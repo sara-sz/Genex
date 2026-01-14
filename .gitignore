@@ -43,3 +43,27 @@ data_proc/
 ~$*.pptx
 ~$*.docx
 ~$*.xlsx
+
+# Office temp / lock files
+~$*.pptx
+~$*.docx
+~$*.xlsx
+
+# Local databases / journals
+*.db-journal
+
+# Local preview outputs / caches
+*_previews/
+**/_previews/
+
+# Python environments anywhere
+**/.venv/
+**/venv/
+
+# Data folders (keep only small samples if you want)
+**/data_raw/
+**/data_proc/
+
+# OS junk
+desktop.ini
+
