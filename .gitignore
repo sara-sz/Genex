@@ -39,3 +39,7 @@ data_proc/
 *.parquet
 *.feather
 *.csv
+
+~$*.pptx
+~$*.docx
+~$*.xlsx
