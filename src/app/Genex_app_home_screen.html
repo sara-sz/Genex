@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genetics Care App</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            max-width: 430px;
+            margin: 0 auto;
+            background: #f8f9fa;
+            min-height: 100vh;
+            position: relative;
+            box-shadow: 0 0 30px rgba(0,0,0,0.2);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px 20px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-radius: 0 0 20px 20px;
+        }
+
+        .header h1 {
+            font-size: 26px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 15px;
+        }
+
+        .content {
+            padding: 25px 20px;
+            padding-bottom: 120px;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* Progress Ring */
+        .progress-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .progress-ring {
+            width: 140px;
+            height: 140px;
+            margin: 0 auto 20px;
+            position: relative;
+            background: conic-gradient(#667eea 0deg 216deg, #e9ecef 216deg 360deg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .progress-inner {
+            width: 110px;
+            height: 110px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .progress-number {
+            font-size: 28px;
+            color: #667eea;
+            font-weight: 800;
+        }
+
+        .progress-label {
+            font-size: 13px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        /* Task Cards */
+        .task-card, .goal-card, .post-card, .dashboard-card {
+            background: white;
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .task-header {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .task-icon, .goal-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            color: white;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .task-content {
+            flex: 1;
+        }
+
+        .task-title, .goal-title {
+            font-weight: 600;
+            font-size: 17px;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .task-toggle {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 3px solid #667eea;
+            margin-left: 15px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .task-toggle.done {
+            background: #667eea;
+            border-color: #667eea;
+        }
+
+        .task-toggle.done::after {
+            content: '✓';
+            color: white;
+            position: absolute;
+            top: -2px;
+            left: 5px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .task-description {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .task-time {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            color: #1976d2;
+            padding: 4px 12px;
+            border-radius: 15px;
+        }
+
+        .task-domain {
+            background: linear-gradient(135deg, #f3e5f5, #e1bee7);
+            color: #7b1fa2;
+            padding: 4px 12px;
+            border-radius: 15px;
+        }
+
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 430px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            padding: 15px 0 10px;
+            z-index: 100;
+            border-radius: 25px 25px 0 0;
+            box-shadow: 0 -5px 25px rgba(0,0,0,0.1);
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px;
+            cursor: pointer;
+            transition: color 0.2s;
+            color: #999;
+        }
+
+        .nav-item.active {
+            color: #667eea;
+        }
+
+        .nav-icon {
+            font-size: 22px;
+            margin-bottom: 6px;
+        }
+
+        .nav-label {
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* Plan Screen */
+        .plan-type-nav {
+            display: flex;
+            background: white;
+            border-radius: 15px;
+            padding: 6px;
+            margin-bottom: 25px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+        }
+
+        .plan-type-btn {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .plan-type-btn.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .goal-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .goal-rationale {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 18px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .activities-list {
+            margin-top: 15px;
+        }
+
+        .activity-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .activity-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 15px;
+        }
+
+        .activity-details {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .plan-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .accept-plan-btn, .revise-plan-btn {
+            padding: 16px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            flex: 1;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .accept-plan-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .revise-plan-btn {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        /* Schedule */
+        .week-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .week-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: #667eea;
+            cursor: pointer;
+        }
+
+        .day-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .day-name {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .day-progress {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .time-block {
+            margin-bottom: 12px;
+        }
+
+        .time-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .mini-task {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mini-task-name {
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .mini-toggle {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid #667eea;
+            cursor: pointer;
+        }
+
+        .mini-toggle.done {
+            background: #667eea;
+        }
+
+        /* Community */
+        .community-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 15px;
+        }
+
+        .community-stat {
+            text-align: center;
+        }
+
+        .community-stat-number {
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .community-stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .post-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 12px;
+        }
+
+        .post-user-info {
+            flex: 1;
+        }
+
+        .post-username {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .post-time {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .post-content {
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .post-actions {
+            display: flex;
+        }
+
+        .post-like-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            color: #666;
+            transition: color 0.2s;
+        }
+
+        .post-like-btn:hover {
+            color: #667eea;
+        }
+
+        .post-like-btn.liked {
+            color: #e74c3c;
+        }
+
+        /* Dashboard */
+        .dashboard-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px 22px;
+            display: flex;
+            align-items: center;
+            border-radius: 16px 16px 0 0;
+            margin: -22px -22px 22px -22px;
+        }
+
+        .dashboard-icon {
+            font-size: 24px;
+            margin-right: 12px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .gene-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .gene-chip {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .add-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+            margin-bottom: 8px;
+        }
+
+        .add-btn:hover {
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1 id="screen-title">Emma's Care Today</h1>
+            <p id="screen-subtitle">Emma's Down Syndrome Care Plan</p>
+        </div>
+
+        <!-- Home Screen -->
+        <div class="screen active" id="home">
+            <div class="content">
+                <div class="progress-section">
+                    <div class="progress-ring">
+                        <div class="progress-inner">
+                            <div class="progress-number">3/4</div>
+                            <div class="progress-label">Today</div>
+                        </div>
+                    </div>
+                    <div style="color: #666; font-size: 14px;">🔥 5 day streak!</div>
+                </div>
+
+                <div class="task-card">
+                    <div class="task-header">
+                        <div class="task-icon">
+                            <i class="fas fa-eye"></i>
+                        </div>
+                        <div class="task-content">
+                            <div class="task-title">Morning Vision Exercise</div>
+                        </div>
+                        <div class="task-toggle done" onclick="toggleTask(this)"></div>
+                    </div>
+                    <div class="task-description">
+                        Track colorful objects with eyes to strengthen eye muscles and improve visual focus
+                    </div>
+                    <div class="task-meta">
+                        <span class="task-time"><i class="fas fa-clock"></i> 5 min</span>
+                        <span class="task-domain">Vision</span>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <div class="task-header">
+                        <div class="task-icon">
+                            <i class="fas fa-hand-paper"></i>
+                        </div>
+                        <div class="task-content">
+                            <div class="task-title">Fine Motor Practice</div>
+                        </div>
+                        <div class="task-toggle done" onclick="toggleTask(this)"></div>
+                    </div>
+                    <div class="task-description">
+                        Pick up small colorful objects to develop pincer grasp and hand coordination
+                    </div>
+                    <div class="task-meta">
+                        <span class="task-time"><i class="fas fa-clock"></i> 10 min</span>
+                        <span class="task-domain">Motor Skills</span>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <div class="task-header">
+                        <div class="task-icon">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <div class="task-content">
+                            <div class="task-title">Speech Sound Practice</div>
+                        </div>
+                        <div class="task-toggle done" onclick="toggleTask(this)"></div>
+                    </div>
+                    <div class="task-description">
+                        Practice consonant-vowel combinations with mirror to improve articulation
+                    </div>
+                    <div class="task-meta">
+                        <span class="task-time"><i class="fas fa-clock"></i> 15 min</span>
+                        <span class="task-domain">Speech</span>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <div class="task-header">
+                        <div class="task-icon">
+                            <i class="fas fa-dumbbell"></i>
+                        </div>
+                        <div class="task-content">
+                            <div class="task-title">Tummy Time Plus</div>
+                        </div>
+                        <div class="task-toggle" onclick="toggleTask(this)"></div>
+                    </div>
+                    <div class="task-description">
+                        Strengthen core and neck muscles while playing with engaging toys
+                    </div>
+                    <div class="task-meta">
+                        <span class="task-time"><i class="fas fa-clock"></i> 20 min</span>
+                        <span class="task-domain">Gross Motor</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Plan Screen -->
+        <div class="screen" id="plan">
+            <div class="content">
+                <div class="plan-type-nav">
+                    <button class="plan-type-btn active" onclick="showPlanType('therapy')">Therapy</button>
+                    <button class="plan-type-btn" onclick="showPlanType('nutrition')">Nutrition</button>
+                </div>
+
+                <div id="therapy-plan">
+                    <div class="goal-card">
+                        <div class="goal-header">
+                            <div class="goal-icon">
+                                <i class="fas fa-comments"></i>
+                            </div>
+                            <div class="goal-title">Communication Skills</div>
+                        </div>
+                        <div class="goal-rationale">
+                            Children with Down syndrome benefit from structured speech and language activities to develop clear communication.
+                        </div>
+                        <div class="activities-list">
+                            <div class="activity-item">
+                                <div class="activity-name">Daily Sound Practice</div>
+                                <div class="activity-details">15 min • Morning • Mirror</div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-name">Picture Naming Game</div>
+                                <div class="activity-details">10 min • Afternoon • Cards</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="goal-card">
+                        <div class="goal-header">
+                            <div class="goal-icon">
+                                <i class="fas fa-dumbbell"></i>
+                            </div>
+                            <div class="goal-title">Motor Development</div>
+                        </div>
+                        <div class="goal-rationale">
+                            Low muscle tone requires regular strengthening activities for better coordination.
+                        </div>
+                        <div class="activities-list">
+                            <div class="activity-item">
+                                <div class="activity-name">Tummy Time Plus</div>
+                                <div class="activity-details">20 min • Morning • Play mat</div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-name">Fine Motor Play</div>
+                                <div class="activity-details">15 min • Evening • Small toys</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="nutrition-plan" style="display: none;">
+                    <div class="goal-card">
+                        <div class="goal-header">
+                            <div class="goal-icon">
+                                <i class="fas fa-apple-alt"></i>
+                            </div>
+                            <div class="goal-title">Daily Nutrition</div>
+                        </div>
+                        <div class="activities-list">
+                            <div class="activity-item">
+                                <div class="activity-name">🥣 Fortified Oatmeal & Banana</div>
+                                <div class="activity-details">Breakfast • Iron & Potassium</div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-name">🥪 Soft Turkey Sandwich</div>
+                                <div class="activity-details">Lunch • Protein & Whole grains</div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-name">🐟 Baked Salmon & Vegetables</div>
+                                <div class="activity-details">Dinner • Omega-3 & Vitamins</div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-name">🍓 Fresh Fruit Snacks</div>
+                                <div class="activity-details">Snacks • Vitamin C & Fiber</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="plan-actions">
+                    <button class="accept-plan-btn" onclick="acceptPlan()">
+                        <i class="fas fa-check"></i> Accept Plan
+                    </button>
+                    <button class="revise-plan-btn" onclick="revisePlan()">
+                        <i class="fas fa-edit"></i> Customize
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schedule Screen -->
+        <div class="screen" id="schedule">
+            <div class="content">
+                <div class="week-nav">
+                    <button class="nav-btn"><i class="fas fa-chevron-left"></i></button>
+                    <div class="week-title">This Week</div>
+                    <button class="nav-btn"><i class="fas fa-chevron-right"></i></button>
+                </div>
+
+                <div class="day-card">
+                    <div class="day-header">
+                        <div class="day-name">Monday</div>
+                        <div class="day-progress">3/4 done</div>
+                    </div>
+                    <div class="time-block">
+                        <div class="time-label"><i class="fas fa-sun"></i> Morning</div>
+                        <div class="mini-task">
+                            <div class="mini-task-name">Vision Exercise</div>
+                            <div class="mini-toggle done"></div>
+                        </div>
+                        <div class="mini-task">
+                            <div class="mini-task-name">Tummy Time Plus</div>
+                            <div class="mini-toggle done"></div>
+                        </div>
+                    </div>
+                    <div class="time-block">
+                        <div class="time-label"><i class="fas fa-sun" style="color: #f39c12;"></i> Afternoon</div>
+                        <div class="mini-task">
+                            <div class="mini-task-name">Speech Practice</div>
+                            <div class="mini-toggle done"></div>
+                        </div>
+                    </div>
+                    <div class="time-block">
+                        <div class="time-label"><i class="fas fa-moon"></i> Evening</div>
+                        <div class="mini-task">
+                            <div class="mini-task-name">Fine Motor Play</div>
+                            <div class="mini-toggle"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <div class="day-header">
+                        <div class="day-name">Tuesday</div>
+                        <div class="day-progress">0/3 scheduled</div>
+                    </div>
+                    <div class="time-block">
+                        <div class="time-label"><i class="fas fa-sun"></i> Morning</div>
+                        <div class="mini-task">
+                            <div class="mini-task-name">Vision Exercise</div>
+                            <div class="mini-toggle"></div>
+                        </div>
+                        <div class="mini-task">
+                            <div class="mini-task-name">Motor Practice</div>
+                            <div class="mini-toggle"></div>
+                        </div>
+                    </div>
+                    <div class="time-block">
+                        <div class="time-label"><i class="fas fa-sun" style="color: #f39c12;"></i> Afternoon</div>
+                        <div class="mini-task">
+                            <div class="mini-task-name">Speech Session</div>
+                            <div class="mini-toggle"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <div class="day-header">
+                        <div class="day-name">Wednesday</div>
+                        <div class="day-progress">Not scheduled</div>
+                    </div>
+                    <div style="color: #666; text-align: center; padding: 20px;">
+                        <i class="fas fa-calendar-plus" style="font-size: 24px; margin-bottom: 10px; display: block;"></i>
+                        Schedule activities for Wednesday
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Community Screen -->
+        <div class="screen" id="community">
+            <div class="content">
+                <div class="goal-card" style="text-align: center;">
+                    <h3><i class="fas fa-users" style="color: #667eea; margin-right: 10px;"></i>Down Syndrome Community</h3>
+                    <p style="color: #666; font-size: 14px; margin-top: 8px;">Connect with other parents on similar journeys</p>
+                    <div class="community-stats">
+                        <div class="community-stat">
+                            <div class="community-stat-number">847</div>
+                            <div class="community-stat-label">Members</div>
+                        </div>
+                        <div class="community-stat">
+                            <div class="community-stat-number">23</div>
+                            <div class="community-stat-label">Online now</div>
+                        </div>
+                        <div class="community-stat">
+                            <div class="community-stat-number">156</div>
+                            <div class="community-stat-label">Posts this week</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="post-card">
+                    <div class="post-header">
+                        <div class="user-avatar">MK</div>
+                        <div class="post-user-info">
+                            <div class="post-username">Maya K. • Mom of Lily (3y)</div>
+                            <div class="post-time">2 hours ago</div>
+                        </div>
+                    </div>
+                    <div class="post-content">
+                        Lily just said her first 3-word sentence today! "I want cookie" - I'm crying happy tears. We've been working with the speech therapist for 6 months and this is such a huge milestone. 💙
+                    </div>
+                    <div class="post-actions">
+                        <button class="post-like-btn liked" onclick="toggleLike(this)">
+                            <i class="fas fa-heart"></i> 24
+                        </button>
+                        <button class="post-like-btn" style="margin-left: 15px;">
+                            <i class="fas fa-comment"></i> 8 replies
+                        </button>
+                    </div>
+                </div>
+
+                <div class="post-card">
+                    <div class="post-header">
+                        <div class="user-avatar">JL</div>
+                        <div class="post-user-info">
+                            <div class="post-username">Jennifer L. • Mom of Alex (7y)</div>
+                            <div class="post-time">4 hours ago</div>
+                        </div>
+                    </div>
+                    <div class="post-content">
+                        Any recommendations for heart-healthy activities? Alex's cardiologist wants us to focus more on cardiovascular fitness. What has worked for your kids?
+                    </div>
+                    <div class="post-actions">
+                        <button class="post-like-btn" onclick="toggleLike(this)">
+                            <i class="fas fa-heart"></i> 12
+                        </button>
+                        <button class="post-like-btn" style="margin-left: 15px;">
+                            <i class="fas fa-comment"></i> 15 replies
+                        </button>
+                    </div>
+                </div>
+
+                <div class="post-card">
+                    <div class="post-header">
+                        <div class="user-avatar">DR</div>
+                        <div class="post-user-info">
+                            <div class="post-username">David R. • Dad of Emma (5y)</div>
+                            <div class="post-time">6 hours ago</div>
+                        </div>
+                    </div>
+                    <div class="post-content">
+                        Emma started mainstream kindergarten this week! She's been in inclusion programs and we're so proud of how well she's adapting. The teachers are amazing and her classmates are so accepting.
+                    </div>
+                    <div class="post-actions">
+                        <button class="post-like-btn" onclick="toggleLike(this)">
+                            <i class="fas fa-heart"></i> 31
+                        </button>
+                        <button class="post-like-btn" style="margin-left: 15px;">
+                            <i class="fas fa-comment"></i> 12 replies
+                        </button>
+                    </div>
+                </div>
+
+                <div class="goal-card">
+                    <h4><i class="fas fa-users"></i> Support Groups</h4>
+                    <div class="activity-item">
+                        <div class="activity-name">Speech Development Support</div>
+                        <div class="activity-details">234 members • Join discussions about speech milestones</div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-name">Heart Health & Cardiology</div>
+                        <div class="activity-details">189 members • Share experiences with heart conditions</div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-name">New Parents (0-3 years)</div>
+                        <div class="activity-details">156 members • Support for early years journey</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Screen -->
+        <div class="screen" id="dashboard">
+            <div class="content">
+                <div class="dashboard-card">
+                    <div class="dashboard-header">
+                        <i class="fas fa-dna dashboard-icon"></i>
+                        <div>
+                            <h3>Down Syndrome Overview</h3>
+                        </div>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-number">1:700</div>
+                            <div class="stat-label">Birth prevalence</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">95%</div>
+                            <div class="stat-label">Trisomy 21</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">21</div>
+                            <div class="stat-label">Extra chromosome</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">6.2M</div>
+                            <div class="stat-label">People worldwide</div>
+                        </div>
+                    </div>
+                    
+                    <h4><i class="fas fa-dna"></i> Associated Genes</h4>
+                    <div class="gene-chips">
+                        <span class="gene-chip">DYRK1A</span>
+                        <span class="gene-chip">GART</span>
+                        <span class="gene-chip">CBS</span>
+                        <span class="gene-chip">CRYA1</span>
+                        <span class="gene-chip">SOD1</span>
+                    </div>
+
+                    <h4><i class="fas fa-stethoscope"></i> Key Clinical Features</h4>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+                            <div><i class="fas fa-eye" style="color: #667eea; margin-right: 8px;"></i>Upward slanting eyes</div>
+                            <div><i class="fas fa-hand-paper" style="color: #667eea; margin-right: 8px;"></i>Single palmar crease</div>
+                            <div><i class="fas fa-user-md" style="color: #667eea; margin-right: 8px;"></i>Flat nasal bridge</div>
+                            <div><i class="fas fa-dumbbell" style="color: #667eea; margin-right: 8px;"></i>Hypotonia</div>
+                            <div><i class="fas fa-brain" style="color: #667eea; margin-right: 8px;"></i>Intellectual disability</div>
+                            <div><i class="fas fa-heartbeat" style="color: #667eea; margin-right: 8px;"></i>Heart defects (40%)</div>
+                        </div>
+                    </div>
+
+                    <h4><i class="fas fa-plus-square"></i> Available Care Packages</h4>
+                    <button class="add-btn" onclick="addToPlan('cardiac')">
+                        <i class="fas fa-heartbeat"></i> Heart Health Monitoring
+                    </button>
+                    <button class="add-btn" onclick="addToPlan('vision')">
+                        <i class="fas fa-eye"></i> Vision Care Package
+                    </button>
+                    <button class="add-btn" onclick="addToPlan('speech')">
+                        <i class="fas fa-comments"></i> Speech Development Pack
+                    </button>
+                    <button class="add-btn" onclick="addToPlan('nutrition')">
+                        <i class="fas fa-apple-alt"></i> Nutrition Guidelines
+                    </button>
+                </div>
+
+                <div class="dashboard-card">
+                    <div class="dashboard-header">
+                        <i class="fas fa-user-md dashboard-icon"></i>
+                        <div><h3>Top Specialists</h3></div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-name">Dr. Brian Chicoine</div>
+                        <div class="activity-details">Adult Down Syndrome Center • 89 Publications</div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-name">Dr. Joaquin Espinosa</div>
+                        <div class="activity-details">Linda Crnic Institute • 127 Publications</div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-name">Dr. Nancy Roizen</div>
+                        <div class="activity-details">Cleveland Clinic • 98 Publications</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- More Screen -->
+        <div class="screen" id="more">
+            <div class="content">
+                <div class="goal-card">
+                    <h3><i class="fas fa-user-circle" style="margin-right: 10px; color: #667eea;"></i>Profile</h3>
+                    <div style="margin-top: 15px;">
+                        <div style="font-weight: 600;">Parent/Caregiver</div>
+                        <div style="color: #666; font-size: 14px; margin-top: 5px;">sarah.example@email.com</div>
+                        <div style="color: #666; font-size: 14px; margin-top: 5px;">Emma's parent since 2022</div>
+                    </div>
+                </div>
+
+                <div class="goal-card">
+                    <h4>App Settings</h4>
+                    <div class="activity-item" onclick="alert('Theme settings')">
+                        <div class="activity-name"><i class="fas fa-palette" style="margin-right: 10px; color: #667eea;"></i>Theme & Display</div>
+                        <div class="activity-details">Customize app appearance</div>
+                    </div>
+                    <div class="activity-item" onclick="alert('Language settings')">
+                        <div class="activity-name"><i class="fas fa-language" style="margin-right: 10px; color: #667eea;"></i>Language</div>
+                        <div class="activity-details">Choose your preferred language</div>
+                    </div>
+                    <div class="activity-item" onclick="alert('Notifications')">
+                        <div class="activity-name"><i class="fas fa-bell" style="margin-right: 10px; color: #667eea;"></i>Notifications</div>
+                        <div class="activity-details">Manage push notifications</div>
+                    </div>
+                </div>
+
+                <div class="goal-card">
+                    <h4>Data Management</h4>
+                    <div class="activity-item" onclick="exportData()">
+                        <div class="activity-name"><i class="fas fa-download" style="margin-right: 10px; color: #667eea;"></i>Export Data</div>
+                        <div class="activity-details">Download Emma's care plan data</div>
+                    </div>
+                    <div class="activity-item" onclick="importData()">
+                        <div class="activity-name"><i class="fas fa-upload" style="margin-right: 10px; color: #667eea;"></i>Import Data</div>
+                        <div class="activity-details">Restore from backup file</div>
+                    </div>
+                </div>
+
+                <div class="goal-card">
+                    <h4>Help & Legal</h4>
+                    <div class="activity-item" onclick="alert('Privacy policy - All data stored locally on your device')">
+                        <div class="activity-name"><i class="fas fa-shield-alt" style="margin-right: 10px; color: #667eea;"></i>Privacy Policy</div>
+                        <div class="activity-details">How we protect your data</div>
+                    </div>
+                    <div class="activity-item" onclick="alert('Help & Support - Contact support team')">
+                        <div class="activity-name"><i class="fas fa-question-circle" style="margin-right: 10px; color: #667eea;"></i>Help & Support</div>
+                        <div class="activity-details">Get assistance and FAQs</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <div class="bottom-nav">
+            <div class="nav-item active" onclick="showScreen('home')">
+                <div class="nav-icon"><i class="fas fa-home"></i></div>
+                <div class="nav-label">Home</div>
+            </div>
+            <div class="nav-item" onclick="showScreen('plan')">
+                <div class="nav-icon"><i class="fas fa-clipboard-list"></i></div>
+                <div class="nav-label">Plan</div>
+            </div>
+            <div class="nav-item" onclick="showScreen('schedule')">
+                <div class="nav-icon"><i class="fas fa-calendar-alt"></i></div>
+                <div class="nav-label">Schedule</div>
+            </div>
+            <div class="nav-item" onclick="showScreen('community')">
+                <div class="nav-icon"><i class="fas fa-users"></i></div>
+                <div class="nav-label">Community</div>
+            </div>
+            <div class="nav-item" onclick="showScreen('dashboard')">
+                <div class="nav-icon"><i class="fas fa-chart-bar"></i></div>
+                <div class="nav-label">Dashboard</div>
+            </div>
+            <div class="nav-item" onclick="showScreen('more')">
+                <div class="nav-icon"><i class="fas fa-ellipsis-h"></i></div>
+                <div class="nav-label">More</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Screen Navigation
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            document.getElementById(screenId).classList.add('active');
+            
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            const titles = {
+                home: 'Emma\'s Care Today',
+                plan: 'Care Plan',
+                schedule: 'Schedule',
+                community: 'Community',
+                dashboard: 'Genetics Dashboard',
+                more: 'Settings'
+            };
+            
+            document.getElementById('screen-title').textContent = titles[screenId];
+            
+            const subtitles = {
+                home: 'Emma\'s Down Syndrome Care Plan',
+                plan: 'Monthly Goals & Activities',
+                schedule: 'Weekly Schedule',
+                community: 'Connect with Other Parents',
+                dashboard: 'Condition Information & Resources',
+                more: 'Profile & Settings'
+            };
+            
+            document.getElementById('screen-subtitle').textContent = subtitles[screenId];
+        }
+
+        // Plan Type Navigation
+        function showPlanType(type) {
+            document.querySelectorAll('.plan-type-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+
+            document.getElementById('therapy-plan').style.display = type === 'therapy' ? 'block' : 'none';
+            document.getElementById('nutrition-plan').style.display = type === 'nutrition' ? 'block' : 'none';
+        }
+
+        // Task Management
+        function toggleTask(element) {
+            element.classList.toggle('done');
+            updateProgress();
+        }
+
+        function updateProgress() {
+            const totalTasks = document.querySelectorAll('.task-toggle').length;
+            const doneTasks = document.querySelectorAll('.task-toggle.done').length;
+            document.querySelector('.progress-number').textContent = `${doneTasks}/${totalTasks}`;
+            
+            const percentage = (doneTasks / totalTasks) * 100;
+            const degrees = (percentage / 100) * 360;
+            document.querySelector('.progress-ring').style.background = 
+                `conic-gradient(#667eea 0deg ${degrees}deg, #e9ecef ${degrees}deg 360deg)`;
+        }
+
+        // Plan Management
+        function addToPlan(packageType) {
+            alert(`Adding ${packageType} package to Emma's plan! This would create new goals and activities locally.`);
+        }
+
+        function acceptPlan() {
+            alert('Plan accepted! This would save Emma\'s plan locally and create a schedule.');
+        }
+
+        function revisePlan() {
+            alert('Opening plan customization for Emma. You can modify goals, adjust activity frequency, or add/remove specific activities.');
+        }
+
+        // Community Functions
+        function toggleLike(element) {
+            element.classList.toggle('liked');
+            const countText = element.textContent.trim();
+            const currentCount = parseInt(countText.split(' ')[1]);
+            if (element.classList.contains('liked')) {
+                element.innerHTML = `<i class="fas fa-heart"></i> ${currentCount + 1}`;
+            } else {
+                element.innerHTML = `<i class="fas fa-heart"></i> ${currentCount - 1}`;
+            }
+        }
+
+        // Data Management
+        function exportData() {
+            const data = {
+                childName: 'Emma',
+                condition: 'Down Syndrome',
+                tasks: [],
+                progress: [],
+                preferences: {}
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'emma-care-data.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            alert('Data imported successfully! This would restore Emma\'s care plan and progress.');
+                        } catch (error) {
+                            alert('Error importing data. Please check the file format.');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateProgress();
+        });
+    </script>
+</body>
+</html>
