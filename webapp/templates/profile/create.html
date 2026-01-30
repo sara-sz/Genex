@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Child Profile - GeneX</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { color: #667eea; margin-bottom: 10px; }
+        p { color: #666; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; color: #333; font-weight: 600; }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #667eea; }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { opacity: 0.9; }
+        .alert { padding: 10px; margin-bottom: 20px; border-radius: 5px; }
+        .alert-error { background: #fee; color: #c00; }
+        .alert-success { background: #efe; color: #080; }
+        .skip { text-align: center; margin-top: 15px; }
+        .skip a { color: #667eea; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👶 Create Child Profile</h1>
+        <p>Let's set up a profile for your child to get started with personalized care plans.</p>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <form method="POST">
+            <div class="form-group">
+                <label for="name">Child's Name *</label>
+                <input type="text" id="name" name="name" required placeholder="e.g., Emma">
+            </div>
+            
+            <div class="form-group">
+                <label for="date_of_birth">Date of Birth *</label>
+                <input type="date" id="date_of_birth" name="date_of_birth" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="gender">Gender</label>
+                <select id="gender" name="gender">
+                    <option value="">Select...</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                    <option value="prefer_not_to_say">Prefer not to say</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="diagnosis">Diagnosis *</label>
+                <input type="text" id="diagnosis" name="diagnosis" required placeholder="e.g., Down Syndrome">
+            </div>
+            
+            <div class="form-group">
+                <label for="diagnosis_date">Diagnosis Date</label>
+                <input type="date" id="diagnosis_date" name="diagnosis_date">
+            </div>
+            
+            <div class="form-group">
+                <label for="additional_conditions">Additional Conditions</label>
+                <input type="text" id="additional_conditions" name="additional_conditions" placeholder="Optional">
+            </div>
+            
+            <div class="form-group">
+                <label for="notes">Notes</label>
+                <textarea id="notes" name="notes" rows="3" placeholder="Any additional information..."></textarea>
+            </div>
+            
+            <button type="submit">Create Profile</button>
+        </form>
+        
+        <div class="skip">
+            <a href="/">Skip for now</a>
+        </div>
+    </div>
+</body>
+</html>

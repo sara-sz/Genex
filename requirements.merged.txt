@@ -1,0 +1,94 @@
+# GENEX Flask Application - Complete Dependencies
+# =================================================
+# MERGED: Your existing data science packages + Flask dependencies
+
+# Your Existing Data Science Stack
+pandas>=2.2.0
+numpy>=1.26.0
+scipy>=1.11.0
+scikit-learn>=1.3.0
+requests>=2.31.0
+tqdm>=4.66.0
+pyarrow>=14.0.0
+networkx>=3.2.0
+umap-learn>=0.5.5
+hdbscan>=0.8.33
+matplotlib>=3.8.0
+
+# Core Flask
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.5
+Flask-Login==0.6.3
+Flask-WTF==1.2.1
+Flask-Cors==4.0.0
+
+# Forms & Validation
+WTForms==3.1.1
+email-validator==2.1.0
+
+# Database
+SQLAlchemy==2.0.23
+
+# Environment Management
+python-dotenv==1.0.0
+
+# AI Agent Dependencies
+openai==1.6.1
+anthropic==0.8.1
+google-generativeai==0.3.2
+
+# Google ADK (Agent Development Kit)
+# Note: Install separately if needed from Google's repository
+# google-adk
+
+# Data Processing (already have pandas, adding Excel support)
+openpyxl==3.1.2  # For Excel file reading
+
+# HTTP & API (already have requests)
+httpx==0.25.2
+
+# Async Support (if using Celery for background tasks)
+celery==5.3.4
+redis==5.0.1
+
+# Date/Time
+python-dateutil==2.8.2
+
+# Security
+werkzeug==3.0.1
+itsdangerous==2.1.2
+cryptography==41.0.7
+
+# Rate Limiting (optional but recommended)
+Flask-Limiter==3.5.0
+
+# WSGI Server (for production)
+gunicorn==21.2.0
+
+# Monitoring & Logging (optional)
+flask-monitoringdashboard==3.2.0
+
+# Testing
+pytest==7.4.3
+pytest-flask==1.3.0
+pytest-cov==4.1.0
+coverage==7.3.4
+
+# Code Quality
+black==23.12.1
+flake8==6.1.0
+pylint==3.0.3
+
+# Utilities
+click==8.1.7
+colorama==0.4.6
+
+# LiteLLM (for ADK multi-model support)
+litellm==1.17.9
+
+# JSON handling
+orjson==3.9.12
+
+# Markdown rendering (for agent responses)
+markdown==3.5.1

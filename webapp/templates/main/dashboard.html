@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - GeneX</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { color: #667eea; margin-bottom: 20px; }
+        .success { background: #d4edda; padding: 15px; border-radius: 8px; color: #155724; margin-bottom: 20px; }
+        .info-box { background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        .btn { 
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            margin: 10px 10px 10px 0;
+        }
+        .logout { background: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧬 GeneX Dashboard</h1>
+        
+        <div class="success">
+            ✅ Welcome, {{ current_user.email }}! You're logged in successfully.
+        </div>
+        
+        <div class="info-box">
+            <h2>Phase 1 Complete! ✅</h2>
+            <p><strong>Backend Status:</strong></p>
+            <ul>
+                <li>✅ Flask application running</li>
+                <li>✅ Database connected and working</li>
+                <li>✅ User authentication functional</li>
+                <li>✅ Your account created and stored</li>
+                <li>✅ Session management working</li>
+            </ul>
+        </div>
+        
+        <div class="info-box">
+            <h2>What's Next?</h2>
+            <p><strong>Phase 2:</strong> Integrate AI agents from your notebooks</p>
+            <p><strong>Phase 3:</strong> Convert your beautiful HTML prototypes to working templates</p>
+        </div>
+        
+        <div class="info-box">
+            <h2>Your Prototypes Will Replace This:</h2>
+            <p>📱 Genex_app_home_screen.html → Full dashboard with care plans</p>
+            <p>🔐 GeneX-app-sign_in.html → Beautiful login/signup flow</p>
+        </div>
+        
+        <a href="/auth/logout" class="btn logout">Log Out</a>
+    </div>
+</body>
+</html>

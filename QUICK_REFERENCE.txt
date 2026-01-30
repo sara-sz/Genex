@@ -1,0 +1,180 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║                                                                      ║
+║          GENEX CUSTOM INTEGRATION - QUICK REFERENCE                  ║
+║                  Safe Setup for YOUR Structure                       ║
+║                                                                      ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+✅ YOUR SETUP ANALYZED
+======================
+Based on your screenshots, you have:
+  • src/ folder with agents/, app/, dashboard/, mvp/
+  • notebooks/ folder (already exists!)
+  • prototypes/ folder (already exists!)
+  • data/ folder with your files
+  • .env with 3 API keys (Google, OpenAI, Anthropic)
+  • .gitignore with good rules
+  • .gitattributes with Git LFS
+  • requirements.txt in hpo/ folder
+
+
+🎯 INTEGRATION STRATEGY
+========================
+PRESERVE src/ as reference + ADD Flask webapp/ alongside
+
+✅ WHAT STAYS:    src/, .git/, .venv/, all other folders
+✅ WHAT'S ADDED:  webapp/, run.py, config files
+✅ WHAT'S SAFE:   Nothing deleted, nothing moved
+✅ COPIES ONLY:   PDF → docs/, Excel → data/
+
+
+📦 FILES TO DOWNLOAD
+====================
+1. custom_integration.py        ← Safe integration script
+2. .env.integrated             ← Your keys + Flask config
+3. .gitignore.merged           ← Your rules + Flask rules  
+4. requirements.merged.txt     ← Your packages + Flask
+5. genex_webapp_phase1.tar.gz  ← Flask webapp/ folder
+6. run.py                      ← Flask entry point
+7. All documentation files
+
+
+🚀 INTEGRATION STEPS (5 minutes)
+=================================
+
+1️⃣  Extract webapp:
+   tar -xzf genex_webapp_phase1.tar.gz
+
+2️⃣  Test integration (DRY RUN):
+   python custom_integration.py
+   
+3️⃣  Execute integration:
+   python custom_integration.py --execute
+   
+4️⃣  Apply config files:
+   cp .env .env.backup
+   cp .env.integrated .env
+   cp .gitignore.merged .gitignore
+   cp requirements.merged.txt requirements.txt
+   
+5️⃣  Generate SECRET_KEY:
+   python -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))"
+   # Add output to .env file
+   
+6️⃣  Install packages:
+   .venv\Scripts\activate
+   pip install -r requirements.txt
+   
+7️⃣  Init database:
+   flask init-db
+   
+8️⃣  Run Flask:
+   python run.py
+   
+9️⃣  Test: http://localhost:5000
+
+
+📁 FINAL STRUCTURE
+==================
+
+genex/
+├── src/              ← YOUR REFERENCE (untouched)
+│   ├── agents/
+│   ├── app/
+│   ├── dashboard/
+│   └── mvp/
+├── webapp/           ← NEW FLASK APP
+│   ├── models/
+│   ├── routes/
+│   ├── agents/       (Phase 2)
+│   └── services/     (Phase 2)
+├── notebooks/        ← KEPT
+├── prototypes/       ← KEPT
+├── data/             ← KEPT
+├── .env              ← INTEGRATED
+├── .gitignore        ← MERGED
+└── run.py            ← NEW
+
+
+🔐 SECURITY CHECKLIST
+=====================
+✅ .env has API keys (already there)
+✅ Generate new SECRET_KEY
+✅ .gitignore protects .env
+✅ Git LFS for large files (.gitattributes)
+
+
+✅ VERIFICATION
+===============
+After setup, check:
+□ src/ folder still complete
+□ webapp/ folder exists
+□ Flask starts: python run.py
+□ Access: http://localhost:5000
+□ Can register user
+□ Can create child profile
+□ Database created: data/genex_dev.db
+
+
+⚠️  WHAT'S SAFE
+================
+✅ src/ - Completely untouched
+✅ .git/ - All history preserved
+✅ .venv/ - Environment safe
+✅ All other folders - Kept as-is
+
+
+🔜 AFTER PHASE 1 WORKS
+=======================
+Phase 2: Convert src/agents/ to webapp/agents/
+  → Research agent (multi-model)
+  → Therapy agent (Q&A)
+  → Service layer
+  → Background processing
+
+Phase 3: Frontend templates
+  → Convert prototypes/ HTML to Jinja2
+  → Add JavaScript for AJAX
+  → Connect to agents
+
+
+🆘 QUICK FIXES
+==============
+
+Flask won't start:
+  → Check you're in root (pwd)
+  → Activate .venv
+  → pip install -r requirements.txt
+
+Database error:
+  → rm data/genex_dev.db
+  → flask init-db
+
+Import error:
+  → Run from genex root, not inside webapp/
+
+
+📚 DOCUMENTATION
+================
+Full Guide:    CUSTOM_INTEGRATION_GUIDE.md
+Structure:     FOLDER_REFERENCE_MAP.md (created by script)
+Setup:         SETUP_GUIDE.md
+Summary:       PHASE_1_SUMMARY.md
+
+
+💡 KEY INSIGHT
+==============
+You're NOT replacing your work - you're ADDING a Flask layer!
+
+  src/       = Reference & development
+  webapp/    = Production Flask app
+  Both coexist peacefully ✌️
+
+
+═══════════════════════════════════════════════════════════════════════
+
+READY TO START? Run: python custom_integration.py
+
+Questions? Check: CUSTOM_INTEGRATION_GUIDE.md
+
+═══════════════════════════════════════════════════════════════════════
