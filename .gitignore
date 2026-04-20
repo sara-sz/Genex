@@ -1,15 +1,12 @@
-# GENEX Flask Application - Git Ignore File
-# ==========================================
-# MERGED: Your existing rules + Flask-specific additions
+# =========================
+# GENEX .gitignore
+# =========================
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-*.pyc
-*.pyo
-*.pyd
 .Python
 build/
 develop-eggs/
@@ -30,9 +27,8 @@ wheels/
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb_checkpoints/
-*.ipynb_checkpoints
 
-# Virtual Environment (your existing rules)
+# Virtual environments
 .venv/
 venv/
 ENV/
@@ -41,98 +37,95 @@ env/
 **/.venv/
 **/venv/
 
-# Environment Variables & Secrets (your existing rules)
+# Environment variables / secrets
 .env
 .env.local
 .env.*.local
 *.env
 .env.*
 
-# Credentials / keys (your existing rules - never commit)
+# Credentials / keys
 *.pem
 *.key
 *.p12
 *.crt
-*.sqlite
 **/credentials*.json
-
-# API Keys (extra protection)
 *_api_key.txt
 api_keys.json
+secret_key.txt
+secrets/
 
-# IDEs (your existing rules)
+# IDE / editor
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
-desktop.ini
-Thumbs.db
 
-# Flask-specific
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Flask / app runtime
 instance/
 .webassets-cache
+
+# Databases
 *.db
 *.db-journal
-
-# Logs (your existing rules)
-*.log
-logs/
-*.log.*
-
-# Database (merged with your rules)
 *.sqlite
 *.sqlite3
 genex_sessions.db*
 
-# Backup files
-*_backup_*/
-*.bak
-*.backup
+# Logs
+*.log
+logs/
+*.log.*
 
-# Testing
+# Testing / coverage
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
 
-# Migration temporary files
+# Backup / temp
+*_backup_*/
+*.bak
+*.backup
+tmp/
+temp/
+*.tmp
+
+# Migrations temp
 migrations/versions/*.pyc
 
-# Uploaded files (if you add file upload feature)
+# Uploads
 webapp/static/uploads/*
 !webapp/static/uploads/.gitkeep
 
-# Compiled CSS/JS (if using preprocessors)
+# Built assets
 webapp/static/css/*.min.css
 webapp/static/js/*.min.js
 
-# OS (your existing rules)
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Data (your existing rules)
-data/
+# Data outputs / caches
 data_raw/
 data_proc/
 **/data_raw/
 **/data_proc/
 *.parquet
 *.feather
-*.csv
 
-# Office temp / lock files (your existing rules)
+# Office temp / lock files
 ~$*.pptx
 ~$*.docx
 ~$*.xlsx
 
-# Local preview outputs / caches (your existing rules)
+# Preview outputs
 *_previews/
 **/_previews/
 
-# Documentation builds
+# Docs builds
 docs/_build/
 site/
 
@@ -140,20 +133,18 @@ site/
 .cache/
 *.cache
 
-# Celery (if used for async tasks)
+# Celery / Redis
 celerybeat-schedule
 celerybeat.pid
-
-# Redis dump (if used)
 dump.rdb
 
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Keep these folders but ignore contents
+# Keep folders, ignore contents only where needed
+data/*
+!data/.gitkeep
 !notebooks/.gitkeep
 !prototypes/.gitkeep
 !tests/.gitkeep
-!data/.gitkeep
+
+# Generated evaluation exports
+advisor_feedback_round1.csv
+*_generated.csv

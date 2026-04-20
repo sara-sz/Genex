@@ -1,0 +1,376 @@
+{
+  "child": {
+    "name": "Ari",
+    "chronological_age_months": 52,
+    "condition": "serine deficiency disorder",
+    "concern_text": "speech ot pt delay",
+    "daily_time_min": 10
+  },
+  "developmental_profile": {
+    "speech_language": {
+      "estimated_range_months": "30-36",
+      "estimated_anchor_month": 30,
+      "confidence": 0.95,
+      "asked": [
+        {
+          "band_month": 48,
+          "question_id": "speech_language_48_134",
+          "question": "says sentences with four or more words",
+          "answer": "no",
+          "score": 0.0
+        },
+        {
+          "band_month": 48,
+          "question_id": "speech_language_48_135",
+          "question": "says some words from a song or story or nursery rhyme",
+          "answer": "sometimes",
+          "score": 0.35
+        },
+        {
+          "band_month": 48,
+          "question_id": "speech_language_48_136",
+          "question": "talks about at least one thing that happended during her day like I played soccer",
+          "answer": "no",
+          "score": 0.0
+        },
+        {
+          "band_month": 48,
+          "question_id": "speech_language_48_137",
+          "question": "answers simple questions like what is a coat for or what is crayon for",
+          "answer": "no",
+          "score": 0.0
+        },
+        {
+          "band_month": 36,
+          "question_id": "speech_language_36_118",
+          "question": "talks with you in conversation using at least two back and forth exchangess",
+          "answer": "yes",
+          "score": 1.0
+        },
+        {
+          "band_month": 36,
+          "question_id": "speech_language_36_119",
+          "question": "ask who or what or where or why questions like where is mommy or where is daddy",
+          "answer": "yes",
+          "score": 1.0
+        },
+        {
+          "band_month": 36,
+          "question_id": "speech_language_36_120",
+          "question": "says what action is happening in a picture or book when asked like running or eating or playing",
+          "answer": "no",
+          "score": 0.0
+        },
+        {
+          "band_month": 36,
+          "question_id": "speech_language_36_121",
+          "question": "says first name when asked",
+          "answer": "yes",
+          "score": 1.0
+        }
+      ],
+      "band_scores": {
+        "48": 0.09,
+        "36": 0.75
+      }
+    },
+    "motor": {
+      "estimated_range_months": "36-48",
+      "estimated_anchor_month": 36,
+      "confidence": 0.75,
+      "asked": [
+        {
+          "band_month": 48,
+          "question_id": "motor_48_141",
+          "question": "catches a large ball most of the times",
+          "answer": "sometimes",
+          "score": 0.35
+        },
+        {
+          "band_month": 48,
+          "question_id": "motor_48_142",
+          "question": "serves herself food or pours water with adult supervision",
+          "answer": "yes",
+          "score": 1.0
+        },
+        {
+          "band_month": 48,
+          "question_id": "motor_48_143",
+          "question": "unbuttons some buttons",
+          "answer": "no",
+          "score": 0.0
+        },
+        {
+          "band_month": 48,
+          "question_id": "motor_48_144",
+          "question": "holds crayon or pencil between fingers and thumb not fist",
+          "answer": "sometimes",
+          "score": 0.35
+        }
+      ],
+      "band_scores": {
+        "48": 0.43
+      }
+    },
+    "social_communication": {
+      "estimated_range_months": "36-48",
+      "estimated_anchor_month": 36,
+      "confidence": 0.75,
+      "asked": [
+        {
+          "band_month": 48,
+          "question_id": "social_communication_48_128",
+          "question": "pretends to be something else during play like teacher or superhero or a dog",
+          "answer": "sometimes",
+          "score": 0.35
+        },
+        {
+          "band_month": 48,
+          "question_id": "social_communication_48_129",
+          "question": "asks to go play with children if none are around like can I play with Alex",
+          "answer": "no",
+          "score": 0.0
+        },
+        {
+          "band_month": 48,
+          "question_id": "social_communication_48_130",
+          "question": "comforts others who are hurt or sad like hugging a crying friend",
+          "answer": "sometimes",
+          "score": 0.35
+        },
+        {
+          "band_month": 48,
+          "question_id": "social_communication_48_131",
+          "question": "avoids danger like not jumping from tall heights at the playgroung",
+          "answer": "yes",
+          "score": 1.0
+        }
+      ],
+      "band_scores": {
+        "48": 0.42
+      }
+    },
+    "adaptive_cognitive": {
+      "estimated_range_months": "36-48",
+      "estimated_anchor_month": 36,
+      "confidence": 0.7,
+      "asked": [
+        {
+          "band_month": 48,
+          "question_id": "adaptive_cognitive_48_138",
+          "question": "names a few colors or items",
+          "answer": "yes",
+          "score": 1.0
+        },
+        {
+          "band_month": 48,
+          "question_id": "adaptive_cognitive_48_139",
+          "question": "tell what comes next in a well known story",
+          "answer": "no",
+          "score": 0.0
+        },
+        {
+          "band_month": 48,
+          "question_id": "adaptive_cognitive_48_140",
+          "question": "draws a person with three or more body parts",
+          "answer": "no",
+          "score": 0.0
+        }
+      ],
+      "band_scores": {
+        "48": 0.33
+      }
+    }
+  },
+  "activities_by_domain": {
+    "speech_language": [
+      {
+        "activity_number": 1,
+        "title": "Story Time with Questions",
+        "why_this_fits": "Encourages sentence formation and comprehension.",
+        "instructions": "Read a short story together and ask Ari questions about it, prompting her to use sentences.",
+        "materials": "A picture book or storybook.",
+        "duration_min": 10,
+        "adaptation": "Use books with engaging pictures to stimulate discussion."
+      },
+      {
+        "activity_number": 2,
+        "title": "Song and Movement",
+        "why_this_fits": "Promotes language through music and physical activity.",
+        "instructions": "Sing a familiar song together, adding simple movements for each verse.",
+        "materials": "Lyrics of a favorite song.",
+        "duration_min": 5,
+        "adaptation": "Choose songs with repetitive phrases to encourage participation."
+      },
+      {
+        "activity_number": 3,
+        "title": "Daily Recap",
+        "why_this_fits": "Encourages Ari to express her thoughts and experiences.",
+        "instructions": "At the end of the day, ask Ari to tell you about one thing she did.",
+        "materials": "None required.",
+        "duration_min": 5,
+        "adaptation": "Use visual aids or prompts if needed to help her recall."
+      },
+      {
+        "activity_number": 4,
+        "title": "Picture Description",
+        "why_this_fits": "Enhances vocabulary and sentence structure.",
+        "instructions": "Show Ari a picture and ask her to describe what she sees.",
+        "materials": "A collection of varied pictures (e.g., animals, places).",
+        "duration_min": 5,
+        "adaptation": "Start with simple pictures and gradually introduce more complex scenes."
+      },
+      {
+        "activity_number": 5,
+        "title": "Role Play",
+        "why_this_fits": "Fosters imaginative play and language use.",
+        "instructions": "Act out a simple scenario (like shopping or cooking) together.",
+        "materials": "Props related to the scenario (e.g., play food, shopping bags).",
+        "duration_min": 10,
+        "adaptation": "Use familiar scenarios to make it easier for Ari to engage."
+      }
+    ],
+    "motor": [
+      {
+        "activity_number": 1,
+        "title": "Ball Toss",
+        "why_this_fits": "Improves hand-eye coordination and gross motor skills.",
+        "instructions": "Stand a short distance apart and toss a soft ball back and forth.",
+        "materials": "A soft ball.",
+        "duration_min": 10,
+        "adaptation": "Start with a larger ball to make catching easier."
+      },
+      {
+        "activity_number": 2,
+        "title": "Obstacle Course",
+        "why_this_fits": "Encourages movement and balance.",
+        "instructions": "Set up a simple obstacle course using pillows, chairs, and other safe objects.",
+        "materials": "Household items for obstacles.",
+        "duration_min": 10,
+        "adaptation": "Adjust the difficulty based on Ari's comfort level."
+      },
+      {
+        "activity_number": 3,
+        "title": "Art with Crayons",
+        "why_this_fits": "Enhances fine motor skills through creative expression.",
+        "instructions": "Encourage Ari to draw or color using crayons.",
+        "materials": "Crayons and paper.",
+        "duration_min": 10,
+        "adaptation": "Provide thicker crayons for easier grip if needed."
+      },
+      {
+        "activity_number": 4,
+        "title": "Pouring Practice",
+        "why_this_fits": "Develops coordination and self-help skills.",
+        "instructions": "Supervise Ari as she pours water from one container to another.",
+        "materials": "Two containers and water.",
+        "duration_min": 5,
+        "adaptation": "Use containers with spouts to make pouring easier."
+      },
+      {
+        "activity_number": 5,
+        "title": "Buttoning Game",
+        "why_this_fits": "Strengthens fine motor skills and independence.",
+        "instructions": "Practice buttoning and unbuttoning on a piece of clothing.",
+        "materials": "A shirt or a fabric with buttons.",
+        "duration_min": 10,
+        "adaptation": "Use larger buttons for easier manipulation."
+      }
+    ],
+    "social_communication": [
+      {
+        "activity_number": 1,
+        "title": "Pretend Play",
+        "why_this_fits": "Encourages imaginative play and social interaction.",
+        "instructions": "Engage in a pretend play scenario, like playing house or store.",
+        "materials": "Props related to the chosen scenario.",
+        "duration_min": 10,
+        "adaptation": "Use familiar roles to make it easier for Ari to participate."
+      },
+      {
+        "activity_number": 2,
+        "title": "Emotion Charades",
+        "why_this_fits": "Helps Ari recognize and express emotions.",
+        "instructions": "Take turns acting out different emotions while the other guesses.",
+        "materials": "Emotion cards or pictures.",
+        "duration_min": 10,
+        "adaptation": "Use simple emotions like happy, sad, and angry."
+      },
+      {
+        "activity_number": 3,
+        "title": "Friendship Bracelet Making",
+        "why_this_fits": "Promotes sharing and cooperative play.",
+        "instructions": "Create simple bracelets together using beads.",
+        "materials": "Beads and string.",
+        "duration_min": 10,
+        "adaptation": "Use larger beads for easier handling."
+      },
+      {
+        "activity_number": 4,
+        "title": "Compliment Circle",
+        "why_this_fits": "Encourages positive social interactions.",
+        "instructions": "Take turns giving each other compliments.",
+        "materials": "None required.",
+        "duration_min": 5,
+        "adaptation": "Model compliments to guide Ari in expressing her thoughts."
+      },
+      {
+        "activity_number": 5,
+        "title": "Turn-Taking Games",
+        "why_this_fits": "Teaches patience and sharing during play.",
+        "instructions": "Play a simple board game that requires taking turns.",
+        "materials": "A board game suitable for her age.",
+        "duration_min": 10,
+        "adaptation": "Choose games with clear rules and visuals."
+      }
+    ],
+    "adaptive_cognitive": [
+      {
+        "activity_number": 1,
+        "title": "Color Hunt",
+        "why_this_fits": "Enhances color recognition and cognitive skills.",
+        "instructions": "Go on a color hunt around the house to find items of a specific color.",
+        "materials": "None required.",
+        "duration_min": 10,
+        "adaptation": "Start with primary colors for easier identification."
+      },
+      {
+        "activity_number": 2,
+        "title": "Story Sequencing",
+        "why_this_fits": "Develops understanding of story structure.",
+        "instructions": "Use picture cards to arrange a story in the correct sequence.",
+        "materials": "Picture cards from a familiar story.",
+        "duration_min": 10,
+        "adaptation": "Use fewer cards for simpler stories."
+      },
+      {
+        "activity_number": 3,
+        "title": "Matching Game",
+        "why_this_fits": "Improves memory and cognitive skills.",
+        "instructions": "Play a matching game using cards with pictures.",
+        "materials": "A set of matching cards.",
+        "duration_min": 10,
+        "adaptation": "Start with fewer pairs to make it easier."
+      },
+      {
+        "activity_number": 4,
+        "title": "Puzzle Time",
+        "why_this_fits": "Enhances problem-solving skills.",
+        "instructions": "Work together to complete a simple jigsaw puzzle.",
+        "materials": "A jigsaw puzzle with large pieces.",
+        "duration_min": 10,
+        "adaptation": "Choose puzzles with fewer pieces for success."
+      },
+      {
+        "activity_number": 5,
+        "title": "What Comes Next?",
+        "why_this_fits": "Encourages prediction and logical thinking.",
+        "instructions": "Show Ari a familiar story and pause before the end, asking her what she thinks will happen next.",
+        "materials": "A familiar storybook.",
+        "duration_min": 5,
+        "adaptation": "Use stories she enjoys to keep her engaged."
+      }
+    ]
+  },
+  "note": "CDC milestones only go to 60 months, so older children start from the 60-month band."
+}

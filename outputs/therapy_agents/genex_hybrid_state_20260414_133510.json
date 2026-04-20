@@ -1,0 +1,275 @@
+{
+  "child": {
+    "name": "mia",
+    "age_years": 10.0,
+    "chronological_months": 120,
+    "diagnosis": "adhd",
+    "concern": "she cannot focus, screams, don't have friends"
+  },
+  "delay_estimates": {
+    "movement_and_physical": {
+      "delay_months": 6,
+      "reason": "The child exhibits challenges in focus and social interactions, indicating potential support needs.",
+      "source": "openai"
+    },
+    "social_and_emotial": {
+      "delay_months": 12,
+      "reason": "Social/emotional challenges related to ADHD may impact peer relationships and focus.",
+      "source": "openai"
+    },
+    "language_and_communication": {
+      "delay_months": 6,
+      "reason": "The child exhibits challenges in focus and social interaction, which may impact communication skills.",
+      "source": "openai"
+    },
+    "cognitive": {
+      "delay_months": 12,
+      "reason": "Parent concerns indicate significant challenges in focus and social interactions.",
+      "source": "openai"
+    }
+  },
+  "qna": {
+    "movement_and_physical": [
+      {
+        "question_id": "movement_and_physical_48_141",
+        "months": 48,
+        "milestone": "catches a large ball most of the times",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "movement_and_physical_48_144",
+        "months": 48,
+        "milestone": "holds crayon or pencil between fingers and thumb not fist",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "movement_and_physical_48_142",
+        "months": 48,
+        "milestone": "serves herself food or pours water with adult supervision",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "movement_and_physical_48_143",
+        "months": 48,
+        "milestone": "unbuttons some buttons",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "movement_and_physical_60_158",
+        "months": 60,
+        "milestone": "buttons some buttons",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      }
+    ],
+    "social_and_emotial": [
+      {
+        "question_id": "social_and_emotial_48_129",
+        "months": 48,
+        "milestone": "asks to go play with children if none are around like can I play with Alex",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "social_and_emotial_48_131",
+        "months": 48,
+        "milestone": "avoids danger like not jumping from tall heights at the playgroung",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "social_and_emotial_48_133",
+        "months": 48,
+        "milestone": "changes behavior based on where she is like place of worship or library or playground",
+        "raw_answer": "sometimes",
+        "norm_answer": "sometimes",
+        "score": 0.45
+      },
+      {
+        "question_id": "social_and_emotial_48_130",
+        "months": 48,
+        "milestone": "comforts others who are hurt or sad like hugging a crying friend",
+        "raw_answer": "sometimes",
+        "norm_answer": "sometimes",
+        "score": 0.45
+      },
+      {
+        "question_id": "social_and_emotial_48_132",
+        "months": 48,
+        "milestone": "likes to be a helper",
+        "raw_answer": "sometimes",
+        "norm_answer": "sometimes",
+        "score": 0.45
+      }
+    ],
+    "language_and_communication": [
+      {
+        "question_id": "language_and_communication_48_137",
+        "months": 48,
+        "milestone": "answers simple questions like what is a coat for or what is crayon for",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "language_and_communication_48_134",
+        "months": 48,
+        "milestone": "says sentences with four or more words",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "language_and_communication_48_135",
+        "months": 48,
+        "milestone": "says some words from a song or story or nursery rhyme",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "language_and_communication_48_136",
+        "months": 48,
+        "milestone": "talks about at least one thing that happended during her day like I played soccer",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "language_and_communication_60_149",
+        "months": 60,
+        "milestone": "answers simple questions about a book or a story after you read or tell it to her",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      }
+    ],
+    "cognitive": [
+      {
+        "question_id": "cognitive_48_140",
+        "months": 48,
+        "milestone": "draws a person with three or more body parts",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "cognitive_48_138",
+        "months": 48,
+        "milestone": "names a few colors or items",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      },
+      {
+        "question_id": "cognitive_48_139",
+        "months": 48,
+        "milestone": "tell what comes next in a well known story",
+        "raw_answer": "yes",
+        "norm_answer": "yes",
+        "score": 1.0
+      }
+    ]
+  },
+  "dev_age": {
+    "movement_and_physical": 60,
+    "social_and_emotial": 48,
+    "language_and_communication": 60,
+    "cognitive": 48
+  },
+  "bf_overlay": {
+    "movement_and_physical": {
+      "flag": false,
+      "reason": "",
+      "reference_items": [
+        "Oral health, nutrition, physical activity."
+      ]
+    },
+    "social_and_emotial": {
+      "flag": true,
+      "reason": "Older child has ADHD / attention-social concerns, so social-emotional support may be needed even without major milestone delay.",
+      "reference_items": [
+        "Temper problems, setting reasonable limits, friends, sexuality."
+      ]
+    },
+    "language_and_communication": {
+      "flag": false,
+      "reason": "",
+      "reference_items": []
+    },
+    "cognitive": {
+      "flag": true,
+      "reason": "Older child has ADHD / school-attention concerns, so cognitive / adaptive / school-functioning support may be needed even without major milestone delay.",
+      "reference_items": [
+        "School attendance, school problems, school performance and progress, transitions, co-occurrence of middle school and pubertal transitions."
+      ]
+    }
+  },
+  "support_recommendations": {
+    "movement_and_physical": {
+      "status": "no_special_support",
+      "summary": "We do not think mia has a meaningful milestone delay in Movement / Physical and may not need special support in this category right now.",
+      "plan": null
+    },
+    "social_and_emotial": {
+      "status": "success",
+      "summary": "This 5-day home support plan focuses on enhancing Mia's social-emotional skills and fostering her ability to engage with peers while addressing her ADHD-related challenges. The activities are designed to be realistic and supportive, considering her developmental age.",
+      "plan": {
+        "summary": "This 5-day home support plan focuses on enhancing Mia's social-emotional skills and fostering her ability to engage with peers while addressing her ADHD-related challenges. The activities are designed to be realistic and supportive, considering her developmental age.",
+        "day_1": [
+          "Engage Mia in a simple chore, like matching socks, to promote responsibility and focus."
+        ],
+        "day_2": [
+          "Play a turn-taking game with Mia, such as 'Simon Says' or a board game, to practice following rules and social interaction."
+        ],
+        "day_3": [
+          "Encourage Mia to express herself through a creative activity, like singing or dancing to her favorite song, to build confidence."
+        ],
+        "day_4": [
+          "Set up a playdate with one peer to practice social skills in a controlled environment, emphasizing sharing and communication."
+        ],
+        "day_5": [
+          "Discuss feelings and emotions with Mia, using a feelings chart to help her identify and express her emotions effectively."
+        ]
+      }
+    },
+    "language_and_communication": {
+      "status": "no_special_support",
+      "summary": "We do not think mia has a meaningful milestone delay in Language / Communication and may not need special support in this category right now.",
+      "plan": null
+    },
+    "cognitive": {
+      "status": "success",
+      "summary": "This 5-day home support plan focuses on enhancing Mia's cognitive and adaptive skills, particularly in areas related to attention and social interaction. The plan includes realistic activities that can help her improve focus and build friendships, while acknowledging her current developmental needs.",
+      "plan": {
+        "summary": "This 5-day home support plan focuses on enhancing Mia's cognitive and adaptive skills, particularly in areas related to attention and social interaction. The plan includes realistic activities that can help her improve focus and build friendships, while acknowledging her current developmental needs.",
+        "day_1": [
+          "Engage Mia in a 10-minute story time where she can choose the book and discuss her favorite parts afterwards."
+        ],
+        "day_2": [
+          "Practice counting with Mia using everyday objects, aiming to count to 10 together."
+        ],
+        "day_3": [
+          "Create a simple art project that requires following 2-3 step instructions, allowing her to express creativity while focusing on task completion."
+        ],
+        "day_4": [
+          "Play a letter and number recognition game using flashcards, encouraging her to name letters and numbers when pointed to."
+        ],
+        "day_5": [
+          "Set up a playdate with a peer, focusing on structured activities that can help facilitate interaction and friendship building."
+        ]
+      }
+    }
+  }
+}

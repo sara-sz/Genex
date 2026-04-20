@@ -1,0 +1,5 @@
+child_name,chronological_age_months,diagnosis,category,estimated_delay_months,estimated_dev_age_months,needs_special_support,summary
+Ari,48,Serine deficiency disorder,Movement / Physical,12,30,True,Created a 5-day support plan for Movement / Physical.
+Ari,48,Serine deficiency disorder,Social / Emotional,6,48,False,We do not think Ari has a meaningful delay in Social / Emotional and may not need special support in this category right now.
+Ari,48,Serine deficiency disorder,Language / Communication,12,36,True,Created a 5-day support plan for Language / Communication.
+Ari,48,Serine deficiency disorder,Cognitive / Adaptive,12,36,True,Created a 5-day support plan for Cognitive / Adaptive.

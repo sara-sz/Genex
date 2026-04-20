@@ -1,0 +1,6 @@
+case_id,name,condition,chronological_age_months,cdc_start_month,speech_range,motor_range,social_range,adaptive_range
+C01,Emma,Down syndrome,36,36,24-30,30-36,30-36,24-30
+C02,Noah,Autism,60,60,36-48,60-60,30-36,36-48
+C03,Liam,ADHD,54,48,36-48,36-48,24-30,36-48
+C04,Maya,Speech delay,48,48,30-36,48-60,36-48,48-60
+C05,Sofia,Cerebral palsy,24,24,15-18,30-36,15-18,12-15

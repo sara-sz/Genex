@@ -1,0 +1,1109 @@
+[
+  {
+    "case_id": "C01",
+    "name": "Emma",
+    "condition": "Down syndrome",
+    "chronological_age_months": 36,
+    "cdc_start_month": 36,
+    "concern_text": "Parents want a home plan for communication, motor skills, and daily routines.",
+    "daily_time_min": 12,
+    "developmental_profile": {
+      "speech_language": {
+        "estimated_range_months": "24-30",
+        "estimated_anchor_month": 24,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_118",
+            "question": "talks with you in conversation using at least two back and forth exchangess",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_119",
+            "question": "ask who or what or where or why questions like where is mommy or where is daddy",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 30,
+            "question_id": "speech_language_30_104",
+            "question": "says about 50 words",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "speech_language_30_105",
+            "question": "say two or more words toghether with one action word like doggie run",
+            "answer": "sometimes",
+            "score": 0.6
+          }
+        ],
+        "band_scores": {
+          "36": 0.4,
+          "30": 0.6
+        }
+      },
+      "motor": {
+        "estimated_range_months": "30-36",
+        "estimated_anchor_month": 30,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 36,
+            "question_id": "motor_36_125",
+            "question": "strings items together like large beads or macaroni",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "motor_36_126",
+            "question": "puts on some clothes by himself like loose pants or a jacket",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "motor_30_112",
+            "question": "uses hands to twist things like turning doorknobs or unscrewing lids",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 30,
+            "question_id": "motor_30_113",
+            "question": "takes some clothes off by himself like loose pants or an open jacket",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "36": 0.6,
+          "30": 1.0
+        }
+      },
+      "social_communication": {
+        "estimated_range_months": "30-36",
+        "estimated_anchor_month": 30,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_116",
+            "question": "calms down within 10 minutes after you leave her like at childcare drop off",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_117",
+            "question": "notices other children and joins them to play",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "social_communication_30_101",
+            "question": "plays next to other children and sometimes plays with them",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 30,
+            "question_id": "social_communication_30_102",
+            "question": "shows you what she can do by saying look at me",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "36": 0.6,
+          "30": 1.0
+        }
+      },
+      "adaptive_cognitive": {
+        "estimated_range_months": "24-30",
+        "estimated_anchor_month": 24,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_123",
+            "question": "draws a circle when you show her how",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_124",
+            "question": "avoids touching hot objects like the stove when you warn her",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 30,
+            "question_id": "adaptive_cognitive_30_108",
+            "question": "uses things to pretend like feeding a block to a doll as if it were food",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "adaptive_cognitive_30_109",
+            "question": "shows simple problem solving skills like standing on a small stool to reach something",
+            "answer": "sometimes",
+            "score": 0.6
+          }
+        ],
+        "band_scores": {
+          "36": 0.4,
+          "30": 0.6
+        }
+      }
+    },
+    "activities_by_domain": {
+      "speech_language": [
+        {
+          "activity_number": 1,
+          "title": "Picture-supported requesting",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Speech / Language around 24-30 months.",
+          "instructions": "Use two preferred items and prompt the child to point, sign, or say what they want.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Expand their communication",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Speech / Language around 24-30 months.",
+          "instructions": "Repeat the child's word and add one more word during play or snacks.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "WH-question picture practice",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Speech / Language around 24-30 months.",
+          "instructions": "Use picture cards to practice who, what, or where questions.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Routine-based language",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Speech / Language around 24-30 months.",
+          "instructions": "Practice short phrases during snack, bath, or dressing routines.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Choice making with pause time",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Speech / Language around 24-30 months.",
+          "instructions": "Offer a choice and wait 5 seconds before helping.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ],
+      "motor": [
+        {
+          "activity_number": 1,
+          "title": "Supported obstacle path",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Motor around 30-36 months.",
+          "instructions": "Create a short safe path for stepping, reaching, and balance.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Sit-to-stand repetitions",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Motor around 30-36 months.",
+          "instructions": "Practice rising from a chair or cushion during play.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "Reach and place game",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Motor around 30-36 months.",
+          "instructions": "Place toys at different heights to practice reaching and controlled movement.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Ball roll and stop",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Motor around 30-36 months.",
+          "instructions": "Roll a ball back and forth and add stop/go cues.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Core and balance play",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Motor around 30-36 months.",
+          "instructions": "Use floor play positions that encourage trunk control and balance.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ],
+      "social_communication": [
+        {
+          "activity_number": 1,
+          "title": "Turn-taking with favorite toy",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Social / Communication around 30-36 months.",
+          "instructions": "Use a favorite toy and practice clear my-turn/your-turn routines.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Shared attention show-and-share",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Social / Communication around 30-36 months.",
+          "instructions": "Encourage the child to show an object and look back to the caregiver.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "Pretend play routine",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Social / Communication around 30-36 months.",
+          "instructions": "Model a simple pretend routine like feeding a doll or stuffed animal.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Name-response game",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Social / Communication around 30-36 months.",
+          "instructions": "Use playful name-calling and immediate reinforcement when the child responds.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Simple peer-style game",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Social / Communication around 30-36 months.",
+          "instructions": "Play a short, rule-based game with waiting and imitation.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ],
+      "adaptive_cognitive": [
+        {
+          "activity_number": 1,
+          "title": "Two-step helper task",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Adaptive / Cognitive around 24-30 months.",
+          "instructions": "Practice a short daily routine with two simple steps.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Visual cleanup routine",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Adaptive / Cognitive around 24-30 months.",
+          "instructions": "Use pictures or gestures for cleanup or dressing steps.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "Matching and sorting",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Adaptive / Cognitive around 24-30 months.",
+          "instructions": "Sort familiar objects by category, color, or function.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Mini task board",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Adaptive / Cognitive around 24-30 months.",
+          "instructions": "Use a tiny 2-3 step board for snack, dressing, or play setup.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Cause-and-effect problem solving",
+          "why_this_fits": "Matches a child with chronological age 36 months and estimated Adaptive / Cognitive around 24-30 months.",
+          "instructions": "Use simple toys or household tasks that reward trial and error.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ]
+    },
+    "profile_text_for_prompt": "Speech / Language estimated around 24-30 months. Evidence: 36m: with_help to 'talks with you in conversation using at least two back and forth exchangess'; 36m: with_help to 'ask who or what or where or why questions like where is mommy or where is daddy'; 30m: sometimes to 'says about 50 words'; 30m: sometimes to 'say two or more words toghether with one action word like doggie run'\nMotor estimated around 30-36 months. Evidence: 36m: sometimes to 'strings items together like large beads or macaroni'; 36m: sometimes to 'puts on some clothes by himself like loose pants or a jacket'; 30m: yes to 'uses hands to twist things like turning doorknobs or unscrewing lids'; 30m: yes to 'takes some clothes off by himself like loose pants or an open jacket'\nSocial / Communication estimated around 30-36 months. Evidence: 36m: sometimes to 'calms down within 10 minutes after you leave her like at childcare drop off'; 36m: sometimes to 'notices other children and joins them to play'; 30m: yes to 'plays next to other children and sometimes plays with them'; 30m: yes to 'shows you what she can do by saying look at me'\nAdaptive / Cognitive estimated around 24-30 months. Evidence: 36m: with_help to 'draws a circle when you show her how'; 36m: with_help to 'avoids touching hot objects like the stove when you warn her'; 30m: sometimes to 'uses things to pretend like feeding a block to a doll as if it were food'; 30m: sometimes to 'shows simple problem solving skills like standing on a small stool to reach something'",
+    "note": "CDC table only goes to 60 months, so children older than 60 months start from the 60-month band as an anchor."
+  },
+  {
+    "case_id": "C02",
+    "name": "Noah",
+    "condition": "Autism",
+    "chronological_age_months": 60,
+    "cdc_start_month": 60,
+    "concern_text": "Parents report limited back-and-forth play, speech delay, and rigid routines.",
+    "daily_time_min": 15,
+    "developmental_profile": {
+      "speech_language": {
+        "estimated_range_months": "36-48",
+        "estimated_anchor_month": 36,
+        "confidence": 0.94,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "speech_language_60_148",
+            "question": "tells a storys she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "speech_language_60_149",
+            "question": "answers simple questions about a book or a story after you read or tell it to her",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "speech_language_48_134",
+            "question": "says sentences with four or more words",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 48,
+            "question_id": "speech_language_48_135",
+            "question": "says some words from a song or story or nursery rhyme",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_118",
+            "question": "talks with you in conversation using at least two back and forth exchangess",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_119",
+            "question": "ask who or what or where or why questions like where is mommy or where is daddy",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 0.0,
+          "48": 0.4,
+          "36": 1.0
+        }
+      },
+      "motor": {
+        "estimated_range_months": "60-60",
+        "estimated_anchor_month": 60,
+        "confidence": 0.7,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "motor_60_158",
+            "question": "buttons some buttons",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "motor_60_159",
+            "question": "hops on one foot",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 1.0
+        }
+      },
+      "social_communication": {
+        "estimated_range_months": "30-36",
+        "estimated_anchor_month": 30,
+        "confidence": 0.95,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "social_communication_60_145",
+            "question": "follows rules or takesake turns when playing games with other  children",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "social_communication_60_146",
+            "question": "sings dances or acts for you",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "social_communication_48_128",
+            "question": "pretends to be something else during play like teacher or superhero or a dog",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "social_communication_48_129",
+            "question": "asks to go play with children if none are around like can I play with Alex",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_116",
+            "question": "calms down within 10 minutes after you leave her like at childcare drop off",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_117",
+            "question": "notices other children and joins them to play",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "social_communication_30_101",
+            "question": "plays next to other children and sometimes plays with them",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 30,
+            "question_id": "social_communication_30_102",
+            "question": "shows you what she can do by saying look at me",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 0.0,
+          "48": 0.0,
+          "36": 0.6,
+          "30": 1.0
+        }
+      },
+      "adaptive_cognitive": {
+        "estimated_range_months": "36-48",
+        "estimated_anchor_month": 36,
+        "confidence": 0.94,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "adaptive_cognitive_60_152",
+            "question": "counts to 10",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "adaptive_cognitive_60_153",
+            "question": "names some numbers between 1 and 5 when you point to them",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "adaptive_cognitive_48_138",
+            "question": "names a few colors or items",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 48,
+            "question_id": "adaptive_cognitive_48_139",
+            "question": "tell what comes next in a well known story",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_123",
+            "question": "draws a circle when you show her how",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_124",
+            "question": "avoids touching hot objects like the stove when you warn her",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 0.0,
+          "48": 0.6,
+          "36": 1.0
+        }
+      }
+    },
+    "activities_by_domain": {
+      "speech_language": [
+        {
+          "activity_number": 1,
+          "title": "Picture-supported requesting",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Speech / Language around 36-48 months.",
+          "instructions": "Use two preferred items and prompt the child to point, sign, or say what they want.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Expand their communication",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Speech / Language around 36-48 months.",
+          "instructions": "Repeat the child's word and add one more word during play or snacks.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "WH-question picture practice",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Speech / Language around 36-48 months.",
+          "instructions": "Use picture cards to practice who, what, or where questions.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Routine-based language",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Speech / Language around 36-48 months.",
+          "instructions": "Practice short phrases during snack, bath, or dressing routines.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Choice making with pause time",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Speech / Language around 36-48 months.",
+          "instructions": "Offer a choice and wait 5 seconds before helping.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ],
+      "motor": [
+        {
+          "activity_number": 1,
+          "title": "Supported obstacle path",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Motor around 60-60 months.",
+          "instructions": "Create a short safe path for stepping, reaching, and balance.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Sit-to-stand repetitions",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Motor around 60-60 months.",
+          "instructions": "Practice rising from a chair or cushion during play.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "Reach and place game",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Motor around 60-60 months.",
+          "instructions": "Place toys at different heights to practice reaching and controlled movement.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Ball roll and stop",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Motor around 60-60 months.",
+          "instructions": "Roll a ball back and forth and add stop/go cues.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Core and balance play",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Motor around 60-60 months.",
+          "instructions": "Use floor play positions that encourage trunk control and balance.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ],
+      "social_communication": [
+        {
+          "activity_number": 1,
+          "title": "Turn-taking with favorite toy",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Social / Communication around 30-36 months.",
+          "instructions": "Use a favorite toy and practice clear my-turn/your-turn routines.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Shared attention show-and-share",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Social / Communication around 30-36 months.",
+          "instructions": "Encourage the child to show an object and look back to the caregiver.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "Pretend play routine",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Social / Communication around 30-36 months.",
+          "instructions": "Model a simple pretend routine like feeding a doll or stuffed animal.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Name-response game",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Social / Communication around 30-36 months.",
+          "instructions": "Use playful name-calling and immediate reinforcement when the child responds.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Simple peer-style game",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Social / Communication around 30-36 months.",
+          "instructions": "Play a short, rule-based game with waiting and imitation.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ],
+      "adaptive_cognitive": [
+        {
+          "activity_number": 1,
+          "title": "Two-step helper task",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Adaptive / Cognitive around 36-48 months.",
+          "instructions": "Practice a short daily routine with two simple steps.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Visual cleanup routine",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Adaptive / Cognitive around 36-48 months.",
+          "instructions": "Use pictures or gestures for cleanup or dressing steps.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "Matching and sorting",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Adaptive / Cognitive around 36-48 months.",
+          "instructions": "Sort familiar objects by category, color, or function.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Mini task board",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Adaptive / Cognitive around 36-48 months.",
+          "instructions": "Use a tiny 2-3 step board for snack, dressing, or play setup.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Cause-and-effect problem solving",
+          "why_this_fits": "Matches a child with chronological age 60 months and estimated Adaptive / Cognitive around 36-48 months.",
+          "instructions": "Use simple toys or household tasks that reward trial and error.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ]
+    },
+    "profile_text_for_prompt": "Speech / Language estimated around 36-48 months. Evidence: 60m: no to 'tells a storys she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it'; 60m: no to 'answers simple questions about a book or a story after you read or tell it to her'; 48m: with_help to 'says sentences with four or more words'; 48m: with_help to 'says some words from a song or story or nursery rhyme'\nMotor estimated around 60-60 months. Evidence: 60m: yes to 'buttons some buttons'; 60m: yes to 'hops on one foot'\nSocial / Communication estimated around 30-36 months. Evidence: 60m: no to 'follows rules or takesake turns when playing games with other  children'; 60m: no to 'sings dances or acts for you'; 48m: no to 'pretends to be something else during play like teacher or superhero or a dog'; 48m: no to 'asks to go play with children if none are around like can I play with Alex'\nAdaptive / Cognitive estimated around 36-48 months. Evidence: 60m: no to 'counts to 10'; 60m: no to 'names some numbers between 1 and 5 when you point to them'; 48m: sometimes to 'names a few colors or items'; 48m: sometimes to 'tell what comes next in a well known story'",
+    "note": "CDC table only goes to 60 months, so children older than 60 months start from the 60-month band as an anchor."
+  },
+  {
+    "case_id": "C03",
+    "name": "Liam",
+    "condition": "ADHD",
+    "chronological_age_months": 84,
+    "cdc_start_month": 60,
+    "concern_text": "Parents want better daily routines, attention, task completion, and social flexibility.",
+    "daily_time_min": 10,
+    "developmental_profile": {
+      "speech_language": {
+        "estimated_range_months": "60-60",
+        "estimated_anchor_month": 60,
+        "confidence": 0.7,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "speech_language_60_148",
+            "question": "tells a storys she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "speech_language_60_149",
+            "question": "answers simple questions about a book or a story after you read or tell it to her",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 1.0
+        }
+      },
+      "motor": {
+        "estimated_range_months": "60-60",
+        "estimated_anchor_month": 60,
+        "confidence": 0.7,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "motor_60_158",
+            "question": "buttons some buttons",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "motor_60_159",
+            "question": "hops on one foot",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 1.0
+        }
+      },
+      "social_communication": {
+        "estimated_range_months": "48-60",
+        "estimated_anchor_month": 48,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "social_communication_60_145",
+            "question": "follows rules or takesake turns when playing games with other  children",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 60,
+            "question_id": "social_communication_60_146",
+            "question": "sings dances or acts for you",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 48,
+            "question_id": "social_communication_48_128",
+            "question": "pretends to be something else during play like teacher or superhero or a dog",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "social_communication_48_129",
+            "question": "asks to go play with children if none are around like can I play with Alex",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 0.4,
+          "48": 1.0
+        }
+      },
+      "adaptive_cognitive": {
+        "estimated_range_months": "36-48",
+        "estimated_anchor_month": 36,
+        "confidence": 0.94,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "adaptive_cognitive_60_152",
+            "question": "counts to 10",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "adaptive_cognitive_60_153",
+            "question": "names some numbers between 1 and 5 when you point to them",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "adaptive_cognitive_48_138",
+            "question": "names a few colors or items",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 48,
+            "question_id": "adaptive_cognitive_48_139",
+            "question": "tell what comes next in a well known story",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_123",
+            "question": "draws a circle when you show her how",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_124",
+            "question": "avoids touching hot objects like the stove when you warn her",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 0.0,
+          "48": 0.6,
+          "36": 1.0
+        }
+      }
+    },
+    "activities_by_domain": {
+      "speech_language": [
+        {
+          "activity_number": 1,
+          "title": "Picture-supported requesting",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Speech / Language around 60-60 months.",
+          "instructions": "Use two preferred items and prompt the child to point, sign, or say what they want.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Expand their communication",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Speech / Language around 60-60 months.",
+          "instructions": "Repeat the child's word and add one more word during play or snacks.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "WH-question picture practice",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Speech / Language around 60-60 months.",
+          "instructions": "Use picture cards to practice who, what, or where questions.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Routine-based language",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Speech / Language around 60-60 months.",
+          "instructions": "Practice short phrases during snack, bath, or dressing routines.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Choice making with pause time",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Speech / Language around 60-60 months.",
+          "instructions": "Offer a choice and wait 5 seconds before helping.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ],
+      "motor": [
+        {
+          "activity_number": 1,
+          "title": "Supported obstacle path",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Motor around 60-60 months.",
+          "instructions": "Create a short safe path for stepping, reaching, and balance.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Sit-to-stand repetitions",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Motor around 60-60 months.",
+          "instructions": "Practice rising from a chair or cushion during play.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "Reach and place game",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Motor around 60-60 months.",
+          "instructions": "Place toys at different heights to practice reaching and controlled movement.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Ball roll and stop",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Motor around 60-60 months.",
+          "instructions": "Roll a ball back and forth and add stop/go cues.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Core and balance play",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Motor around 60-60 months.",
+          "instructions": "Use floor play positions that encourage trunk control and balance.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ],
+      "social_communication": [
+        {
+          "activity_number": 1,
+          "title": "Turn-taking with favorite toy",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Social / Communication around 48-60 months.",
+          "instructions": "Use a favorite toy and practice clear my-turn/your-turn routines.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Shared attention show-and-share",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Social / Communication around 48-60 months.",
+          "instructions": "Encourage the child to show an object and look back to the caregiver.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "Pretend play routine",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Social / Communication around 48-60 months.",
+          "instructions": "Model a simple pretend routine like feeding a doll or stuffed animal.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Name-response game",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Social / Communication around 48-60 months.",
+          "instructions": "Use playful name-calling and immediate reinforcement when the child responds.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Simple peer-style game",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Social / Communication around 48-60 months.",
+          "instructions": "Play a short, rule-based game with waiting and imitation.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ],
+      "adaptive_cognitive": [
+        {
+          "activity_number": 1,
+          "title": "Two-step helper task",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Adaptive / Cognitive around 36-48 months.",
+          "instructions": "Practice a short daily routine with two simple steps.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Visual cleanup routine",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Adaptive / Cognitive around 36-48 months.",
+          "instructions": "Use pictures or gestures for cleanup or dressing steps.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "Matching and sorting",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Adaptive / Cognitive around 36-48 months.",
+          "instructions": "Sort familiar objects by category, color, or function.",
+          "materials": "common home items",
+          "duration_min": 5,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Mini task board",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Adaptive / Cognitive around 36-48 months.",
+          "instructions": "Use a tiny 2-3 step board for snack, dressing, or play setup.",
+          "materials": "common home items",
+          "duration_min": 7,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Cause-and-effect problem solving",
+          "why_this_fits": "Matches a child with chronological age 84 months and estimated Adaptive / Cognitive around 36-48 months.",
+          "instructions": "Use simple toys or household tasks that reward trial and error.",
+          "materials": "common home items",
+          "duration_min": 9,
+          "adaptation": "Reduce language demands, simplify the routine, and add modeling or support as needed."
+        }
+      ]
+    },
+    "profile_text_for_prompt": "Speech / Language estimated around 60-60 months. Evidence: 60m: yes to 'tells a storys she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it'; 60m: yes to 'answers simple questions about a book or a story after you read or tell it to her'\nMotor estimated around 60-60 months. Evidence: 60m: yes to 'buttons some buttons'; 60m: yes to 'hops on one foot'\nSocial / Communication estimated around 48-60 months. Evidence: 60m: with_help to 'follows rules or takesake turns when playing games with other  children'; 60m: with_help to 'sings dances or acts for you'; 48m: yes to 'pretends to be something else during play like teacher or superhero or a dog'; 48m: yes to 'asks to go play with children if none are around like can I play with Alex'\nAdaptive / Cognitive estimated around 36-48 months. Evidence: 60m: no to 'counts to 10'; 60m: no to 'names some numbers between 1 and 5 when you point to them'; 48m: sometimes to 'names a few colors or items'; 48m: sometimes to 'tell what comes next in a well known story'",
+    "note": "CDC table only goes to 60 months, so children older than 60 months start from the 60-month band as an anchor."
+  }
+]
