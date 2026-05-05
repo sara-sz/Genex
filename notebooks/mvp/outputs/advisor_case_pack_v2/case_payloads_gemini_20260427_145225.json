@@ -1,0 +1,2067 @@
+[
+  {
+    "case_id": "C01",
+    "child_name": "Noah",
+    "age_label": "10 months",
+    "age_months": 10,
+    "diagnosis": "Down syndrome",
+    "concerns_bullets": [
+      "Not sitting independently yet",
+      "Hypotonia",
+      "slow feeding",
+      "socially engaged"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[2m] holds head up when on tummy -> sometimes",
+      "[2m] moves both arms and both legs -> yes",
+      "[2m] open hands briefly -> yes",
+      "[4m] bring hands to mouth -> sometimes",
+      "[4m] holds a toy when you put it in his hand -> sometimes",
+      "[4m] holds head steady without support when you are holding him -> sometimes",
+      "[4m] pushes up onto elbows or forearms when on tummy -> sometimes",
+      "[6m] leans on hands to support herself when sitting -> no",
+      "[6m] pushes up with straight arms when on tummy -> no",
+      "[6m] rolls from tummy to back -> sometimes",
+      "[2m] calms down when spoken to or picked up -> yes",
+      "[2m] looks at your face -> yes",
+      "[2m] seems happy to see you when you walk up to her -> not_sure",
+      "[2m] smiles when you talk to or smile at her -> not_sure",
+      "[4m] chuckles when you try to make him laugh but not yet a full laugh -> not_sure",
+      "[4m] looks at you moves or makes sounds to get or keep you attention -> not_sure",
+      "[4m] smiles on his own to get your attention -> not_sure",
+      "[6m] knows familiar people -> not_sure",
+      "[6m] laughs -> not_sure",
+      "[6m] likes to look at self in a mirror -> not_sure",
+      "[2m] makes sounds other than crying -> not_sure",
+      "[2m] reacts to loud sounds -> not_sure",
+      "[4m] makes cooing sounds like ooooo or aahhh -> not_sure",
+      "[4m] makes sounds back when you talk to him -> not_sure",
+      "[4m] turns head towards the sound of your voice -> not_sure",
+      "[6m] blows raspberries or sticks tongue out and blows -> not_sure",
+      "[6m] makes squealing noises -> not_sure",
+      "[6m] takes turns making sounds with you -> not_sure",
+      "[2m] looks at a toy for sevedral seconds -> not_sure",
+      "[2m] watches you as you move -> not_sure",
+      "[4m] if hungry open mouth when she sees breast or bottle -> not_sure",
+      "[4m] looks at her hands with interest -> not_sure",
+      "[6m] closes lips to show she doesn't want more food -> not_sure",
+      "[6m] puts things in her mouth to explore them -> not_sure",
+      "[6m] reaches to grab a toy she wants -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[2m] holds head up when on tummy -> sometimes",
+      "[2m] moves both arms and both legs -> yes",
+      "[2m] open hands briefly -> yes",
+      "[4m] bring hands to mouth -> sometimes",
+      "[4m] holds a toy when you put it in his hand -> sometimes",
+      "[4m] holds head steady without support when you are holding him -> sometimes",
+      "[4m] pushes up onto elbows or forearms when on tummy -> sometimes",
+      "[6m] leans on hands to support herself when sitting -> no",
+      "[6m] pushes up with straight arms when on tummy -> no",
+      "[6m] rolls from tummy to back -> sometimes",
+      "[2m] calms down when spoken to or picked up -> yes",
+      "[2m] looks at your face -> yes"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 2,
+        "gap_months": 8,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of movement and physical activities for Noah, focusing on his current abilities and encouraging development towards his next milestones."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 2,
+        "gap_months": 8,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes engaging and practical activities to support Noah's social and emotional development at home. These activities are designed to be enjoyable and promote interaction, helping him reach his developmental milestones."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 2,
+        "gap_months": 8,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "Here are some engaging activities to support Noah's language and communication development. These activities are designed to be fun and interactive, helping him practice sounds and reactions in a comfortable home environment."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 2,
+        "gap_months": 8,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes engaging and practical activities for Noah to support his cognitive and adaptive development. The activities are designed to be fun and interactive, fitting his current abilities while also encouraging growth towards upcoming milestones."
+      }
+    ],
+    "focus_areas": [
+      "Movement / Physical",
+      "Social / Emotional",
+      "Language / Communication"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Sound Imitation",
+        "description": "Make different sounds (like animal noises or silly sounds) and encourage Noah to imitate you. Use a playful tone and smile to keep him engaged.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Movement / Physical",
+        "title": "Tummy Time with Toys",
+        "description": "Place Noah on his tummy on a soft surface. Place colorful toys just out of reach to encourage him to lift his head and reach for them.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Cooing Time",
+        "description": "Lie on the floor with Noah and take turns making cooing sounds. Encourage him to respond to your sounds by making his own.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Movement / Physical",
+        "title": "Arm and Leg Movements",
+        "description": "Lay Noah on his back and gently move his arms and legs in a bicycle motion. Encourage him to try moving them on his own.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Sound Reaction Game",
+        "description": "Use a rattle or a musical toy. Shake it or play it while Noah is looking away, then see if he turns his head towards the sound.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Noah. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C02",
+    "child_name": "Maya",
+    "age_label": "18 months",
+    "age_months": 18,
+    "diagnosis": "No formal diagnosis",
+    "concerns_bullets": [
+      "No words yet",
+      "uses gestures",
+      "understands simple commands",
+      "good eye contact"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[12m] drinks from a cup without a lid as you hold it -> yes",
+      "[12m] picks things up between thumb and pointer finger like small bits of food -> yes",
+      "[12m] pulls up to stand -> yes",
+      "[12m] walks holding on to furniture -> not_sure",
+      "[15m] takes a few steps on her own -> not_sure",
+      "[15m] uses fingers to feed herself some food -> not_sure",
+      "[18m] climbs on and off a couch or chair without help -> not_sure",
+      "[18m] drinks from a cup without a lid and may spill sometimes -> not_sure",
+      "[18m] feeds himself with his fingers -> not_sure",
+      "[18m] scribbles -> not_sure",
+      "[9m] is shy or clingy or fearful around strangers -> not_sure",
+      "[9m] looks when you call her name -> not_sure",
+      "[9m] reacts when you leave -> not_sure",
+      "[9m] shows several facial expressions like happy or sad or angry or surprised -> not_sure",
+      "[12m] play games with you like pat a cake -> not_sure",
+      "[15m] claps when excited -> not_sure",
+      "[15m] copies other children while playing like taking toys out of a container when another child does -> not_sure",
+      "[15m] hugs stuffed doll or other toy -> not_sure",
+      "[15m] shows you affection like hugs or cuddles or kisses you -> not_sure",
+      "[9m] lifts arms up to be picked up -> not_sure",
+      "[9m] makes a lot of different sounds like mamamamama and bababababa -> not_sure",
+      "[12m] calls parents mama or dada or another special name -> not_sure",
+      "[12m] understands no so pauses briefly or stops when you say it -> not_sure",
+      "[12m] waves byebye -> not_sure",
+      "[15m] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> not_sure",
+      "[15m] looks at a ffamiliar object when you name it -> not_sure",
+      "[15m] points to ask for something or to get help -> not_sure",
+      "[15m] tries to say or or two words besides mama or dada like ba for ball or da for dog -> not_sure",
+      "[9m] bangs to things together -> not_sure",
+      "[9m] looks for objects when dropped out of sight -> not_sure",
+      "[12m] looks for things he sees you hide like a toy under a blanket -> not_sure",
+      "[12m] puts something in a container like a block in a cap -> not_sure",
+      "[15m] stacks at least two small objects like blocks -> not_sure",
+      "[15m] tries to use things the right way like a phone or a cup or a book -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[12m] drinks from a cup without a lid as you hold it -> yes",
+      "[12m] picks things up between thumb and pointer finger like small bits of food -> yes",
+      "[12m] pulls up to stand -> yes",
+      "[12m] walks holding on to furniture -> not_sure",
+      "[15m] takes a few steps on her own -> not_sure",
+      "[15m] uses fingers to feed herself some food -> not_sure",
+      "[18m] climbs on and off a couch or chair without help -> not_sure",
+      "[18m] drinks from a cup without a lid and may spill sometimes -> not_sure",
+      "[18m] feeds himself with his fingers -> not_sure",
+      "[18m] scribbles -> not_sure",
+      "[9m] is shy or clingy or fearful around strangers -> not_sure",
+      "[9m] looks when you call her name -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 12,
+        "gap_months": 6,
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical movement and physical activities for Maya, focusing on her current abilities and encouraging her to reach the next developmental milestones."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 9,
+        "gap_months": 9,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes engaging and practical activities to support Maya's social and emotional development. The activities are designed to be fun and interactive, helping her connect with you and express her feelings."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 9,
+        "gap_months": 9,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes practical language and communication activities for Maya, focusing on her current abilities and encouraging her next steps in development."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 9,
+        "gap_months": 9,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes engaging and practical activities to support Maya's cognitive and adaptive skills development at home. The activities are designed to be fun and easy to incorporate into daily routines."
+      }
+    ],
+    "focus_areas": [
+      "Social / Emotional",
+      "Language / Communication",
+      "Cognitive / Adaptive"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Name Calling",
+        "description": "Call Maya's name from another room and see if she looks for you. Reward her with a smile or clap when she responds.",
+        "duration_min": 3,
+        "goal": "current"
+      },
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Banging Blocks Together",
+        "description": "Provide Maya with two soft blocks. Show her how to bang them together, then encourage her to try it herself.",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Peek-a-Boo",
+        "description": "Play peek-a-boo by hiding your face behind your hands or a cloth and then revealing yourself. Encourage Maya to do the same.",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_2",
+        "category": "Cognitive / Adaptive",
+        "title": "Hide and Seek with a Toy",
+        "description": "While Maya watches, hide a small toy under a blanket. Encourage her to find it by lifting the blanket.",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_3",
+        "category": "Social / Emotional",
+        "title": "Facial Expression Game",
+        "description": "Make different facial expressions (happy, sad, surprised) and encourage Maya to mimic you. Use a mirror to help her see her own expressions.",
+        "duration_min": 5,
+        "goal": "current"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Maya. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C03",
+    "child_name": "Leo",
+    "age_label": "2y 2m",
+    "age_months": 26,
+    "diagnosis": "Autism spectrum disorder",
+    "concerns_bullets": [
+      "Limited eye contact and few words",
+      "Repetitive play",
+      "transitions hard",
+      "picky eating"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[15m] takes a few steps on her own -> not_sure",
+      "[15m] uses fingers to feed herself some food -> not_sure",
+      "[18m] climbs on and off a couch or chair without help -> not_sure",
+      "[18m] drinks from a cup without a lid and may spill sometimes -> not_sure",
+      "[18m] feeds himself with his fingers -> not_sure",
+      "[18m] scribbles -> not_sure",
+      "[24m] eats with a spoon -> not_sure",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[12m] play games with you like pat a cake -> not_sure",
+      "[15m] claps when excited -> not_sure",
+      "[15m] copies other children while playing like taking toys out of a container when another child does -> not_sure",
+      "[15m] hugs stuffed doll or other toy -> not_sure",
+      "[15m] shows you affection like hugs or cuddles or kisses you -> not_sure",
+      "[18m] helps you dress him by pushing the arm through the sleeve or lifting up the foot -> not_sure",
+      "[18m] looks at a few pages in a book with you -> not_sure",
+      "[18m] moves away from you but looks to make sure you are close by -> not_sure",
+      "[18m] points to show you something interesting -> not_sure",
+      "[12m] calls parents mama or dada or another special name -> not_sure",
+      "[12m] understands no so pauses briefly or stops when you say it -> not_sure",
+      "[12m] waves byebye -> not_sure",
+      "[15m] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> not_sure",
+      "[15m] looks at a ffamiliar object when you name it -> not_sure",
+      "[15m] points to ask for something or to get help -> not_sure",
+      "[15m] tries to say or or two words besides mama or dada like ba for ball or da for dog -> not_sure",
+      "[18m] follows one step directions without any gestures like giving you the toy when you say give it to me -> not_sure",
+      "[18m] tries to say three or more words besides mama or dada -> not_sure",
+      "[15m] stacks at least two small objects like blocks -> not_sure",
+      "[15m] tries to use things the right way like a phone or a cup or a book -> not_sure",
+      "[18m] copies you doing chores like sweeping with a broom -> not_sure",
+      "[18m] plays with toys in a simple way like pushing a toy car -> not_sure",
+      "[24m] holds something in one hand while using the other hand for example holding a container and taking the lid off -> not_sure",
+      "[24m] plays with more than one toy at the same time like putting toy food on a toy plate -> not_sure",
+      "[24m] tries to use switches or knobs or buttons on a toy -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[15m] takes a few steps on her own -> not_sure",
+      "[15m] uses fingers to feed herself some food -> not_sure",
+      "[18m] climbs on and off a couch or chair without help -> not_sure",
+      "[18m] drinks from a cup without a lid and may spill sometimes -> not_sure",
+      "[18m] feeds himself with his fingers -> not_sure",
+      "[18m] scribbles -> not_sure",
+      "[24m] eats with a spoon -> not_sure",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[12m] play games with you like pat a cake -> not_sure",
+      "[15m] claps when excited -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 15,
+        "gap_months": 11,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes a variety of movement and physical activities designed to support Leo's development in a fun and engaging way. The activities focus on current skills and encourage progression towards next milestones."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 12,
+        "gap_months": 14,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes engaging and practical activities to support Leo's social and emotional development, focusing on play, affection, and interaction with others."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 12,
+        "gap_months": 14,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities to support Leo's language and communication skills at home. The activities focus on current-level practice and near next-step practice to encourage progress in a fun and interactive way."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 15,
+        "gap_months": 11,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities for Leo to support his cognitive and adaptive skills at home. The activities are designed to be short and manageable, promoting both current-level practice and near next-step skills."
+      }
+    ],
+    "focus_areas": [
+      "Social / Emotional",
+      "Language / Communication",
+      "Movement / Physical"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Excited Clapping",
+        "description": "Whenever Leo shows excitement, model clapping your hands and encourage him to join in. You can use a favorite toy or activity to elicit excitement.",
+        "duration_min": 3,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Movement / Physical",
+        "title": "Couch Climbing",
+        "description": "Encourage Leo to climb on and off the couch or a sturdy chair. You can use pillows to create a safe climbing area.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Pat-a-Cake Game",
+        "description": "Sit facing Leo and sing the 'Pat-a-Cake' song while clapping your hands together. Encourage him to clap along with you.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Movement / Physical",
+        "title": "Cup Drinking Practice",
+        "description": "Fill a cup with a small amount of water and let Leo practice drinking from it. Be ready for spills and encourage him to try again.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_3",
+        "category": "Social / Emotional",
+        "title": "Copying Play",
+        "description": "Play with a container and some toys. Take a toy out and encourage Leo to copy you by taking a toy out as well. Use simple phrases like 'Your turn!'",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Leo. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C04",
+    "child_name": "Sofia",
+    "age_label": "3y 1m",
+    "age_months": 37,
+    "diagnosis": "Prematurity history",
+    "concerns_bullets": [
+      "Speech hard to understand",
+      "Fine motor delay",
+      "good comprehension"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[24m] eats with a spoon -> with_help",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> not_sure",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure",
+      "[36m] puts on some clothes by himself like loose pants or a jacket -> not_sure",
+      "[36m] strings items together like large beads or macaroni -> not_sure",
+      "[36m] uses a fork -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure",
+      "[24m] notices when others are hurt or upset like pausing or looking sad when someone is crying -> not_sure",
+      "[30m] follos simple routines when told like helping to pick up toys when you say it is clean up time -> not_sure",
+      "[30m] plays next to other children and sometimes plays with them -> not_sure",
+      "[30m] shows you what she can do by saying look at me -> not_sure",
+      "[36m] calms down within 10 minutes after you leave her like at childcare drop off -> not_sure",
+      "[36m] notices other children and joins them to play -> not_sure",
+      "[18m] follows one step directions without any gestures like giving you the toy when you say give it to me -> not_sure",
+      "[18m] tries to say three or more words besides mama or dada -> not_sure",
+      "[24m] points at least two body parts when you ask her to show you -> not_sure",
+      "[24m] points to things in a book when you ask like where is the bear -> not_sure",
+      "[24m] says at least two words together like more milk -> not_sure",
+      "[24m] uses more gestures than just waving or pointing like blowing a kiss or nodding yes -> not_sure",
+      "[30m] name things in a book when you point and ask what is this -> not_sure",
+      "[30m] say two or more words toghether with one action word like doggie run -> not_sure",
+      "[30m] says about 50 words -> not_sure",
+      "[30m] says words like I me or we -> not_sure",
+      "[24m] holds something in one hand while using the other hand for example holding a container and taking the lid off -> not_sure",
+      "[24m] plays with more than one toy at the same time like putting toy food on a toy plate -> not_sure",
+      "[24m] tries to use switches or knobs or buttons on a toy -> not_sure",
+      "[30m] follows two step instructions like put the toy down and close the door -> not_sure",
+      "[30m] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> not_sure",
+      "[30m] shows simple problem solving skills like standing on a small stool to reach something -> not_sure",
+      "[30m] uses things to pretend like feeding a block to a doll as if it were food -> not_sure",
+      "[36m] avoids touching hot objects like the stove when you warn her -> not_sure",
+      "[36m] draws a circle when you show her how -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[24m] eats with a spoon -> with_help",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> not_sure",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure",
+      "[36m] puts on some clothes by himself like loose pants or a jacket -> not_sure",
+      "[36m] strings items together like large beads or macaroni -> not_sure",
+      "[36m] uses a fork -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 24,
+        "gap_months": 13,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical movement and physical activities for Sofia, focusing on developing her gross motor skills and fine motor abilities in a fun and engaging way."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 24,
+        "gap_months": 13,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities to support Sofia's social and emotional development at home, focusing on her current abilities and encouraging growth towards next milestones."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 18,
+        "gap_months": 19,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities to support Sofia's language and communication skills at home. The activities are designed to be fun and fit her developmental level while encouraging progress towards her milestone targets."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 24,
+        "gap_months": 13,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities for Sofia to support her cognitive and adaptive skills development. The activities are designed to be fun and fit within the home environment, focusing on both current-level and near next-step practices."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Movement / Physical",
+      "Social / Emotional"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Body Part Show and Tell",
+        "description": "Ask Sofia to show you different body parts like 'Where's your nose?' or 'Show me your feet.' Celebrate her responses!",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Emotion Faces Game",
+        "description": "Make different facial expressions (happy, sad, surprised) and encourage Sofia to mimic them. Talk about what each expression means.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Gesture Play",
+        "description": "Play a game where you model different gestures like blowing a kiss or nodding. Encourage Sofia to imitate you.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Clean Up Time",
+        "description": "At the end of playtime, say 'It's clean-up time!' and help Sofia pick up toys together. Encourage her to follow your lead.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Two-Word Requests",
+        "description": "During snack time, encourage Sofia to use two words together, like 'more juice' or 'want cookie.' Prompt her gently if needed.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Sofia. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C05",
+    "child_name": "Ethan",
+    "age_label": "4y 6m",
+    "age_months": 54,
+    "diagnosis": "Cerebral palsy",
+    "concerns_bullets": [
+      "Trouble keeping up in preschool",
+      "Self-care delays",
+      "frequent falls",
+      "difficulty with stairs"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[24m] eats with a spoon -> not_sure",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> not_sure",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure",
+      "[36m] puts on some clothes by himself like loose pants or a jacket -> not_sure",
+      "[36m] strings items together like large beads or macaroni -> not_sure",
+      "[36m] uses a fork -> not_sure",
+      "[36m] calms down within 10 minutes after you leave her like at childcare drop off -> not_sure",
+      "[36m] notices other children and joins them to play -> not_sure",
+      "[48m] asks to go play with children if none are around like can I play with Alex -> not_sure",
+      "[48m] avoids danger like not jumping from tall heights at the playgroung -> not_sure",
+      "[48m] changes behavior based on where she is like place of worship or library or playground -> not_sure",
+      "[48m] comforts others who are hurt or sad like hugging a crying friend -> not_sure",
+      "[60m] does simple chores at home like matching socks or cleaning the table after eating -> not_sure",
+      "[60m] follows rules or takesake turns when playing games with other  children -> not_sure",
+      "[60m] sings dances or acts for you -> not_sure",
+      "[36m] ask who or what or where or why questions like where is mommy or where is daddy -> not_sure",
+      "[36m] says first name when asked -> not_sure",
+      "[36m] says what action is happening in a picture or book when asked like running or eating or playing -> not_sure",
+      "[36m] talks well enough for others to understand most of the time -> not_sure",
+      "[48m] answers simple questions like what is a coat for or what is crayon for -> not_sure",
+      "[48m] says sentences with four or more words -> not_sure",
+      "[48m] says some words from a song or story or nursery rhyme -> not_sure",
+      "[48m] talks about at least one thing that happended during her day like I played soccer -> not_sure",
+      "[60m] answers simple questions about a book or a story after you read or tell it to her -> not_sure",
+      "[60m] keep a conversation going with more than three back and forth exchanges -> not_sure",
+      "[60m] tells a storys she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it -> not_sure",
+      "[60m] uses or recognizes simple rhymes like bat cat or ball tall -> not_sure",
+      "[30m] follows two step instructions like put the toy down and close the door -> not_sure",
+      "[30m] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> not_sure",
+      "[30m] shows simple problem solving skills like standing on a small stool to reach something -> not_sure",
+      "[30m] uses things to pretend like feeding a block to a doll as if it were food -> not_sure",
+      "[36m] avoids touching hot objects like the stove when you warn her -> not_sure",
+      "[36m] draws a circle when you show her how -> not_sure",
+      "[48m] draws a person with three or more body parts -> not_sure",
+      "[48m] names a few colors or items -> not_sure",
+      "[48m] tell what comes next in a well known story -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[24m] eats with a spoon -> not_sure",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> not_sure",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure",
+      "[36m] puts on some clothes by himself like loose pants or a jacket -> not_sure",
+      "[36m] strings items together like large beads or macaroni -> not_sure",
+      "[36m] uses a fork -> not_sure",
+      "[36m] calms down within 10 minutes after you leave her like at childcare drop off -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 24,
+        "gap_months": 30,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of movement and physical activities for Ethan, focusing on both current skills and near next-step practices to support his development in a fun and engaging way."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 36,
+        "gap_months": 18,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical social and emotional activities for Ethan, focusing on his current level and near next-step skills. These activities aim to enhance his ability to interact with peers, manage emotions, and understand social cues."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 36,
+        "gap_months": 18,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes engaging and practical language and communication activities for Ethan, focusing on his current level and near next-step skills. These activities are designed to fit into daily routines and promote language development in a fun way."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 30,
+        "gap_months": 24,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities for Ethan to support his cognitive and adaptive skills development at home."
+      }
+    ],
+    "focus_areas": [
+      "Movement / Physical",
+      "Cognitive / Adaptive",
+      "Social / Emotional"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Movement / Physical",
+        "title": "Spoon Practice",
+        "description": "Give Ethan a bowl of soft food and a spoon. Encourage him to eat independently while you supervise. Offer help as needed.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Emotion Charades",
+        "description": "Take turns acting out different emotions (happy, sad, angry) while the other guesses. Discuss what makes you feel each emotion.",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_2",
+        "category": "Movement / Physical",
+        "title": "Jumping Fun",
+        "description": "Create a safe space with soft mats or cushions. Encourage Ethan to jump off the ground with both feet, celebrating each jump.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Calm Down Corner",
+        "description": "Create a calm down space with pillows and soft toys. Practice going there together when feeling upset, and talk about how to calm down.",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_3",
+        "category": "Movement / Physical",
+        "title": "Kick the Ball",
+        "description": "Set up a soft ball in a safe area. Encourage Ethan to kick the ball towards a target, like a box or a wall.",
+        "duration_min": 7,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Ethan. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C06",
+    "child_name": "Amina",
+    "age_label": "5 years",
+    "age_months": 60,
+    "diagnosis": "Global developmental delay",
+    "concerns_bullets": [
+      "Learning and routines are hard",
+      "Short attention span",
+      "follows only simple directions"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[48m] catches a large ball most of the times -> not_sure",
+      "[48m] holds crayon or pencil between fingers and thumb not fist -> not_sure",
+      "[48m] serves herself food or pours water with adult supervision -> not_sure",
+      "[48m] unbuttons some buttons -> not_sure",
+      "[60m] buttons some buttons -> not_sure",
+      "[60m] hops on one foot -> not_sure",
+      "[48m] asks to go play with children if none are around like can I play with Alex -> not_sure",
+      "[48m] avoids danger like not jumping from tall heights at the playgroung -> not_sure",
+      "[48m] changes behavior based on where she is like place of worship or library or playground -> not_sure",
+      "[48m] comforts others who are hurt or sad like hugging a crying friend -> not_sure",
+      "[60m] does simple chores at home like matching socks or cleaning the table after eating -> not_sure",
+      "[60m] follows rules or takesake turns when playing games with other  children -> not_sure",
+      "[60m] sings dances or acts for you -> not_sure",
+      "[48m] answers simple questions like what is a coat for or what is crayon for -> not_sure",
+      "[48m] says sentences with four or more words -> not_sure",
+      "[48m] says some words from a song or story or nursery rhyme -> not_sure",
+      "[48m] talks about at least one thing that happended during her day like I played soccer -> not_sure",
+      "[60m] answers simple questions about a book or a story after you read or tell it to her -> not_sure",
+      "[60m] keep a conversation going with more than three back and forth exchanges -> not_sure",
+      "[60m] tells a storys she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it -> not_sure",
+      "[60m] uses or recognizes simple rhymes like bat cat or ball tall -> not_sure",
+      "[24m] holds something in one hand while using the other hand for example holding a container and taking the lid off -> not_sure",
+      "[24m] plays with more than one toy at the same time like putting toy food on a toy plate -> not_sure",
+      "[24m] tries to use switches or knobs or buttons on a toy -> not_sure",
+      "[30m] follows two step instructions like put the toy down and close the door -> not_sure",
+      "[30m] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> not_sure",
+      "[30m] shows simple problem solving skills like standing on a small stool to reach something -> not_sure",
+      "[30m] uses things to pretend like feeding a block to a doll as if it were food -> not_sure",
+      "[36m] avoids touching hot objects like the stove when you warn her -> not_sure",
+      "[36m] draws a circle when you show her how -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[48m] catches a large ball most of the times -> not_sure",
+      "[48m] holds crayon or pencil between fingers and thumb not fist -> not_sure",
+      "[48m] serves herself food or pours water with adult supervision -> not_sure",
+      "[48m] unbuttons some buttons -> not_sure",
+      "[60m] buttons some buttons -> not_sure",
+      "[60m] hops on one foot -> not_sure",
+      "[48m] asks to go play with children if none are around like can I play with Alex -> not_sure",
+      "[48m] avoids danger like not jumping from tall heights at the playgroung -> not_sure",
+      "[48m] changes behavior based on where she is like place of worship or library or playground -> not_sure",
+      "[48m] comforts others who are hurt or sad like hugging a crying friend -> not_sure",
+      "[60m] does simple chores at home like matching socks or cleaning the table after eating -> not_sure",
+      "[60m] follows rules or takesake turns when playing games with other  children -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 48,
+        "gap_months": 12,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging movement and physical activities for Amina, focusing on her current abilities and helping her progress towards her developmental milestones."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 48,
+        "gap_months": 12,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities to support Amina's social and emotional development, focusing on her current abilities and encouraging growth towards her next milestones."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 48,
+        "gap_months": 12,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical language and communication activities for Amina, focusing on her current level and near next-step skills. These activities are designed to enhance her language development in a fun and manageable way."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 24,
+        "gap_months": 36,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities for Amina to support her cognitive and adaptive skills at home, focusing on her current level and near next-step practices."
+      }
+    ],
+    "focus_areas": [
+      "Cognitive / Adaptive",
+      "Movement / Physical",
+      "Social / Emotional"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Container Lid Play",
+        "description": "Give Amina a container with a lid and some small toys. Encourage her to hold the container in one hand while using the other hand to take the lid off and put the toys inside.",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Playdate Invitation",
+        "description": "Encourage Amina to ask a neighbor or friend to play. Help her formulate the question, like 'Can I play with Alex?'",
+        "duration_min": 5,
+        "goal": "next"
+      },
+      {
+        "day": "day_2",
+        "category": "Cognitive / Adaptive",
+        "title": "Color Sorting",
+        "description": "Provide Amina with a set of colored blocks or crayons. Ask her to point to or hand you a specific color when you name it, like 'Can you show me the blue one?'",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Comforting Friends",
+        "description": "Use dolls or stuffed animals to role-play comforting a sad character. Encourage Amina to hug or talk to the character.",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_3",
+        "category": "Cognitive / Adaptive",
+        "title": "Two-Step Instructions Game",
+        "description": "Play a game where you give Amina two simple instructions to follow, such as 'Put the toy down and clap your hands.'",
+        "duration_min": 5,
+        "goal": "next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Amina. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C07",
+    "child_name": "Lucas",
+    "age_label": "14 months",
+    "age_months": 14,
+    "diagnosis": "Fragile X syndrome",
+    "concerns_bullets": [
+      "Not walking",
+      "limited babbling",
+      "Sensory sensitivity",
+      "shy socially"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[4m] bring hands to mouth -> not_sure",
+      "[4m] holds a toy when you put it in his hand -> not_sure",
+      "[4m] holds head steady without support when you are holding him -> not_sure",
+      "[4m] pushes up onto elbows or forearms when on tummy -> not_sure",
+      "[6m] leans on hands to support herself when sitting -> not_sure",
+      "[6m] pushes up with straight arms when on tummy -> not_sure",
+      "[6m] rolls from tummy to back -> not_sure",
+      "[9m] gets to sitting position by herself -> not_sure",
+      "[9m] moves things from one hand to her other hand -> not_sure",
+      "[9m] sits without support -> not_sure",
+      "[9m] uses fingers to rake food towards himself -> not_sure",
+      "[2m] calms down when spoken to or picked up -> not_sure",
+      "[2m] looks at your face -> not_sure",
+      "[2m] seems happy to see you when you walk up to her -> not_sure",
+      "[2m] smiles when you talk to or smile at her -> not_sure",
+      "[4m] chuckles when you try to make him laugh but not yet a full laugh -> not_sure",
+      "[4m] looks at you moves or makes sounds to get or keep you attention -> not_sure",
+      "[4m] smiles on his own to get your attention -> not_sure",
+      "[6m] knows familiar people -> not_sure",
+      "[6m] laughs -> not_sure",
+      "[6m] likes to look at self in a mirror -> not_sure",
+      "[4m] makes cooing sounds like ooooo or aahhh -> not_sure",
+      "[4m] makes sounds back when you talk to him -> not_sure",
+      "[4m] turns head towards the sound of your voice -> not_sure",
+      "[6m] blows raspberries or sticks tongue out and blows -> not_sure",
+      "[6m] makes squealing noises -> not_sure",
+      "[6m] takes turns making sounds with you -> not_sure",
+      "[9m] lifts arms up to be picked up -> not_sure",
+      "[9m] makes a lot of different sounds like mamamamama and bababababa -> not_sure",
+      "[4m] if hungry open mouth when she sees breast or bottle -> not_sure",
+      "[4m] looks at her hands with interest -> not_sure",
+      "[6m] closes lips to show she doesn't want more food -> not_sure",
+      "[6m] puts things in her mouth to explore them -> not_sure",
+      "[6m] reaches to grab a toy she wants -> not_sure",
+      "[9m] bangs to things together -> not_sure",
+      "[9m] looks for objects when dropped out of sight -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[4m] bring hands to mouth -> not_sure",
+      "[4m] holds a toy when you put it in his hand -> not_sure",
+      "[4m] holds head steady without support when you are holding him -> not_sure",
+      "[4m] pushes up onto elbows or forearms when on tummy -> not_sure",
+      "[6m] leans on hands to support herself when sitting -> not_sure",
+      "[6m] pushes up with straight arms when on tummy -> not_sure",
+      "[6m] rolls from tummy to back -> not_sure",
+      "[9m] gets to sitting position by herself -> not_sure",
+      "[9m] moves things from one hand to her other hand -> not_sure",
+      "[9m] sits without support -> not_sure",
+      "[9m] uses fingers to rake food towards himself -> not_sure",
+      "[2m] calms down when spoken to or picked up -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 4,
+        "gap_months": 10,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities to support Lucas's movement and physical development, focusing on his current abilities and encouraging growth towards next milestones."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 2,
+        "gap_months": 12,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of short, engaging activities to support Lucas's social and emotional development, focusing on interaction and connection."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 4,
+        "gap_months": 10,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities to support Lucas's language and communication development at home, focusing on current skills and near next steps."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 4,
+        "gap_months": 10,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical home activities for Lucas to support his cognitive and adaptive development, focusing on current-level and near next-step skills."
+      }
+    ],
+    "focus_areas": [
+      "Social / Emotional",
+      "Movement / Physical",
+      "Language / Communication"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Happy Greetings",
+        "description": "Practice greeting Lucas with a big smile and a cheerful voice when you enter the room. Observe his reaction and encourage him to smile back.",
+        "duration_min": 3,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Cooing Back and Forth",
+        "description": "Sit face-to-face with Lucas. Make cooing sounds like 'oooo' or 'aahhh' and encourage him to mimic you. Wait for him to respond, then repeat the sounds back to him.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Face Time",
+        "description": "Sit in front of Lucas and make different facial expressions. Encourage him to look at your face and mimic your expressions. Use a mirror if available.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Sound Turn-Taking",
+        "description": "Take turns making sounds with Lucas. You can squeal, clap, or make funny noises. Encourage him to imitate you and respond to your sounds.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_3",
+        "category": "Social / Emotional",
+        "title": "Silly Sounds",
+        "description": "Make silly sounds or noises to get Lucas's attention. Pause to see if he responds with sounds or looks your way.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Lucas. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C08",
+    "child_name": "Emma",
+    "age_label": "2y 8m",
+    "age_months": 32,
+    "diagnosis": "Suspected childhood apraxia of speech",
+    "concerns_bullets": [
+      "Very limited speech output",
+      "Uses gestures",
+      "gets frustrated",
+      "inconsistent sounds"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[18m] climbs on and off a couch or chair without help -> not_sure",
+      "[18m] drinks from a cup without a lid and may spill sometimes -> not_sure",
+      "[18m] feeds himself with his fingers -> not_sure",
+      "[18m] scribbles -> not_sure",
+      "[24m] eats with a spoon -> not_sure",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> not_sure",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure",
+      "[18m] helps you dress him by pushing the arm through the sleeve or lifting up the foot -> not_sure",
+      "[18m] looks at a few pages in a book with you -> not_sure",
+      "[18m] moves away from you but looks to make sure you are close by -> not_sure",
+      "[18m] points to show you something interesting -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure",
+      "[24m] notices when others are hurt or upset like pausing or looking sad when someone is crying -> not_sure",
+      "[30m] follos simple routines when told like helping to pick up toys when you say it is clean up time -> not_sure",
+      "[30m] plays next to other children and sometimes plays with them -> not_sure",
+      "[30m] shows you what she can do by saying look at me -> not_sure",
+      "[12m] calls parents mama or dada or another special name -> not_sure",
+      "[12m] understands no so pauses briefly or stops when you say it -> not_sure",
+      "[12m] waves byebye -> not_sure",
+      "[15m] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> not_sure",
+      "[15m] looks at a ffamiliar object when you name it -> not_sure",
+      "[15m] points to ask for something or to get help -> not_sure",
+      "[15m] tries to say or or two words besides mama or dada like ba for ball or da for dog -> not_sure",
+      "[18m] follows one step directions without any gestures like giving you the toy when you say give it to me -> not_sure",
+      "[18m] tries to say three or more words besides mama or dada -> not_sure",
+      "[18m] copies you doing chores like sweeping with a broom -> not_sure",
+      "[18m] plays with toys in a simple way like pushing a toy car -> not_sure",
+      "[24m] holds something in one hand while using the other hand for example holding a container and taking the lid off -> not_sure",
+      "[24m] plays with more than one toy at the same time like putting toy food on a toy plate -> not_sure",
+      "[24m] tries to use switches or knobs or buttons on a toy -> not_sure",
+      "[30m] follows two step instructions like put the toy down and close the door -> not_sure",
+      "[30m] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> not_sure",
+      "[30m] shows simple problem solving skills like standing on a small stool to reach something -> not_sure",
+      "[30m] uses things to pretend like feeding a block to a doll as if it were food -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[18m] climbs on and off a couch or chair without help -> not_sure",
+      "[18m] drinks from a cup without a lid and may spill sometimes -> not_sure",
+      "[18m] feeds himself with his fingers -> not_sure",
+      "[18m] scribbles -> not_sure",
+      "[24m] eats with a spoon -> not_sure",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> not_sure",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 18,
+        "gap_months": 14,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes a variety of movement and physical activities designed for Emma, focusing on her current abilities and encouraging her to reach the next developmental milestones."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 18,
+        "gap_months": 14,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes practical social and emotional activities designed for Emma, focusing on her current developmental level while also encouraging her to reach near next-step milestones."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 12,
+        "gap_months": 20,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank includes practical language and communication activities for Emma, focusing on her current skills and near next steps. These activities are designed to be engaging and suitable for home practice."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 18,
+        "gap_months": 14,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of engaging and practical home activities for Emma, focusing on cognitive and adaptive skills. The activities are designed to support her current abilities while encouraging growth towards developmental milestones."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Movement / Physical",
+      "Social / Emotional"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Wave Goodbye",
+        "description": "Practice waving goodbye during daily routines. Use a toy or a family member to model waving and encourage Emma to join in.",
+        "duration_min": 3,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Washing Hands Together",
+        "description": "Make handwashing fun by singing a short song while you wash Emma's hands together. Encourage her to hold out her hands for you.",
+        "duration_min": 3,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Name Game",
+        "description": "Sit with Emma and look at family photos. Point to each person and say their name. Encourage Emma to repeat or gesture to indicate who she recognizes.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Dress-Up Fun",
+        "description": "Let Emma help you dress by guiding her to push her arm through a sleeve or lift her foot for a shoe. Make it playful by using a favorite stuffed animal to dress up too.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Follow the Gesture",
+        "description": "Use simple gestures paired with words. For example, say 'come here' while gesturing for her to come. Encourage her to follow your gesture.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Emma. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C09",
+    "child_name": "Zain",
+    "age_label": "4 years",
+    "age_months": 48,
+    "diagnosis": "Attention and self-regulation concerns (possible ADHD)",
+    "concerns_bullets": [
+      "Very active",
+      "impulsive",
+      "Big emotional reactions",
+      "interrupts"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[36m] puts on some clothes by himself like loose pants or a jacket -> not_sure",
+      "[36m] strings items together like large beads or macaroni -> not_sure",
+      "[36m] uses a fork -> not_sure",
+      "[48m] catches a large ball most of the times -> not_sure",
+      "[48m] holds crayon or pencil between fingers and thumb not fist -> not_sure",
+      "[48m] serves herself food or pours water with adult supervision -> not_sure",
+      "[48m] unbuttons some buttons -> not_sure",
+      "[60m] buttons some buttons -> not_sure",
+      "[60m] hops on one foot -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure",
+      "[24m] notices when others are hurt or upset like pausing or looking sad when someone is crying -> not_sure",
+      "[30m] follos simple routines when told like helping to pick up toys when you say it is clean up time -> not_sure",
+      "[30m] plays next to other children and sometimes plays with them -> not_sure",
+      "[30m] shows you what she can do by saying look at me -> not_sure",
+      "[36m] calms down within 10 minutes after you leave her like at childcare drop off -> not_sure",
+      "[36m] notices other children and joins them to play -> not_sure",
+      "[30m] name things in a book when you point and ask what is this -> not_sure",
+      "[30m] say two or more words toghether with one action word like doggie run -> not_sure",
+      "[30m] says about 50 words -> not_sure",
+      "[30m] says words like I me or we -> not_sure",
+      "[36m] ask who or what or where or why questions like where is mommy or where is daddy -> not_sure",
+      "[36m] says first name when asked -> not_sure",
+      "[36m] says what action is happening in a picture or book when asked like running or eating or playing -> not_sure",
+      "[36m] talks well enough for others to understand most of the time -> not_sure",
+      "[48m] answers simple questions like what is a coat for or what is crayon for -> not_sure",
+      "[48m] says sentences with four or more words -> not_sure",
+      "[48m] says some words from a song or story or nursery rhyme -> not_sure",
+      "[48m] talks about at least one thing that happended during her day like I played soccer -> not_sure",
+      "[24m] holds something in one hand while using the other hand for example holding a container and taking the lid off -> not_sure",
+      "[24m] plays with more than one toy at the same time like putting toy food on a toy plate -> not_sure",
+      "[24m] tries to use switches or knobs or buttons on a toy -> not_sure",
+      "[30m] follows two step instructions like put the toy down and close the door -> not_sure",
+      "[30m] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> not_sure",
+      "[30m] shows simple problem solving skills like standing on a small stool to reach something -> not_sure",
+      "[30m] uses things to pretend like feeding a block to a doll as if it were food -> not_sure",
+      "[36m] avoids touching hot objects like the stove when you warn her -> not_sure",
+      "[36m] draws a circle when you show her how -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[36m] puts on some clothes by himself like loose pants or a jacket -> not_sure",
+      "[36m] strings items together like large beads or macaroni -> not_sure",
+      "[36m] uses a fork -> not_sure",
+      "[48m] catches a large ball most of the times -> not_sure",
+      "[48m] holds crayon or pencil between fingers and thumb not fist -> not_sure",
+      "[48m] serves herself food or pours water with adult supervision -> not_sure",
+      "[48m] unbuttons some buttons -> not_sure",
+      "[60m] buttons some buttons -> not_sure",
+      "[60m] hops on one foot -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure",
+      "[24m] notices when others are hurt or upset like pausing or looking sad when someone is crying -> not_sure",
+      "[30m] follos simple routines when told like helping to pick up toys when you say it is clean up time -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 36,
+        "gap_months": 12,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes a variety of movement and physical activities designed to support Zain's development in a fun and engaging way. The activities focus on current skills and near next-step skills to help him practice self-regulation and coordination."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 24,
+        "gap_months": 24,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of social and emotional activities tailored for Zain, focusing on current-level and near next-step practices to support his development in a fun and engaging way."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 30,
+        "gap_months": 18,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes engaging language and communication activities tailored for Zain, focusing on both current skills and next-step development. Each activity is designed to be practical and fun, encouraging language use in everyday situations."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 24,
+        "gap_months": 24,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities for Zain to support cognitive and adaptive skills development, focusing on current-level and near next-step practices."
+      }
+    ],
+    "focus_areas": [
+      "Social / Emotional",
+      "Cognitive / Adaptive",
+      "Language / Communication"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Emotion Faces Game",
+        "description": "Make different facial expressions (happy, sad, surprised) and encourage Zain to mimic them. Talk about how each expression might feel.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Book Naming",
+        "description": "Choose a picture book and point to different objects. Ask Zain, 'What is this?' and encourage him to name the items.",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Clean Up Time Song",
+        "description": "Sing a clean-up song while picking up toys together. Encourage Zain to help by following your lead when you say it's clean-up time.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Action Words Game",
+        "description": "Use toys or stuffed animals to act out simple actions. Say a phrase like 'doggie run' and encourage Zain to repeat it while mimicking the action.",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_3",
+        "category": "Social / Emotional",
+        "title": "Emotion Matching Cards",
+        "description": "Create or use cards with different facial expressions. Take turns matching the cards and discussing the emotions shown.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Zain. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C10",
+    "child_name": "Isla",
+    "age_label": "3y 8m",
+    "age_months": 44,
+    "diagnosis": "SYNGAP1-related disorder",
+    "concerns_bullets": [
+      "Delayed speech and balance",
+      "Attention issues",
+      "clumsy gait",
+      "limited pretend play"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[24m] eats with a spoon -> sometimes",
+      "[24m] kicks a ball -> sometimes",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> with_help",
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> sometimes",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure",
+      "[36m] puts on some clothes by himself like loose pants or a jacket -> not_sure",
+      "[36m] strings items together like large beads or macaroni -> not_sure",
+      "[36m] uses a fork -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure",
+      "[24m] notices when others are hurt or upset like pausing or looking sad when someone is crying -> not_sure",
+      "[30m] follos simple routines when told like helping to pick up toys when you say it is clean up time -> not_sure",
+      "[30m] plays next to other children and sometimes plays with them -> not_sure",
+      "[30m] shows you what she can do by saying look at me -> not_sure",
+      "[36m] calms down within 10 minutes after you leave her like at childcare drop off -> not_sure",
+      "[36m] notices other children and joins them to play -> not_sure",
+      "[18m] follows one step directions without any gestures like giving you the toy when you say give it to me -> not_sure",
+      "[18m] tries to say three or more words besides mama or dada -> not_sure",
+      "[24m] points at least two body parts when you ask her to show you -> not_sure",
+      "[24m] points to things in a book when you ask like where is the bear -> not_sure",
+      "[24m] says at least two words together like more milk -> not_sure",
+      "[24m] uses more gestures than just waving or pointing like blowing a kiss or nodding yes -> not_sure",
+      "[30m] name things in a book when you point and ask what is this -> not_sure",
+      "[30m] say two or more words toghether with one action word like doggie run -> not_sure",
+      "[30m] says about 50 words -> not_sure",
+      "[30m] says words like I me or we -> not_sure",
+      "[18m] copies you doing chores like sweeping with a broom -> not_sure",
+      "[18m] plays with toys in a simple way like pushing a toy car -> not_sure",
+      "[24m] holds something in one hand while using the other hand for example holding a container and taking the lid off -> not_sure",
+      "[24m] plays with more than one toy at the same time like putting toy food on a toy plate -> not_sure",
+      "[24m] tries to use switches or knobs or buttons on a toy -> not_sure",
+      "[30m] follows two step instructions like put the toy down and close the door -> not_sure",
+      "[30m] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> not_sure",
+      "[30m] shows simple problem solving skills like standing on a small stool to reach something -> not_sure",
+      "[30m] uses things to pretend like feeding a block to a doll as if it were food -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[24m] eats with a spoon -> sometimes",
+      "[24m] kicks a ball -> sometimes",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> with_help",
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> sometimes",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure",
+      "[36m] puts on some clothes by himself like loose pants or a jacket -> not_sure",
+      "[36m] strings items together like large beads or macaroni -> not_sure",
+      "[36m] uses a fork -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 24,
+        "gap_months": 20,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank includes a variety of movement and physical activities designed to support Isla's development in a fun and engaging way. The activities focus on current-level skills and near next-step skills to promote progress in her physical abilities."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 24,
+        "gap_months": 20,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank includes engaging social and emotional activities tailored for Isla, focusing on her current developmental level and encouraging growth towards her next milestones."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 18,
+        "gap_months": 26,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank includes engaging and practical activities to support Isla's language and communication skills, focusing on her current level and near next steps."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 18,
+        "gap_months": 26,
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank includes a variety of cognitive and adaptive activities designed to support Isla's developmental milestones in a fun and engaging way. Each activity is tailored to her current abilities while also encouraging her to reach for the next steps."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Cognitive / Adaptive",
+      "Movement / Physical"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Body Parts Game",
+        "description": "Ask Isla to show you different body parts by saying, 'Where's your nose?' or 'Show me your feet!'. Start with familiar body parts and gradually introduce new ones.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Movement / Physical",
+        "title": "Spoon Practice",
+        "description": "Provide Isla with a bowl of soft food (like yogurt or applesauce) and a spoon. Encourage her to scoop and eat independently. Offer help if needed, but let her try on her own.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Simple Directions",
+        "description": "Give Isla simple one-step directions like 'Come here!' or 'Give me the ball!'. Encourage her to follow without gestures.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Movement / Physical",
+        "title": "Ball Kicking Fun",
+        "description": "Set up a soft ball in a safe space. Encourage Isla to kick the ball back and forth with you. Start by rolling it to her and let her kick it back.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Gesture Play",
+        "description": "Play a game where you model different gestures like blowing a kiss or nodding. Encourage Isla to imitate you and use gestures during play.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Isla. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C11",
+    "child_name": "Aria",
+    "age_label": "20 months",
+    "age_months": 20,
+    "diagnosis": "No diagnosis",
+    "concerns_bullets": [
+      "Only ~10 words",
+      "very active",
+      "good eye contact",
+      "understands well"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[15m] takes a few steps on her own -> not_sure",
+      "[15m] uses fingers to feed herself some food -> not_sure",
+      "[18m] climbs on and off a couch or chair without help -> not_sure",
+      "[18m] drinks from a cup without a lid and may spill sometimes -> not_sure",
+      "[18m] feeds himself with his fingers -> not_sure",
+      "[18m] scribbles -> not_sure",
+      "[24m] eats with a spoon -> not_sure",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[15m] claps when excited -> not_sure",
+      "[15m] copies other children while playing like taking toys out of a container when another child does -> not_sure",
+      "[15m] hugs stuffed doll or other toy -> not_sure",
+      "[15m] shows you affection like hugs or cuddles or kisses you -> not_sure",
+      "[18m] helps you dress him by pushing the arm through the sleeve or lifting up the foot -> not_sure",
+      "[18m] looks at a few pages in a book with you -> not_sure",
+      "[18m] moves away from you but looks to make sure you are close by -> not_sure",
+      "[18m] points to show you something interesting -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure",
+      "[24m] notices when others are hurt or upset like pausing or looking sad when someone is crying -> not_sure",
+      "[15m] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> not_sure",
+      "[15m] looks at a ffamiliar object when you name it -> not_sure",
+      "[15m] points to ask for something or to get help -> not_sure",
+      "[15m] tries to say or or two words besides mama or dada like ba for ball or da for dog -> not_sure",
+      "[18m] follows one step directions without any gestures like giving you the toy when you say give it to me -> not_sure",
+      "[18m] tries to say three or more words besides mama or dada -> not_sure",
+      "[24m] points at least two body parts when you ask her to show you -> not_sure",
+      "[24m] points to things in a book when you ask like where is the bear -> not_sure",
+      "[24m] says at least two words together like more milk -> not_sure",
+      "[24m] uses more gestures than just waving or pointing like blowing a kiss or nodding yes -> not_sure",
+      "[15m] stacks at least two small objects like blocks -> not_sure",
+      "[15m] tries to use things the right way like a phone or a cup or a book -> not_sure",
+      "[18m] copies you doing chores like sweeping with a broom -> not_sure",
+      "[18m] plays with toys in a simple way like pushing a toy car -> not_sure",
+      "[24m] holds something in one hand while using the other hand for example holding a container and taking the lid off -> not_sure",
+      "[24m] plays with more than one toy at the same time like putting toy food on a toy plate -> not_sure",
+      "[24m] tries to use switches or knobs or buttons on a toy -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[15m] takes a few steps on her own -> not_sure",
+      "[15m] uses fingers to feed herself some food -> not_sure",
+      "[18m] climbs on and off a couch or chair without help -> not_sure",
+      "[18m] drinks from a cup without a lid and may spill sometimes -> not_sure",
+      "[18m] feeds himself with his fingers -> not_sure",
+      "[18m] scribbles -> not_sure",
+      "[24m] eats with a spoon -> not_sure",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[15m] claps when excited -> not_sure",
+      "[15m] copies other children while playing like taking toys out of a container when another child does -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 15,
+        "gap_months": 5,
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank includes practical movement and physical activities for Aria to support her development at home."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 15,
+        "gap_months": 5,
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "Here are six engaging activities to support Aria's social and emotional development, focusing on current skills and near-next steps."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 15,
+        "gap_months": 5,
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities to support Aria's language and communication development at home."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 15,
+        "gap_months": 5,
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "Here are six engaging activities to support Aria's cognitive and adaptive skills at home."
+      }
+    ],
+    "focus_areas": [
+      "Movement / Physical",
+      "Social / Emotional",
+      "Language / Communication"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Toy Naming Game",
+        "description": "Hold up a familiar toy and say its name. Encourage Aria to look at the toy when you name it. Repeat with different toys.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Movement / Physical",
+        "title": "Couch Climbing",
+        "description": "Encourage Aria to climb on and off the couch safely. You can place soft cushions on the floor for safety.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Follow the Direction",
+        "description": "Give a simple one-step direction like 'give me the ball' without gestures. Praise her when she follows the direction.",
+        "duration_min": 5,
+        "goal": "next"
+      },
+      {
+        "day": "day_2",
+        "category": "Movement / Physical",
+        "title": "Cup Drinking Practice",
+        "description": "Fill a cup with a small amount of water and let Aria practice drinking from it. Expect some spills!",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Point and Ask",
+        "description": "Place a few toys out of reach. Encourage Aria to point to a toy she wants and say 'that' or 'give.'",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Aria. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C12",
+    "child_name": "Mateo",
+    "age_label": "2y 6m",
+    "age_months": 30,
+    "diagnosis": "No formal diagnosis",
+    "concerns_bullets": [
+      "Good eye contact but no words",
+      "lines up toys",
+      "responds to name inconsistently"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[18m] climbs on and off a couch or chair without help -> not_sure",
+      "[18m] drinks from a cup without a lid and may spill sometimes -> not_sure",
+      "[18m] feeds himself with his fingers -> not_sure",
+      "[18m] scribbles -> not_sure",
+      "[24m] eats with a spoon -> not_sure",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> not_sure",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure",
+      "[18m] helps you dress him by pushing the arm through the sleeve or lifting up the foot -> not_sure",
+      "[18m] looks at a few pages in a book with you -> not_sure",
+      "[18m] moves away from you but looks to make sure you are close by -> not_sure",
+      "[18m] points to show you something interesting -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure",
+      "[24m] notices when others are hurt or upset like pausing or looking sad when someone is crying -> not_sure",
+      "[30m] follos simple routines when told like helping to pick up toys when you say it is clean up time -> not_sure",
+      "[30m] plays next to other children and sometimes plays with them -> not_sure",
+      "[30m] shows you what she can do by saying look at me -> not_sure",
+      "[12m] calls parents mama or dada or another special name -> not_sure",
+      "[12m] understands no so pauses briefly or stops when you say it -> not_sure",
+      "[12m] waves byebye -> not_sure",
+      "[15m] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> not_sure",
+      "[15m] looks at a ffamiliar object when you name it -> not_sure",
+      "[15m] points to ask for something or to get help -> not_sure",
+      "[15m] tries to say or or two words besides mama or dada like ba for ball or da for dog -> not_sure",
+      "[18m] follows one step directions without any gestures like giving you the toy when you say give it to me -> not_sure",
+      "[18m] tries to say three or more words besides mama or dada -> not_sure",
+      "[18m] copies you doing chores like sweeping with a broom -> not_sure",
+      "[18m] plays with toys in a simple way like pushing a toy car -> not_sure",
+      "[24m] holds something in one hand while using the other hand for example holding a container and taking the lid off -> not_sure",
+      "[24m] plays with more than one toy at the same time like putting toy food on a toy plate -> not_sure",
+      "[24m] tries to use switches or knobs or buttons on a toy -> not_sure",
+      "[30m] follows two step instructions like put the toy down and close the door -> not_sure",
+      "[30m] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> not_sure",
+      "[30m] shows simple problem solving skills like standing on a small stool to reach something -> not_sure",
+      "[30m] uses things to pretend like feeding a block to a doll as if it were food -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[18m] climbs on and off a couch or chair without help -> not_sure",
+      "[18m] drinks from a cup without a lid and may spill sometimes -> not_sure",
+      "[18m] feeds himself with his fingers -> not_sure",
+      "[18m] scribbles -> not_sure",
+      "[24m] eats with a spoon -> not_sure",
+      "[24m] kicks a ball -> not_sure",
+      "[24m] runs -> not_sure",
+      "[24m] walks not climbs up a few stairs wih or without help -> not_sure",
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> not_sure",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 18,
+        "gap_months": 12,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes a variety of movement and physical activities designed for Mateo, focusing on current skills and next-step development. These activities are practical for home and aim to support his physical milestones."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 18,
+        "gap_months": 12,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "Here are some engaging activities to support Mateo's social and emotional development. These activities are designed to encourage interaction, communication, and exploration in a fun and practical way."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 12,
+        "gap_months": 18,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities to support Mateo's language and communication skills at home. The activities are designed to fit his current developmental level while encouraging growth towards near next-step milestones."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 18,
+        "gap_months": 12,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities for Mateo to support his cognitive and adaptive development. The activities are designed to be fun and fit into a typical home environment, promoting skills that align with his current developmental level and next steps."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Movement / Physical",
+      "Social / Emotional"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Bye-Bye Wave",
+        "description": "Practice waving bye-bye together. Encourage Mateo to wave when you say 'bye-bye' to toys or family members.",
+        "duration_min": 3,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Dress-Up Fun",
+        "description": "Let Mateo help you dress him by guiding his arms through the sleeves of a shirt or lifting his feet for shoes. Make it playful by using a favorite toy or character as a model.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Name Game",
+        "description": "Sit with Mateo and hold up a picture of a family member or a favorite toy. Say the name clearly and encourage him to repeat it. If he doesn\u2019t, model it a few times and encourage him to point to the picture or toy.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Hide and Seek Glance",
+        "description": "Play a simple game of hide and seek where you hide briefly and then peek out. Encourage Mateo to look for you and check in with him to see if he is looking.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Follow the Gesture",
+        "description": "Give Mateo simple directions using both a gesture and words, like 'come here' while waving your hand. Praise him when he follows the direction.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Mateo. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C13",
+    "child_name": "Luna",
+    "age_label": "3y 6m",
+    "age_months": 42,
+    "diagnosis": "Speech delay",
+    "concerns_bullets": [
+      "Limited speech",
+      "understands well",
+      "parents have very limited time for activities"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> not_sure",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure",
+      "[36m] puts on some clothes by himself like loose pants or a jacket -> not_sure",
+      "[36m] strings items together like large beads or macaroni -> not_sure",
+      "[36m] uses a fork -> not_sure",
+      "[48m] catches a large ball most of the times -> not_sure",
+      "[48m] holds crayon or pencil between fingers and thumb not fist -> not_sure",
+      "[48m] serves herself food or pours water with adult supervision -> not_sure",
+      "[48m] unbuttons some buttons -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure",
+      "[24m] notices when others are hurt or upset like pausing or looking sad when someone is crying -> not_sure",
+      "[30m] follos simple routines when told like helping to pick up toys when you say it is clean up time -> not_sure",
+      "[30m] plays next to other children and sometimes plays with them -> not_sure",
+      "[30m] shows you what she can do by saying look at me -> not_sure",
+      "[36m] calms down within 10 minutes after you leave her like at childcare drop off -> not_sure",
+      "[36m] notices other children and joins them to play -> not_sure",
+      "[24m] points at least two body parts when you ask her to show you -> not_sure",
+      "[24m] points to things in a book when you ask like where is the bear -> not_sure",
+      "[24m] says at least two words together like more milk -> not_sure",
+      "[24m] uses more gestures than just waving or pointing like blowing a kiss or nodding yes -> not_sure",
+      "[30m] name things in a book when you point and ask what is this -> not_sure",
+      "[30m] say two or more words toghether with one action word like doggie run -> not_sure",
+      "[30m] says about 50 words -> not_sure",
+      "[30m] says words like I me or we -> not_sure",
+      "[36m] ask who or what or where or why questions like where is mommy or where is daddy -> not_sure",
+      "[36m] says first name when asked -> not_sure",
+      "[36m] says what action is happening in a picture or book when asked like running or eating or playing -> not_sure",
+      "[36m] talks well enough for others to understand most of the time -> not_sure",
+      "[24m] holds something in one hand while using the other hand for example holding a container and taking the lid off -> not_sure",
+      "[24m] plays with more than one toy at the same time like putting toy food on a toy plate -> not_sure",
+      "[24m] tries to use switches or knobs or buttons on a toy -> not_sure",
+      "[30m] follows two step instructions like put the toy down and close the door -> not_sure",
+      "[30m] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> not_sure",
+      "[30m] shows simple problem solving skills like standing on a small stool to reach something -> not_sure",
+      "[30m] uses things to pretend like feeding a block to a doll as if it were food -> not_sure",
+      "[36m] avoids touching hot objects like the stove when you warn her -> not_sure",
+      "[36m] draws a circle when you show her how -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[30m] jumps off the ground with both feet -> not_sure",
+      "[30m] takes some clothes off by himself like loose pants or an open jacket -> not_sure",
+      "[30m] turns book pages one at a time when you read to her -> not_sure",
+      "[30m] uses hands to twist things like turning doorknobs or unscrewing lids -> not_sure",
+      "[36m] puts on some clothes by himself like loose pants or a jacket -> not_sure",
+      "[36m] strings items together like large beads or macaroni -> not_sure",
+      "[36m] uses a fork -> not_sure",
+      "[48m] catches a large ball most of the times -> not_sure",
+      "[48m] holds crayon or pencil between fingers and thumb not fist -> not_sure",
+      "[48m] serves herself food or pours water with adult supervision -> not_sure",
+      "[48m] unbuttons some buttons -> not_sure",
+      "[24m] looks at your face to see how to react in a new situation -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 30,
+        "gap_months": 12,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical movement and physical activities for Luna, focusing on her current skills and near next-step goals. Each activity is designed to be short and manageable for busy parents while promoting her physical development."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 24,
+        "gap_months": 18,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities to support Luna's social and emotional development, focusing on her current abilities and near next steps."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 24,
+        "gap_months": 18,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes engaging language and communication activities tailored for Luna's developmental level. Each activity is designed to be short and practical for home, focusing on enhancing her speech and understanding."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 24,
+        "gap_months": 18,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities for Luna to support her cognitive and adaptive skills development, focusing on her current level and near next steps."
+      }
+    ],
+    "focus_areas": [
+      "Social / Emotional",
+      "Language / Communication",
+      "Cognitive / Adaptive"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Look at Me!",
+        "description": "Encourage Luna to show you something she can do (like a dance move or a drawing) and say 'Look at me!' when she does.",
+        "duration_min": 3,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Toy Sorting",
+        "description": "Gather a few different toys of various colors. Ask Luna to sort them by color into different containers. You can help her by naming the colors as she sorts.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Emotion Faces",
+        "description": "Make different facial expressions (happy, sad, surprised) and encourage Luna to mimic them. Talk about what each face means.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Cognitive / Adaptive",
+        "title": "Two-Step Instructions",
+        "description": "Give Luna simple two-step instructions, like 'Pick up the ball and put it in the box.' Praise her when she follows the instructions.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_3",
+        "category": "Social / Emotional",
+        "title": "Clean Up Time",
+        "description": "At the end of playtime, say 'It's clean-up time!' and guide Luna to help put away toys. Praise her for helping.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Luna. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  },
+  {
+    "case_id": "C14",
+    "child_name": "Ryan",
+    "age_label": "4y 2m",
+    "age_months": 50,
+    "diagnosis": "No diagnosis",
+    "concerns_bullets": [
+      "Tantrums",
+      "difficulty with transitions",
+      "strong language skills",
+      "social but rigid"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[48m] catches a large ball most of the times -> not_sure",
+      "[48m] holds crayon or pencil between fingers and thumb not fist -> not_sure",
+      "[48m] serves herself food or pours water with adult supervision -> not_sure",
+      "[48m] unbuttons some buttons -> not_sure",
+      "[60m] buttons some buttons -> not_sure",
+      "[60m] hops on one foot -> not_sure",
+      "[36m] calms down within 10 minutes after you leave her like at childcare drop off -> not_sure",
+      "[36m] notices other children and joins them to play -> not_sure",
+      "[48m] asks to go play with children if none are around like can I play with Alex -> not_sure",
+      "[48m] avoids danger like not jumping from tall heights at the playgroung -> not_sure",
+      "[48m] changes behavior based on where she is like place of worship or library or playground -> not_sure",
+      "[48m] comforts others who are hurt or sad like hugging a crying friend -> not_sure",
+      "[36m] ask who or what or where or why questions like where is mommy or where is daddy -> not_sure",
+      "[36m] says first name when asked -> not_sure",
+      "[36m] says what action is happening in a picture or book when asked like running or eating or playing -> not_sure",
+      "[36m] talks well enough for others to understand most of the time -> not_sure",
+      "[48m] answers simple questions like what is a coat for or what is crayon for -> not_sure",
+      "[48m] says sentences with four or more words -> not_sure",
+      "[48m] says some words from a song or story or nursery rhyme -> not_sure",
+      "[48m] talks about at least one thing that happended during her day like I played soccer -> not_sure",
+      "[36m] avoids touching hot objects like the stove when you warn her -> not_sure",
+      "[36m] draws a circle when you show her how -> not_sure",
+      "[48m] draws a person with three or more body parts -> not_sure",
+      "[48m] names a few colors or items -> not_sure",
+      "[48m] tell what comes next in a well known story -> not_sure"
+    ],
+    "parent_qa_pdf": [
+      "[48m] catches a large ball most of the times -> not_sure",
+      "[48m] holds crayon or pencil between fingers and thumb not fist -> not_sure",
+      "[48m] serves herself food or pours water with adult supervision -> not_sure",
+      "[48m] unbuttons some buttons -> not_sure",
+      "[60m] buttons some buttons -> not_sure",
+      "[60m] hops on one foot -> not_sure",
+      "[36m] calms down within 10 minutes after you leave her like at childcare drop off -> not_sure",
+      "[36m] notices other children and joins them to play -> not_sure",
+      "[48m] asks to go play with children if none are around like can I play with Alex -> not_sure",
+      "[48m] avoids danger like not jumping from tall heights at the playgroung -> not_sure",
+      "[48m] changes behavior based on where she is like place of worship or library or playground -> not_sure",
+      "[48m] comforts others who are hurt or sad like hugging a crying friend -> not_sure"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 48,
+        "gap_months": 2,
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Ryan has a meaningful delay in Movement / Physical and may not need special support in this category right now."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 36,
+        "gap_months": 14,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank includes practical and engaging activities to support Ryan's social and emotional development. The activities are designed to help him manage transitions, engage with peers, and develop empathy."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 36,
+        "gap_months": 14,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities to support Ryan's language and communication skills, focusing on both current-level and near next-step practices."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 36,
+        "gap_months": 14,
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of engaging and practical activities to support Ryan's cognitive and adaptive skills at home. The activities are designed to be fun and encourage learning through play, while also addressing the developmental milestones relevant to his age."
+      }
+    ],
+    "focus_areas": [
+      "Social / Emotional",
+      "Language / Communication",
+      "Cognitive / Adaptive"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Who Am I?",
+        "description": "Ask Ryan to tell you his first name when you say, 'Who are you?'. Then, ask him to ask you the same question.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Emotion Charades",
+        "description": "Take turns acting out different emotions (happy, sad, angry) while the other guesses. Discuss what makes you feel that way.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Question Time",
+        "description": "Take turns asking each other simple questions. Start with questions like 'What is a coat for?' or 'What do we use a crayon for?'.",
+        "duration_min": 5,
+        "goal": "current_or_next"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Transition Countdown",
+        "description": "Use a timer to help Ryan transition between activities. Explain what will happen next and set the timer for 5 minutes.",
+        "duration_min": 5,
+        "goal": "current"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Picture Storytime",
+        "description": "Look at a picture book together. Ask Ryan what action is happening in different pictures, like 'What is he doing?' or 'What is she eating?'.",
+        "duration_min": 7,
+        "goal": "current_or_next"
+      }
+    ],
+    "summary_text": "This plan prioritizes Social / Emotional, Language / Communication, Cognitive / Adaptive for Ryan. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed in the interview."
+  }
+]

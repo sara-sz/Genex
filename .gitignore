@@ -1,0 +1,150 @@
+# =========================
+# GENEX .gitignore
+# =========================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.virtualenv/
+**/.venv/
+**/venv/
+
+# Environment variables / secrets
+.env
+.env.local
+.env.*.local
+*.env
+.env.*
+
+# Credentials / keys
+*.pem
+*.key
+*.p12
+*.crt
+**/credentials*.json
+*_api_key.txt
+api_keys.json
+secret_key.txt
+secrets/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Flask / app runtime
+instance/
+.webassets-cache
+
+# Databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+genex_sessions.db*
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Backup / temp
+*_backup_*/
+*.bak
+*.backup
+tmp/
+temp/
+*.tmp
+
+# Migrations temp
+migrations/versions/*.pyc
+
+# Uploads
+webapp/static/uploads/*
+!webapp/static/uploads/.gitkeep
+
+# Built assets
+webapp/static/css/*.min.css
+webapp/static/js/*.min.js
+
+# Data outputs / caches
+data_raw/
+data_proc/
+**/data_raw/
+**/data_proc/
+*.parquet
+*.feather
+
+# Office temp / lock files
+~$*.pptx
+~$*.docx
+~$*.xlsx
+
+# Preview outputs
+*_previews/
+**/_previews/
+
+# Docs builds
+docs/_build/
+site/
+
+# Cache
+.cache/
+*.cache
+
+# Celery / Redis
+celerybeat-schedule
+celerybeat.pid
+dump.rdb
+
+# Keep folders, ignore contents only where needed
+data/*
+!data/.gitkeep
+!notebooks/.gitkeep
+!prototypes/.gitkeep
+!tests/.gitkeep
+
+# Generated evaluation exports
+advisor_feedback_round1.csv
+*_generated.csv

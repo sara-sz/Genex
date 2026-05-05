@@ -1,0 +1,6 @@
+case_id,name,condition,score_ranges_1to5,score_activities_1to5,score_safety_1to5,score_usefulness_1to5,score_overall_1to5,comments
+C01,Emma,Down syndrome,,,,,,
+C02,Noah,Autism,,,,,,
+C03,Liam,ADHD,,,,,,
+C04,Maya,Speech delay,,,,,,
+C05,Sofia,Cerebral palsy,,,,,,

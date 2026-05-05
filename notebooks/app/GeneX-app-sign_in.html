@@ -1,0 +1,2576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeneX - Genetics Made Practical</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Fallback for Font Awesome icons */
+        .fa-arrow-left::before { content: "←"; }
+        .fa-play::before { content: "▶"; }
+        .fa-female::before { content: "♀"; }
+        .fa-male::before { content: "♂"; }
+        .fa-check::before { content: "✓"; }
+        .fa-magic::before { content: "✨"; }
+        .fa-arrow-right::before { content: "→"; }
+        .fa-dna::before { content: "🧬"; }
+        .fa-brain::before { content: "🧠"; }
+        .fa-clipboard-list::before { content: "📋"; }
+        .fa-calendar-check::before { content: "📅"; }
+        .fa-home::before { content: "🏠"; }
+        .fa-calendar-alt::before { content: "📆"; }
+        .fa-users::before { content: "👥"; }
+        .fa-chart-bar::before { content: "📊"; }
+        .fa-ellipsis-h::before { content: "⋯"; }
+        .fa-eye::before { content: "👁"; }
+        .fa-hand-paper::before { content: "✋"; }
+        .fa-comments::before { content: "💬"; }
+        .fa-dumbbell::before { content: "💪"; }
+        .fa-clock::before { content: "⏰"; }
+        .fa-chevron-left::before { content: "‹"; }
+        .fa-chevron-right::before { content: "›"; }
+        .fa-heart::before { content: "♥"; }
+        .fa-apple-alt::before { content: "🍎"; }
+        .fa-book-medical::before { content: "📖"; }
+        .fa-user-circle::before { content: "👤"; }
+        .fa-palette::before { content: "🎨"; }
+        .fa-language::before { content: "🌐"; }
+        .fa-bell::before { content: "🔔"; }
+        .fa-download::before { content: "⬇"; }
+        .fa-upload::before { content: "⬆"; }
+        .fa-shield-alt::before { content: "🛡"; }
+        .fa-question-circle::before { content: "❓"; }
+        .fa-sign-out-alt::before { content: "🚪"; }
+        .fa-edit::before { content: "✏"; }
+        .fa-camera::before { content: "📷"; }
+        .fa-print::before { content: "🖨"; }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            max-width: 430px;
+            margin: 0 auto;
+            background: #f8f9fa;
+            min-height: 100vh;
+            position: relative;
+            box-shadow: 0 0 30px rgba(0,0,0,0.2);
+        }
+
+        /* ========== ONBOARDING STYLES ========== */
+        .onboarding-screen {
+            display: none;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .onboarding-screen.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .onboarding-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        /* Decorative DNA helix background - removed circles, plain gradient */
+        .dna-bg {
+            display: none;
+        }
+
+        /* Welcome Screen */
+        .logo-container {
+            margin-bottom: 30px;
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        .logo-container img {
+            max-width: 280px;
+            height: auto;
+            filter: drop-shadow(0 10px 30px rgba(0,0,0,0.2));
+        }
+
+        .welcome-title {
+            color: white;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+
+        .welcome-tagline {
+            color: rgba(255,255,255,0.95);
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 50px;
+            animation: fadeInUp 0.8s ease-out 0.3s both;
+            letter-spacing: 0.5px;
+        }
+
+        .welcome-subtitle {
+            color: rgba(255,255,255,0.9);
+            font-size: 16px;
+            line-height: 1.6;
+            max-width: 320px;
+            margin-bottom: 40px;
+            animation: fadeInUp 0.8s ease-out 0.4s both;
+        }
+
+        .primary-btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 18px 50px;
+            border-radius: 30px;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+            animation: fadeInUp 0.8s ease-out 0.6s both;
+        }
+
+        .primary-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.25);
+        }
+
+        .secondary-btn {
+            background: transparent;
+            color: white;
+            border: 2px solid rgba(255,255,255,0.5);
+            padding: 16px 40px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 15px;
+        }
+
+        .secondary-btn:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: white;
+        }
+
+        /* Video Screen */
+        .video-container {
+            width: 100%;
+            max-width: 350px;
+            aspect-ratio: 16/9;
+            background: rgba(0,0,0,0.3);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+
+        .video-placeholder {
+            text-align: center;
+            color: white;
+        }
+
+        .play-btn {
+            width: 80px;
+            height: 80px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+        }
+
+        .play-btn i {
+            font-size: 30px;
+            color: #667eea;
+            margin-left: 5px;
+        }
+
+        .play-btn:hover {
+            transform: scale(1.1);
+            background: white;
+        }
+
+        .skip-video {
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .skip-video:hover {
+            color: white;
+        }
+
+        /* Form Screens */
+        .form-screen {
+            background: #f8f9fa;
+        }
+
+        .form-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 25px 60px;
+            text-align: center;
+            position: relative;
+        }
+
+        .form-header::after {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background: #f8f9fa;
+            border-radius: 25px 25px 0 0;
+        }
+
+        .form-header h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .form-header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .form-body {
+            padding: 30px 25px 40px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .form-group {
+            margin-bottom: 22px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 16px 18px;
+            border: 2px solid #e9ecef;
+            border-radius: 14px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+        }
+
+        .form-input::placeholder {
+            color: #adb5bd;
+        }
+
+        /* Gender Selection */
+        .gender-options {
+            display: flex;
+            gap: 15px;
+        }
+
+        .gender-option {
+            flex: 1;
+            padding: 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .gender-option:hover {
+            border-color: #667eea;
+        }
+
+        .gender-option.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+        }
+
+        .gender-option i {
+            font-size: 32px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .gender-option.girl i {
+            color: #e91e8c;
+        }
+
+        .gender-option.boy i {
+            color: #2196f3;
+        }
+
+        .gender-option span {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        /* Dropdown */
+        .form-select {
+            width: 100%;
+            padding: 16px 18px;
+            border: 2px solid #e9ecef;
+            border-radius: 14px;
+            font-size: 16px;
+            font-family: inherit;
+            background: white;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667eea' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+            background-size: 20px;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+        }
+
+        .condition-examples {
+            font-size: 12px;
+            color: #666;
+            margin-top: 6px;
+            font-style: italic;
+        }
+
+        /* Progress Indicator */
+        .progress-dots {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            padding: 20px;
+        }
+
+        .progress-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            transition: all 0.3s;
+        }
+
+        .progress-dot.active {
+            background: white;
+            width: 30px;
+            border-radius: 5px;
+        }
+
+        .progress-dot.completed {
+            background: rgba(255,255,255,0.7);
+        }
+
+        /* Form Progress Bar */
+        .form-progress {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 25px;
+        }
+
+        .form-progress-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #e9ecef;
+        }
+
+        .form-progress-dot.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            width: 24px;
+            border-radius: 4px;
+        }
+
+        .form-progress-dot.completed {
+            background: #667eea;
+        }
+
+        /* Continue Button */
+        .continue-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 18px;
+            border-radius: 14px;
+            font-size: 17px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        .continue-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .continue-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Milestone Questions */
+        .milestone-card {
+            background: white;
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 18px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .milestone-question {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            line-height: 1.4;
+        }
+
+        .milestone-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .milestone-option {
+            padding: 14px 18px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .milestone-option:hover {
+            border-color: #667eea;
+        }
+
+        .milestone-option.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+        }
+
+        .milestone-option .check-circle {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .milestone-option.selected .check-circle {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-color: #667eea;
+        }
+
+        .milestone-option.selected .check-circle i {
+            color: white;
+            font-size: 12px;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading-animation {
+            margin-bottom: 40px;
+        }
+
+        .dna-loader {
+            width: 80px;
+            height: 80px;
+            position: relative;
+            margin: 0 auto 30px;
+        }
+
+        .dna-loader::before,
+        .dna-loader::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            animation: dnaRotate 1.5s ease-in-out infinite;
+        }
+
+        .dna-loader::before {
+            top: 0;
+            left: 30px;
+        }
+
+        .dna-loader::after {
+            bottom: 0;
+            left: 30px;
+            animation-delay: 0.75s;
+        }
+
+        @keyframes dnaRotate {
+            0%, 100% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: translateY(60px) scale(0.8);
+                opacity: 0.5;
+            }
+        }
+
+        .loading-bar-container {
+            width: 100%;
+            max-width: 280px;
+            height: 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 0 auto 25px;
+        }
+
+        .loading-bar {
+            height: 100%;
+            background: white;
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .loading-text {
+            color: white;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .loading-subtext {
+            color: rgba(255,255,255,0.8);
+            font-size: 14px;
+            max-width: 280px;
+            margin: 0 auto;
+            line-height: 1.5;
+        }
+
+        .loading-steps {
+            margin-top: 40px;
+            text-align: left;
+            max-width: 280px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .loading-step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 15px;
+            color: rgba(255,255,255,0.5);
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .loading-step.active {
+            color: white;
+        }
+
+        .loading-step.completed {
+            color: rgba(255,255,255,0.8);
+        }
+
+        .loading-step i {
+            width: 24px;
+            text-align: center;
+        }
+
+        /* Password strength */
+        .password-strength {
+            display: flex;
+            gap: 5px;
+            margin-top: 8px;
+        }
+
+        .strength-bar {
+            flex: 1;
+            height: 4px;
+            background: #e9ecef;
+            border-radius: 2px;
+            transition: background 0.3s;
+        }
+
+        .strength-bar.weak {
+            background: #e74c3c;
+        }
+
+        .strength-bar.medium {
+            background: #f39c12;
+        }
+
+        .strength-bar.strong {
+            background: #27ae60;
+        }
+
+        /* Login link */
+        .login-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .login-link a {
+            color: #667eea;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        /* Back button */
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .back-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .back-btn-dark {
+            color: #667eea;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        /* ========== MAIN APP STYLES ========== */
+        .main-app {
+            display: none;
+        }
+
+        .main-app.active {
+            display: block;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px 20px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-radius: 0 0 20px 20px;
+        }
+
+        .header h1 {
+            font-size: 26px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 15px;
+        }
+
+        .content {
+            padding: 25px 20px;
+            padding-bottom: 120px;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* Progress Ring */
+        .progress-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .progress-ring {
+            width: 140px;
+            height: 140px;
+            margin: 0 auto 20px;
+            position: relative;
+            background: conic-gradient(#667eea 0deg 216deg, #e9ecef 216deg 360deg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .progress-inner {
+            width: 110px;
+            height: 110px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .progress-number {
+            font-size: 28px;
+            color: #667eea;
+            font-weight: 800;
+        }
+
+        .progress-label {
+            font-size: 13px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        /* Task Cards */
+        .task-card, .goal-card, .post-card, .dashboard-card {
+            background: white;
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .task-header {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .task-icon, .goal-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            color: white;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .task-content {
+            flex: 1;
+        }
+
+        .task-title, .goal-title {
+            font-weight: 600;
+            font-size: 17px;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .task-toggle {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 3px solid #667eea;
+            margin-left: 15px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .task-toggle.done {
+            background: #667eea;
+            border-color: #667eea;
+        }
+
+        .task-toggle.done::after {
+            content: '✓';
+            color: white;
+            position: absolute;
+            top: -2px;
+            left: 5px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .task-description {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .task-time {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            color: #1976d2;
+            padding: 4px 12px;
+            border-radius: 15px;
+        }
+
+        .task-domain {
+            background: linear-gradient(135deg, #f3e5f5, #e1bee7);
+            color: #7b1fa2;
+            padding: 4px 12px;
+            border-radius: 15px;
+        }
+
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 430px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            padding: 15px 0 10px;
+            z-index: 100;
+            border-radius: 25px 25px 0 0;
+            box-shadow: 0 -5px 25px rgba(0,0,0,0.1);
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px;
+            cursor: pointer;
+            transition: color 0.2s;
+            color: #999;
+        }
+
+        .nav-item.active {
+            color: #667eea;
+        }
+
+        .nav-icon {
+            font-size: 22px;
+            margin-bottom: 6px;
+        }
+
+        .nav-label {
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* Plan Screen */
+        .plan-type-nav {
+            display: flex;
+            background: white;
+            border-radius: 15px;
+            padding: 6px;
+            margin-bottom: 25px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+        }
+
+        .plan-type-btn {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .plan-type-btn.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .goal-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .goal-rationale {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 18px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .activities-list {
+            margin-top: 15px;
+        }
+
+        .activity-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .activity-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 15px;
+        }
+
+        .activity-details {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .plan-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .accept-plan-btn, .revise-plan-btn {
+            padding: 16px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            flex: 1;
+            transition: all 0.2s;
+            border: none;
+            font-family: inherit;
+        }
+
+        .accept-plan-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .revise-plan-btn {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        /* Schedule */
+        .week-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .week-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: #667eea;
+            cursor: pointer;
+        }
+
+        .day-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .day-name {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .day-progress {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .time-block {
+            margin-bottom: 12px;
+        }
+
+        .time-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .mini-task {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mini-task-name {
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .mini-toggle {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid #667eea;
+            cursor: pointer;
+        }
+
+        .mini-toggle.done {
+            background: #667eea;
+        }
+
+        /* Community */
+        .community-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 15px;
+        }
+
+        .community-stat {
+            text-align: center;
+        }
+
+        .community-stat-number {
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .community-stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .post-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 12px;
+        }
+
+        .post-user-info {
+            flex: 1;
+        }
+
+        .post-username {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .post-time {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .post-content {
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .post-actions {
+            display: flex;
+        }
+
+        .post-like-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            color: #666;
+            transition: color 0.2s;
+            font-family: inherit;
+        }
+
+        .post-like-btn:hover {
+            color: #667eea;
+        }
+
+        .post-like-btn.liked {
+            color: #e74c3c;
+        }
+
+        /* Dashboard */
+        .dashboard-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px 22px;
+            display: flex;
+            align-items: center;
+            border-radius: 16px 16px 0 0;
+            margin: -22px -22px 22px -22px;
+        }
+
+        .dashboard-icon {
+            font-size: 24px;
+            margin-right: 12px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .gene-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .gene-chip {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .add-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+            margin-bottom: 8px;
+            font-family: inherit;
+        }
+
+        .add-btn:hover {
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        
+        <!-- ========== ONBOARDING SCREENS ========== -->
+        
+        <!-- Screen 1: Welcome -->
+        <div class="onboarding-screen active" id="welcome-screen">
+            <div class="dna-bg"></div>
+            <div class="onboarding-content">
+                <div class="logo-container">
+                    <img src="logo.png" alt="GeneX Logo">
+                </div>
+                <p class="welcome-tagline">GeneX - Genetics Made Practical</p>
+                <button class="primary-btn" onclick="goToScreen('video-screen')">Get Started</button>
+                <button class="secondary-btn" onclick="goToScreen('login-screen')">I already have an account</button>
+            </div>
+            <div class="progress-dots">
+                <div class="progress-dot active"></div>
+                <div class="progress-dot"></div>
+                <div class="progress-dot"></div>
+                <div class="progress-dot"></div>
+                <div class="progress-dot"></div>
+            </div>
+        </div>
+
+        <!-- Screen 2: Video -->
+        <div class="onboarding-screen" id="video-screen">
+            <div class="dna-bg"></div>
+            <button class="back-btn" onclick="goToScreen('welcome-screen')">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <div class="onboarding-content">
+                <h1 class="welcome-title">Genetics Made Practical</h1>
+                <p class="welcome-subtitle" style="margin-bottom: 30px;">
+                    See how GeneX creates personalized care plans based on your child's unique needs
+                </p>
+                <div class="video-container">
+                    <div class="video-placeholder">
+                        <div class="play-btn" onclick="playVideo()">
+                            <i class="fas fa-play"></i>
+                        </div>
+                        <p>Watch our 1-minute intro</p>
+                    </div>
+                </div>
+                <button class="primary-btn" onclick="goToScreen('child-info-screen')">Continue</button>
+                <p class="skip-video" onclick="goToScreen('child-info-screen')">Skip video</p>
+            </div>
+            <div class="progress-dots">
+                <div class="progress-dot completed"></div>
+                <div class="progress-dot active"></div>
+                <div class="progress-dot"></div>
+                <div class="progress-dot"></div>
+                <div class="progress-dot"></div>
+            </div>
+        </div>
+
+        <!-- Screen 3: Child Information -->
+        <div class="onboarding-screen form-screen" id="child-info-screen">
+            <div class="form-header">
+                <button class="back-btn" onclick="goToScreen('video-screen')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Tell Us About Your Child</h2>
+                <p>This helps us create a personalized plan</p>
+            </div>
+            <div class="form-body">
+                <div class="form-progress">
+                    <div class="form-progress-dot active"></div>
+                    <div class="form-progress-dot"></div>
+                    <div class="form-progress-dot"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Child's First Name</label>
+                    <input type="text" class="form-input" id="child-name" placeholder="Enter first name" oninput="validateChildForm()">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Gender</label>
+                    <div class="gender-options">
+                        <div class="gender-option girl" onclick="selectGender('girl', this)">
+                            <i class="fas fa-female"></i>
+                            <span>Girl</span>
+                        </div>
+                        <div class="gender-option boy" onclick="selectGender('boy', this)">
+                            <i class="fas fa-male"></i>
+                            <span>Boy</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Date of Birth</label>
+                    <input type="date" class="form-input" id="child-dob" onchange="validateChildForm()">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Genetic Condition</label>
+                    <select class="form-select" id="genetic-condition" onchange="validateChildForm()">
+                        <option value="">Select a condition</option>
+                        <option value="down-syndrome">Down Syndrome (Trisomy 21)</option>
+                        <option value="turner-syndrome">Turner Syndrome</option>
+                        <option value="klinefelter-syndrome">Klinefelter Syndrome</option>
+                        <option value="williams-syndrome">Williams Syndrome</option>
+                        <option value="fragile-x">Fragile X Syndrome</option>
+                        <option value="prader-willi">Prader-Willi Syndrome</option>
+                        <option value="angelman">Angelman Syndrome</option>
+                        <option value="22q11">22q11.2 Deletion Syndrome</option>
+                        <option value="cystic-fibrosis">Cystic Fibrosis</option>
+                        <option value="sickle-cell">Sickle Cell Disease</option>
+                        <option value="noonan-syndrome">Noonan Syndrome</option>
+                        <option value="rett-syndrome">Rett Syndrome</option>
+                        <option value="other">Other (specify later)</option>
+                    </select>
+                    <p class="condition-examples">Examples: Down Syndrome, Turner Syndrome, Fragile X, etc.</p>
+                </div>
+
+                <button class="continue-btn" id="child-continue-btn" disabled onclick="goToScreen('account-screen')">
+                    Continue <i class="fas fa-arrow-right" style="margin-left: 8px;"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Screen 4: Account Creation -->
+        <div class="onboarding-screen form-screen" id="account-screen">
+            <div class="form-header">
+                <button class="back-btn" onclick="goToScreen('child-info-screen')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Create Your Account</h2>
+                <p>Secure access to your child's care plan</p>
+            </div>
+            <div class="form-body">
+                <div class="form-progress">
+                    <div class="form-progress-dot completed"></div>
+                    <div class="form-progress-dot active"></div>
+                    <div class="form-progress-dot"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" class="form-input" id="user-email" placeholder="your@email.com" oninput="validateAccountForm()">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="user-password" placeholder="Create a password" oninput="validateAccountForm(); checkPasswordStrength()">
+                    <div class="password-strength" id="password-strength">
+                        <div class="strength-bar" id="str-bar-1"></div>
+                        <div class="strength-bar" id="str-bar-2"></div>
+                        <div class="strength-bar" id="str-bar-3"></div>
+                        <div class="strength-bar" id="str-bar-4"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Confirm Password</label>
+                    <input type="password" class="form-input" id="user-password-confirm" placeholder="Re-enter password" oninput="validateAccountForm()">
+                </div>
+
+                <button class="continue-btn" id="account-continue-btn" disabled onclick="goToScreen('milestone-screen')">
+                    Create Account <i class="fas fa-arrow-right" style="margin-left: 8px;"></i>
+                </button>
+
+                <div class="login-link">
+                    Already have an account? <a href="#" onclick="goToScreen('login-screen')">Log in</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 4b: Login Screen -->
+        <div class="onboarding-screen form-screen" id="login-screen">
+            <div class="form-header">
+                <button class="back-btn" onclick="goToScreen('welcome-screen')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Welcome Back</h2>
+                <p>Log in to access your care plan</p>
+            </div>
+            <div class="form-body">
+                <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" class="form-input" id="login-email" placeholder="your@email.com">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="login-password" placeholder="Enter your password">
+                </div>
+
+                <button class="continue-btn" onclick="loginUser()">
+                    Log In <i class="fas fa-arrow-right" style="margin-left: 8px;"></i>
+                </button>
+
+                <div class="login-link">
+                    Don't have an account? <a href="#" onclick="goToScreen('video-screen')">Sign up</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 5: Milestone Questions -->
+        <div class="onboarding-screen form-screen" id="milestone-screen">
+            <div class="form-header">
+                <button class="back-btn" onclick="goToScreen('account-screen')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2 id="milestone-title">Let's Get to Know Emma Better</h2>
+                <p id="milestone-subtitle">A few questions to create the best plan just for her</p>
+            </div>
+            <div class="form-body">
+                <div class="form-progress">
+                    <div class="form-progress-dot completed"></div>
+                    <div class="form-progress-dot completed"></div>
+                    <div class="form-progress-dot active"></div>
+                </div>
+
+                <div class="milestone-card">
+                    <p class="milestone-question">Can <span class="child-name-placeholder">Emma</span> sit up without support?</p>
+                    <div class="milestone-options">
+                        <div class="milestone-option" onclick="selectMilestone(this, 'sitting', 'yes')">
+                            <div class="check-circle"><i class="fas fa-check"></i></div>
+                            <span>Yes, independently</span>
+                        </div>
+                        <div class="milestone-option" onclick="selectMilestone(this, 'sitting', 'partial')">
+                            <div class="check-circle"><i class="fas fa-check"></i></div>
+                            <span>With some support</span>
+                        </div>
+                        <div class="milestone-option" onclick="selectMilestone(this, 'sitting', 'no')">
+                            <div class="check-circle"><i class="fas fa-check"></i></div>
+                            <span>Not yet</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="milestone-card">
+                    <p class="milestone-question">How does <span class="child-name-placeholder">Emma</span> communicate?</p>
+                    <div class="milestone-options">
+                        <div class="milestone-option" onclick="selectMilestone(this, 'communication', 'words')">
+                            <div class="check-circle"><i class="fas fa-check"></i></div>
+                            <span>Using words or phrases</span>
+                        </div>
+                        <div class="milestone-option" onclick="selectMilestone(this, 'communication', 'sounds')">
+                            <div class="check-circle"><i class="fas fa-check"></i></div>
+                            <span>Sounds and gestures</span>
+                        </div>
+                        <div class="milestone-option" onclick="selectMilestone(this, 'communication', 'nonverbal')">
+                            <div class="check-circle"><i class="fas fa-check"></i></div>
+                            <span>Mostly non-verbal</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="milestone-card">
+                    <p class="milestone-question">Does <span class="child-name-placeholder">Emma</span> make eye contact?</p>
+                    <div class="milestone-options">
+                        <div class="milestone-option" onclick="selectMilestone(this, 'eyecontact', 'consistent')">
+                            <div class="check-circle"><i class="fas fa-check"></i></div>
+                            <span>Consistently</span>
+                        </div>
+                        <div class="milestone-option" onclick="selectMilestone(this, 'eyecontact', 'sometimes')">
+                            <div class="check-circle"><i class="fas fa-check"></i></div>
+                            <span>Sometimes</span>
+                        </div>
+                        <div class="milestone-option" onclick="selectMilestone(this, 'eyecontact', 'rarely')">
+                            <div class="check-circle"><i class="fas fa-check"></i></div>
+                            <span>Rarely</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="continue-btn" onclick="startPlanGeneration()">
+                    Create My Plan <i class="fas fa-magic" style="margin-left: 8px;"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Screen 6: Loading / Plan Generation -->
+        <div class="onboarding-screen loading-screen" id="loading-screen">
+            <div class="dna-bg"></div>
+            <div class="onboarding-content">
+                <div class="loading-animation">
+                    <div class="dna-loader"></div>
+                </div>
+                
+                <div class="loading-bar-container">
+                    <div class="loading-bar" id="loading-bar"></div>
+                </div>
+                
+                <h2 class="loading-text" id="loading-text">Creating Your Plan...</h2>
+                <p class="loading-subtext" id="loading-subtext">Our AI agents are analyzing your child's unique needs</p>
+
+                <div class="loading-steps">
+                    <div class="loading-step active" id="step-1">
+                        <i class="fas fa-dna"></i>
+                        <span>Analyzing genetic condition</span>
+                    </div>
+                    <div class="loading-step" id="step-2">
+                        <i class="fas fa-brain"></i>
+                        <span>Reviewing developmental milestones</span>
+                    </div>
+                    <div class="loading-step" id="step-3">
+                        <i class="fas fa-clipboard-list"></i>
+                        <span>Creating personalized activities</span>
+                    </div>
+                    <div class="loading-step" id="step-4">
+                        <i class="fas fa-calendar-check"></i>
+                        <span>Building your care schedule</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 7: Plan Review (Onboarding) -->
+        <div class="onboarding-screen form-screen" id="plan-screen">
+            <div class="form-header">
+                <h2 id="plan-title">Emma's Care Plan</h2>
+                <p>Review and customize your personalized plan</p>
+            </div>
+            <div class="form-body" style="padding-bottom: 100px;">
+                <div style="background: rgba(102, 126, 234, 0.1); border-radius: 10px; padding: 12px 15px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">💡</span>
+                    <span style="color: #555; font-size: 13px;">Don't worry — you can always customize your plan later in the app settings.</span>
+                </div>
+                
+                <div class="plan-type-nav">
+                    <button class="plan-type-btn active" onclick="showPlanType('therapy')">Therapy</button>
+                    <button class="plan-type-btn" onclick="showPlanType('nutrition')">Nutrition</button>
+                </div>
+
+                <div id="therapy-plan">
+                    <div class="goal-card">
+                        <div class="goal-header">
+                            <div class="goal-icon">
+                                <i class="fas fa-comments"></i>
+                            </div>
+                            <div class="goal-title">Communication Skills</div>
+                        </div>
+                        <div class="goal-rationale">
+                            Children with Down syndrome benefit from structured speech and language activities to develop clear communication.
+                        </div>
+                        <div class="activities-list">
+                            <div class="activity-item">
+                                <div class="activity-name">Daily Sound Practice</div>
+                                <div class="activity-details">15 min • Morning • Mirror</div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-name">Picture Naming Game</div>
+                                <div class="activity-details">10 min • Afternoon • Cards</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="goal-card">
+                        <div class="goal-header">
+                            <div class="goal-icon">
+                                <i class="fas fa-dumbbell"></i>
+                            </div>
+                            <div class="goal-title">Motor Development</div>
+                        </div>
+                        <div class="goal-rationale">
+                            Low muscle tone requires regular strengthening activities for better coordination.
+                        </div>
+                        <div class="activities-list">
+                            <div class="activity-item">
+                                <div class="activity-name">Tummy Time Plus</div>
+                                <div class="activity-details">20 min • Morning • Play mat</div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-name">Fine Motor Play</div>
+                                <div class="activity-details">15 min • Evening • Small toys</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="nutrition-plan" style="display: none;">
+                    <div class="goal-card">
+                        <div class="goal-header">
+                            <div class="goal-icon">
+                                <i class="fas fa-apple-alt"></i>
+                            </div>
+                            <div class="goal-title">Daily Nutrition</div>
+                        </div>
+                        <div class="activities-list">
+                            <div class="activity-item">
+                                <div class="activity-name">🥣 Fortified Oatmeal & Banana</div>
+                                <div class="activity-details">Breakfast • Iron & Potassium</div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-name">🥪 Soft Turkey Sandwich</div>
+                                <div class="activity-details">Lunch • Protein & Whole grains</div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-name">🐟 Baked Salmon & Vegetables</div>
+                                <div class="activity-details">Dinner • Omega-3 & Vitamins</div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-name">🍓 Fresh Fruit Snacks</div>
+                                <div class="activity-details">Snacks • Vitamin C & Fiber</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="plan-actions">
+                    <button class="accept-plan-btn" onclick="acceptPlanAndContinue()">
+                        <i class="fas fa-check"></i> Accept Plan
+                    </button>
+                    <button class="revise-plan-btn" onclick="revisePlan()">
+                        <i class="fas fa-edit"></i> Customize
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== MAIN APP ========== -->
+        <div class="main-app" id="main-app">
+            <div class="header">
+                <h1 id="screen-title">Emma's Care Today</h1>
+                <p id="screen-subtitle">Down Syndrome Care Plan</p>
+            </div>
+
+            <!-- Home Screen -->
+            <div class="screen active" id="home">
+                <div class="content">
+                    <div class="progress-section">
+                        <div class="progress-ring">
+                            <div class="progress-inner">
+                                <div class="progress-number">3/4</div>
+                                <div class="progress-label">Today</div>
+                            </div>
+                        </div>
+                        <div style="color: #666; font-size: 14px;">🔥 5 day streak!</div>
+                    </div>
+
+                    <div class="task-card">
+                        <div class="task-header">
+                            <div class="task-icon">
+                                <i class="fas fa-eye"></i>
+                            </div>
+                            <div class="task-content">
+                                <div class="task-title">Morning Vision Exercise</div>
+                            </div>
+                            <div class="task-toggle done" onclick="toggleTask(this)"></div>
+                        </div>
+                        <div class="task-description">
+                            Track colorful objects with eyes to strengthen eye muscles and improve visual focus
+                        </div>
+                        <div class="task-meta">
+                            <span class="task-time"><i class="fas fa-clock"></i> 5 min</span>
+                            <span class="task-domain">Vision</span>
+                        </div>
+                    </div>
+
+                    <div class="task-card">
+                        <div class="task-header">
+                            <div class="task-icon">
+                                <i class="fas fa-hand-paper"></i>
+                            </div>
+                            <div class="task-content">
+                                <div class="task-title">Fine Motor Practice</div>
+                            </div>
+                            <div class="task-toggle done" onclick="toggleTask(this)"></div>
+                        </div>
+                        <div class="task-description">
+                            Pick up small colorful objects to develop pincer grasp and hand coordination
+                        </div>
+                        <div class="task-meta">
+                            <span class="task-time"><i class="fas fa-clock"></i> 10 min</span>
+                            <span class="task-domain">Motor Skills</span>
+                        </div>
+                    </div>
+
+                    <div class="task-card">
+                        <div class="task-header">
+                            <div class="task-icon">
+                                <i class="fas fa-comments"></i>
+                            </div>
+                            <div class="task-content">
+                                <div class="task-title">Speech Sound Practice</div>
+                            </div>
+                            <div class="task-toggle done" onclick="toggleTask(this)"></div>
+                        </div>
+                        <div class="task-description">
+                            Practice consonant-vowel combinations with mirror to improve articulation
+                        </div>
+                        <div class="task-meta">
+                            <span class="task-time"><i class="fas fa-clock"></i> 15 min</span>
+                            <span class="task-domain">Speech</span>
+                        </div>
+                    </div>
+
+                    <div class="task-card">
+                        <div class="task-header">
+                            <div class="task-icon">
+                                <i class="fas fa-dumbbell"></i>
+                            </div>
+                            <div class="task-content">
+                                <div class="task-title">Tummy Time Plus</div>
+                            </div>
+                            <div class="task-toggle" onclick="toggleTask(this)"></div>
+                        </div>
+                        <div class="task-description">
+                            Strengthen core and neck muscles while playing with engaging toys
+                        </div>
+                        <div class="task-meta">
+                            <span class="task-time"><i class="fas fa-clock"></i> 20 min</span>
+                            <span class="task-domain">Gross Motor</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Schedule Screen -->
+            <div class="screen" id="schedule">
+                <div class="content">
+                    <div class="week-nav">
+                        <button class="nav-btn"><i class="fas fa-chevron-left"></i></button>
+                        <div class="week-title">This Week</div>
+                        <button class="nav-btn"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+
+                    <div class="day-card">
+                        <div class="day-header">
+                            <div class="day-name">Monday</div>
+                            <div class="day-progress">3/4 done</div>
+                        </div>
+                        <div class="time-block">
+                            <div class="time-label">Morning</div>
+                            <div class="mini-task">
+                                <span class="mini-task-name">Vision Exercise</span>
+                                <div class="mini-toggle done"></div>
+                            </div>
+                            <div class="mini-task">
+                                <span class="mini-task-name">Tummy Time</span>
+                                <div class="mini-toggle done"></div>
+                            </div>
+                        </div>
+                        <div class="time-block">
+                            <div class="time-label">Afternoon</div>
+                            <div class="mini-task">
+                                <span class="mini-task-name">Speech Practice</span>
+                                <div class="mini-toggle done"></div>
+                            </div>
+                            <div class="mini-task">
+                                <span class="mini-task-name">Fine Motor Play</span>
+                                <div class="mini-toggle"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="day-card">
+                        <div class="day-header">
+                            <div class="day-name">Tuesday</div>
+                            <div class="day-progress">0/4 done</div>
+                        </div>
+                        <div class="time-block">
+                            <div class="time-label">Morning</div>
+                            <div class="mini-task">
+                                <span class="mini-task-name">Vision Exercise</span>
+                                <div class="mini-toggle"></div>
+                            </div>
+                            <div class="mini-task">
+                                <span class="mini-task-name">Tummy Time</span>
+                                <div class="mini-toggle"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Album Screen - Capture Precious Moments -->
+            <div class="screen" id="album">
+                <div class="content">
+                    <div class="goal-card" style="text-align: center; padding: 30px;">
+                        <div style="font-size: 50px; margin-bottom: 15px;">📸</div>
+                        <h3 style="margin-bottom: 10px; color: #333;">Keep Precious Moments</h3>
+                        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">Capture <span id="album-child-name">Emma</span>'s precious moments</p>
+                    </div>
+
+                    <div class="goal-card">
+                        <h4 style="margin-bottom: 15px; display: flex; align-items: center;">
+                            <span style="font-size: 24px; margin-right: 10px;">🎉</span>
+                            Recent Milestones
+                        </h4>
+                        
+                        <div class="milestone-memory-item" style="background: #f8f9fa; border-radius: 12px; padding: 15px; margin-bottom: 12px; border-left: 4px solid #667eea;">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div>
+                                    <div style="font-weight: 600; color: #333; margin-bottom: 5px;">First Babbling Sounds!</div>
+                                    <div style="color: #666; font-size: 13px;">Made sounds like: mama, papa</div>
+                                    <div style="color: #999; font-size: 12px; margin-top: 5px;">December 1, 2025</div>
+                                </div>
+                                <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;">
+                                    🗣️
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="milestone-memory-item" style="background: #f8f9fa; border-radius: 12px; padding: 15px; margin-bottom: 12px; border-left: 4px solid #764ba2;">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div>
+                                    <div style="font-weight: 600; color: #333; margin-bottom: 5px;">Sitting Up Independently</div>
+                                    <div style="color: #666; font-size: 13px;">Sat without support for 30 seconds!</div>
+                                    <div style="color: #999; font-size: 12px; margin-top: 5px;">November 28, 2025</div>
+                                </div>
+                                <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;">
+                                    🧒
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="goal-card">
+                        <h4 style="margin-bottom: 15px; display: flex; align-items: center;">
+                            <span style="font-size: 24px; margin-right: 10px;">✨</span>
+                            Capture a Milestone
+                        </h4>
+
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label class="form-label">What milestone did you capture?</label>
+                            <input type="text" class="form-input" id="milestone-description" placeholder="e.g., I made simple babbling sounds like: mama, papa">
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label class="form-label">Add a Photo or Video</label>
+                            <div onclick="addPhotoVideo()" style="border: 2px dashed #667eea; border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; background: rgba(102, 126, 234, 0.05); transition: all 0.2s;">
+                                <div style="font-size: 40px; margin-bottom: 10px;">📷</div>
+                                <div style="color: #667eea; font-weight: 600;">Tap to add photo or video</div>
+                                <div style="color: #999; font-size: 12px; margin-top: 5px;">Supports JPG, PNG, MP4</div>
+                            </div>
+                        </div>
+
+                        <button class="continue-btn" onclick="saveMilestone()">
+                            <i class="fas fa-check"></i> Save Milestone
+                        </button>
+                    </div>
+
+                    <div class="goal-card" style="text-align: center;">
+                        <h4 style="margin-bottom: 15px; display: flex; align-items: center; justify-content: center;">
+                            <span style="font-size: 24px; margin-right: 10px;">📖</span>
+                            Create Memory Book
+                        </h4>
+                        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">Turn your precious moments into a beautiful printed notebook - your child's very own milestone book!</p>
+                        <button class="add-btn" onclick="printNotebook()">
+                            <i class="fas fa-print"></i> Print the Notebook
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Community Screen -->
+            <div class="screen" id="community">
+                <div class="content">
+                    <div class="goal-card">
+                        <h3 style="margin-bottom: 5px;"><i class="fas fa-users" style="color: #667eea; margin-right: 10px;"></i><span id="community-title">Down Syndrome Parents</span></h3>
+                        <p style="font-size: 13px; color: #666; margin-bottom: 15px;">A supportive community for families</p>
+                        <div class="community-stats">
+                            <div class="community-stat">
+                                <div class="community-stat-number">2.4K</div>
+                                <div class="community-stat-label">Members</div>
+                            </div>
+                            <div class="community-stat">
+                                <div class="community-stat-number">156</div>
+                                <div class="community-stat-label">Posts Today</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="post-card">
+                        <div class="post-header">
+                            <div class="user-avatar">SM</div>
+                            <div class="post-user-info">
+                                <div class="post-username">Sarah M.</div>
+                                <div class="post-time">2 hours ago</div>
+                            </div>
+                        </div>
+                        <div class="post-content">
+                            Just had our first breakthrough with the speech exercises! My little one said "mama" clearly for the first time. The daily practice is really paying off! 🎉
+                        </div>
+                        <div class="post-actions">
+                            <button class="post-like-btn" onclick="toggleLike(this)">
+                                <i class="fas fa-heart"></i> 24
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="post-card">
+                        <div class="post-header">
+                            <div class="user-avatar">JD</div>
+                            <div class="post-user-info">
+                                <div class="post-username">James D.</div>
+                                <div class="post-time">5 hours ago</div>
+                            </div>
+                        </div>
+                        <div class="post-content">
+                            Anyone have tips for making tummy time more enjoyable? My son gets frustrated after a few minutes. Would love some creative ideas! 🙏
+                        </div>
+                        <div class="post-actions">
+                            <button class="post-like-btn" onclick="toggleLike(this)">
+                                <i class="fas fa-heart"></i> 18
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Screen -->
+            <div class="screen" id="dashboard">
+                <div class="content">
+                    <div class="dashboard-card">
+                        <div class="dashboard-header">
+                            <i class="fas fa-dna dashboard-icon"></i>
+                            <div>
+                                <strong id="dashboard-condition">Down Syndrome</strong>
+                                <div style="font-size: 12px; opacity: 0.9;">Trisomy 21</div>
+                            </div>
+                        </div>
+                        
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-number">47</div>
+                                <div class="stat-label">Chromosomes</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number">21</div>
+                                <div class="stat-label">Affected Chr.</div>
+                            </div>
+                        </div>
+
+                        <h4 style="margin-bottom: 12px; font-size: 15px;">Associated Genes</h4>
+                        <div class="gene-chips">
+                            <span class="gene-chip">DYRK1A</span>
+                            <span class="gene-chip">APP</span>
+                            <span class="gene-chip">SOD1</span>
+                            <span class="gene-chip">CBS</span>
+                        </div>
+                    </div>
+
+                    <div class="goal-card">
+                        <h4 style="margin-bottom: 15px;"><i class="fas fa-book-medical" style="color: #667eea; margin-right: 10px;"></i>Resources</h4>
+                        <div class="activity-item">
+                            <div class="activity-name">Understanding Down Syndrome</div>
+                            <div class="activity-details">Comprehensive guide for parents</div>
+                        </div>
+                        <div class="activity-item">
+                            <div class="activity-name">Early Intervention Tips</div>
+                            <div class="activity-details">Evidence-based strategies</div>
+                        </div>
+                        <div class="activity-item">
+                            <div class="activity-name">Specialist Directory</div>
+                            <div class="activity-details">Find local experts</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- More Screen -->
+            <div class="screen" id="more">
+                <div class="content">
+                    <div class="goal-card">
+                        <h3><i class="fas fa-user-circle" style="margin-right: 10px; color: #667eea;"></i>Profile</h3>
+                        <div style="margin-top: 15px;">
+                            <div style="font-weight: 600;">Parent/Caregiver</div>
+                            <div style="color: #666; font-size: 14px; margin-top: 5px;" id="profile-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="daaabba8bfb4ae9abfa2bbb7aab6bff4b9b5b7">[email&#160;protected]</a></div>
+                            <div style="color: #666; font-size: 14px; margin-top: 5px;" id="profile-child">Emma's parent since 2022</div>
+                        </div>
+                    </div>
+
+                    <div class="goal-card">
+                        <h4>App Settings</h4>
+                        <div class="activity-item" onclick="alert('Theme settings')">
+                            <div class="activity-name"><i class="fas fa-palette" style="margin-right: 10px; color: #667eea;"></i>Theme & Display</div>
+                            <div class="activity-details">Customize app appearance</div>
+                        </div>
+                        <div class="activity-item" onclick="alert('Language settings')">
+                            <div class="activity-name"><i class="fas fa-language" style="margin-right: 10px; color: #667eea;"></i>Language</div>
+                            <div class="activity-details">Choose your preferred language</div>
+                        </div>
+                        <div class="activity-item" onclick="alert('Notifications')">
+                            <div class="activity-name"><i class="fas fa-bell" style="margin-right: 10px; color: #667eea;"></i>Notifications</div>
+                            <div class="activity-details">Manage push notifications</div>
+                        </div>
+                    </div>
+
+                    <div class="goal-card">
+                        <h4>Data Management</h4>
+                        <div class="activity-item" onclick="exportData()">
+                            <div class="activity-name"><i class="fas fa-download" style="margin-right: 10px; color: #667eea;"></i>Export Data</div>
+                            <div class="activity-details">Download your care plan data</div>
+                        </div>
+                        <div class="activity-item" onclick="importData()">
+                            <div class="activity-name"><i class="fas fa-upload" style="margin-right: 10px; color: #667eea;"></i>Import Data</div>
+                            <div class="activity-details">Restore from backup file</div>
+                        </div>
+                    </div>
+
+                    <div class="goal-card">
+                        <h4>Help & Legal</h4>
+                        <div class="activity-item" onclick="alert('Privacy policy - All data stored locally on your device')">
+                            <div class="activity-name"><i class="fas fa-shield-alt" style="margin-right: 10px; color: #667eea;"></i>Privacy Policy</div>
+                            <div class="activity-details">How we protect your data</div>
+                        </div>
+                        <div class="activity-item" onclick="alert('Help & Support - Contact support team')">
+                            <div class="activity-name"><i class="fas fa-question-circle" style="margin-right: 10px; color: #667eea;"></i>Help & Support</div>
+                            <div class="activity-details">Get assistance and FAQs</div>
+                        </div>
+                        <div class="activity-item" onclick="logoutUser()">
+                            <div class="activity-name"><i class="fas fa-sign-out-alt" style="margin-right: 10px; color: #e74c3c;"></i>Log Out</div>
+                            <div class="activity-details">Sign out of your account</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Navigation -->
+            <div class="bottom-nav">
+                <div class="nav-item active" onclick="showScreen('home')">
+                    <div class="nav-icon"><i class="fas fa-home"></i></div>
+                    <div class="nav-label">Home</div>
+                </div>
+                <div class="nav-item" onclick="showScreen('schedule')">
+                    <div class="nav-icon"><i class="fas fa-calendar-alt"></i></div>
+                    <div class="nav-label">Schedule</div>
+                </div>
+                <div class="nav-item" onclick="showScreen('album')">
+                    <div class="nav-icon"><i class="fas fa-camera"></i></div>
+                    <div class="nav-label">Album</div>
+                </div>
+                <div class="nav-item" onclick="showScreen('community')">
+                    <div class="nav-icon"><i class="fas fa-users"></i></div>
+                    <div class="nav-label">Community</div>
+                </div>
+                <div class="nav-item" onclick="showScreen('dashboard')">
+                    <div class="nav-icon"><i class="fas fa-chart-bar"></i></div>
+                    <div class="nav-label">Dashboard</div>
+                </div>
+                <div class="nav-item" onclick="showScreen('more')">
+                    <div class="nav-icon"><i class="fas fa-ellipsis-h"></i></div>
+                    <div class="nav-label">More</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // User Data Storage
+        let userData = {
+            childName: '',
+            gender: '',
+            dob: '',
+            condition: '',
+            email: '',
+            milestones: {}
+        };
+
+        // Condition display names
+        const conditionNames = {
+            'down-syndrome': 'Down Syndrome',
+            'turner-syndrome': 'Turner Syndrome',
+            'klinefelter-syndrome': 'Klinefelter Syndrome',
+            'williams-syndrome': 'Williams Syndrome',
+            'fragile-x': 'Fragile X Syndrome',
+            'prader-willi': 'Prader-Willi Syndrome',
+            'angelman': 'Angelman Syndrome',
+            '22q11': '22q11.2 Deletion Syndrome',
+            'cystic-fibrosis': 'Cystic Fibrosis',
+            'sickle-cell': 'Sickle Cell Disease',
+            'noonan-syndrome': 'Noonan Syndrome',
+            'rett-syndrome': 'Rett Syndrome',
+            'other': 'Genetic Condition'
+        };
+
+        // Screen Navigation
+        function goToScreen(screenId) {
+            // Hide all onboarding screens
+            document.querySelectorAll('.onboarding-screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            // Show target screen
+            const targetScreen = document.getElementById(screenId);
+            if (targetScreen) {
+                targetScreen.classList.add('active');
+            }
+
+            // Update milestone screen with child's name
+            if (screenId === 'milestone-screen') {
+                updateMilestoneScreen();
+            }
+        }
+
+        // Video placeholder
+        function playVideo() {
+            alert('Video would play here. In production, this would be an embedded video about GeneX and genetics made practical.');
+        }
+
+        // Gender Selection
+        function selectGender(gender, element) {
+            document.querySelectorAll('.gender-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            userData.gender = gender;
+            validateChildForm();
+        }
+
+        // Form Validation
+        function validateChildForm() {
+            const name = document.getElementById('child-name').value.trim();
+            const dob = document.getElementById('child-dob').value;
+            const condition = document.getElementById('genetic-condition').value;
+            const genderSelected = userData.gender !== '';
+
+            userData.childName = name;
+            userData.dob = dob;
+            userData.condition = condition;
+
+            const isValid = name && dob && condition && genderSelected;
+            document.getElementById('child-continue-btn').disabled = !isValid;
+        }
+
+        function validateAccountForm() {
+            const email = document.getElementById('user-email').value.trim();
+            const password = document.getElementById('user-password').value;
+            const confirmPassword = document.getElementById('user-password-confirm').value;
+
+            userData.email = email;
+
+            const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+            const passwordValid = password.length >= 6;
+            const passwordsMatch = password === confirmPassword;
+
+            const isValid = emailValid && passwordValid && passwordsMatch;
+            document.getElementById('account-continue-btn').disabled = !isValid;
+        }
+
+        function checkPasswordStrength() {
+            const password = document.getElementById('user-password').value;
+            const bars = [
+                document.getElementById('str-bar-1'),
+                document.getElementById('str-bar-2'),
+                document.getElementById('str-bar-3'),
+                document.getElementById('str-bar-4')
+            ];
+
+            // Reset bars
+            bars.forEach(bar => {
+                bar.className = 'strength-bar';
+            });
+
+            if (password.length === 0) return;
+
+            let strength = 0;
+            if (password.length >= 6) strength++;
+            if (password.length >= 8) strength++;
+            if (/[A-Z]/.test(password) && /[a-z]/.test(password)) strength++;
+            if (/[0-9]/.test(password) || /[^A-Za-z0-9]/.test(password)) strength++;
+
+            const strengthClass = strength <= 1 ? 'weak' : strength <= 2 ? 'medium' : 'strong';
+
+            for (let i = 0; i < strength; i++) {
+                bars[i].classList.add(strengthClass);
+            }
+        }
+
+        // Update milestone screen with child's name
+        function updateMilestoneScreen() {
+            const name = userData.childName || 'Emma';
+            const pronoun = userData.gender === 'girl' ? 'her' : userData.gender === 'boy' ? 'him' : 'them';
+            
+            document.getElementById('milestone-title').textContent = `Let's Get to Know ${name} Better`;
+            document.getElementById('milestone-subtitle').textContent = `A few questions to create the best plan just for ${pronoun}`;
+            
+            document.querySelectorAll('.child-name-placeholder').forEach(el => {
+                el.textContent = name;
+            });
+        }
+
+        // Milestone Selection
+        function selectMilestone(element, category, value) {
+            const parent = element.closest('.milestone-options');
+            parent.querySelectorAll('.milestone-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            userData.milestones[category] = value;
+        }
+
+        // Plan Generation Loading
+        function startPlanGeneration() {
+            goToScreen('loading-screen');
+            
+            const loadingBar = document.getElementById('loading-bar');
+            const steps = [
+                document.getElementById('step-1'),
+                document.getElementById('step-2'),
+                document.getElementById('step-3'),
+                document.getElementById('step-4')
+            ];
+            const loadingText = document.getElementById('loading-text');
+            const loadingSubtext = document.getElementById('loading-subtext');
+
+            const messages = [
+                { text: 'Analyzing Condition...', subtext: `Understanding ${conditionNames[userData.condition] || 'the genetic condition'} and its implications` },
+                { text: 'Reviewing Milestones...', subtext: `Assessing ${userData.childName}'s developmental stage` },
+                { text: 'Creating Activities...', subtext: 'Designing personalized therapy exercises' },
+                { text: 'Building Schedule...', subtext: `Finalizing ${userData.childName}'s care plan` }
+            ];
+
+            let progress = 0;
+            let currentStep = 0;
+
+            const interval = setInterval(() => {
+                progress += 2;
+                loadingBar.style.width = progress + '%';
+
+                if (progress >= 25 && currentStep === 0) {
+                    steps[0].classList.remove('active');
+                    steps[0].classList.add('completed');
+                    steps[1].classList.add('active');
+                    loadingText.textContent = messages[1].text;
+                    loadingSubtext.textContent = messages[1].subtext;
+                    currentStep = 1;
+                }
+                if (progress >= 50 && currentStep === 1) {
+                    steps[1].classList.remove('active');
+                    steps[1].classList.add('completed');
+                    steps[2].classList.add('active');
+                    loadingText.textContent = messages[2].text;
+                    loadingSubtext.textContent = messages[2].subtext;
+                    currentStep = 2;
+                }
+                if (progress >= 75 && currentStep === 2) {
+                    steps[2].classList.remove('active');
+                    steps[2].classList.add('completed');
+                    steps[3].classList.add('active');
+                    loadingText.textContent = messages[3].text;
+                    loadingSubtext.textContent = messages[3].subtext;
+                    currentStep = 3;
+                }
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    steps[3].classList.remove('active');
+                    steps[3].classList.add('completed');
+                    
+                    setTimeout(() => {
+                        // Update plan title with child's name
+                        document.getElementById('plan-title').textContent = `${userData.childName}'s Care Plan`;
+                        goToScreen('plan-screen');
+                    }, 500);
+                }
+            }, 80);
+        }
+
+        // Show Main App (after plan is accepted)
+        function showMainApp() {
+            // Hide all onboarding screens
+            document.querySelectorAll('.onboarding-screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            // Update main app with user data
+            const conditionDisplay = conditionNames[userData.condition] || 'Genetic Condition';
+            document.getElementById('screen-title').textContent = `${userData.childName}'s Care Today`;
+            document.getElementById('screen-subtitle').textContent = `${conditionDisplay} Care Plan`;
+            document.getElementById('dashboard-condition').textContent = conditionDisplay;
+            document.getElementById('profile-email').textContent = userData.email;
+            document.getElementById('profile-child').textContent = `${userData.childName}'s parent`;
+            
+            // Update album page with child's name
+            document.getElementById('album-child-name').textContent = userData.childName;
+            
+            // Update community title with condition
+            document.getElementById('community-title').textContent = `${conditionDisplay} Parents`;
+            
+            // Show main app
+            document.getElementById('main-app').classList.add('active');
+        }
+
+        // Login User
+        function loginUser() {
+            // In production, this would authenticate against a backend
+            userData.email = document.getElementById('login-email').value;
+            userData.childName = 'Emma'; // Would come from backend
+            userData.condition = 'down-syndrome'; // Would come from backend
+            showMainApp();
+        }
+
+        // Logout User
+        function logoutUser() {
+            document.getElementById('main-app').classList.remove('active');
+            goToScreen('welcome-screen');
+            // Reset form fields
+            userData = {
+                childName: '',
+                gender: '',
+                dob: '',
+                condition: '',
+                email: '',
+                milestones: {}
+            };
+        }
+
+        // Main App Screen Navigation
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            document.getElementById(screenId).classList.add('active');
+            
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            const conditionDisplay = conditionNames[userData.condition] || 'Genetic Condition';
+            
+            const titles = {
+                home: `${userData.childName}'s Care Today`,
+                schedule: 'Schedule',
+                album: 'Album',
+                community: 'Community',
+                dashboard: 'Genetics Dashboard',
+                more: 'Settings'
+            };
+            
+            document.getElementById('screen-title').textContent = titles[screenId];
+            
+            const subtitles = {
+                home: `${conditionDisplay} Care Plan`,
+                schedule: 'Weekly Schedule',
+                album: 'Capture Precious Moments',
+                community: 'Connect with Other Parents',
+                dashboard: 'Condition Information & Resources',
+                more: 'Profile & Settings'
+            };
+            
+            document.getElementById('screen-subtitle').textContent = subtitles[screenId];
+        }
+
+        // Plan Type Navigation
+        function showPlanType(type) {
+            document.querySelectorAll('.plan-type-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+
+            document.getElementById('therapy-plan').style.display = type === 'therapy' ? 'block' : 'none';
+            document.getElementById('nutrition-plan').style.display = type === 'nutrition' ? 'block' : 'none';
+        }
+
+        // Task Management
+        function toggleTask(element) {
+            element.classList.toggle('done');
+            updateProgress();
+        }
+
+        function updateProgress() {
+            const totalTasks = document.querySelectorAll('.task-toggle').length;
+            const doneTasks = document.querySelectorAll('.task-toggle.done').length;
+            document.querySelector('.progress-number').textContent = `${doneTasks}/${totalTasks}`;
+            
+            const percentage = (doneTasks / totalTasks) * 100;
+            const degrees = (percentage / 100) * 360;
+            document.querySelector('.progress-ring').style.background = 
+                `conic-gradient(#667eea 0deg ${degrees}deg, #e9ecef ${degrees}deg 360deg)`;
+        }
+
+        // Plan Management (for onboarding)
+        function acceptPlanAndContinue() {
+            // Update plan title with child's name before showing
+            document.getElementById('plan-title').textContent = `${userData.childName}'s Care Plan`;
+            showMainApp();
+        }
+
+        function acceptPlan() {
+            alert(`Plan accepted! ${userData.childName}'s care plan has been saved.`);
+        }
+
+        function revisePlan() {
+            alert(`Opening plan customization for ${userData.childName}. You can modify goals, adjust activity frequency, or add/remove specific activities.`);
+        }
+
+        // Community Functions
+        function toggleLike(element) {
+            element.classList.toggle('liked');
+            const countText = element.textContent.trim();
+            const currentCount = parseInt(countText.split(' ')[1]);
+            if (element.classList.contains('liked')) {
+                element.innerHTML = `<i class="fas fa-heart"></i> ${currentCount + 1}`;
+            } else {
+                element.innerHTML = `<i class="fas fa-heart"></i> ${currentCount - 1}`;
+            }
+        }
+
+        // Data Management
+        function exportData() {
+            const data = {
+                childName: userData.childName,
+                condition: userData.condition,
+                email: userData.email,
+                milestones: userData.milestones,
+                tasks: [],
+                progress: [],
+                preferences: {}
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${userData.childName.toLowerCase()}-care-data.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            alert(`Data imported successfully! ${data.childName}'s care plan has been restored.`);
+                        } catch (error) {
+                            alert('Error importing data. Please check the file format.');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+        }
+
+        // Album Functions
+        function addPhotoVideo() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*,video/*';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    alert(`${file.name} selected! In the full app, this would upload and attach to your milestone.`);
+                }
+            };
+            input.click();
+        }
+
+        function saveMilestone() {
+            const description = document.getElementById('milestone-description').value;
+            if (description) {
+                alert(`Milestone saved: "${description}"\n\nThis precious moment has been added to ${userData.childName}'s album!`);
+                document.getElementById('milestone-description').value = '';
+            } else {
+                alert('Please describe the milestone before saving.');
+            }
+        }
+
+        function printNotebook() {
+            alert(`Preparing ${userData.childName}'s Memory Book for printing!\n\nIn the full app, this would generate a beautiful PDF of all milestones that you can print as a keepsake notebook.`);
+        }
+    </script>
+</body>
+</html>

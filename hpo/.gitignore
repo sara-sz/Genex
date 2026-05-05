@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# Data
+data_raw/
+data_proc/*.parquet
+data_proc/*.npz
+data_proc/_previews/
+data_proc/*_preview.csv
+data_proc/X_hpo_csr.npz
+data_proc/retrieval_*.csv
+
+# Jupyter
+.ipynb_checkpoints/

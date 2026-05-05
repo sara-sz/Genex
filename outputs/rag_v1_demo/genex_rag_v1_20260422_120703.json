@@ -1,0 +1,289 @@
+{
+  "child_ctx": {
+    "child_name": "Emma",
+    "age_months": 30,
+    "condition": "down syndrome",
+    "concern": "global developmental delay"
+  },
+  "user_query": "What should I track at home for this child's speech and development, and what are the most relevant papers?",
+  "query_type": "literature_qna",
+  "pubmed_query": "down syndrome AND global developmental delay AND What should I track at home for this child's speech and development, and what are the most relevant papers? AND pediatric child age 2.5 years",
+  "papers": [],
+  "context_docs": [
+    {
+      "doc_id": "condition_profile_ORPHA:139",
+      "source": "condition_profile",
+      "title": "Condition profile: CHILD syndrome",
+      "text": "Condition CHILD syndrome (ORPHA:139). Top phenotype terms: Polydactyly; Amelia; Renal agenesis; Foam cells; Scarring alopecia of scalp; Syndactyly; Oligodactyly; Morphological central nervous system abnormality; Hydronephrosis; Multiple joint contractures; Pulmonary hypoplasia; Abnormal heart morphology; Verruciform xanthoma; Scoliosis; Abnormal periungual morphology; Congenital onychodystrophy; Aplasia/hypoplasia involving bones of the extremities; Congenital ichthyosiform erythroderma; Parakeratosis; Epidermal acanthosis. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.15825973740218113
+    },
+    {
+      "doc_id": "cdc_social_and_emotional_30",
+      "source": "cdc",
+      "title": "CDC Social / Emotional 30 months",
+      "text": "CDC milestone reference for Social / Emotional at 30 months. Milestones:\n- plays next to other children and sometimes plays with them\n- shows you what she can do by saying look at me\n- follos simple routines when told like helping to pick up toys when you say it is clean up time",
+      "score": 0.1453819318524693
+    },
+    {
+      "doc_id": "cdc_language_and_communication_30",
+      "source": "cdc",
+      "title": "CDC Language / Communication 30 months",
+      "text": "CDC milestone reference for Language / Communication at 30 months. Milestones:\n- says about 50 words\n- say two or more words toghether with one action word like doggie run\n- name things in a book when you point and ask what is this\n- says words like I me or we",
+      "score": 0.1383344709225634
+    },
+    {
+      "doc_id": "condition_profile_OMIM:618412",
+      "source": "condition_profile",
+      "title": "Condition profile: Global developmental delay, progressive ataxia, and elevated glutamine",
+      "text": "Condition Global developmental delay, progressive ataxia, and elevated glutamine (OMIM:618412). Top phenotype terms: Hyperglutaminemia; Progressive cerebellar ataxia; Delayed gross motor development; Delayed speech and language development; Childhood onset; Global developmental delay; Febrile seizure (within the age range of 3 months to 6 years); Autosomal recessive inheritance; Cerebellar atrophy. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.13667584553386397
+    },
+    {
+      "doc_id": "cdc_movement_and_physical_30",
+      "source": "cdc",
+      "title": "CDC Movement / Physical 30 months",
+      "text": "CDC milestone reference for Movement / Physical at 30 months. Milestones:\n- uses hands to twist things like turning doorknobs or unscrewing lids\n- takes some clothes off by himself like loose pants or an open jacket\n- jumps off the ground with both feet\n- turns book pages one at a time when you read to her",
+      "score": 0.1331099406398388
+    },
+    {
+      "doc_id": "condition_profile_OMIM:619243",
+      "source": "condition_profile",
+      "title": "Condition profile: Global developmental delay with speech and behavioral abnormalities",
+      "text": "Condition Global developmental delay with speech and behavioral abnormalities (OMIM:619243). Top phenotype terms: Delayed fine motor development; Delayed gross motor development; Delayed speech and language development; Attention deficit hyperactivity disorder; Intellectual disability; Global developmental delay; Autistic behavior; Joint hypermobility; Autosomal dominant inheritance; Hypotonia; Sleep disturbance; Thin upper lip vermilion; Micrognathia; Triangular face; Recurrent otitis media; Downslanted palpebral fissures; Supernumerary nipple; Hearing impairment; Inguinal hernia; Macrocephaly. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.11912714347795084
+    },
+    {
+      "doc_id": "condition_profile_OMIM:618330",
+      "source": "condition_profile",
+      "title": "Condition profile: Global developmental delay with or without impaired intellectual development",
+      "text": "Condition Global developmental delay with or without impaired intellectual development (OMIM:618330). Top phenotype terms: Delayed speech and language development; Motor delay; Infantile onset; Global developmental delay; Autosomal dominant inheritance; Poor fine motor coordination; Intellectual disability; Pulmonary sequestration; Bulbous nose; Hypospadias; Patent ductus arteriosus; Frontal bossing; Widened subarachnoid space; Hypotonia; Oligodontia; Long palpebral fissure; Lateral ventricle dilatation; Plagiocephaly; Hypotelorism; Broad forehead. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.11680504418108412
+    },
+    {
+      "doc_id": "condition_profile_OMIM:213000",
+      "source": "condition_profile",
+      "title": "Condition profile: Cerebellar hypoplasia/atrophy, epilepsy, and global developmental delay",
+      "text": "Condition Cerebellar hypoplasia/atrophy, epilepsy, and global developmental delay (OMIM:213000). Top phenotype terms: Cerebellar hypoplasia; Tremor; Ataxia; Delayed speech and language development; Nystagmus; Intellectual disability; Seizure; Global developmental delay; Hypotonia; Autosomal recessive inheritance; Scoliosis. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.11665883600346195
+    },
+    {
+      "doc_id": "cdc_cognitive_30",
+      "source": "cdc",
+      "title": "CDC Cognitive / Adaptive 30 months",
+      "text": "CDC milestone reference for Cognitive / Adaptive at 30 months. Milestones:\n- uses things to pretend like feeding a block to a doll as if it were food\n- shows simple problem solving skills like standing on a small stool to reach something\n- follows two step instructions like put the toy down and close the door\n- shows she knows at least one color like pointing to a red crayon when you ask which one is red",
+      "score": 0.11631532384948062
+    },
+    {
+      "doc_id": "condition_profile_OMIM:612798",
+      "source": "condition_profile",
+      "title": "Condition profile: Question mark ears, isolated",
+      "text": "Condition Question mark ears, isolated (OMIM:612798). Top phenotype terms: Question mark ear; Autosomal dominant inheritance; Hearing abnormality. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.11433566984766812
+    }
+  ],
+  "answers": [
+    {
+      "model_name": "extractive_baseline",
+      "answer": "Genex found 10 relevant evidence items for Emma. This child is 30 months old, with condition 'down syndrome' and parent concern 'global developmental delay'. The question appears to be about: What should I track at home for this child's speech and development, and what are the most relevant papers? Top retrieved evidence includes: - [condition_profile] Condition profile: CHILD syndrome - [cdc] CDC Social / Emotional 30 months - [cdc] CDC Language / Communication 30 months - [condition_profile] Condition profile: Global developmental delay, progressive ataxia, and elevated glutamine",
+      "citations": [
+        {
+          "doc_id": "condition_profile_ORPHA:139",
+          "source": "condition_profile",
+          "title": "Condition profile: CHILD syndrome"
+        },
+        {
+          "doc_id": "cdc_social_and_emotional_30",
+          "source": "cdc",
+          "title": "CDC Social / Emotional 30 months"
+        },
+        {
+          "doc_id": "cdc_language_and_communication_30",
+          "source": "cdc",
+          "title": "CDC Language / Communication 30 months"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:618412",
+          "source": "condition_profile",
+          "title": "Condition profile: Global developmental delay, progressive ataxia, and elevated glutamine"
+        },
+        {
+          "doc_id": "cdc_movement_and_physical_30",
+          "source": "cdc",
+          "title": "CDC Movement / Physical 30 months"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:619243",
+          "source": "condition_profile",
+          "title": "Condition profile: Global developmental delay with speech and behavioral abnormalities"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:618330",
+          "source": "condition_profile",
+          "title": "Condition profile: Global developmental delay with or without impaired intellectual development"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:213000",
+          "source": "condition_profile",
+          "title": "Condition profile: Cerebellar hypoplasia/atrophy, epilepsy, and global developmental delay"
+        }
+      ],
+      "follow_up_questions": [
+        "Would you like Genex to focus on milestones, phenotype terms, or papers?",
+        "Would you like a next doctor visit prep summary?"
+      ],
+      "safety_flags": [
+        "extractive_mode",
+        "non_diagnostic"
+      ]
+    },
+    {
+      "model_name": "gpt-4o-mini",
+      "answer": "For Emma's speech and development tracking at home, you can focus on the following areas:\n\n1. **Language/Communication**: Track if she can say about 50 words, use two or more words together with an action word (like 'doggie run'), name things in a book when you point to them, and use words like 'I', 'me', or 'we'.\n\n2. **Social/Emotional**: Observe if she plays next to other children and sometimes engages with them, shows you what she can do by saying 'look at me', and follows simple routines like helping to clean up toys when prompted.\n\n3. **Movement/Physical**: Note if she can twist things (like turning doorknobs), take off some clothes by herself, jump off the ground with both feet, and turn book pages one at a time when you read to her.\n\n4. **Cognitive/Adaptive**: Look for her ability to pretend play (like feeding a doll), solve simple problems (like standing on a stool to reach something), follow two-step instructions, and recognize at least one color.\n\nThese milestones can help you gauge her development and provide valuable information for discussions with her healthcare provider.",
+      "citations": [
+        {
+          "doc_id": "cdc_language_and_communication_30",
+          "title": "CDC Language / Communication 30 months"
+        },
+        {
+          "doc_id": "cdc_social_and_emotional_30",
+          "title": "CDC Social / Emotional 30 months"
+        },
+        {
+          "doc_id": "cdc_movement_and_physical_30",
+          "title": "CDC Movement / Physical 30 months"
+        },
+        {
+          "doc_id": "cdc_cognitive_30",
+          "title": "CDC Cognitive / Adaptive 30 months"
+        }
+      ],
+      "follow_up_questions": [
+        "What specific concerns do you have about Emma's speech and development?",
+        "Have you noticed any particular areas where she excels or struggles?",
+        "Are there any resources or support groups you would like to learn more about?"
+      ],
+      "safety_flags": []
+    },
+    {
+      "model_name": "gpt-4.1-mini",
+      "answer": "For tracking Emma's speech and development at home, you can observe and note her progress in several areas based on typical milestones for her age (30 months). For speech and communication, track if she says around 50 words, uses two or more words together with an action word (like 'doggie run'), names things in books when asked, and uses pronouns like 'I', 'me', or 'we'. For social and emotional development, watch if she plays next to or with other children, shows you what she can do by saying 'look at me', and follows simple routines like helping to pick up toys when told. For cognitive and adaptive skills, see if she uses objects to pretend (like feeding a doll), solves simple problems, follows two-step instructions, and recognizes at least one color. For physical development, note if she can twist things with her hands, take off some clothes by herself, jump with both feet, and turn book pages one at a time. Since Emma has Down syndrome and global developmental delay, these milestones may be reached at a different pace, so tracking progress over time is helpful. The most relevant papers and sources for these milestones and developmental concerns include CDC milestone references for 30 months in language/communication, social/emotional, cognitive/adaptive, and movement/physical development, as well as condition profiles related to global developmental delay with speech and behavioral abnormalities.",
+      "citations": [
+        {
+          "doc_id": "cdc_language_and_communication_30",
+          "title": "CDC Language / Communication 30 months"
+        },
+        {
+          "doc_id": "cdc_social_and_emotional_30",
+          "title": "CDC Social / Emotional 30 months"
+        },
+        {
+          "doc_id": "cdc_cognitive_30",
+          "title": "CDC Cognitive / Adaptive 30 months"
+        },
+        {
+          "doc_id": "cdc_movement_and_physical_30",
+          "title": "CDC Movement / Physical 30 months"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:619243",
+          "title": "Condition profile: Global developmental delay with speech and behavioral abnormalities"
+        }
+      ],
+      "follow_up_questions": [
+        "Are there specific speech therapy or developmental interventions recommended for children with Down syndrome and global developmental delay?",
+        "What are typical ranges of progress for speech and motor skills in children with Down syndrome at this age?",
+        "How can I support Emma's social and emotional development at home?"
+      ],
+      "safety_flags": [
+        "This information is for tracking and support purposes only and does not replace professional evaluation or diagnosis.",
+        "If you notice any sudden changes or concerns in Emma's development, please consult a healthcare provider."
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "model_name": "extractive_baseline",
+      "answer_words": 87,
+      "answer_chars": 588,
+      "citation_count": 8,
+      "follow_up_count": 2,
+      "safety_flag_count": 2,
+      "context_doc_count": 10,
+      "unique_context_sources": 2,
+      "pubmed_paper_count": 0,
+      "mentions_uncertainty": false,
+      "mentions_doctor": false
+    },
+    {
+      "model_name": "gpt-4o-mini",
+      "answer_words": 182,
+      "answer_chars": 1102,
+      "citation_count": 4,
+      "follow_up_count": 3,
+      "safety_flag_count": 0,
+      "context_doc_count": 10,
+      "unique_context_sources": 2,
+      "pubmed_paper_count": 0,
+      "mentions_uncertainty": false,
+      "mentions_doctor": false
+    },
+    {
+      "model_name": "gpt-4.1-mini",
+      "answer_words": 227,
+      "answer_chars": 1424,
+      "citation_count": 5,
+      "follow_up_count": 3,
+      "safety_flag_count": 2,
+      "context_doc_count": 10,
+      "unique_context_sources": 2,
+      "pubmed_paper_count": 0,
+      "mentions_uncertainty": true,
+      "mentions_doctor": false
+    }
+  ],
+  "doctor_prep": {
+    "summary": "Emma is a 30-month-old child with Down syndrome and concerns regarding global developmental delay. It is important to assess her developmental milestones across various domains including social/emotional, language/communication, movement/physical, and cognitive/adaptive skills.",
+    "top_concerns": [
+      "Global developmental delay",
+      "Social interaction with peers",
+      "Language development",
+      "Physical movement skills",
+      "Cognitive skills and problem-solving"
+    ],
+    "questions_to_ask": [
+      "What specific developmental milestones should we focus on for Emma?",
+      "Are there any recommended therapies or interventions for her global developmental delay?",
+      "How can we support her social and communication skills at home?",
+      "What resources are available for families with children who have Down syndrome?"
+    ],
+    "records_to_bring": [
+      "Previous developmental assessments",
+      "Medical history related to Down syndrome",
+      "Any therapy reports (speech, occupational, etc.)",
+      "Vaccination records"
+    ],
+    "citations": [
+      {
+        "doc_id": "cdc_social_and_emotional_30",
+        "title": "CDC Social / Emotional 30 months"
+      },
+      {
+        "doc_id": "cdc_language_and_communication_30",
+        "title": "CDC Language / Communication 30 months"
+      },
+      {
+        "doc_id": "cdc_movement_and_physical_30",
+        "title": "CDC Movement / Physical 30 months"
+      },
+      {
+        "doc_id": "cdc_cognitive_30",
+        "title": "CDC Cognitive / Adaptive 30 months"
+      },
+      {
+        "doc_id": "hpo_term_HP:0001263",
+        "title": "HPO HP:0001263 Global developmental delay"
+      }
+    ],
+    "safety_flags": []
+  }
+}

@@ -1,0 +1,15 @@
+age_label,age_min,age_max,bf_domain,mapped_domain,text
+4 Years,48,59,school_readiness,cognitive,Language understanding and fluency; feelings; opportunities to socialize with other children; readiness for structured learning experiences; preschool.
+4 Years,48,59,media_use,social_and_emotial,Limits on use; promoting physical activity and safe play.
+5 Years,60,71,development_and_mental_health,social_and_emotial,"Family rules and routines, concern for others, patience and control over anger."
+5 Years,60,71,school,cognitive,"Readiness, established routines, school attendance, and friends; after-school care and parent-teacher communication."
+5 Years,60,71,physical_growth_and_development,movement_and_physical,"Oral health, nutrition, physical activity."
+6 Years,72,83,development_and_mental_health,social_and_emotial,"Family rules and routines, concern for others, patience and control over anger."
+6 Years,72,83,school,cognitive,"Readiness, established routines, school attendance, and friends; after-school care and parent-teacher communication."
+6 Years,72,83,physical_growth_and_development,movement_and_physical,"Oral health, nutrition, physical activity."
+7-8 Years,84,107,development_and_mental_health,social_and_emotial,Independence; rules and consequences; temper problems and conflict resolution; pubertal development.
+7-8 Years,84,107,school,cognitive,Adaptation to school; school problems (behavior or learning issues); school performance and progress; school attendance; IEP or special education services.
+7-8 Years,84,107,physical_growth_and_development,movement_and_physical,"Oral health, nutrition, physical activity."
+9-10 Years,108,131,development_and_mental_health,social_and_emotial,"Temper problems, setting reasonable limits, friends, sexuality."
+9-10 Years,108,131,school,cognitive,"School attendance, school problems, school performance and progress, transitions, co-occurrence of middle school and pubertal transitions."
+9-10 Years,108,131,physical_growth_and_development,movement_and_physical,"Oral health, nutrition, physical activity."

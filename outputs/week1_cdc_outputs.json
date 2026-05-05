@@ -1,0 +1,1902 @@
+[
+  {
+    "case_id": "C01",
+    "name": "Emma",
+    "condition": "Down syndrome",
+    "chronological_age_months": 36,
+    "cdc_start_month": 36,
+    "concern_text": "Parents want a home plan for communication, motor skills, and daily routines.",
+    "daily_time_min": 10,
+    "developmental_profile": {
+      "speech_language": {
+        "estimated_range_months": "24-30",
+        "estimated_anchor_month": 24,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_118",
+            "question": "talks with you in conversation using at least two back and forth exchangess",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_119",
+            "question": "ask who or what or where or why questions like where is mommy or where is daddy",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 30,
+            "question_id": "speech_language_30_104",
+            "question": "says about 50 words",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "speech_language_30_105",
+            "question": "say two or more words toghether with one action word like doggie run",
+            "answer": "sometimes",
+            "score": 0.6
+          }
+        ],
+        "band_scores": {
+          "36": 0.4,
+          "30": 0.6
+        }
+      },
+      "motor": {
+        "estimated_range_months": "30-36",
+        "estimated_anchor_month": 30,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 36,
+            "question_id": "motor_36_125",
+            "question": "strings items together like large beads or macaroni",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "motor_36_126",
+            "question": "puts on some clothes by himself like loose pants or a jacket",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "motor_30_112",
+            "question": "uses hands to twist things like turning doorknobs or unscrewing lids",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 30,
+            "question_id": "motor_30_113",
+            "question": "takes some clothes off by himself like loose pants or an open jacket",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "36": 0.6,
+          "30": 1.0
+        }
+      },
+      "social_communication": {
+        "estimated_range_months": "30-36",
+        "estimated_anchor_month": 30,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_116",
+            "question": "calms down within 10 minutes after you leave her like at childcare drop off",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_117",
+            "question": "notices other children and joins them to play",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "social_communication_30_101",
+            "question": "plays next to other children and sometimes plays with them",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 30,
+            "question_id": "social_communication_30_102",
+            "question": "shows you what she can do by saying look at me",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "36": 0.6,
+          "30": 1.0
+        }
+      },
+      "adaptive_cognitive": {
+        "estimated_range_months": "24-30",
+        "estimated_anchor_month": 24,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_123",
+            "question": "draws a circle when you show her how",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_124",
+            "question": "avoids touching hot objects like the stove when you warn her",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 30,
+            "question_id": "adaptive_cognitive_30_108",
+            "question": "uses things to pretend like feeding a block to a doll as if it were food",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "adaptive_cognitive_30_109",
+            "question": "shows simple problem solving skills like standing on a small stool to reach something",
+            "answer": "sometimes",
+            "score": 0.6
+          }
+        ],
+        "band_scores": {
+          "36": 0.4,
+          "30": 0.6
+        }
+      }
+    },
+    "activities_by_domain": {
+      "speech_language": [
+        {
+          "activity_number": 1,
+          "title": "Picture Exchange Conversation",
+          "why_this_fits": "Encourages back-and-forth communication using visual supports.",
+          "instructions": "Use picture cards to represent common objects or actions. Take turns asking questions using the cards, such as 'What do you want?' or 'Where is the dog?'.",
+          "materials": "Picture cards (can be homemade or printed), a small box to hold the cards.",
+          "duration_min": 5,
+          "adaptation": "For limited speech, use a communication device or app to select pictures."
+        },
+        {
+          "activity_number": 2,
+          "title": "Word and Action Game",
+          "why_this_fits": "Promotes vocabulary development through actions.",
+          "instructions": "Say a word and perform an action (e.g., 'jump' while jumping). Encourage Emma to repeat the word and action.",
+          "materials": "None required, just space to move.",
+          "duration_min": 5,
+          "adaptation": "Use gestures or visual prompts if Emma struggles to say the words."
+        },
+        {
+          "activity_number": 3,
+          "title": "Story Time with Questions",
+          "why_this_fits": "Enhances comprehension and question-asking skills.",
+          "instructions": "Read a short story and pause to ask Emma questions like 'Who is this?' or 'What happens next?'.",
+          "materials": "A children's book.",
+          "duration_min": 5,
+          "adaptation": "Use simple yes/no questions or point to pictures for her to respond."
+        },
+        {
+          "activity_number": 4,
+          "title": "Sing and Sign",
+          "why_this_fits": "Supports language development through music and gestures.",
+          "instructions": "Choose a simple song and incorporate hand signs for key words. Sing together.",
+          "materials": "None required.",
+          "duration_min": 5,
+          "adaptation": "Use visual aids or props to represent the words in the song."
+        },
+        {
+          "activity_number": 5,
+          "title": "Labeling Household Items",
+          "why_this_fits": "Encourages vocabulary building in a familiar context.",
+          "instructions": "Walk around the house and label items together (e.g., 'table', 'chair').",
+          "materials": "Sticky notes and a pen.",
+          "duration_min": 5,
+          "adaptation": "Use picture labels if Emma has difficulty with words."
+        }
+      ],
+      "motor": [
+        {
+          "activity_number": 1,
+          "title": "Bead Stringing",
+          "why_this_fits": "Enhances fine motor skills through a fun activity.",
+          "instructions": "Provide large beads and a string. Encourage Emma to string the beads in a pattern.",
+          "materials": "Large beads, string.",
+          "duration_min": 5,
+          "adaptation": "Use a thicker string or pipe cleaner for easier handling."
+        },
+        {
+          "activity_number": 2,
+          "title": "Dress-Up Challenge",
+          "why_this_fits": "Promotes independence in dressing skills.",
+          "instructions": "Lay out loose clothing items and encourage Emma to put them on herself.",
+          "materials": "Loose clothing items.",
+          "duration_min": 5,
+          "adaptation": "Assist with tricky parts like buttons or zippers."
+        },
+        {
+          "activity_number": 3,
+          "title": "Twist and Turn",
+          "why_this_fits": "Develops hand strength and coordination.",
+          "instructions": "Provide various containers with lids. Encourage Emma to twist and turn the lids on and off.",
+          "materials": "Containers with different lids (e.g., jars, bottles).",
+          "duration_min": 5,
+          "adaptation": "Use larger containers for easier manipulation."
+        },
+        {
+          "activity_number": 4,
+          "title": "Obstacle Course",
+          "why_this_fits": "Encourages gross motor skills through movement.",
+          "instructions": "Set up a simple obstacle course with pillows, chairs, and toys to crawl over or around.",
+          "materials": "Pillows, chairs, toys.",
+          "duration_min": 5,
+          "adaptation": "Simplify the course by reducing the number of obstacles."
+        },
+        {
+          "activity_number": 5,
+          "title": "Ball Toss",
+          "why_this_fits": "Improves hand-eye coordination and gross motor skills.",
+          "instructions": "Use a soft ball to toss back and forth. Encourage Emma to catch and throw.",
+          "materials": "Soft ball.",
+          "duration_min": 5,
+          "adaptation": "Use a larger ball for easier catching."
+        }
+      ],
+      "social_communication": [
+        {
+          "activity_number": 1,
+          "title": "Play Date Role Play",
+          "why_this_fits": "Encourages social skills and interaction.",
+          "instructions": "Role-play different scenarios with dolls or toys, such as sharing or asking to play.",
+          "materials": "Dolls or toys.",
+          "duration_min": 5,
+          "adaptation": "Use simple prompts to guide Emma in the role play."
+        },
+        {
+          "activity_number": 2,
+          "title": "Emotion Charades",
+          "why_this_fits": "Helps recognize and express emotions.",
+          "instructions": "Act out different emotions and have Emma guess what they are.",
+          "materials": "None required.",
+          "duration_min": 5,
+          "adaptation": "Use picture cards of emotions for visual support."
+        },
+        {
+          "activity_number": 3,
+          "title": "Group Play with Siblings",
+          "why_this_fits": "Encourages interaction and cooperation.",
+          "instructions": "Engage in a simple game with siblings that requires taking turns.",
+          "materials": "Board game or simple card game.",
+          "duration_min": 5,
+          "adaptation": "Simplify rules to ensure Emma can participate."
+        },
+        {
+          "activity_number": 4,
+          "title": "Show and Tell",
+          "why_this_fits": "Promotes sharing and communication.",
+          "instructions": "Encourage Emma to bring a favorite toy and talk about it.",
+          "materials": "Favorite toy.",
+          "duration_min": 5,
+          "adaptation": "Provide sentence starters to help her express herself."
+        },
+        {
+          "activity_number": 5,
+          "title": "Follow the Leader",
+          "why_this_fits": "Encourages imitation and social interaction.",
+          "instructions": "Take turns being the leader and doing actions for each other to follow.",
+          "materials": "None required.",
+          "duration_min": 5,
+          "adaptation": "Use simple actions that Emma can easily imitate."
+        }
+      ],
+      "adaptive_cognitive": [
+        {
+          "activity_number": 1,
+          "title": "Simple Puzzles",
+          "why_this_fits": "Encourages problem-solving skills.",
+          "instructions": "Provide a simple puzzle and encourage Emma to fit the pieces together.",
+          "materials": "Simple jigsaw puzzle.",
+          "duration_min": 5,
+          "adaptation": "Use larger pieces for easier handling."
+        },
+        {
+          "activity_number": 2,
+          "title": "Pretend Play with Food",
+          "why_this_fits": "Enhances imaginative play and cognitive skills.",
+          "instructions": "Use toy food and encourage Emma to 'feed' a doll or stuffed animal.",
+          "materials": "Toy food and a doll or stuffed animal.",
+          "duration_min": 5,
+          "adaptation": "Use real food items for more engagement if safe."
+        },
+        {
+          "activity_number": 3,
+          "title": "Sorting Objects",
+          "why_this_fits": "Develops categorization and sorting skills.",
+          "instructions": "Provide various objects and ask Emma to sort them by color or size.",
+          "materials": "Different colored blocks or toys.",
+          "duration_min": 5,
+          "adaptation": "Use fewer items to maintain focus."
+        },
+        {
+          "activity_number": 4,
+          "title": "Drawing with Guidance",
+          "why_this_fits": "Encourages creativity and fine motor skills.",
+          "instructions": "Show Emma how to draw simple shapes and encourage her to try.",
+          "materials": "Paper and crayons.",
+          "duration_min": 5,
+          "adaptation": "Use thicker crayons for easier grip."
+        },
+        {
+          "activity_number": 5,
+          "title": "Treasure Hunt",
+          "why_this_fits": "Promotes problem-solving and following directions.",
+          "instructions": "Hide objects around the room and give Emma clues to find them.",
+          "materials": "Small toys or objects to hide.",
+          "duration_min": 5,
+          "adaptation": "Use visual clues or pictures to guide her."
+        }
+      ]
+    },
+    "profile_text_for_prompt": "Speech / Language estimated around 24-30 months. Evidence: 36m: with_help to 'talks with you in conversation using at least two back and forth exchangess'; 36m: with_help to 'ask who or what or where or why questions like where is mommy or where is daddy'; 30m: sometimes to 'says about 50 words'; 30m: sometimes to 'say two or more words toghether with one action word like doggie run'\nMotor estimated around 30-36 months. Evidence: 36m: sometimes to 'strings items together like large beads or macaroni'; 36m: sometimes to 'puts on some clothes by himself like loose pants or a jacket'; 30m: yes to 'uses hands to twist things like turning doorknobs or unscrewing lids'; 30m: yes to 'takes some clothes off by himself like loose pants or an open jacket'\nSocial / Communication estimated around 30-36 months. Evidence: 36m: sometimes to 'calms down within 10 minutes after you leave her like at childcare drop off'; 36m: sometimes to 'notices other children and joins them to play'; 30m: yes to 'plays next to other children and sometimes plays with them'; 30m: yes to 'shows you what she can do by saying look at me'\nAdaptive / Cognitive estimated around 24-30 months. Evidence: 36m: with_help to 'draws a circle when you show her how'; 36m: with_help to 'avoids touching hot objects like the stove when you warn her'; 30m: sometimes to 'uses things to pretend like feeding a block to a doll as if it were food'; 30m: sometimes to 'shows simple problem solving skills like standing on a small stool to reach something'",
+    "note": "CDC table only goes to 60 months, so children older than 60 months start from the 60-month band as an anchor."
+  },
+  {
+    "case_id": "C02",
+    "name": "Noah",
+    "condition": "Autism",
+    "chronological_age_months": 60,
+    "cdc_start_month": 60,
+    "concern_text": "Parents report limited back-and-forth play, speech delay, and rigid routines.",
+    "daily_time_min": 15,
+    "developmental_profile": {
+      "speech_language": {
+        "estimated_range_months": "36-48",
+        "estimated_anchor_month": 36,
+        "confidence": 0.94,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "speech_language_60_148",
+            "question": "tells a storys she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "speech_language_60_149",
+            "question": "answers simple questions about a book or a story after you read or tell it to her",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "speech_language_48_134",
+            "question": "says sentences with four or more words",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 48,
+            "question_id": "speech_language_48_135",
+            "question": "says some words from a song or story or nursery rhyme",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_118",
+            "question": "talks with you in conversation using at least two back and forth exchangess",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_119",
+            "question": "ask who or what or where or why questions like where is mommy or where is daddy",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 0.0,
+          "48": 0.4,
+          "36": 1.0
+        }
+      },
+      "motor": {
+        "estimated_range_months": "60-60",
+        "estimated_anchor_month": 60,
+        "confidence": 0.7,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "motor_60_158",
+            "question": "buttons some buttons",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "motor_60_159",
+            "question": "hops on one foot",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 1.0
+        }
+      },
+      "social_communication": {
+        "estimated_range_months": "30-36",
+        "estimated_anchor_month": 30,
+        "confidence": 0.95,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "social_communication_60_145",
+            "question": "follows rules or takesake turns when playing games with other  children",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "social_communication_60_146",
+            "question": "sings dances or acts for you",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "social_communication_48_128",
+            "question": "pretends to be something else during play like teacher or superhero or a dog",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "social_communication_48_129",
+            "question": "asks to go play with children if none are around like can I play with Alex",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_116",
+            "question": "calms down within 10 minutes after you leave her like at childcare drop off",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_117",
+            "question": "notices other children and joins them to play",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "social_communication_30_101",
+            "question": "plays next to other children and sometimes plays with them",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 30,
+            "question_id": "social_communication_30_102",
+            "question": "shows you what she can do by saying look at me",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 0.0,
+          "48": 0.0,
+          "36": 0.6,
+          "30": 1.0
+        }
+      },
+      "adaptive_cognitive": {
+        "estimated_range_months": "36-48",
+        "estimated_anchor_month": 36,
+        "confidence": 0.94,
+        "asked": [
+          {
+            "band_month": 60,
+            "question_id": "adaptive_cognitive_60_152",
+            "question": "counts to 10",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "adaptive_cognitive_60_153",
+            "question": "names some numbers between 1 and 5 when you point to them",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "adaptive_cognitive_48_138",
+            "question": "names a few colors or items",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 48,
+            "question_id": "adaptive_cognitive_48_139",
+            "question": "tell what comes next in a well known story",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_123",
+            "question": "draws a circle when you show her how",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_124",
+            "question": "avoids touching hot objects like the stove when you warn her",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "60": 0.0,
+          "48": 0.6,
+          "36": 1.0
+        }
+      }
+    },
+    "activities_by_domain": {
+      "speech_language": [
+        {
+          "activity_number": 1,
+          "title": "Story Sequencing with Pictures",
+          "why_this_fits": "Encourages storytelling and sentence formation.",
+          "instructions": "Use a set of picture cards that tell a simple story. Ask Noah to arrange them in order and describe what happens in each picture.",
+          "materials": "Picture cards or printed images from a story.",
+          "duration_min": 10,
+          "adaptation": "If Noah struggles with verbalizing, encourage him to point to the pictures and use single words or phrases."
+        },
+        {
+          "activity_number": 2,
+          "title": "Song Repetition",
+          "why_this_fits": "Supports language development through music.",
+          "instructions": "Play a simple song and sing along. Pause after each line and encourage Noah to repeat the last word or phrase.",
+          "materials": "A favorite children's song.",
+          "duration_min": 5,
+          "adaptation": "Use visual aids or gestures to help him understand the song's content."
+        },
+        {
+          "activity_number": 3,
+          "title": "Question and Answer Game",
+          "why_this_fits": "Promotes answering questions and conversation skills.",
+          "instructions": "Ask Noah simple questions about his day or favorite toys, encouraging him to respond with short sentences.",
+          "materials": "None required.",
+          "duration_min": 5,
+          "adaptation": "Use visual prompts or choices if he has difficulty answering."
+        },
+        {
+          "activity_number": 4,
+          "title": "Labeling Objects",
+          "why_this_fits": "Enhances vocabulary and word retrieval.",
+          "instructions": "Choose common objects around the house and ask Noah to name them. You can model the words first.",
+          "materials": "Everyday household items.",
+          "duration_min": 5,
+          "adaptation": "Use gestures or point to the objects to support his responses."
+        },
+        {
+          "activity_number": 5,
+          "title": "Story Time with Questions",
+          "why_this_fits": "Encourages comprehension and expressive language.",
+          "instructions": "Read a short story and pause to ask Noah questions about it, encouraging him to answer.",
+          "materials": "A short picture book.",
+          "duration_min": 10,
+          "adaptation": "Use yes/no questions or multiple-choice options to make it easier for him to respond."
+        }
+      ],
+      "motor": [
+        {
+          "activity_number": 1,
+          "title": "Obstacle Course",
+          "why_this_fits": "Improves gross motor skills and coordination.",
+          "instructions": "Set up a simple obstacle course using cushions, chairs, and toys for Noah to navigate.",
+          "materials": "Cushions, chairs, toys.",
+          "duration_min": 10,
+          "adaptation": "Modify the course to be easier if he has difficulty with certain movements."
+        },
+        {
+          "activity_number": 2,
+          "title": "Buttoning Practice",
+          "why_this_fits": "Enhances fine motor skills and independence.",
+          "instructions": "Provide a shirt or fabric with buttons for Noah to practice buttoning and unbuttoning.",
+          "materials": "A button-up shirt or fabric.",
+          "duration_min": 5,
+          "adaptation": "Use larger buttons or a button board to make it easier."
+        },
+        {
+          "activity_number": 3,
+          "title": "Ball Toss",
+          "why_this_fits": "Develops hand-eye coordination.",
+          "instructions": "Play a simple game of tossing a soft ball back and forth with Noah.",
+          "materials": "A soft ball.",
+          "duration_min": 10,
+          "adaptation": "Reduce the distance between you if he has difficulty catching."
+        },
+        {
+          "activity_number": 4,
+          "title": "Drawing with Crayons",
+          "why_this_fits": "Encourages fine motor control and creativity.",
+          "instructions": "Provide crayons and paper for Noah to draw freely or follow simple prompts like drawing shapes.",
+          "materials": "Crayons, paper.",
+          "duration_min": 10,
+          "adaptation": "Use thicker crayons or markers if he has difficulty gripping."
+        },
+        {
+          "activity_number": 5,
+          "title": "Simon Says",
+          "why_this_fits": "Enhances listening skills and motor planning.",
+          "instructions": "Play a game of Simon Says with various movements (e.g., jump, clap, spin).",
+          "materials": "None required.",
+          "duration_min": 10,
+          "adaptation": "Use visual cues or demonstrate the actions for clarity."
+        }
+      ],
+      "social_communication": [
+        {
+          "activity_number": 1,
+          "title": "Turn-Taking with Toys",
+          "why_this_fits": "Encourages sharing and turn-taking skills.",
+          "instructions": "Play with a toy that requires turns (like stacking blocks) and model taking turns with Noah.",
+          "materials": "Stacking blocks or similar toys.",
+          "duration_min": 10,
+          "adaptation": "Use a timer to signal turns if he struggles with waiting."
+        },
+        {
+          "activity_number": 2,
+          "title": "Role Play with Puppets",
+          "why_this_fits": "Fosters imaginative play and social interaction.",
+          "instructions": "Use puppets to act out simple scenarios, encouraging Noah to join in the dialogue.",
+          "materials": "Puppets or stuffed animals.",
+          "duration_min": 10,
+          "adaptation": "Model the dialogue first and encourage him to mimic or respond."
+        },
+        {
+          "activity_number": 3,
+          "title": "Group Play with Family",
+          "why_this_fits": "Promotes social interaction in a familiar setting.",
+          "instructions": "Engage in a simple board game or card game with family members, encouraging Noah to participate.",
+          "materials": "Board game or cards.",
+          "duration_min": 15,
+          "adaptation": "Simplify the rules or use visual aids to help him understand."
+        },
+        {
+          "activity_number": 4,
+          "title": "Emotion Charades",
+          "why_this_fits": "Helps recognize and express emotions.",
+          "instructions": "Take turns acting out different emotions while the other guesses what they are.",
+          "materials": "Emotion cards or pictures.",
+          "duration_min": 10,
+          "adaptation": "Use visual cues or model the emotions for him to imitate."
+        },
+        {
+          "activity_number": 5,
+          "title": "Simple Group Activities",
+          "why_this_fits": "Encourages interaction with peers.",
+          "instructions": "Organize a simple group activity like a craft or a game with a small group of familiar children.",
+          "materials": "Craft supplies or game materials.",
+          "duration_min": 15,
+          "adaptation": "Provide clear instructions and support to help him engage."
+        }
+      ],
+      "adaptive_cognitive": [
+        {
+          "activity_number": 1,
+          "title": "Counting Objects",
+          "why_this_fits": "Supports number recognition and counting skills.",
+          "instructions": "Use small toys or snacks to practice counting together.",
+          "materials": "Small toys or snacks.",
+          "duration_min": 10,
+          "adaptation": "Use visual aids or number cards to assist him in counting."
+        },
+        {
+          "activity_number": 2,
+          "title": "Color Sorting",
+          "why_this_fits": "Enhances color recognition and categorization skills.",
+          "instructions": "Provide colored objects and ask Noah to sort them into groups by color.",
+          "materials": "Colored blocks or items.",
+          "duration_min": 10,
+          "adaptation": "Use fewer colors to simplify the task if needed."
+        },
+        {
+          "activity_number": 3,
+          "title": "Story Prediction",
+          "why_this_fits": "Encourages critical thinking and comprehension.",
+          "instructions": "Read a familiar story and pause to ask Noah what he thinks will happen next.",
+          "materials": "A familiar storybook.",
+          "duration_min": 10,
+          "adaptation": "Offer choices or visual prompts to help him formulate predictions."
+        },
+        {
+          "activity_number": 4,
+          "title": "Matching Games",
+          "why_this_fits": "Develops memory and cognitive skills.",
+          "instructions": "Play a simple matching game with cards or objects.",
+          "materials": "Matching cards or pairs of objects.",
+          "duration_min": 10,
+          "adaptation": "Use fewer pairs to make the game easier and more engaging."
+        },
+        {
+          "activity_number": 5,
+          "title": "Daily Routine Chart",
+          "why_this_fits": "Supports understanding of daily activities and time management.",
+          "instructions": "Create a visual chart of Noah's daily activities and review it together.",
+          "materials": "Paper, markers, and pictures of daily activities.",
+          "duration_min": 10,
+          "adaptation": "Use simple images and limit the number of activities to avoid overwhelming him."
+        }
+      ]
+    },
+    "profile_text_for_prompt": "Speech / Language estimated around 36-48 months. Evidence: 60m: no to 'tells a storys she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it'; 60m: no to 'answers simple questions about a book or a story after you read or tell it to her'; 48m: with_help to 'says sentences with four or more words'; 48m: with_help to 'says some words from a song or story or nursery rhyme'\nMotor estimated around 60-60 months. Evidence: 60m: yes to 'buttons some buttons'; 60m: yes to 'hops on one foot'\nSocial / Communication estimated around 30-36 months. Evidence: 60m: no to 'follows rules or takesake turns when playing games with other  children'; 60m: no to 'sings dances or acts for you'; 48m: no to 'pretends to be something else during play like teacher or superhero or a dog'; 48m: no to 'asks to go play with children if none are around like can I play with Alex'\nAdaptive / Cognitive estimated around 36-48 months. Evidence: 60m: no to 'counts to 10'; 60m: no to 'names some numbers between 1 and 5 when you point to them'; 48m: sometimes to 'names a few colors or items'; 48m: sometimes to 'tell what comes next in a well known story'",
+    "note": "CDC table only goes to 60 months, so children older than 60 months start from the 60-month band as an anchor."
+  },
+  {
+    "case_id": "C03",
+    "name": "Liam",
+    "condition": "ADHD",
+    "chronological_age_months": 54,
+    "cdc_start_month": 48,
+    "concern_text": "Parents want better daily routines, attention, task completion, and social flexibility.",
+    "daily_time_min": 10,
+    "developmental_profile": {
+      "speech_language": {
+        "estimated_range_months": "36-48",
+        "estimated_anchor_month": 36,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 48,
+            "question_id": "speech_language_48_134",
+            "question": "says sentences with four or more words",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 48,
+            "question_id": "speech_language_48_135",
+            "question": "says some words from a song or story or nursery rhyme",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_118",
+            "question": "talks with you in conversation using at least two back and forth exchangess",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_119",
+            "question": "ask who or what or where or why questions like where is mommy or where is daddy",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "48": 0.4,
+          "36": 1.0
+        }
+      },
+      "motor": {
+        "estimated_range_months": "36-48",
+        "estimated_anchor_month": 36,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 48,
+            "question_id": "motor_48_141",
+            "question": "catches a large ball most of the times",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 48,
+            "question_id": "motor_48_142",
+            "question": "serves herself food or pours water with adult supervision",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 36,
+            "question_id": "motor_36_125",
+            "question": "strings items together like large beads or macaroni",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "motor_36_126",
+            "question": "puts on some clothes by himself like loose pants or a jacket",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "48": 0.4,
+          "36": 1.0
+        }
+      },
+      "social_communication": {
+        "estimated_range_months": "24-30",
+        "estimated_anchor_month": 24,
+        "confidence": 0.94,
+        "asked": [
+          {
+            "band_month": 48,
+            "question_id": "social_communication_48_128",
+            "question": "pretends to be something else during play like teacher or superhero or a dog",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "social_communication_48_129",
+            "question": "asks to go play with children if none are around like can I play with Alex",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_116",
+            "question": "calms down within 10 minutes after you leave her like at childcare drop off",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_117",
+            "question": "notices other children and joins them to play",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 30,
+            "question_id": "social_communication_30_101",
+            "question": "plays next to other children and sometimes plays with them",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "social_communication_30_102",
+            "question": "shows you what she can do by saying look at me",
+            "answer": "sometimes",
+            "score": 0.6
+          }
+        ],
+        "band_scores": {
+          "48": 0.0,
+          "36": 0.4,
+          "30": 0.6
+        }
+      },
+      "adaptive_cognitive": {
+        "estimated_range_months": "36-48",
+        "estimated_anchor_month": 36,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 48,
+            "question_id": "adaptive_cognitive_48_138",
+            "question": "names a few colors or items",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 48,
+            "question_id": "adaptive_cognitive_48_139",
+            "question": "tell what comes next in a well known story",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_123",
+            "question": "draws a circle when you show her how",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "adaptive_cognitive_36_124",
+            "question": "avoids touching hot objects like the stove when you warn her",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "48": 0.4,
+          "36": 1.0
+        }
+      }
+    },
+    "activities_by_domain": {
+      "speech_language": [
+        {
+          "activity_number": 1,
+          "title": "Story Time with Questions",
+          "why_this_fits": "Encourages conversation and question-asking.",
+          "instructions": "Read a short story and pause to ask Liam questions about it, encouraging him to answer in complete sentences.",
+          "materials": "A children's book.",
+          "duration_min": 10,
+          "adaptation": "If Liam struggles to answer, provide sentence starters or options to choose from."
+        },
+        {
+          "activity_number": 2,
+          "title": "Sing Along",
+          "why_this_fits": "Promotes language through music and repetition.",
+          "instructions": "Choose a familiar song and sing together, encouraging him to fill in the missing words.",
+          "materials": "Lyrics of a favorite song.",
+          "duration_min": 5,
+          "adaptation": "Use visuals or gestures to help him remember the words."
+        },
+        {
+          "activity_number": 3,
+          "title": "Picture Description",
+          "why_this_fits": "Enhances vocabulary and sentence structure.",
+          "instructions": "Show Liam a picture and ask him to describe what he sees in four or more words.",
+          "materials": "A colorful picture or a photo.",
+          "duration_min": 5,
+          "adaptation": "Provide prompts or ask yes/no questions to guide his responses."
+        },
+        {
+          "activity_number": 4,
+          "title": "Role Play Conversations",
+          "why_this_fits": "Builds conversational skills and turn-taking.",
+          "instructions": "Act out a simple scenario (like ordering food) and take turns speaking.",
+          "materials": "Props for the role play (like toy food).",
+          "duration_min": 10,
+          "adaptation": "Use a script or cue cards to help him remember what to say."
+        },
+        {
+          "activity_number": 5,
+          "title": "Word Hunt",
+          "why_this_fits": "Encourages vocabulary building and word recognition.",
+          "instructions": "Go on a scavenger hunt around the house to find items that start with specific letters.",
+          "materials": "List of letters, paper, and a bag for collecting items.",
+          "duration_min": 10,
+          "adaptation": "Limit the number of items to find to keep it manageable."
+        }
+      ],
+      "motor": [
+        {
+          "activity_number": 1,
+          "title": "Ball Toss",
+          "why_this_fits": "Improves hand-eye coordination and gross motor skills.",
+          "instructions": "Stand a few feet apart and toss a soft ball back and forth.",
+          "materials": "A soft ball.",
+          "duration_min": 10,
+          "adaptation": "Start with a larger ball and reduce the distance as he improves."
+        },
+        {
+          "activity_number": 2,
+          "title": "Bead Stringing",
+          "why_this_fits": "Enhances fine motor skills and concentration.",
+          "instructions": "String large beads onto a shoelace or string.",
+          "materials": "Large beads and a shoelace.",
+          "duration_min": 10,
+          "adaptation": "Use a thicker string for easier handling."
+        },
+        {
+          "activity_number": 3,
+          "title": "Dress Up Challenge",
+          "why_this_fits": "Promotes independence in dressing skills.",
+          "instructions": "Encourage Liam to put on a jacket or loose pants by himself.",
+          "materials": "A jacket or loose pants.",
+          "duration_min": 10,
+          "adaptation": "Provide verbal cues or assistance as needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Obstacle Course",
+          "why_this_fits": "Develops gross motor skills through movement.",
+          "instructions": "Set up a simple obstacle course using cushions and chairs to crawl under and climb over.",
+          "materials": "Cushions, chairs, and space to move.",
+          "duration_min": 10,
+          "adaptation": "Adjust the course to be easier or more challenging based on his ability."
+        },
+        {
+          "activity_number": 5,
+          "title": "Pouring Practice",
+          "why_this_fits": "Enhances fine motor skills and independence.",
+          "instructions": "Practice pouring water from one container to another with supervision.",
+          "materials": "Two containers and water.",
+          "duration_min": 10,
+          "adaptation": "Use a larger container to make it easier to pour."
+        }
+      ],
+      "social_communication": [
+        {
+          "activity_number": 1,
+          "title": "Playdate Planning",
+          "why_this_fits": "Encourages social interaction and communication.",
+          "instructions": "Help Liam invite a friend over and plan an activity together.",
+          "materials": "Paper and crayons for invitations.",
+          "duration_min": 10,
+          "adaptation": "Role-play the invitation process to build confidence."
+        },
+        {
+          "activity_number": 2,
+          "title": "Emotion Charades",
+          "why_this_fits": "Develops empathy and understanding of emotions.",
+          "instructions": "Take turns acting out different emotions while the other guesses.",
+          "materials": "Emotion cards or a list of emotions.",
+          "duration_min": 10,
+          "adaptation": "Use visuals to help him understand the emotions better."
+        },
+        {
+          "activity_number": 3,
+          "title": "Group Story Creation",
+          "why_this_fits": "Encourages cooperative play and communication.",
+          "instructions": "Take turns adding a sentence to create a story together.",
+          "materials": "A notebook to write the story down.",
+          "duration_min": 10,
+          "adaptation": "Provide prompts or sentence starters to help him contribute."
+        },
+        {
+          "activity_number": 4,
+          "title": "Compliment Circle",
+          "why_this_fits": "Builds positive social interactions.",
+          "instructions": "Sit in a circle and take turns giving each other compliments.",
+          "materials": "None.",
+          "duration_min": 10,
+          "adaptation": "Model compliments first to guide him."
+        },
+        {
+          "activity_number": 5,
+          "title": "Turn-Taking Games",
+          "why_this_fits": "Promotes patience and social skills.",
+          "instructions": "Play a simple board game that requires taking turns.",
+          "materials": "A board game.",
+          "duration_min": 10,
+          "adaptation": "Use a timer to help him understand when it's his turn."
+        }
+      ],
+      "adaptive_cognitive": [
+        {
+          "activity_number": 1,
+          "title": "Color Sorting",
+          "why_this_fits": "Enhances cognitive skills through categorization.",
+          "instructions": "Sort objects by color into different containers.",
+          "materials": "Colored objects and containers.",
+          "duration_min": 10,
+          "adaptation": "Provide fewer colors to sort if he gets overwhelmed."
+        },
+        {
+          "activity_number": 2,
+          "title": "Story Sequencing",
+          "why_this_fits": "Improves understanding of narrative structure.",
+          "instructions": "Use picture cards from a familiar story and arrange them in order.",
+          "materials": "Picture cards from a story.",
+          "duration_min": 10,
+          "adaptation": "Provide a model sequence to follow."
+        },
+        {
+          "activity_number": 3,
+          "title": "Matching Game",
+          "why_this_fits": "Boosts memory and cognitive skills.",
+          "instructions": "Play a simple matching game with cards or objects.",
+          "materials": "Matching cards or pairs of objects.",
+          "duration_min": 10,
+          "adaptation": "Start with fewer pairs to keep it manageable."
+        },
+        {
+          "activity_number": 4,
+          "title": "Simple Puzzles",
+          "why_this_fits": "Enhances problem-solving skills.",
+          "instructions": "Complete a simple jigsaw puzzle together.",
+          "materials": "A jigsaw puzzle.",
+          "duration_min": 10,
+          "adaptation": "Choose puzzles with fewer pieces to start."
+        },
+        {
+          "activity_number": 5,
+          "title": "Cooking Together",
+          "why_this_fits": "Encourages following directions and cognitive skills.",
+          "instructions": "Follow a simple recipe together, measuring and mixing ingredients.",
+          "materials": "A simple recipe and ingredients.",
+          "duration_min": 10,
+          "adaptation": "Use visual steps or a video to guide the process."
+        }
+      ]
+    },
+    "profile_text_for_prompt": "Speech / Language estimated around 36-48 months. Evidence: 48m: with_help to 'says sentences with four or more words'; 48m: with_help to 'says some words from a song or story or nursery rhyme'; 36m: yes to 'talks with you in conversation using at least two back and forth exchangess'; 36m: yes to 'ask who or what or where or why questions like where is mommy or where is daddy'\nMotor estimated around 36-48 months. Evidence: 48m: with_help to 'catches a large ball most of the times'; 48m: with_help to 'serves herself food or pours water with adult supervision'; 36m: yes to 'strings items together like large beads or macaroni'; 36m: yes to 'puts on some clothes by himself like loose pants or a jacket'\nSocial / Communication estimated around 24-30 months. Evidence: 48m: no to 'pretends to be something else during play like teacher or superhero or a dog'; 48m: no to 'asks to go play with children if none are around like can I play with Alex'; 36m: with_help to 'calms down within 10 minutes after you leave her like at childcare drop off'; 36m: with_help to 'notices other children and joins them to play'\nAdaptive / Cognitive estimated around 36-48 months. Evidence: 48m: with_help to 'names a few colors or items'; 48m: with_help to 'tell what comes next in a well known story'; 36m: yes to 'draws a circle when you show her how'; 36m: yes to 'avoids touching hot objects like the stove when you warn her'",
+    "note": "CDC table only goes to 60 months, so children older than 60 months start from the 60-month band as an anchor."
+  },
+  {
+    "case_id": "C04",
+    "name": "Maya",
+    "condition": "Speech delay",
+    "chronological_age_months": 48,
+    "cdc_start_month": 48,
+    "concern_text": "Parents are most concerned about communication frustration and limited expressive language.",
+    "daily_time_min": 10,
+    "developmental_profile": {
+      "speech_language": {
+        "estimated_range_months": "30-36",
+        "estimated_anchor_month": 30,
+        "confidence": 0.94,
+        "asked": [
+          {
+            "band_month": 48,
+            "question_id": "speech_language_48_134",
+            "question": "says sentences with four or more words",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "speech_language_48_135",
+            "question": "says some words from a song or story or nursery rhyme",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_118",
+            "question": "talks with you in conversation using at least two back and forth exchangess",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "speech_language_36_119",
+            "question": "ask who or what or where or why questions like where is mommy or where is daddy",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 30,
+            "question_id": "speech_language_30_104",
+            "question": "says about 50 words",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 30,
+            "question_id": "speech_language_30_105",
+            "question": "say two or more words toghether with one action word like doggie run",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "48": 0.0,
+          "36": 0.6,
+          "30": 1.0
+        }
+      },
+      "motor": {
+        "estimated_range_months": "48-60",
+        "estimated_anchor_month": 48,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 48,
+            "question_id": "motor_48_141",
+            "question": "catches a large ball most of the times",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "motor_48_142",
+            "question": "serves herself food or pours water with adult supervision",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "motor_60_158",
+            "question": "buttons some buttons",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 60,
+            "question_id": "motor_60_159",
+            "question": "hops on one foot",
+            "answer": "with_help",
+            "score": 0.4
+          }
+        ],
+        "band_scores": {
+          "48": 1.0,
+          "60": 0.4
+        }
+      },
+      "social_communication": {
+        "estimated_range_months": "36-48",
+        "estimated_anchor_month": 36,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 48,
+            "question_id": "social_communication_48_128",
+            "question": "pretends to be something else during play like teacher or superhero or a dog",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 48,
+            "question_id": "social_communication_48_129",
+            "question": "asks to go play with children if none are around like can I play with Alex",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_116",
+            "question": "calms down within 10 minutes after you leave her like at childcare drop off",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "social_communication_36_117",
+            "question": "notices other children and joins them to play",
+            "answer": "yes",
+            "score": 1.0
+          }
+        ],
+        "band_scores": {
+          "48": 0.6,
+          "36": 1.0
+        }
+      },
+      "adaptive_cognitive": {
+        "estimated_range_months": "48-60",
+        "estimated_anchor_month": 48,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 48,
+            "question_id": "adaptive_cognitive_48_138",
+            "question": "names a few colors or items",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 48,
+            "question_id": "adaptive_cognitive_48_139",
+            "question": "tell what comes next in a well known story",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 60,
+            "question_id": "adaptive_cognitive_60_152",
+            "question": "counts to 10",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 60,
+            "question_id": "adaptive_cognitive_60_153",
+            "question": "names some numbers between 1 and 5 when you point to them",
+            "answer": "with_help",
+            "score": 0.4
+          }
+        ],
+        "band_scores": {
+          "48": 1.0,
+          "60": 0.4
+        }
+      }
+    },
+    "activities_by_domain": {
+      "speech_language": [
+        {
+          "activity_number": 1,
+          "title": "Storytime with Props",
+          "why_this_fits": "Encourages expressive language through storytelling.",
+          "instructions": "Choose a favorite story and use props to act it out. Encourage Maya to describe what is happening.",
+          "materials": "Storybook, simple props (toys or household items related to the story).",
+          "duration_min": 10,
+          "adaptation": "If speech is limited, prompt her with questions about the story using visual cues."
+        },
+        {
+          "activity_number": 2,
+          "title": "Sing and Sign",
+          "why_this_fits": "Combines music with visual support to enhance communication.",
+          "instructions": "Choose a simple song and incorporate basic signs for key words. Sing together and encourage her to use signs.",
+          "materials": "Lyrics of a simple song, visual aids for signs.",
+          "duration_min": 5,
+          "adaptation": "Use gestures or pictures to support understanding and expression."
+        },
+        {
+          "activity_number": 3,
+          "title": "Picture Exchange Communication",
+          "why_this_fits": "Helps express needs and wants visually.",
+          "instructions": "Create a set of pictures representing common items or activities. Encourage her to use them to communicate.",
+          "materials": "Printed pictures, a small box or board to hold them.",
+          "duration_min": 10,
+          "adaptation": "Use fewer pictures to avoid overwhelming her and focus on her favorites."
+        },
+        {
+          "activity_number": 4,
+          "title": "Descriptive Play",
+          "why_this_fits": "Encourages vocabulary development through play.",
+          "instructions": "While playing with toys, encourage Maya to describe what she is doing or what the toys are.",
+          "materials": "Toys or play sets.",
+          "duration_min": 10,
+          "adaptation": "Model sentences for her to repeat or fill in the blanks."
+        },
+        {
+          "activity_number": 5,
+          "title": "Emotion Charades",
+          "why_this_fits": "Promotes understanding and expression of emotions.",
+          "instructions": "Act out different emotions and have her guess them. Discuss times when she feels these emotions.",
+          "materials": "Emotion cards or pictures.",
+          "duration_min": 5,
+          "adaptation": "Use visual aids to help her identify and express emotions."
+        }
+      ],
+      "motor": [
+        {
+          "activity_number": 1,
+          "title": "Obstacle Course",
+          "why_this_fits": "Enhances gross motor skills through fun physical activity.",
+          "instructions": "Set up a simple obstacle course using cushions, chairs, and toys. Encourage her to navigate through it.",
+          "materials": "Cushions, chairs, toys.",
+          "duration_min": 10,
+          "adaptation": "Simplify the course by reducing obstacles if she struggles."
+        },
+        {
+          "activity_number": 2,
+          "title": "Ball Toss",
+          "why_this_fits": "Improves hand-eye coordination and motor skills.",
+          "instructions": "Play catch using a soft ball. Start close and gradually increase the distance.",
+          "materials": "Soft ball.",
+          "duration_min": 5,
+          "adaptation": "Use a larger ball for easier catching and throwing."
+        },
+        {
+          "activity_number": 3,
+          "title": "Water Pouring",
+          "why_this_fits": "Develops fine motor skills and hand strength.",
+          "instructions": "Provide a small pitcher and cups. Encourage her to pour water from one cup to another.",
+          "materials": "Small pitcher, cups, water.",
+          "duration_min": 10,
+          "adaptation": "Use a larger pitcher for easier handling."
+        },
+        {
+          "activity_number": 4,
+          "title": "Building Blocks",
+          "why_this_fits": "Enhances fine motor skills and creativity.",
+          "instructions": "Encourage her to build structures using blocks. Discuss what she is building.",
+          "materials": "Building blocks.",
+          "duration_min": 10,
+          "adaptation": "Use larger blocks for easier manipulation."
+        },
+        {
+          "activity_number": 5,
+          "title": "Dance Party",
+          "why_this_fits": "Promotes gross motor skills through movement and rhythm.",
+          "instructions": "Play her favorite music and encourage her to dance freely. Join in to model movements.",
+          "materials": "Music player.",
+          "duration_min": 10,
+          "adaptation": "Keep movements simple and follow her lead."
+        }
+      ],
+      "social_communication": [
+        {
+          "activity_number": 1,
+          "title": "Role Play",
+          "why_this_fits": "Encourages imaginative play and social interaction.",
+          "instructions": "Pretend to be different characters (like a teacher or doctor) and have her join in the role play.",
+          "materials": "Costumes or props (optional).",
+          "duration_min": 10,
+          "adaptation": "Use simple roles and provide prompts to guide her participation."
+        },
+        {
+          "activity_number": 2,
+          "title": "Playdate Planning",
+          "why_this_fits": "Encourages her to express desires for social interaction.",
+          "instructions": "Discuss potential playdates with friends. Help her express who she wants to invite.",
+          "materials": "None.",
+          "duration_min": 5,
+          "adaptation": "Use pictures of friends to help her communicate her choices."
+        },
+        {
+          "activity_number": 3,
+          "title": "Group Games",
+          "why_this_fits": "Promotes turn-taking and cooperation.",
+          "instructions": "Play simple group games like 'Simon Says' or 'Duck, Duck, Goose' with family.",
+          "materials": "None.",
+          "duration_min": 10,
+          "adaptation": "Simplify rules and provide physical assistance if needed."
+        },
+        {
+          "activity_number": 4,
+          "title": "Emotion Sharing",
+          "why_this_fits": "Encourages discussion about feelings and empathy.",
+          "instructions": "Share a story or experience and discuss how it made her feel. Encourage her to share her own feelings.",
+          "materials": "None.",
+          "duration_min": 5,
+          "adaptation": "Use visual aids to help her express emotions."
+        },
+        {
+          "activity_number": 5,
+          "title": "Friendship Art",
+          "why_this_fits": "Encourages social expression and creativity.",
+          "instructions": "Create a drawing or craft for a friend. Discuss what they like about that friend.",
+          "materials": "Art supplies (paper, crayons, etc.).",
+          "duration_min": 10,
+          "adaptation": "Provide examples to guide her in expressing her thoughts."
+        }
+      ],
+      "adaptive_cognitive": [
+        {
+          "activity_number": 1,
+          "title": "Color Hunt",
+          "why_this_fits": "Enhances color recognition and cognitive skills.",
+          "instructions": "Go on a color hunt around the house. Ask her to find items of a specific color.",
+          "materials": "None.",
+          "duration_min": 10,
+          "adaptation": "Limit to one color at a time to simplify the task."
+        },
+        {
+          "activity_number": 2,
+          "title": "Story Sequencing",
+          "why_this_fits": "Develops understanding of narrative structure.",
+          "instructions": "Use pictures from a familiar story and ask her to arrange them in order.",
+          "materials": "Printed pictures from a story.",
+          "duration_min": 10,
+          "adaptation": "Provide hints or model the sequence if she struggles."
+        },
+        {
+          "activity_number": 3,
+          "title": "Counting Objects",
+          "why_this_fits": "Promotes counting skills and number recognition.",
+          "instructions": "Count everyday objects together, like toys or snacks. Encourage her to count along.",
+          "materials": "Small objects (toys, snacks).",
+          "duration_min": 5,
+          "adaptation": "Use fewer objects to avoid overwhelming her."
+        },
+        {
+          "activity_number": 4,
+          "title": "Matching Game",
+          "why_this_fits": "Enhances memory and cognitive skills.",
+          "instructions": "Create a simple matching game with pairs of pictures or cards. Take turns matching them.",
+          "materials": "Homemade picture cards.",
+          "duration_min": 10,
+          "adaptation": "Use fewer pairs to keep the game manageable."
+        },
+        {
+          "activity_number": 5,
+          "title": "What Comes Next?",
+          "why_this_fits": "Encourages prediction and cognitive reasoning.",
+          "instructions": "Tell a familiar story and pause before the end. Ask her what she thinks will happen next.",
+          "materials": "Familiar storybook.",
+          "duration_min": 5,
+          "adaptation": "Provide choices to help her make predictions."
+        }
+      ]
+    },
+    "profile_text_for_prompt": "Speech / Language estimated around 30-36 months. Evidence: 48m: no to 'says sentences with four or more words'; 48m: no to 'says some words from a song or story or nursery rhyme'; 36m: sometimes to 'talks with you in conversation using at least two back and forth exchangess'; 36m: sometimes to 'ask who or what or where or why questions like where is mommy or where is daddy'\nMotor estimated around 48-60 months. Evidence: 48m: yes to 'catches a large ball most of the times'; 48m: yes to 'serves herself food or pours water with adult supervision'; 60m: with_help to 'buttons some buttons'; 60m: with_help to 'hops on one foot'\nSocial / Communication estimated around 36-48 months. Evidence: 48m: sometimes to 'pretends to be something else during play like teacher or superhero or a dog'; 48m: sometimes to 'asks to go play with children if none are around like can I play with Alex'; 36m: yes to 'calms down within 10 minutes after you leave her like at childcare drop off'; 36m: yes to 'notices other children and joins them to play'\nAdaptive / Cognitive estimated around 48-60 months. Evidence: 48m: yes to 'names a few colors or items'; 48m: yes to 'tell what comes next in a well known story'; 60m: with_help to 'counts to 10'; 60m: with_help to 'names some numbers between 1 and 5 when you point to them'",
+    "note": "CDC table only goes to 60 months, so children older than 60 months start from the 60-month band as an anchor."
+  },
+  {
+    "case_id": "C05",
+    "name": "Sofia",
+    "condition": "Cerebral palsy",
+    "chronological_age_months": 24,
+    "cdc_start_month": 24,
+    "concern_text": "Parents want a realistic home plan for movement, communication, and independence.",
+    "daily_time_min": 5,
+    "developmental_profile": {
+      "speech_language": {
+        "estimated_range_months": "15-18",
+        "estimated_anchor_month": 15,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 24,
+            "question_id": "speech_language_24_90",
+            "question": "points to things in a book when you ask like where is the bear",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 24,
+            "question_id": "speech_language_24_91",
+            "question": "says at least two words together like more milk",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 18,
+            "question_id": "speech_language_18_78",
+            "question": "tries to say three or more words besides mama or dada",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 18,
+            "question_id": "speech_language_18_79",
+            "question": "follows one step directions without any gestures like giving you the toy when you say give it to me",
+            "answer": "sometimes",
+            "score": 0.6
+          }
+        ],
+        "band_scores": {
+          "24": 0.4,
+          "18": 0.6
+        }
+      },
+      "motor": {
+        "estimated_range_months": "30-36",
+        "estimated_anchor_month": 30,
+        "confidence": 0.94,
+        "asked": [
+          {
+            "band_month": 24,
+            "question_id": "motor_24_97",
+            "question": "kicks a ball",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 24,
+            "question_id": "motor_24_98",
+            "question": "runs",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 30,
+            "question_id": "motor_30_112",
+            "question": "uses hands to twist things like turning doorknobs or unscrewing lids",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 30,
+            "question_id": "motor_30_113",
+            "question": "takes some clothes off by himself like loose pants or an open jacket",
+            "answer": "yes",
+            "score": 1.0
+          },
+          {
+            "band_month": 36,
+            "question_id": "motor_36_125",
+            "question": "strings items together like large beads or macaroni",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 36,
+            "question_id": "motor_36_126",
+            "question": "puts on some clothes by himself like loose pants or a jacket",
+            "answer": "sometimes",
+            "score": 0.6
+          }
+        ],
+        "band_scores": {
+          "24": 1.0,
+          "30": 1.0,
+          "36": 0.6
+        }
+      },
+      "social_communication": {
+        "estimated_range_months": "15-18",
+        "estimated_anchor_month": 15,
+        "confidence": 0.82,
+        "asked": [
+          {
+            "band_month": 24,
+            "question_id": "social_communication_24_88",
+            "question": "notices when others are hurt or upset like pausing or looking sad when someone is crying",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 24,
+            "question_id": "social_communication_24_89",
+            "question": "looks at your face to see how to react in a new situation",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 18,
+            "question_id": "social_communication_18_73",
+            "question": "moves away from you but looks to make sure you are close by",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 18,
+            "question_id": "social_communication_18_74",
+            "question": "points to show you something interesting",
+            "answer": "sometimes",
+            "score": 0.6
+          }
+        ],
+        "band_scores": {
+          "24": 0.4,
+          "18": 0.6
+        }
+      },
+      "adaptive_cognitive": {
+        "estimated_range_months": "12-15",
+        "estimated_anchor_month": 12,
+        "confidence": 0.94,
+        "asked": [
+          {
+            "band_month": 24,
+            "question_id": "adaptive_cognitive_24_94",
+            "question": "holds something in one hand while using the other hand for example holding a container and taking the lid off",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 24,
+            "question_id": "adaptive_cognitive_24_95",
+            "question": "tries to use switches or knobs or buttons on a toy",
+            "answer": "no",
+            "score": 0.0
+          },
+          {
+            "band_month": 18,
+            "question_id": "adaptive_cognitive_18_80",
+            "question": "copies you doing chores like sweeping with a broom",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 18,
+            "question_id": "adaptive_cognitive_18_81",
+            "question": "plays with toys in a simple way like pushing a toy car",
+            "answer": "with_help",
+            "score": 0.4
+          },
+          {
+            "band_month": 15,
+            "question_id": "adaptive_cognitive_15_69",
+            "question": "tries to use things the right way like a phone or a cup or a book",
+            "answer": "sometimes",
+            "score": 0.6
+          },
+          {
+            "band_month": 15,
+            "question_id": "adaptive_cognitive_15_70",
+            "question": "stacks at least two small objects like blocks",
+            "answer": "sometimes",
+            "score": 0.6
+          }
+        ],
+        "band_scores": {
+          "24": 0.0,
+          "18": 0.4,
+          "15": 0.6
+        }
+      }
+    },
+    "activities_by_domain": {
+      "speech_language": [
+        {
+          "activity_number": 1,
+          "title": "Book Pointing",
+          "why_this_fits": "Encourages vocabulary and comprehension through interactive reading.",
+          "instructions": "Choose a picture book and ask Sofia to point to specific animals or objects when you say their names.",
+          "materials": "A picture book with clear images.",
+          "duration_min": 5,
+          "adaptation": "If verbal communication is challenging, use gestures or provide choices to help her point."
+        },
+        {
+          "activity_number": 2,
+          "title": "Two-Word Phrases",
+          "why_this_fits": "Supports language development by encouraging word combinations.",
+          "instructions": "Model two-word phrases like 'more juice' or 'big truck' and encourage Sofia to repeat them.",
+          "materials": "Juice or a toy truck.",
+          "duration_min": 5,
+          "adaptation": "Use visual aids or objects to prompt her to say the phrases."
+        },
+        {
+          "activity_number": 3,
+          "title": "Follow the Direction",
+          "why_this_fits": "Enhances understanding of simple commands.",
+          "instructions": "Give Sofia simple one-step directions like 'give me the ball' and encourage her to follow them.",
+          "materials": "A ball or any small toy.",
+          "duration_min": 5,
+          "adaptation": "Use physical prompts or gestures to guide her if she struggles."
+        },
+        {
+          "activity_number": 4,
+          "title": "Sound Imitation",
+          "why_this_fits": "Encourages vocalization and sound recognition.",
+          "instructions": "Make animal sounds and encourage Sofia to imitate them.",
+          "materials": "None required, just your voice.",
+          "duration_min": 5,
+          "adaptation": "Use visual cues like pictures of animals to support her understanding."
+        },
+        {
+          "activity_number": 5,
+          "title": "Action Words",
+          "why_this_fits": "Promotes vocabulary related to actions.",
+          "instructions": "Use toys to demonstrate actions (like 'jump' with a toy figure) and encourage Sofia to say the action word.",
+          "materials": "Toys that can perform actions.",
+          "duration_min": 5,
+          "adaptation": "Use hand-over-hand assistance to help her produce the words."
+        }
+      ],
+      "motor": [
+        {
+          "activity_number": 1,
+          "title": "Ball Kicking",
+          "why_this_fits": "Develops gross motor skills through play.",
+          "instructions": "Set up a soft ball and encourage Sofia to kick it back and forth with you.",
+          "materials": "A soft ball.",
+          "duration_min": 5,
+          "adaptation": "If kicking is challenging, assist her by holding her leg or using a rolling motion."
+        },
+        {
+          "activity_number": 2,
+          "title": "Obstacle Course",
+          "why_this_fits": "Encourages movement and coordination.",
+          "instructions": "Create a simple obstacle course with cushions and soft toys for Sofia to navigate.",
+          "materials": "Cushions, soft toys.",
+          "duration_min": 5,
+          "adaptation": "Modify the course to include only low obstacles that she can easily maneuver."
+        },
+        {
+          "activity_number": 3,
+          "title": "Twisting Lids",
+          "why_this_fits": "Enhances fine motor skills through manipulation.",
+          "instructions": "Provide jars with lids and encourage Sofia to practice twisting them open and closed.",
+          "materials": "Jars with lids.",
+          "duration_min": 5,
+          "adaptation": "Use larger jars or assist her hands to help with the twisting motion."
+        },
+        {
+          "activity_number": 4,
+          "title": "Dress-Up Time",
+          "why_this_fits": "Promotes independence in dressing skills.",
+          "instructions": "Encourage Sofia to practice putting on and taking off loose clothing items.",
+          "materials": "Loose clothing items.",
+          "duration_min": 5,
+          "adaptation": "Use clothing with larger openings or provide assistance as needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Balloon Toss",
+          "why_this_fits": "Improves hand-eye coordination and reaction time.",
+          "instructions": "Gently toss a balloon back and forth with Sofia, encouraging her to catch it.",
+          "materials": "A balloon.",
+          "duration_min": 5,
+          "adaptation": "If catching is difficult, allow her to hit the balloon instead."
+        }
+      ],
+      "social_communication": [
+        {
+          "activity_number": 1,
+          "title": "Emotion Faces",
+          "why_this_fits": "Helps Sofia recognize and respond to emotions.",
+          "instructions": "Show her pictures of faces expressing different emotions and discuss them.",
+          "materials": "Pictures of faces or emotion cards.",
+          "duration_min": 5,
+          "adaptation": "Use fewer pictures or focus on one emotion at a time to maintain attention."
+        },
+        {
+          "activity_number": 2,
+          "title": "Turn-Taking Game",
+          "why_this_fits": "Encourages sharing and waiting for her turn.",
+          "instructions": "Play a simple game like rolling a ball back and forth, taking turns.",
+          "materials": "A soft ball.",
+          "duration_min": 5,
+          "adaptation": "Use a timer to signal turns if she has difficulty waiting."
+        },
+        {
+          "activity_number": 3,
+          "title": "Look and React",
+          "why_this_fits": "Promotes understanding of social cues.",
+          "instructions": "Make different facial expressions and encourage Sofia to mimic or react to them.",
+          "materials": "None required.",
+          "duration_min": 5,
+          "adaptation": "Use a mirror to help her see her own expressions."
+        },
+        {
+          "activity_number": 4,
+          "title": "Pointing Out Interests",
+          "why_this_fits": "Encourages her to share what she finds interesting.",
+          "instructions": "Walk around the house and ask Sofia to point to things she likes.",
+          "materials": "None required.",
+          "duration_min": 5,
+          "adaptation": "Use hand-over-hand guidance to help her point if needed."
+        },
+        {
+          "activity_number": 5,
+          "title": "Story Time Reactions",
+          "why_this_fits": "Encourages engagement and emotional responses to stories.",
+          "instructions": "Read a short story and pause to ask Sofia how she thinks characters feel.",
+          "materials": "A short storybook.",
+          "duration_min": 5,
+          "adaptation": "Simplify the story or use props to illustrate emotions."
+        }
+      ],
+      "adaptive_cognitive": [
+        {
+          "activity_number": 1,
+          "title": "Simple Chores",
+          "why_this_fits": "Encourages participation in daily tasks.",
+          "instructions": "Involve Sofia in simple chores like putting away toys.",
+          "materials": "Toys to put away.",
+          "duration_min": 5,
+          "adaptation": "Use a visual schedule to guide her through the steps."
+        },
+        {
+          "activity_number": 2,
+          "title": "Toy Sorting",
+          "why_this_fits": "Promotes categorization and organization skills.",
+          "instructions": "Provide different types of toys and ask Sofia to sort them into groups.",
+          "materials": "Various toys.",
+          "duration_min": 5,
+          "adaptation": "Limit the number of toys to avoid overwhelming her."
+        },
+        {
+          "activity_number": 3,
+          "title": "Container Play",
+          "why_this_fits": "Enhances problem-solving and fine motor skills.",
+          "instructions": "Give Sofia containers and various items to practice putting in and taking out.",
+          "materials": "Containers and small items.",
+          "duration_min": 5,
+          "adaptation": "Use larger items that are easier for her to grasp."
+        },
+        {
+          "activity_number": 4,
+          "title": "Follow the Leader",
+          "why_this_fits": "Encourages imitation and understanding of sequences.",
+          "instructions": "Model simple actions for Sofia to imitate, like clapping or stomping.",
+          "materials": "None required.",
+          "duration_min": 5,
+          "adaptation": "Use hand-over-hand assistance to help her with the actions."
+        },
+        {
+          "activity_number": 5,
+          "title": "Color Matching",
+          "why_this_fits": "Promotes recognition of colors and matching skills.",
+          "instructions": "Provide colored objects and ask Sofia to match them to colored cards.",
+          "materials": "Colored objects and cards.",
+          "duration_min": 5,
+          "adaptation": "Use fewer colors to keep her focused and engaged."
+        }
+      ]
+    },
+    "profile_text_for_prompt": "Speech / Language estimated around 15-18 months. Evidence: 24m: with_help to 'points to things in a book when you ask like where is the bear'; 24m: with_help to 'says at least two words together like more milk'; 18m: sometimes to 'tries to say three or more words besides mama or dada'; 18m: sometimes to 'follows one step directions without any gestures like giving you the toy when you say give it to me'\nMotor estimated around 30-36 months. Evidence: 24m: yes to 'kicks a ball'; 24m: yes to 'runs'; 30m: yes to 'uses hands to twist things like turning doorknobs or unscrewing lids'; 30m: yes to 'takes some clothes off by himself like loose pants or an open jacket'\nSocial / Communication estimated around 15-18 months. Evidence: 24m: with_help to 'notices when others are hurt or upset like pausing or looking sad when someone is crying'; 24m: with_help to 'looks at your face to see how to react in a new situation'; 18m: sometimes to 'moves away from you but looks to make sure you are close by'; 18m: sometimes to 'points to show you something interesting'\nAdaptive / Cognitive estimated around 12-15 months. Evidence: 24m: no to 'holds something in one hand while using the other hand for example holding a container and taking the lid off'; 24m: no to 'tries to use switches or knobs or buttons on a toy'; 18m: with_help to 'copies you doing chores like sweeping with a broom'; 18m: with_help to 'plays with toys in a simple way like pushing a toy car'",
+    "note": "CDC table only goes to 60 months, so children older than 60 months start from the 60-month band as an anchor."
+  }
+]

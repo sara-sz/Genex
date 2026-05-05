@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ child.name }}'s Profile - GeneX</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { color: #667eea; margin-bottom: 20px; }
+        .success { background: #d4edda; padding: 15px; border-radius: 8px; color: #155724; margin-bottom: 20px; }
+        .profile-info { background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        .info-row { display: flex; padding: 10px 0; border-bottom: 1px solid #e0e0e0; }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { font-weight: 600; width: 200px; color: #666; }
+        .info-value { color: #333; }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            margin: 10px 10px 10px 0;
+        }
+        .btn-secondary { background: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👶 {{ child.name }}'s Profile</h1>
+        
+        <div class="success">
+            ✅ Profile created successfully!
+        </div>
+        
+        <div class="profile-info">
+            <div class="info-row">
+                <div class="info-label">Name:</div>
+                <div class="info-value">{{ child.name }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Age:</div>
+                <div class="info-value">{{ child.age_display }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Date of Birth:</div>
+                <div class="info-value">{{ child.date_of_birth }}</div>
+            </div>
+            {% if child.gender %}
+            <div class="info-row">
+                <div class="info-label">Gender:</div>
+                <div class="info-value">{{ child.gender|capitalize }}</div>
+            </div>
+            {% endif %}
+            <div class="info-row">
+                <div class="info-label">Diagnosis:</div>
+                <div class="info-value">{{ child.diagnosis }}</div>
+            </div>
+            {% if child.diagnosis_date %}
+            <div class="info-row">
+                <div class="info-label">Diagnosis Date:</div>
+                <div class="info-value">{{ child.diagnosis_date }}</div>
+            </div>
+            {% endif %}
+            {% if child.additional_conditions %}
+            <div class="info-row">
+                <div class="info-label">Additional Conditions:</div>
+                <div class="info-value">{{ child.additional_conditions }}</div>
+            </div>
+            {% endif %}
+            {% if child.notes %}
+            <div class="info-row">
+                <div class="info-label">Notes:</div>
+                <div class="info-value">{{ child.notes }}</div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <a href="/" class="btn">Go to Dashboard</a>
+        <a href="/profile/child/{{ child.id }}/edit" class="btn btn-secondary">Edit Profile</a>
+        <a href="/auth/logout" class="btn btn-secondary">Log Out</a>
+    </div>
+</body>
+</html>

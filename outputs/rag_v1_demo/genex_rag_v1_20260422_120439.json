@@ -1,0 +1,272 @@
+{
+  "child_ctx": {
+    "child_name": "Ari",
+    "age_months": 48,
+    "condition": "speech delay",
+    "concern": "speech delay, developmental delay, difficulty expressing needs"
+  },
+  "user_query": "What should I track at home for this child's speech and development, and what are the most relevant papers?",
+  "query_type": "literature_qna",
+  "pubmed_query": "speech delay AND speech delay, developmental delay, difficulty expressing needs AND What should I track at home for this child's speech and development, and what are the most relevant papers? AND pediatric child age 4.0 years",
+  "papers": [],
+  "context_docs": [
+    {
+      "doc_id": "condition_profile_OMIM:620027",
+      "source": "condition_profile",
+      "title": "Condition profile: Neurodevelopmental disorder with microcephaly, short stature, and speech delay",
+      "text": "Condition Neurodevelopmental disorder with microcephaly, short stature, and speech delay (OMIM:620027). Top phenotype terms: Synophrys; Delayed ability to walk; Upslanted palpebral fissure; Severe intellectual disability; Delayed speech and language development; Childhood onset; Poor speech; Hypotonia; Short stature; Aggressive behavior; Microcephaly; Waddling gait; Global developmental delay; Absent speech; Autosomal recessive inheritance; Seizure. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.21840226000355895
+    },
+    {
+      "doc_id": "condition_profile_OMIM:606053",
+      "source": "condition_profile",
+      "title": "Condition profile: Intellectual developmental disorder with autism and speech delay",
+      "text": "Condition Intellectual developmental disorder with autism and speech delay (OMIM:606053). Top phenotype terms: Reduced social responsiveness; Pachygyria; Autism; Motor stereotypy; Inability to walk; Delayed ability to walk; Severe intellectual disability; Generalized hypotonia; Joint hypermobility; Delayed speech and language development; Infantile onset; Global developmental delay; Autosomal dominant inheritance. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.20836195370562455
+    },
+    {
+      "doc_id": "condition_profile_OMIM:619099",
+      "source": "condition_profile",
+      "title": "Condition profile: Intellectual developmental disorder with speech delay and axonal peripheral neuropathy",
+      "text": "Condition Intellectual developmental disorder with speech delay and axonal peripheral neuropathy (OMIM:619099). Top phenotype terms: Peripheral axonal neuropathy; Distal amyotrophy; Delayed speech and language development; Childhood onset; Kyphoscoliosis; Intellectual disability; Generalized hypotonia; Global developmental delay; Autosomal recessive inheritance; Tremor; Ataxia; Infantile onset; Respiratory distress. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.19793795739563025
+    },
+    {
+      "doc_id": "condition_profile_OMIM:618158",
+      "source": "condition_profile",
+      "title": "Condition profile: Intellectual developmental disorder with macrocephaly, seizures, and speech delay",
+      "text": "Condition Intellectual developmental disorder with macrocephaly, seizures, and speech delay (OMIM:618158). Top phenotype terms: Postnatal macrocephaly; Receptive language delay; Delayed myelination; Poor speech; Unsteady gait; Microtia; Broad forehead; Long face; Gait ataxia; Delayed ability to walk; Deeply set eye; Severe intellectual disability; Recurrent hypoglycemia; Periventricular white matter hyperintensities; Frontal bossing; Generalized hypotonia; Esodeviation; Motor delay; Delayed speech and language development; Infantile onset. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.18378431957481903
+    },
+    {
+      "doc_id": "condition_profile_OMIM:619989",
+      "source": "condition_profile",
+      "title": "Condition profile: Neurodevelopmental disorder with speech delay and variable ocular anomalies",
+      "text": "Condition Neurodevelopmental disorder with speech delay and variable ocular anomalies (OMIM:619989). Top phenotype terms: Scaphocephaly; Short columella; Sparse eyebrow; Smooth philtrum; Sparse hair; Wide mouth; Mandibular prognathia; Thin upper lip vermilion; Frontal bossing; Downslanted palpebral fissures; Ptosis; Epicanthus; Low-set ears; Delayed speech and language development; Febrile seizure (within the age range of 3 months to 6 years); Hypertelorism; Infantile onset; Hearing impairment; Intellectual disability; Global developmental delay. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.18329784647111222
+    },
+    {
+      "doc_id": "condition_profile_OMIM:618092",
+      "source": "condition_profile",
+      "title": "Condition profile: Intellectual developmental disorder with dysmorphic facies, speech delay, and T-cell abnormalities",
+      "text": "Condition Intellectual developmental disorder with dysmorphic facies, speech delay, and T-cell abnormalities (OMIM:618092). Top phenotype terms: Hypodontia; Delayed ability to walk; Prominent nose; Thin upper lip vermilion; Asthma; Myopathic facies; Short palpebral fissure; Thin eyebrow; Motor delay; Delayed speech and language development; Long philtrum; Infantile onset; Oligodontia; Increased total eosinophil count; Microdontia; Intellectual disability; Global developmental delay; Hypertelorism; Autosomal dominant inheritance; Recurrent infections. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.17768738918826385
+    },
+    {
+      "doc_id": "condition_profile_OMIM:619470",
+      "source": "condition_profile",
+      "title": "Condition profile: Neurodevelopmental disorder with motor and speech delay and behavioral abnormalities",
+      "text": "Condition Neurodevelopmental disorder with motor and speech delay and behavioral abnormalities (OMIM:619470). Top phenotype terms: Delayed ability to walk; Motor delay; Delayed speech and language development; Broad-based gait; Global developmental delay; Hypotonia; Aggressive behavior; Autosomal recessive inheritance; Tremor; Motor stereotypy; Microcephaly; Seizure; Spastic tetraparesis; Elbow flexion contracture; Small nail; Hyperactivity; Strabismus; Hydrocephalus; Autistic behavior; Periventricular white matter hyperintensities. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.17711349742709534
+    },
+    {
+      "doc_id": "condition_profile_OMIM:618672",
+      "source": "condition_profile",
+      "title": "Condition profile: Intellectual developmental disorder with speech delay, autism, and dysmorphic facies",
+      "text": "Condition Intellectual developmental disorder with speech delay, autism, and dysmorphic facies (OMIM:618672). Top phenotype terms: Delayed fine motor development; Delayed gross motor development; Delayed ability to walk; Infantile onset; Intellectual disability; Global developmental delay; Autistic behavior; Autosomal dominant inheritance; Hypotonia; Prominent forehead; Short philtrum; Malar flattening; Deeply set eye; Tapered finger; Strabismus; Small hand; Plagiocephaly; Hypotelorism; Thick corpus callosum; Hypoplasia of the corpus callosum. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.163592899611339
+    },
+    {
+      "doc_id": "condition_profile_OMIM:620317",
+      "source": "condition_profile",
+      "title": "Condition profile: Neurodevelopmental disorder with microcephaly and speech delay, with or without brain abnormalities",
+      "text": "Condition Neurodevelopmental disorder with microcephaly and speech delay, with or without brain abnormalities (OMIM:620317). Top phenotype terms: Dysplastic corpus callosum; Secondary microcephaly; Delayed CNS myelination; Inability to walk; Large earlobe; Hyperintensity of cerebral white matter on MRI; Bilateral tonic-clonic seizure; Long palpebral fissure; Absent speech; Sloping forehead; Prominent nose; Prominent nasal bridge; Synophrys; Delayed speech and language development; Congenital onset; Infantile onset; Reduced cerebral white matter volume; Leukoencephalopathy; Intellectual disability; Autistic behavior. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.15559240291546736
+    },
+    {
+      "doc_id": "condition_profile_OMIM:619338",
+      "source": "condition_profile",
+      "title": "Condition profile: Cataracts, spastic paraparesis, and speech delay",
+      "text": "Condition Cataracts, spastic paraparesis, and speech delay (OMIM:619338). Top phenotype terms: Spastic paraparesis; Delayed ability to walk; Cataract; Infantile onset; Delayed speech and language development; Chronic constipation; Axial hypotonia; Bilateral tonic-clonic seizure; Autosomal dominant inheritance; Focal motor seizure; Generalized non-motor (absence) seizure; Dysarthria; Complex febrile seizure; Impaired executive functioning; Macrocephaly. These phenotype terms are derived from HPO condition-to-feature associations.",
+      "score": 0.15341107945704582
+    }
+  ],
+  "answers": [
+    {
+      "model_name": "extractive_baseline",
+      "answer": "Genex found 10 relevant evidence items for Ari. This child is 48 months old, with condition 'speech delay' and parent concern 'speech delay, developmental delay, difficulty expressing needs'. The question appears to be about: What should I track at home for this child's speech and development, and what are the most relevant papers? Top retrieved evidence includes: - [condition_profile] Condition profile: Neurodevelopmental disorder with microcephaly, short stature, and speech delay - [condition_profile] Condition profile: Intellectual developmental disorder with autism and speech delay - [condition_profile] Condition profile: Intellectual developmental disorder with speech delay and axonal peripheral neuropathy - [condition_profile] Condition profile: Intellectual developmental disorder with macrocephaly, seizures, and speech delay",
+      "citations": [
+        {
+          "doc_id": "condition_profile_OMIM:620027",
+          "source": "condition_profile",
+          "title": "Condition profile: Neurodevelopmental disorder with microcephaly, short stature, and speech delay"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:606053",
+          "source": "condition_profile",
+          "title": "Condition profile: Intellectual developmental disorder with autism and speech delay"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:619099",
+          "source": "condition_profile",
+          "title": "Condition profile: Intellectual developmental disorder with speech delay and axonal peripheral neuropathy"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:618158",
+          "source": "condition_profile",
+          "title": "Condition profile: Intellectual developmental disorder with macrocephaly, seizures, and speech delay"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:619989",
+          "source": "condition_profile",
+          "title": "Condition profile: Neurodevelopmental disorder with speech delay and variable ocular anomalies"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:618092",
+          "source": "condition_profile",
+          "title": "Condition profile: Intellectual developmental disorder with dysmorphic facies, speech delay, and T-cell abnormalities"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:619470",
+          "source": "condition_profile",
+          "title": "Condition profile: Neurodevelopmental disorder with motor and speech delay and behavioral abnormalities"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:618672",
+          "source": "condition_profile",
+          "title": "Condition profile: Intellectual developmental disorder with speech delay, autism, and dysmorphic facies"
+        }
+      ],
+      "follow_up_questions": [
+        "Would you like Genex to focus on milestones, phenotype terms, or papers?",
+        "Would you like a next doctor visit prep summary?"
+      ],
+      "safety_flags": [
+        "extractive_mode",
+        "non_diagnostic"
+      ]
+    },
+    {
+      "model_name": "gpt-4o-mini",
+      "answer": "To support Ari's speech and development at home, you can track the following: 1. **Communication Attempts**: Note how often Ari tries to express needs or wants, and the methods used (e.g., gestures, words). 2. **Vocabulary Growth**: Keep a list of new words Ari learns each week. 3. **Social Interactions**: Observe how Ari interacts with peers and adults, including eye contact and turn-taking in conversations. 4. **Play Activities**: Document the types of play activities Ari enjoys and how he engages with toys or games that encourage language use. 5. **Response to Questions**: Track how well Ari responds to simple questions or prompts. 6. **Frustration Levels**: Note any signs of frustration when trying to communicate, which can indicate areas where support is needed. 7. **Progress Over Time**: Regularly review and reflect on any improvements or changes in Ari's speech and communication skills. This tracking can help you identify patterns and areas where additional support may be beneficial.",
+      "citations": [
+        {
+          "doc_id": "condition_profile_OMIM:620027",
+          "title": "Condition profile: Neurodevelopmental disorder with microcephaly, short stature, and speech delay"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:606053",
+          "title": "Condition profile: Intellectual developmental disorder with autism and speech delay"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:619099",
+          "title": "Condition profile: Intellectual developmental disorder with speech delay and axonal peripheral neuropathy"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:618158",
+          "title": "Condition profile: Intellectual developmental disorder with macrocephaly, seizures, and speech delay"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:619989",
+          "title": "Condition profile: Neurodevelopmental disorder with speech delay and variable ocular anomalies"
+        }
+      ],
+      "follow_up_questions": [
+        "What specific strategies have you tried at home to support Ari's speech?",
+        "Have you noticed any particular situations where Ari struggles more with communication?",
+        "Are there any resources or support services you are currently using?"
+      ],
+      "safety_flags": []
+    },
+    {
+      "model_name": "gpt-4.1-mini",
+      "answer": "For tracking Ari's speech and development at home, it can be helpful to monitor several areas: 1) Speech and language milestones, such as the number of words used, ability to combine words, and clarity of speech; 2) Ability to express needs and wants, including nonverbal communication like gestures or pointing; 3) Motor skills development, including walking and fine motor tasks; 4) Social responsiveness and interaction with others; and 5) Any changes in behavior or new concerns like seizures or muscle tone changes. Since Ari has a speech delay and possible developmental delay, keeping a simple daily or weekly log of these areas can help provide useful information for healthcare providers. The most relevant papers related to speech delay and developmental delay in children include profiles of neurodevelopmental disorders with speech delay and global developmental delay, such as those described in OMIM entries 620027, 606053, 619099, and 619470. These documents highlight common features like delayed speech and language development, global developmental delay, hypotonia, and motor delays. However, specific guidance on home tracking is limited in the retrieved documents.",
+      "citations": [
+        {
+          "doc_id": "condition_profile_OMIM:620027",
+          "title": "Condition profile: Neurodevelopmental disorder with microcephaly, short stature, and speech delay"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:606053",
+          "title": "Condition profile: Intellectual developmental disorder with autism and speech delay"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:619099",
+          "title": "Condition profile: Intellectual developmental disorder with speech delay and axonal peripheral neuropathy"
+        },
+        {
+          "doc_id": "condition_profile_OMIM:619470",
+          "title": "Condition profile: Neurodevelopmental disorder with motor and speech delay and behavioral abnormalities"
+        }
+      ],
+      "follow_up_questions": [
+        "Are there specific speech therapy techniques or home exercises recommended for children with speech delay?",
+        "What developmental milestones should I expect Ari to reach in the next 6 months?",
+        "When should I seek further evaluation if Ari's speech or development does not improve?"
+      ],
+      "safety_flags": [
+        "Monitor for any signs of seizures or sudden changes in muscle tone or behavior, and seek medical attention if these occur."
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "model_name": "extractive_baseline",
+      "answer_words": 109,
+      "answer_chars": 843,
+      "citation_count": 8,
+      "follow_up_count": 2,
+      "safety_flag_count": 2,
+      "context_doc_count": 10,
+      "unique_context_sources": 1,
+      "pubmed_paper_count": 0,
+      "mentions_uncertainty": false,
+      "mentions_doctor": false
+    },
+    {
+      "model_name": "gpt-4o-mini",
+      "answer_words": 155,
+      "answer_chars": 1005,
+      "citation_count": 5,
+      "follow_up_count": 3,
+      "safety_flag_count": 0,
+      "context_doc_count": 10,
+      "unique_context_sources": 1,
+      "pubmed_paper_count": 0,
+      "mentions_uncertainty": true,
+      "mentions_doctor": false
+    },
+    {
+      "model_name": "gpt-4.1-mini",
+      "answer_words": 177,
+      "answer_chars": 1185,
+      "citation_count": 4,
+      "follow_up_count": 3,
+      "safety_flag_count": 1,
+      "context_doc_count": 10,
+      "unique_context_sources": 1,
+      "pubmed_paper_count": 0,
+      "mentions_uncertainty": true,
+      "mentions_doctor": false
+    }
+  ],
+  "doctor_prep": {
+    "summary": "Ari is a 48-month-old child with a known speech delay. The parent is concerned about Ari's speech and developmental delays, as well as difficulties in expressing needs.",
+    "top_concerns": [
+      "Speech delay",
+      "Developmental delay",
+      "Difficulty expressing needs"
+    ],
+    "questions_to_ask": [
+      "What assessments will be conducted to evaluate Ari's speech and developmental delays?",
+      "Are there specific therapies or interventions recommended for speech delay?",
+      "How can I support Ari's communication skills at home?",
+      "What resources are available for developmental support?"
+    ],
+    "records_to_bring": [
+      "Previous developmental assessments",
+      "Speech therapy reports",
+      "Any medical records related to Ari's speech and development"
+    ],
+    "citations": [
+      {
+        "doc_id": "condition_profile_ORPHA:313892",
+        "title": "Developmental and speech delay due to SOX5 deficiency"
+      }
+    ],
+    "safety_flags": [
+      "Monitor for any signs of aggression or self-injurious behavior",
+      "Be aware of any potential feeding difficulties"
+    ]
+  }
+}

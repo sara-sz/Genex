@@ -1,0 +1,22 @@
+raw_dir: data_raw
+
+hpo:
+  hp_json_urls:
+    - https://purl.obolibrary.org/obo/hp.json
+    - https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/master/hp.json
+  phenotype_hpoa_urls:
+    - https://hpo.jax.org/data/annotations/phenotype.hpoa
+    - https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/master/annotations/phenotype.hpoa
+  genes_to_phenotype_urls:
+    - https://hpo.jax.org/data/genes_to_phenotype.txt
+  phenotype_to_genes_urls:
+    - https://hpo.jax.org/data/phenotype_to_genes.txt
+
+orpha:
+  notes: |
+    Visit https://www.orphadata.com/ (Datasets) and download:
+      - ORDO ontology (ordo.owl or ordo.json)
+      - Clinical classification/hierarchy CSVs
+      - Epidemiology/prevalence CSVs
+      - Inheritance CSVs
+    Save into data_raw/orpha/ then run 02_build_tables.py to enrich attributes.

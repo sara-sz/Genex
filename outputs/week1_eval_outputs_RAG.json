@@ -1,0 +1,3182 @@
+[
+  {
+    "version": "A_rules_baseline",
+    "case_id": "C01",
+    "selected_domains": [
+      "social_communication",
+      "speech_language"
+    ],
+    "range_by_domain": {
+      "social_communication": "48-60m",
+      "speech_language": "36-48m"
+    },
+    "activities": [
+      "Simple Rule Game",
+      "Picture What/Where Game"
+    ],
+    "notes": "Baseline structured output only.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 60,
+        "known_condition": "autism",
+        "concern_text": "He has autism, uses a few words, struggles with turn taking, and does not play much with other kids.",
+        "time_available_min": 10
+      },
+      "selected_domains": [
+        {
+          "domain_key": "social_communication",
+          "domain_label": "Social / Communication",
+          "routing_score": 3.5
+        },
+        {
+          "domain_key": "speech_language",
+          "domain_label": "Speech / Language",
+          "routing_score": 2.5
+        }
+      ],
+      "questions_by_domain": {
+        "social_communication": [
+          {
+            "qid": "so_48_1",
+            "domain": "social_communication",
+            "milestone_month": 48,
+            "text": "Can your child take turns in simple play or routines?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_60_1",
+            "domain": "social_communication",
+            "milestone_month": 60,
+            "text": "Can your child play with peers using simple rules or roles?",
+            "weight": 1.0
+          }
+        ],
+        "speech_language": [
+          {
+            "qid": "sp_48_1",
+            "domain": "speech_language",
+            "milestone_month": 48,
+            "text": "Can your child answer simple who/what/where questions?",
+            "weight": 1.0
+          },
+          {
+            "qid": "sp_60_1",
+            "domain": "speech_language",
+            "milestone_month": 60,
+            "text": "Can your child tell a simple story or describe a recent event?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "social_communication": {
+          "estimated_range": "48-60m",
+          "confidence": 0.95,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/2 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "so_48_1",
+              "question": "Can your child take turns in simple play or routines?",
+              "milestone_month": 48,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "so_60_1",
+              "question": "Can your child play with peers using simple rules or roles?",
+              "milestone_month": 60,
+              "answer": "no",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        },
+        "speech_language": {
+          "estimated_range": "36-48m",
+          "confidence": 0.95,
+          "summary": "Estimated current functional range is around 36-48 months based on 2/2 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "sp_48_1",
+              "question": "Can your child answer simple who/what/where questions?",
+              "milestone_month": 48,
+              "answer": "not_yet",
+              "score": 0.0
+            },
+            {
+              "question_id": "sp_60_1",
+              "question": "Can your child tell a simple story or describe a recent event?",
+              "milestone_month": 60,
+              "answer": "no",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_so_60_peer",
+          "domain": "social_communication",
+          "range_label": "48-60m",
+          "max_minutes": 10,
+          "title": "Simple Rule Game",
+          "instructions": "Play a short game with one rule, like rolling a ball and waiting for turns.",
+          "adaptation": "Preview the rule before starting.",
+          "rationale_doc_id": "doc_activity_social_rules"
+        },
+        {
+          "activity_id": "act_sp_48_wh",
+          "domain": "speech_language",
+          "range_label": "36-48m",
+          "max_minutes": 8,
+          "title": "Picture What/Where Game",
+          "instructions": "Use 3-4 pictures and ask simple what/where questions, giving a model answer first if needed.",
+          "adaptation": "Let the child point before speaking if speaking is hard.",
+          "rationale_doc_id": "doc_activity_speech_wh"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_wh",
+          "doc_type": "activity_rationale",
+          "title": "What/where question rationale",
+          "text": "Simple picture-based WH questions support comprehension and early sentence use without needing long conversations.",
+          "tags": [
+            "speech",
+            "questions",
+            "comprehension",
+            "pictures"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_expand",
+          "doc_type": "activity_rationale",
+          "title": "Word expansion rationale",
+          "text": "Language expansion supports early expressive language by giving the child a slightly richer version of what they already said.",
+          "tags": [
+            "speech",
+            "language",
+            "expansion",
+            "expressive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "B_rules_plus_rag_explanation",
+    "case_id": "C01",
+    "selected_domains": [
+      "social_communication",
+      "speech_language"
+    ],
+    "range_by_domain": {
+      "social_communication": "48-60m",
+      "speech_language": "36-48m"
+    },
+    "activities": [
+      "Simple Rule Game",
+      "Picture What/Where Game"
+    ],
+    "notes": "Focused domains: Social / Communication, Speech / Language. Suggested activities: Simple Rule Game, Picture What/Where Game. Retrieved supporting context includes: Autism profile summary, What/where question rationale.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 60,
+        "known_condition": "autism",
+        "concern_text": "He has autism, uses a few words, struggles with turn taking, and does not play much with other kids.",
+        "time_available_min": 10
+      },
+      "selected_domains": [
+        {
+          "domain_key": "social_communication",
+          "domain_label": "Social / Communication",
+          "routing_score": 3.5
+        },
+        {
+          "domain_key": "speech_language",
+          "domain_label": "Speech / Language",
+          "routing_score": 2.5
+        }
+      ],
+      "questions_by_domain": {
+        "social_communication": [
+          {
+            "qid": "so_48_1",
+            "domain": "social_communication",
+            "milestone_month": 48,
+            "text": "Can your child take turns in simple play or routines?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_60_1",
+            "domain": "social_communication",
+            "milestone_month": 60,
+            "text": "Can your child play with peers using simple rules or roles?",
+            "weight": 1.0
+          }
+        ],
+        "speech_language": [
+          {
+            "qid": "sp_48_1",
+            "domain": "speech_language",
+            "milestone_month": 48,
+            "text": "Can your child answer simple who/what/where questions?",
+            "weight": 1.0
+          },
+          {
+            "qid": "sp_60_1",
+            "domain": "speech_language",
+            "milestone_month": 60,
+            "text": "Can your child tell a simple story or describe a recent event?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "social_communication": {
+          "estimated_range": "48-60m",
+          "confidence": 0.95,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/2 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "so_48_1",
+              "question": "Can your child take turns in simple play or routines?",
+              "milestone_month": 48,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "so_60_1",
+              "question": "Can your child play with peers using simple rules or roles?",
+              "milestone_month": 60,
+              "answer": "no",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        },
+        "speech_language": {
+          "estimated_range": "36-48m",
+          "confidence": 0.95,
+          "summary": "Estimated current functional range is around 36-48 months based on 2/2 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "sp_48_1",
+              "question": "Can your child answer simple who/what/where questions?",
+              "milestone_month": 48,
+              "answer": "not_yet",
+              "score": 0.0
+            },
+            {
+              "question_id": "sp_60_1",
+              "question": "Can your child tell a simple story or describe a recent event?",
+              "milestone_month": 60,
+              "answer": "no",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_so_60_peer",
+          "domain": "social_communication",
+          "range_label": "48-60m",
+          "max_minutes": 10,
+          "title": "Simple Rule Game",
+          "instructions": "Play a short game with one rule, like rolling a ball and waiting for turns.",
+          "adaptation": "Preview the rule before starting.",
+          "rationale_doc_id": "doc_activity_social_rules"
+        },
+        {
+          "activity_id": "act_sp_48_wh",
+          "domain": "speech_language",
+          "range_label": "36-48m",
+          "max_minutes": 8,
+          "title": "Picture What/Where Game",
+          "instructions": "Use 3-4 pictures and ask simple what/where questions, giving a model answer first if needed.",
+          "adaptation": "Let the child point before speaking if speaking is hard.",
+          "rationale_doc_id": "doc_activity_speech_wh"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_wh",
+          "doc_type": "activity_rationale",
+          "title": "What/where question rationale",
+          "text": "Simple picture-based WH questions support comprehension and early sentence use without needing long conversations.",
+          "tags": [
+            "speech",
+            "questions",
+            "comprehension",
+            "pictures"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_expand",
+          "doc_type": "activity_rationale",
+          "title": "Word expansion rationale",
+          "text": "Language expansion supports early expressive language by giving the child a slightly richer version of what they already said.",
+          "tags": [
+            "speech",
+            "language",
+            "expansion",
+            "expressive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "C_rules_plus_parent_friendly_summary",
+    "case_id": "C01",
+    "selected_domains": [
+      "social_communication",
+      "speech_language"
+    ],
+    "range_by_domain": {
+      "social_communication": "48-60m",
+      "speech_language": "36-48m"
+    },
+    "activities": [
+      "Simple Rule Game",
+      "Picture What/Where Game"
+    ],
+    "notes": "Here is a simple home plan: Social / Communication looks around 48-60m with confidence 0.95. Speech / Language looks around 36-48m with confidence 0.95. Start with: Simple Rule Game, Picture What/Where Game. Keep the activities short, playful, and repeatable.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 60,
+        "known_condition": "autism",
+        "concern_text": "He has autism, uses a few words, struggles with turn taking, and does not play much with other kids.",
+        "time_available_min": 10
+      },
+      "selected_domains": [
+        {
+          "domain_key": "social_communication",
+          "domain_label": "Social / Communication",
+          "routing_score": 3.5
+        },
+        {
+          "domain_key": "speech_language",
+          "domain_label": "Speech / Language",
+          "routing_score": 2.5
+        }
+      ],
+      "questions_by_domain": {
+        "social_communication": [
+          {
+            "qid": "so_48_1",
+            "domain": "social_communication",
+            "milestone_month": 48,
+            "text": "Can your child take turns in simple play or routines?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_60_1",
+            "domain": "social_communication",
+            "milestone_month": 60,
+            "text": "Can your child play with peers using simple rules or roles?",
+            "weight": 1.0
+          }
+        ],
+        "speech_language": [
+          {
+            "qid": "sp_48_1",
+            "domain": "speech_language",
+            "milestone_month": 48,
+            "text": "Can your child answer simple who/what/where questions?",
+            "weight": 1.0
+          },
+          {
+            "qid": "sp_60_1",
+            "domain": "speech_language",
+            "milestone_month": 60,
+            "text": "Can your child tell a simple story or describe a recent event?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "social_communication": {
+          "estimated_range": "48-60m",
+          "confidence": 0.95,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/2 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "so_48_1",
+              "question": "Can your child take turns in simple play or routines?",
+              "milestone_month": 48,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "so_60_1",
+              "question": "Can your child play with peers using simple rules or roles?",
+              "milestone_month": 60,
+              "answer": "no",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        },
+        "speech_language": {
+          "estimated_range": "36-48m",
+          "confidence": 0.95,
+          "summary": "Estimated current functional range is around 36-48 months based on 2/2 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "sp_48_1",
+              "question": "Can your child answer simple who/what/where questions?",
+              "milestone_month": 48,
+              "answer": "not_yet",
+              "score": 0.0
+            },
+            {
+              "question_id": "sp_60_1",
+              "question": "Can your child tell a simple story or describe a recent event?",
+              "milestone_month": 60,
+              "answer": "no",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_so_60_peer",
+          "domain": "social_communication",
+          "range_label": "48-60m",
+          "max_minutes": 10,
+          "title": "Simple Rule Game",
+          "instructions": "Play a short game with one rule, like rolling a ball and waiting for turns.",
+          "adaptation": "Preview the rule before starting.",
+          "rationale_doc_id": "doc_activity_social_rules"
+        },
+        {
+          "activity_id": "act_sp_48_wh",
+          "domain": "speech_language",
+          "range_label": "36-48m",
+          "max_minutes": 8,
+          "title": "Picture What/Where Game",
+          "instructions": "Use 3-4 pictures and ask simple what/where questions, giving a model answer first if needed.",
+          "adaptation": "Let the child point before speaking if speaking is hard.",
+          "rationale_doc_id": "doc_activity_speech_wh"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_wh",
+          "doc_type": "activity_rationale",
+          "title": "What/where question rationale",
+          "text": "Simple picture-based WH questions support comprehension and early sentence use without needing long conversations.",
+          "tags": [
+            "speech",
+            "questions",
+            "comprehension",
+            "pictures"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_expand",
+          "doc_type": "activity_rationale",
+          "title": "Word expansion rationale",
+          "text": "Language expansion supports early expressive language by giving the child a slightly richer version of what they already said.",
+          "tags": [
+            "speech",
+            "language",
+            "expansion",
+            "expressive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "A_rules_baseline",
+    "case_id": "C02",
+    "selected_domains": [
+      "adaptive_cognitive",
+      "motor"
+    ],
+    "range_by_domain": {
+      "adaptive_cognitive": "48-60m",
+      "motor": "48-60m"
+    },
+    "activities": [
+      "Same-or-Different Sort",
+      "Cushion Obstacle Path"
+    ],
+    "notes": "Baseline structured output only.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 48,
+        "known_condition": "down syndrome",
+        "concern_text": "She has down syndrome and needs help with movement, routines, and self-help skills.",
+        "time_available_min": 8
+      },
+      "selected_domains": [
+        {
+          "domain_key": "adaptive_cognitive",
+          "domain_label": "Adaptive / Cognitive",
+          "routing_score": 2.5
+        },
+        {
+          "domain_key": "motor",
+          "domain_label": "Motor",
+          "routing_score": 1.5
+        }
+      ],
+      "questions_by_domain": {
+        "adaptive_cognitive": [
+          {
+            "qid": "ad_36_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 36,
+            "text": "Can your child complete a simple 2-step routine with prompts?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_48_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 48,
+            "text": "Can your child follow a short daily routine with limited help?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_60_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 60,
+            "text": "Can your child complete a short task and stay with it for a few minutes?",
+            "weight": 1.0
+          }
+        ],
+        "motor": [
+          {
+            "qid": "mo_36_1",
+            "domain": "motor",
+            "milestone_month": 36,
+            "text": "Can your child run and stop without falling most of the time?",
+            "weight": 1.0
+          },
+          {
+            "qid": "mo_48_1",
+            "domain": "motor",
+            "milestone_month": 48,
+            "text": "Can your child jump with both feet off the ground?",
+            "weight": 1.0
+          },
+          {
+            "qid": "mo_60_1",
+            "domain": "motor",
+            "milestone_month": 60,
+            "text": "Can your child balance briefly on one foot or hop with support?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "adaptive_cognitive": {
+          "estimated_range": "48-60m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "ad_36_1",
+              "question": "Can your child complete a simple 2-step routine with prompts?",
+              "milestone_month": 36,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "ad_48_1",
+              "question": "Can your child follow a short daily routine with limited help?",
+              "milestone_month": 48,
+              "answer": "with_help",
+              "score": 0.45
+            },
+            {
+              "question_id": "ad_60_1",
+              "question": "Can your child complete a short task and stay with it for a few minutes?",
+              "milestone_month": 60,
+              "answer": "not_sure",
+              "score": 0.25
+            }
+          ],
+          "missing_data": false
+        },
+        "motor": {
+          "estimated_range": "48-60m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "mo_36_1",
+              "question": "Can your child run and stop without falling most of the time?",
+              "milestone_month": 36,
+              "answer": "yes",
+              "score": 1.0
+            },
+            {
+              "question_id": "mo_48_1",
+              "question": "Can your child jump with both feet off the ground?",
+              "milestone_month": 48,
+              "answer": "with_help",
+              "score": 0.45
+            },
+            {
+              "question_id": "mo_60_1",
+              "question": "Can your child balance briefly on one foot or hop with support?",
+              "milestone_month": 60,
+              "answer": "not_sure",
+              "score": 0.25
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_ad_24_sort",
+          "domain": "adaptive_cognitive",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Same-or-Different Sort",
+          "instructions": "Sort 2-3 familiar objects into simple groups like spoons vs blocks.",
+          "adaptation": "Start with very distinct objects.",
+          "rationale_doc_id": "doc_activity_adaptive_sort"
+        },
+        {
+          "activity_id": "act_mo_24_obstacle",
+          "domain": "motor",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Cushion Obstacle Path",
+          "instructions": "Make a safe path with pillows or towels for stepping over and around objects.",
+          "adaptation": "Provide hand support as needed.",
+          "rationale_doc_id": "doc_activity_motor_obstacle"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_adhd",
+          "doc_type": "condition_profile",
+          "title": "ADHD profile summary",
+          "text": "ADHD can affect attention, transitions, self-regulation, and task completion. Parent guidance often emphasizes short routines, visual structure, and quick reinforcement.",
+          "tags": [
+            "adhd",
+            "attention",
+            "focus",
+            "adaptive",
+            "routine"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "B_rules_plus_rag_explanation",
+    "case_id": "C02",
+    "selected_domains": [
+      "adaptive_cognitive",
+      "motor"
+    ],
+    "range_by_domain": {
+      "adaptive_cognitive": "48-60m",
+      "motor": "48-60m"
+    },
+    "activities": [
+      "Same-or-Different Sort",
+      "Cushion Obstacle Path"
+    ],
+    "notes": "Focused domains: Adaptive / Cognitive, Motor. Suggested activities: Same-or-Different Sort, Cushion Obstacle Path. Retrieved supporting context includes: Down syndrome profile summary, Global developmental delay profile summary.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 48,
+        "known_condition": "down syndrome",
+        "concern_text": "She has down syndrome and needs help with movement, routines, and self-help skills.",
+        "time_available_min": 8
+      },
+      "selected_domains": [
+        {
+          "domain_key": "adaptive_cognitive",
+          "domain_label": "Adaptive / Cognitive",
+          "routing_score": 2.5
+        },
+        {
+          "domain_key": "motor",
+          "domain_label": "Motor",
+          "routing_score": 1.5
+        }
+      ],
+      "questions_by_domain": {
+        "adaptive_cognitive": [
+          {
+            "qid": "ad_36_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 36,
+            "text": "Can your child complete a simple 2-step routine with prompts?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_48_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 48,
+            "text": "Can your child follow a short daily routine with limited help?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_60_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 60,
+            "text": "Can your child complete a short task and stay with it for a few minutes?",
+            "weight": 1.0
+          }
+        ],
+        "motor": [
+          {
+            "qid": "mo_36_1",
+            "domain": "motor",
+            "milestone_month": 36,
+            "text": "Can your child run and stop without falling most of the time?",
+            "weight": 1.0
+          },
+          {
+            "qid": "mo_48_1",
+            "domain": "motor",
+            "milestone_month": 48,
+            "text": "Can your child jump with both feet off the ground?",
+            "weight": 1.0
+          },
+          {
+            "qid": "mo_60_1",
+            "domain": "motor",
+            "milestone_month": 60,
+            "text": "Can your child balance briefly on one foot or hop with support?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "adaptive_cognitive": {
+          "estimated_range": "48-60m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "ad_36_1",
+              "question": "Can your child complete a simple 2-step routine with prompts?",
+              "milestone_month": 36,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "ad_48_1",
+              "question": "Can your child follow a short daily routine with limited help?",
+              "milestone_month": 48,
+              "answer": "with_help",
+              "score": 0.45
+            },
+            {
+              "question_id": "ad_60_1",
+              "question": "Can your child complete a short task and stay with it for a few minutes?",
+              "milestone_month": 60,
+              "answer": "not_sure",
+              "score": 0.25
+            }
+          ],
+          "missing_data": false
+        },
+        "motor": {
+          "estimated_range": "48-60m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "mo_36_1",
+              "question": "Can your child run and stop without falling most of the time?",
+              "milestone_month": 36,
+              "answer": "yes",
+              "score": 1.0
+            },
+            {
+              "question_id": "mo_48_1",
+              "question": "Can your child jump with both feet off the ground?",
+              "milestone_month": 48,
+              "answer": "with_help",
+              "score": 0.45
+            },
+            {
+              "question_id": "mo_60_1",
+              "question": "Can your child balance briefly on one foot or hop with support?",
+              "milestone_month": 60,
+              "answer": "not_sure",
+              "score": 0.25
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_ad_24_sort",
+          "domain": "adaptive_cognitive",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Same-or-Different Sort",
+          "instructions": "Sort 2-3 familiar objects into simple groups like spoons vs blocks.",
+          "adaptation": "Start with very distinct objects.",
+          "rationale_doc_id": "doc_activity_adaptive_sort"
+        },
+        {
+          "activity_id": "act_mo_24_obstacle",
+          "domain": "motor",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Cushion Obstacle Path",
+          "instructions": "Make a safe path with pillows or towels for stepping over and around objects.",
+          "adaptation": "Provide hand support as needed.",
+          "rationale_doc_id": "doc_activity_motor_obstacle"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_adhd",
+          "doc_type": "condition_profile",
+          "title": "ADHD profile summary",
+          "text": "ADHD can affect attention, transitions, self-regulation, and task completion. Parent guidance often emphasizes short routines, visual structure, and quick reinforcement.",
+          "tags": [
+            "adhd",
+            "attention",
+            "focus",
+            "adaptive",
+            "routine"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "C_rules_plus_parent_friendly_summary",
+    "case_id": "C02",
+    "selected_domains": [
+      "adaptive_cognitive",
+      "motor"
+    ],
+    "range_by_domain": {
+      "adaptive_cognitive": "48-60m",
+      "motor": "48-60m"
+    },
+    "activities": [
+      "Same-or-Different Sort",
+      "Cushion Obstacle Path"
+    ],
+    "notes": "Here is a simple home plan: Adaptive / Cognitive looks around 48-60m with confidence 0.88. Motor looks around 48-60m with confidence 0.88. Start with: Same-or-Different Sort, Cushion Obstacle Path. Keep the activities short, playful, and repeatable.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 48,
+        "known_condition": "down syndrome",
+        "concern_text": "She has down syndrome and needs help with movement, routines, and self-help skills.",
+        "time_available_min": 8
+      },
+      "selected_domains": [
+        {
+          "domain_key": "adaptive_cognitive",
+          "domain_label": "Adaptive / Cognitive",
+          "routing_score": 2.5
+        },
+        {
+          "domain_key": "motor",
+          "domain_label": "Motor",
+          "routing_score": 1.5
+        }
+      ],
+      "questions_by_domain": {
+        "adaptive_cognitive": [
+          {
+            "qid": "ad_36_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 36,
+            "text": "Can your child complete a simple 2-step routine with prompts?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_48_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 48,
+            "text": "Can your child follow a short daily routine with limited help?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_60_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 60,
+            "text": "Can your child complete a short task and stay with it for a few minutes?",
+            "weight": 1.0
+          }
+        ],
+        "motor": [
+          {
+            "qid": "mo_36_1",
+            "domain": "motor",
+            "milestone_month": 36,
+            "text": "Can your child run and stop without falling most of the time?",
+            "weight": 1.0
+          },
+          {
+            "qid": "mo_48_1",
+            "domain": "motor",
+            "milestone_month": 48,
+            "text": "Can your child jump with both feet off the ground?",
+            "weight": 1.0
+          },
+          {
+            "qid": "mo_60_1",
+            "domain": "motor",
+            "milestone_month": 60,
+            "text": "Can your child balance briefly on one foot or hop with support?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "adaptive_cognitive": {
+          "estimated_range": "48-60m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "ad_36_1",
+              "question": "Can your child complete a simple 2-step routine with prompts?",
+              "milestone_month": 36,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "ad_48_1",
+              "question": "Can your child follow a short daily routine with limited help?",
+              "milestone_month": 48,
+              "answer": "with_help",
+              "score": 0.45
+            },
+            {
+              "question_id": "ad_60_1",
+              "question": "Can your child complete a short task and stay with it for a few minutes?",
+              "milestone_month": 60,
+              "answer": "not_sure",
+              "score": 0.25
+            }
+          ],
+          "missing_data": false
+        },
+        "motor": {
+          "estimated_range": "48-60m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "mo_36_1",
+              "question": "Can your child run and stop without falling most of the time?",
+              "milestone_month": 36,
+              "answer": "yes",
+              "score": 1.0
+            },
+            {
+              "question_id": "mo_48_1",
+              "question": "Can your child jump with both feet off the ground?",
+              "milestone_month": 48,
+              "answer": "with_help",
+              "score": 0.45
+            },
+            {
+              "question_id": "mo_60_1",
+              "question": "Can your child balance briefly on one foot or hop with support?",
+              "milestone_month": 60,
+              "answer": "not_sure",
+              "score": 0.25
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_ad_24_sort",
+          "domain": "adaptive_cognitive",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Same-or-Different Sort",
+          "instructions": "Sort 2-3 familiar objects into simple groups like spoons vs blocks.",
+          "adaptation": "Start with very distinct objects.",
+          "rationale_doc_id": "doc_activity_adaptive_sort"
+        },
+        {
+          "activity_id": "act_mo_24_obstacle",
+          "domain": "motor",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Cushion Obstacle Path",
+          "instructions": "Make a safe path with pillows or towels for stepping over and around objects.",
+          "adaptation": "Provide hand support as needed.",
+          "rationale_doc_id": "doc_activity_motor_obstacle"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_adhd",
+          "doc_type": "condition_profile",
+          "title": "ADHD profile summary",
+          "text": "ADHD can affect attention, transitions, self-regulation, and task completion. Parent guidance often emphasizes short routines, visual structure, and quick reinforcement.",
+          "tags": [
+            "adhd",
+            "attention",
+            "focus",
+            "adaptive",
+            "routine"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "A_rules_baseline",
+    "case_id": "C03",
+    "selected_domains": [
+      "speech_language"
+    ],
+    "range_by_domain": {
+      "speech_language": "24-36m"
+    },
+    "activities": [
+      "Two-Choice Communication"
+    ],
+    "notes": "Baseline structured output only.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 36,
+        "known_condition": null,
+        "concern_text": "My child is not talking much yet and gets frustrated when trying to ask for things.",
+        "time_available_min": 5
+      },
+      "selected_domains": [
+        {
+          "domain_key": "speech_language",
+          "domain_label": "Speech / Language",
+          "routing_score": 1.0
+        }
+      ],
+      "questions_by_domain": {
+        "speech_language": [
+          {
+            "qid": "sp_24_1",
+            "domain": "speech_language",
+            "milestone_month": 24,
+            "text": "Does your child use at least 10-20 meaningful words?",
+            "weight": 1.0
+          },
+          {
+            "qid": "sp_36_1",
+            "domain": "speech_language",
+            "milestone_month": 36,
+            "text": "Can your child combine 2-3 words to ask or comment?",
+            "weight": 1.0
+          },
+          {
+            "qid": "sp_48_1",
+            "domain": "speech_language",
+            "milestone_month": 48,
+            "text": "Can your child answer simple who/what/where questions?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "speech_language": {
+          "estimated_range": "24-36m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 24-36 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "sp_24_1",
+              "question": "Does your child use at least 10-20 meaningful words?",
+              "milestone_month": 24,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "sp_36_1",
+              "question": "Can your child combine 2-3 words to ask or comment?",
+              "milestone_month": 36,
+              "answer": "not_yet",
+              "score": 0.0
+            },
+            {
+              "question_id": "sp_48_1",
+              "question": "Can your child answer simple who/what/where questions?",
+              "milestone_month": 48,
+              "answer": "not_sure",
+              "score": 0.25
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_sp_24_choice",
+          "domain": "speech_language",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Two-Choice Communication",
+          "instructions": "Offer two favorite items, name each one, and pause for a point, look, sound, or word before giving it.",
+          "adaptation": "Accept gestures, signs, or approximated sounds as communication.",
+          "rationale_doc_id": "doc_activity_speech_choice"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_expand",
+          "doc_type": "activity_rationale",
+          "title": "Word expansion rationale",
+          "text": "Language expansion supports early expressive language by giving the child a slightly richer version of what they already said.",
+          "tags": [
+            "speech",
+            "language",
+            "expansion",
+            "expressive"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "B_rules_plus_rag_explanation",
+    "case_id": "C03",
+    "selected_domains": [
+      "speech_language"
+    ],
+    "range_by_domain": {
+      "speech_language": "24-36m"
+    },
+    "activities": [
+      "Two-Choice Communication"
+    ],
+    "notes": "Focused domains: Speech / Language. Suggested activities: Two-Choice Communication. Retrieved supporting context includes: Communication choice-making rationale, Word expansion rationale.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 36,
+        "known_condition": null,
+        "concern_text": "My child is not talking much yet and gets frustrated when trying to ask for things.",
+        "time_available_min": 5
+      },
+      "selected_domains": [
+        {
+          "domain_key": "speech_language",
+          "domain_label": "Speech / Language",
+          "routing_score": 1.0
+        }
+      ],
+      "questions_by_domain": {
+        "speech_language": [
+          {
+            "qid": "sp_24_1",
+            "domain": "speech_language",
+            "milestone_month": 24,
+            "text": "Does your child use at least 10-20 meaningful words?",
+            "weight": 1.0
+          },
+          {
+            "qid": "sp_36_1",
+            "domain": "speech_language",
+            "milestone_month": 36,
+            "text": "Can your child combine 2-3 words to ask or comment?",
+            "weight": 1.0
+          },
+          {
+            "qid": "sp_48_1",
+            "domain": "speech_language",
+            "milestone_month": 48,
+            "text": "Can your child answer simple who/what/where questions?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "speech_language": {
+          "estimated_range": "24-36m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 24-36 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "sp_24_1",
+              "question": "Does your child use at least 10-20 meaningful words?",
+              "milestone_month": 24,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "sp_36_1",
+              "question": "Can your child combine 2-3 words to ask or comment?",
+              "milestone_month": 36,
+              "answer": "not_yet",
+              "score": 0.0
+            },
+            {
+              "question_id": "sp_48_1",
+              "question": "Can your child answer simple who/what/where questions?",
+              "milestone_month": 48,
+              "answer": "not_sure",
+              "score": 0.25
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_sp_24_choice",
+          "domain": "speech_language",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Two-Choice Communication",
+          "instructions": "Offer two favorite items, name each one, and pause for a point, look, sound, or word before giving it.",
+          "adaptation": "Accept gestures, signs, or approximated sounds as communication.",
+          "rationale_doc_id": "doc_activity_speech_choice"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_expand",
+          "doc_type": "activity_rationale",
+          "title": "Word expansion rationale",
+          "text": "Language expansion supports early expressive language by giving the child a slightly richer version of what they already said.",
+          "tags": [
+            "speech",
+            "language",
+            "expansion",
+            "expressive"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "C_rules_plus_parent_friendly_summary",
+    "case_id": "C03",
+    "selected_domains": [
+      "speech_language"
+    ],
+    "range_by_domain": {
+      "speech_language": "24-36m"
+    },
+    "activities": [
+      "Two-Choice Communication"
+    ],
+    "notes": "Here is a simple home plan: Speech / Language looks around 24-36m with confidence 0.88. Start with: Two-Choice Communication. Keep the activities short, playful, and repeatable.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 36,
+        "known_condition": null,
+        "concern_text": "My child is not talking much yet and gets frustrated when trying to ask for things.",
+        "time_available_min": 5
+      },
+      "selected_domains": [
+        {
+          "domain_key": "speech_language",
+          "domain_label": "Speech / Language",
+          "routing_score": 1.0
+        }
+      ],
+      "questions_by_domain": {
+        "speech_language": [
+          {
+            "qid": "sp_24_1",
+            "domain": "speech_language",
+            "milestone_month": 24,
+            "text": "Does your child use at least 10-20 meaningful words?",
+            "weight": 1.0
+          },
+          {
+            "qid": "sp_36_1",
+            "domain": "speech_language",
+            "milestone_month": 36,
+            "text": "Can your child combine 2-3 words to ask or comment?",
+            "weight": 1.0
+          },
+          {
+            "qid": "sp_48_1",
+            "domain": "speech_language",
+            "milestone_month": 48,
+            "text": "Can your child answer simple who/what/where questions?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "speech_language": {
+          "estimated_range": "24-36m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 24-36 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "sp_24_1",
+              "question": "Does your child use at least 10-20 meaningful words?",
+              "milestone_month": 24,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "sp_36_1",
+              "question": "Can your child combine 2-3 words to ask or comment?",
+              "milestone_month": 36,
+              "answer": "not_yet",
+              "score": 0.0
+            },
+            {
+              "question_id": "sp_48_1",
+              "question": "Can your child answer simple who/what/where questions?",
+              "milestone_month": 48,
+              "answer": "not_sure",
+              "score": 0.25
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_sp_24_choice",
+          "domain": "speech_language",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Two-Choice Communication",
+          "instructions": "Offer two favorite items, name each one, and pause for a point, look, sound, or word before giving it.",
+          "adaptation": "Accept gestures, signs, or approximated sounds as communication.",
+          "rationale_doc_id": "doc_activity_speech_choice"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_expand",
+          "doc_type": "activity_rationale",
+          "title": "Word expansion rationale",
+          "text": "Language expansion supports early expressive language by giving the child a slightly richer version of what they already said.",
+          "tags": [
+            "speech",
+            "language",
+            "expansion",
+            "expressive"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "A_rules_baseline",
+    "case_id": "C04",
+    "selected_domains": [
+      "adaptive_cognitive",
+      "social_communication"
+    ],
+    "range_by_domain": {
+      "adaptive_cognitive": "48-60m",
+      "social_communication": "48-60m"
+    },
+    "activities": [
+      "Same-or-Different Sort",
+      "Show Me Game"
+    ],
+    "notes": "Baseline structured output only.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 54,
+        "known_condition": "ADHD",
+        "concern_text": "He has ADHD and has a hard time following routines and staying with tasks.",
+        "time_available_min": 7
+      },
+      "selected_domains": [
+        {
+          "domain_key": "adaptive_cognitive",
+          "domain_label": "Adaptive / Cognitive",
+          "routing_score": 3.5
+        },
+        {
+          "domain_key": "social_communication",
+          "domain_label": "Social / Communication",
+          "routing_score": 1.5
+        }
+      ],
+      "questions_by_domain": {
+        "adaptive_cognitive": [
+          {
+            "qid": "ad_36_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 36,
+            "text": "Can your child complete a simple 2-step routine with prompts?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_48_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 48,
+            "text": "Can your child follow a short daily routine with limited help?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_60_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 60,
+            "text": "Can your child complete a short task and stay with it for a few minutes?",
+            "weight": 1.0
+          }
+        ],
+        "social_communication": [
+          {
+            "qid": "so_36_1",
+            "domain": "social_communication",
+            "milestone_month": 36,
+            "text": "Does your child join simple back-and-forth play with an adult?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_48_1",
+            "domain": "social_communication",
+            "milestone_month": 48,
+            "text": "Can your child take turns in simple play or routines?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_60_1",
+            "domain": "social_communication",
+            "milestone_month": 60,
+            "text": "Can your child play with peers using simple rules or roles?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "adaptive_cognitive": {
+          "estimated_range": "48-60m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "ad_36_1",
+              "question": "Can your child complete a simple 2-step routine with prompts?",
+              "milestone_month": 36,
+              "answer": "not_sure",
+              "score": 0.25
+            },
+            {
+              "question_id": "ad_48_1",
+              "question": "Can your child follow a short daily routine with limited help?",
+              "milestone_month": 48,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "ad_60_1",
+              "question": "Can your child complete a short task and stay with it for a few minutes?",
+              "milestone_month": 60,
+              "answer": "not_yet",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        },
+        "social_communication": {
+          "estimated_range": "48-60m",
+          "confidence": 0.85,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "so_36_1",
+              "question": "Does your child join simple back-and-forth play with an adult?",
+              "milestone_month": 36,
+              "answer": "not_sure",
+              "score": 0.25
+            },
+            {
+              "question_id": "so_48_1",
+              "question": "Can your child take turns in simple play or routines?",
+              "milestone_month": 48,
+              "answer": "yes",
+              "score": 1.0
+            },
+            {
+              "question_id": "so_60_1",
+              "question": "Can your child play with peers using simple rules or roles?",
+              "milestone_month": 60,
+              "answer": "sometimes",
+              "score": 0.6
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_ad_24_sort",
+          "domain": "adaptive_cognitive",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Same-or-Different Sort",
+          "instructions": "Sort 2-3 familiar objects into simple groups like spoons vs blocks.",
+          "adaptation": "Start with very distinct objects.",
+          "rationale_doc_id": "doc_activity_adaptive_sort"
+        },
+        {
+          "activity_id": "act_so_24_share",
+          "domain": "social_communication",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Show Me Game",
+          "instructions": "Take turns showing exciting objects and waiting for shared look or reaction.",
+          "adaptation": "Celebrate eye gaze, pointing, or turning toward you.",
+          "rationale_doc_id": "doc_activity_social_share"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_adhd",
+          "doc_type": "condition_profile",
+          "title": "ADHD profile summary",
+          "text": "ADHD can affect attention, transitions, self-regulation, and task completion. Parent guidance often emphasizes short routines, visual structure, and quick reinforcement.",
+          "tags": [
+            "adhd",
+            "attention",
+            "focus",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "B_rules_plus_rag_explanation",
+    "case_id": "C04",
+    "selected_domains": [
+      "adaptive_cognitive",
+      "social_communication"
+    ],
+    "range_by_domain": {
+      "adaptive_cognitive": "48-60m",
+      "social_communication": "48-60m"
+    },
+    "activities": [
+      "Same-or-Different Sort",
+      "Show Me Game"
+    ],
+    "notes": "Focused domains: Adaptive / Cognitive, Social / Communication. Suggested activities: Same-or-Different Sort, Show Me Game. Retrieved supporting context includes: ADHD profile summary, Global developmental delay profile summary.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 54,
+        "known_condition": "ADHD",
+        "concern_text": "He has ADHD and has a hard time following routines and staying with tasks.",
+        "time_available_min": 7
+      },
+      "selected_domains": [
+        {
+          "domain_key": "adaptive_cognitive",
+          "domain_label": "Adaptive / Cognitive",
+          "routing_score": 3.5
+        },
+        {
+          "domain_key": "social_communication",
+          "domain_label": "Social / Communication",
+          "routing_score": 1.5
+        }
+      ],
+      "questions_by_domain": {
+        "adaptive_cognitive": [
+          {
+            "qid": "ad_36_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 36,
+            "text": "Can your child complete a simple 2-step routine with prompts?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_48_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 48,
+            "text": "Can your child follow a short daily routine with limited help?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_60_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 60,
+            "text": "Can your child complete a short task and stay with it for a few minutes?",
+            "weight": 1.0
+          }
+        ],
+        "social_communication": [
+          {
+            "qid": "so_36_1",
+            "domain": "social_communication",
+            "milestone_month": 36,
+            "text": "Does your child join simple back-and-forth play with an adult?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_48_1",
+            "domain": "social_communication",
+            "milestone_month": 48,
+            "text": "Can your child take turns in simple play or routines?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_60_1",
+            "domain": "social_communication",
+            "milestone_month": 60,
+            "text": "Can your child play with peers using simple rules or roles?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "adaptive_cognitive": {
+          "estimated_range": "48-60m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "ad_36_1",
+              "question": "Can your child complete a simple 2-step routine with prompts?",
+              "milestone_month": 36,
+              "answer": "not_sure",
+              "score": 0.25
+            },
+            {
+              "question_id": "ad_48_1",
+              "question": "Can your child follow a short daily routine with limited help?",
+              "milestone_month": 48,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "ad_60_1",
+              "question": "Can your child complete a short task and stay with it for a few minutes?",
+              "milestone_month": 60,
+              "answer": "not_yet",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        },
+        "social_communication": {
+          "estimated_range": "48-60m",
+          "confidence": 0.85,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "so_36_1",
+              "question": "Does your child join simple back-and-forth play with an adult?",
+              "milestone_month": 36,
+              "answer": "not_sure",
+              "score": 0.25
+            },
+            {
+              "question_id": "so_48_1",
+              "question": "Can your child take turns in simple play or routines?",
+              "milestone_month": 48,
+              "answer": "yes",
+              "score": 1.0
+            },
+            {
+              "question_id": "so_60_1",
+              "question": "Can your child play with peers using simple rules or roles?",
+              "milestone_month": 60,
+              "answer": "sometimes",
+              "score": 0.6
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_ad_24_sort",
+          "domain": "adaptive_cognitive",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Same-or-Different Sort",
+          "instructions": "Sort 2-3 familiar objects into simple groups like spoons vs blocks.",
+          "adaptation": "Start with very distinct objects.",
+          "rationale_doc_id": "doc_activity_adaptive_sort"
+        },
+        {
+          "activity_id": "act_so_24_share",
+          "domain": "social_communication",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Show Me Game",
+          "instructions": "Take turns showing exciting objects and waiting for shared look or reaction.",
+          "adaptation": "Celebrate eye gaze, pointing, or turning toward you.",
+          "rationale_doc_id": "doc_activity_social_share"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_adhd",
+          "doc_type": "condition_profile",
+          "title": "ADHD profile summary",
+          "text": "ADHD can affect attention, transitions, self-regulation, and task completion. Parent guidance often emphasizes short routines, visual structure, and quick reinforcement.",
+          "tags": [
+            "adhd",
+            "attention",
+            "focus",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "C_rules_plus_parent_friendly_summary",
+    "case_id": "C04",
+    "selected_domains": [
+      "adaptive_cognitive",
+      "social_communication"
+    ],
+    "range_by_domain": {
+      "adaptive_cognitive": "48-60m",
+      "social_communication": "48-60m"
+    },
+    "activities": [
+      "Same-or-Different Sort",
+      "Show Me Game"
+    ],
+    "notes": "Here is a simple home plan: Adaptive / Cognitive looks around 48-60m with confidence 0.88. Social / Communication looks around 48-60m with confidence 0.85. Start with: Same-or-Different Sort, Show Me Game. Keep the activities short, playful, and repeatable.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 54,
+        "known_condition": "ADHD",
+        "concern_text": "He has ADHD and has a hard time following routines and staying with tasks.",
+        "time_available_min": 7
+      },
+      "selected_domains": [
+        {
+          "domain_key": "adaptive_cognitive",
+          "domain_label": "Adaptive / Cognitive",
+          "routing_score": 3.5
+        },
+        {
+          "domain_key": "social_communication",
+          "domain_label": "Social / Communication",
+          "routing_score": 1.5
+        }
+      ],
+      "questions_by_domain": {
+        "adaptive_cognitive": [
+          {
+            "qid": "ad_36_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 36,
+            "text": "Can your child complete a simple 2-step routine with prompts?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_48_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 48,
+            "text": "Can your child follow a short daily routine with limited help?",
+            "weight": 1.0
+          },
+          {
+            "qid": "ad_60_1",
+            "domain": "adaptive_cognitive",
+            "milestone_month": 60,
+            "text": "Can your child complete a short task and stay with it for a few minutes?",
+            "weight": 1.0
+          }
+        ],
+        "social_communication": [
+          {
+            "qid": "so_36_1",
+            "domain": "social_communication",
+            "milestone_month": 36,
+            "text": "Does your child join simple back-and-forth play with an adult?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_48_1",
+            "domain": "social_communication",
+            "milestone_month": 48,
+            "text": "Can your child take turns in simple play or routines?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_60_1",
+            "domain": "social_communication",
+            "milestone_month": 60,
+            "text": "Can your child play with peers using simple rules or roles?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "adaptive_cognitive": {
+          "estimated_range": "48-60m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "ad_36_1",
+              "question": "Can your child complete a simple 2-step routine with prompts?",
+              "milestone_month": 36,
+              "answer": "not_sure",
+              "score": 0.25
+            },
+            {
+              "question_id": "ad_48_1",
+              "question": "Can your child follow a short daily routine with limited help?",
+              "milestone_month": 48,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "ad_60_1",
+              "question": "Can your child complete a short task and stay with it for a few minutes?",
+              "milestone_month": 60,
+              "answer": "not_yet",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        },
+        "social_communication": {
+          "estimated_range": "48-60m",
+          "confidence": 0.85,
+          "summary": "Estimated current functional range is around 48-60 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "so_36_1",
+              "question": "Does your child join simple back-and-forth play with an adult?",
+              "milestone_month": 36,
+              "answer": "not_sure",
+              "score": 0.25
+            },
+            {
+              "question_id": "so_48_1",
+              "question": "Can your child take turns in simple play or routines?",
+              "milestone_month": 48,
+              "answer": "yes",
+              "score": 1.0
+            },
+            {
+              "question_id": "so_60_1",
+              "question": "Can your child play with peers using simple rules or roles?",
+              "milestone_month": 60,
+              "answer": "sometimes",
+              "score": 0.6
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_ad_24_sort",
+          "domain": "adaptive_cognitive",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Same-or-Different Sort",
+          "instructions": "Sort 2-3 familiar objects into simple groups like spoons vs blocks.",
+          "adaptation": "Start with very distinct objects.",
+          "rationale_doc_id": "doc_activity_adaptive_sort"
+        },
+        {
+          "activity_id": "act_so_24_share",
+          "domain": "social_communication",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Show Me Game",
+          "instructions": "Take turns showing exciting objects and waiting for shared look or reaction.",
+          "adaptation": "Celebrate eye gaze, pointing, or turning toward you.",
+          "rationale_doc_id": "doc_activity_social_share"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_adhd",
+          "doc_type": "condition_profile",
+          "title": "ADHD profile summary",
+          "text": "ADHD can affect attention, transitions, self-regulation, and task completion. Parent guidance often emphasizes short routines, visual structure, and quick reinforcement.",
+          "tags": [
+            "adhd",
+            "attention",
+            "focus",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "A_rules_baseline",
+    "case_id": "C05",
+    "selected_domains": [
+      "motor"
+    ],
+    "range_by_domain": {
+      "motor": "24-36m"
+    },
+    "activities": [
+      "Cushion Obstacle Path"
+    ],
+    "notes": "Baseline structured output only.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 30,
+        "known_condition": null,
+        "concern_text": "She falls often and has trouble running and climbing.",
+        "time_available_min": 6
+      },
+      "selected_domains": [
+        {
+          "domain_key": "motor",
+          "domain_label": "Motor",
+          "routing_score": 2.0
+        }
+      ],
+      "questions_by_domain": {
+        "motor": [
+          {
+            "qid": "mo_24_1",
+            "domain": "motor",
+            "milestone_month": 24,
+            "text": "Does your child walk independently most of the time?",
+            "weight": 1.0
+          },
+          {
+            "qid": "mo_36_1",
+            "domain": "motor",
+            "milestone_month": 36,
+            "text": "Can your child run and stop without falling most of the time?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "motor": {
+          "estimated_range": "24-36m",
+          "confidence": 0.95,
+          "summary": "Estimated current functional range is around 24-36 months based on 2/2 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "mo_24_1",
+              "question": "Does your child walk independently most of the time?",
+              "milestone_month": 24,
+              "answer": "yes",
+              "score": 1.0
+            },
+            {
+              "question_id": "mo_36_1",
+              "question": "Can your child run and stop without falling most of the time?",
+              "milestone_month": 36,
+              "answer": "not_yet",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_mo_24_obstacle",
+          "domain": "motor",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Cushion Obstacle Path",
+          "instructions": "Make a safe path with pillows or towels for stepping over and around objects.",
+          "adaptation": "Provide hand support as needed.",
+          "rationale_doc_id": "doc_activity_motor_obstacle"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "B_rules_plus_rag_explanation",
+    "case_id": "C05",
+    "selected_domains": [
+      "motor"
+    ],
+    "range_by_domain": {
+      "motor": "24-36m"
+    },
+    "activities": [
+      "Cushion Obstacle Path"
+    ],
+    "notes": "Focused domains: Motor. Suggested activities: Cushion Obstacle Path. Retrieved supporting context includes: Down syndrome profile summary, Global developmental delay profile summary.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 30,
+        "known_condition": null,
+        "concern_text": "She falls often and has trouble running and climbing.",
+        "time_available_min": 6
+      },
+      "selected_domains": [
+        {
+          "domain_key": "motor",
+          "domain_label": "Motor",
+          "routing_score": 2.0
+        }
+      ],
+      "questions_by_domain": {
+        "motor": [
+          {
+            "qid": "mo_24_1",
+            "domain": "motor",
+            "milestone_month": 24,
+            "text": "Does your child walk independently most of the time?",
+            "weight": 1.0
+          },
+          {
+            "qid": "mo_36_1",
+            "domain": "motor",
+            "milestone_month": 36,
+            "text": "Can your child run and stop without falling most of the time?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "motor": {
+          "estimated_range": "24-36m",
+          "confidence": 0.95,
+          "summary": "Estimated current functional range is around 24-36 months based on 2/2 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "mo_24_1",
+              "question": "Does your child walk independently most of the time?",
+              "milestone_month": 24,
+              "answer": "yes",
+              "score": 1.0
+            },
+            {
+              "question_id": "mo_36_1",
+              "question": "Can your child run and stop without falling most of the time?",
+              "milestone_month": 36,
+              "answer": "not_yet",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_mo_24_obstacle",
+          "domain": "motor",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Cushion Obstacle Path",
+          "instructions": "Make a safe path with pillows or towels for stepping over and around objects.",
+          "adaptation": "Provide hand support as needed.",
+          "rationale_doc_id": "doc_activity_motor_obstacle"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "C_rules_plus_parent_friendly_summary",
+    "case_id": "C05",
+    "selected_domains": [
+      "motor"
+    ],
+    "range_by_domain": {
+      "motor": "24-36m"
+    },
+    "activities": [
+      "Cushion Obstacle Path"
+    ],
+    "notes": "Here is a simple home plan: Motor looks around 24-36m with confidence 0.95. Start with: Cushion Obstacle Path. Keep the activities short, playful, and repeatable.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 30,
+        "known_condition": null,
+        "concern_text": "She falls often and has trouble running and climbing.",
+        "time_available_min": 6
+      },
+      "selected_domains": [
+        {
+          "domain_key": "motor",
+          "domain_label": "Motor",
+          "routing_score": 2.0
+        }
+      ],
+      "questions_by_domain": {
+        "motor": [
+          {
+            "qid": "mo_24_1",
+            "domain": "motor",
+            "milestone_month": 24,
+            "text": "Does your child walk independently most of the time?",
+            "weight": 1.0
+          },
+          {
+            "qid": "mo_36_1",
+            "domain": "motor",
+            "milestone_month": 36,
+            "text": "Can your child run and stop without falling most of the time?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "motor": {
+          "estimated_range": "24-36m",
+          "confidence": 0.95,
+          "summary": "Estimated current functional range is around 24-36 months based on 2/2 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "mo_24_1",
+              "question": "Does your child walk independently most of the time?",
+              "milestone_month": 24,
+              "answer": "yes",
+              "score": 1.0
+            },
+            {
+              "question_id": "mo_36_1",
+              "question": "Can your child run and stop without falling most of the time?",
+              "milestone_month": 36,
+              "answer": "not_yet",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_mo_24_obstacle",
+          "domain": "motor",
+          "range_label": "12-24m",
+          "max_minutes": 5,
+          "title": "Cushion Obstacle Path",
+          "instructions": "Make a safe path with pillows or towels for stepping over and around objects.",
+          "adaptation": "Provide hand support as needed.",
+          "rationale_doc_id": "doc_activity_motor_obstacle"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_down",
+          "doc_type": "condition_profile",
+          "title": "Down syndrome profile summary",
+          "text": "Down syndrome may be associated with developmental differences across speech, motor, and adaptive skills. Helpful supports often include repetition, visual cues, and short practice embedded in daily routines.",
+          "tags": [
+            "down syndrome",
+            "speech",
+            "motor",
+            "adaptive",
+            "routine"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "A_rules_baseline",
+    "case_id": "C06",
+    "selected_domains": [
+      "social_communication"
+    ],
+    "range_by_domain": {
+      "social_communication": "36-48m"
+    },
+    "activities": [
+      "Pretend Play Routine"
+    ],
+    "notes": "Baseline structured output only.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 42,
+        "known_condition": null,
+        "concern_text": "He avoids pretend play and rarely joins games with other children.",
+        "time_available_min": 8
+      },
+      "selected_domains": [
+        {
+          "domain_key": "social_communication",
+          "domain_label": "Social / Communication",
+          "routing_score": 2.0
+        }
+      ],
+      "questions_by_domain": {
+        "social_communication": [
+          {
+            "qid": "so_24_1",
+            "domain": "social_communication",
+            "milestone_month": 24,
+            "text": "Does your child show or bring things to share interest with you?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_36_1",
+            "domain": "social_communication",
+            "milestone_month": 36,
+            "text": "Does your child join simple back-and-forth play with an adult?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_48_1",
+            "domain": "social_communication",
+            "milestone_month": 48,
+            "text": "Can your child take turns in simple play or routines?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "social_communication": {
+          "estimated_range": "36-48m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 36-48 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "so_24_1",
+              "question": "Does your child show or bring things to share interest with you?",
+              "milestone_month": 24,
+              "answer": "not_sure",
+              "score": 0.25
+            },
+            {
+              "question_id": "so_36_1",
+              "question": "Does your child join simple back-and-forth play with an adult?",
+              "milestone_month": 36,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "so_48_1",
+              "question": "Can your child take turns in simple play or routines?",
+              "milestone_month": 48,
+              "answer": "not_yet",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_so_48_pretend",
+          "domain": "social_communication",
+          "range_label": "36-48m",
+          "max_minutes": 8,
+          "title": "Pretend Play Routine",
+          "instructions": "Feed a doll or animal, take turns, and model one pretend action at a time.",
+          "adaptation": "Use real objects first, then symbolic play.",
+          "rationale_doc_id": "doc_activity_social_pretend"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "B_rules_plus_rag_explanation",
+    "case_id": "C06",
+    "selected_domains": [
+      "social_communication"
+    ],
+    "range_by_domain": {
+      "social_communication": "36-48m"
+    },
+    "activities": [
+      "Pretend Play Routine"
+    ],
+    "notes": "Focused domains: Social / Communication. Suggested activities: Pretend Play Routine. Retrieved supporting context includes: Autism profile summary, Communication choice-making rationale.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 42,
+        "known_condition": null,
+        "concern_text": "He avoids pretend play and rarely joins games with other children.",
+        "time_available_min": 8
+      },
+      "selected_domains": [
+        {
+          "domain_key": "social_communication",
+          "domain_label": "Social / Communication",
+          "routing_score": 2.0
+        }
+      ],
+      "questions_by_domain": {
+        "social_communication": [
+          {
+            "qid": "so_24_1",
+            "domain": "social_communication",
+            "milestone_month": 24,
+            "text": "Does your child show or bring things to share interest with you?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_36_1",
+            "domain": "social_communication",
+            "milestone_month": 36,
+            "text": "Does your child join simple back-and-forth play with an adult?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_48_1",
+            "domain": "social_communication",
+            "milestone_month": 48,
+            "text": "Can your child take turns in simple play or routines?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "social_communication": {
+          "estimated_range": "36-48m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 36-48 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "so_24_1",
+              "question": "Does your child show or bring things to share interest with you?",
+              "milestone_month": 24,
+              "answer": "not_sure",
+              "score": 0.25
+            },
+            {
+              "question_id": "so_36_1",
+              "question": "Does your child join simple back-and-forth play with an adult?",
+              "milestone_month": 36,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "so_48_1",
+              "question": "Can your child take turns in simple play or routines?",
+              "milestone_month": 48,
+              "answer": "not_yet",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_so_48_pretend",
+          "domain": "social_communication",
+          "range_label": "36-48m",
+          "max_minutes": 8,
+          "title": "Pretend Play Routine",
+          "instructions": "Feed a doll or animal, take turns, and model one pretend action at a time.",
+          "adaptation": "Use real objects first, then symbolic play.",
+          "rationale_doc_id": "doc_activity_social_pretend"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  },
+  {
+    "version": "C_rules_plus_parent_friendly_summary",
+    "case_id": "C06",
+    "selected_domains": [
+      "social_communication"
+    ],
+    "range_by_domain": {
+      "social_communication": "36-48m"
+    },
+    "activities": [
+      "Pretend Play Routine"
+    ],
+    "notes": "Here is a simple home plan: Social / Communication looks around 36-48m with confidence 0.88. Start with: Pretend Play Routine. Keep the activities short, playful, and repeatable.",
+    "full_output": {
+      "input_summary": {
+        "child_age_months": 42,
+        "known_condition": null,
+        "concern_text": "He avoids pretend play and rarely joins games with other children.",
+        "time_available_min": 8
+      },
+      "selected_domains": [
+        {
+          "domain_key": "social_communication",
+          "domain_label": "Social / Communication",
+          "routing_score": 2.0
+        }
+      ],
+      "questions_by_domain": {
+        "social_communication": [
+          {
+            "qid": "so_24_1",
+            "domain": "social_communication",
+            "milestone_month": 24,
+            "text": "Does your child show or bring things to share interest with you?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_36_1",
+            "domain": "social_communication",
+            "milestone_month": 36,
+            "text": "Does your child join simple back-and-forth play with an adult?",
+            "weight": 1.0
+          },
+          {
+            "qid": "so_48_1",
+            "domain": "social_communication",
+            "milestone_month": 48,
+            "text": "Can your child take turns in simple play or routines?",
+            "weight": 1.0
+          }
+        ]
+      },
+      "developmental_estimate_by_domain": {
+        "social_communication": {
+          "estimated_range": "36-48m",
+          "confidence": 0.88,
+          "summary": "Estimated current functional range is around 36-48 months based on 2/3 answered milestone prompts.",
+          "evidence": [
+            {
+              "question_id": "so_24_1",
+              "question": "Does your child show or bring things to share interest with you?",
+              "milestone_month": 24,
+              "answer": "not_sure",
+              "score": 0.25
+            },
+            {
+              "question_id": "so_36_1",
+              "question": "Does your child join simple back-and-forth play with an adult?",
+              "milestone_month": 36,
+              "answer": "sometimes",
+              "score": 0.6
+            },
+            {
+              "question_id": "so_48_1",
+              "question": "Can your child take turns in simple play or routines?",
+              "milestone_month": 48,
+              "answer": "not_yet",
+              "score": 0.0
+            }
+          ],
+          "missing_data": false
+        }
+      },
+      "recommended_activities": [
+        {
+          "activity_id": "act_so_48_pretend",
+          "domain": "social_communication",
+          "range_label": "36-48m",
+          "max_minutes": 8,
+          "title": "Pretend Play Routine",
+          "instructions": "Feed a doll or animal, take turns, and model one pretend action at a time.",
+          "adaptation": "Use real objects first, then symbolic play.",
+          "rationale_doc_id": "doc_activity_social_pretend"
+        }
+      ],
+      "retrieved_context": [
+        {
+          "doc_id": "doc_cond_autism",
+          "doc_type": "condition_profile",
+          "title": "Autism profile summary",
+          "text": "Autism can affect social communication, flexible routines, and language development in different ways across children. Parent-friendly support often focuses on communication, shared attention, play, and predictable routines.",
+          "tags": [
+            "autism",
+            "social",
+            "speech",
+            "routine",
+            "play"
+          ]
+        },
+        {
+          "doc_id": "doc_activity_speech_choice",
+          "doc_type": "activity_rationale",
+          "title": "Communication choice-making rationale",
+          "text": "Choice-making creates repeated opportunities for a child to communicate through pointing, looking, signs, sounds, or words during a familiar daily routine.",
+          "tags": [
+            "speech",
+            "communication",
+            "choice",
+            "request"
+          ]
+        },
+        {
+          "doc_id": "doc_cond_gdd",
+          "doc_type": "condition_profile",
+          "title": "Global developmental delay profile summary",
+          "text": "Global developmental delay can involve several developmental domains at once. A short structured interview can help identify which domains need the most immediate support and what to prioritize at home.",
+          "tags": [
+            "global developmental delay",
+            "speech",
+            "motor",
+            "social",
+            "adaptive"
+          ]
+        }
+      ],
+      "safety_note": "This is a non-diagnostic developmental support estimate intended to guide parent activities and follow-up questions. It is not a medical diagnosis or formal developmental assessment."
+    }
+  }
+]

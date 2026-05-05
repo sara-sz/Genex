@@ -1,0 +1,159 @@
+# GENEX Flask Application - Git Ignore File
+# ==========================================
+# MERGED: Your existing rules + Flask-specific additions
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Virtual Environment (your existing rules)
+.venv/
+venv/
+ENV/
+env/
+.virtualenv/
+**/.venv/
+**/venv/
+
+# Environment Variables & Secrets (your existing rules)
+.env
+.env.local
+.env.*.local
+*.env
+.env.*
+
+# Credentials / keys (your existing rules - never commit)
+*.pem
+*.key
+*.p12
+*.crt
+*.sqlite
+**/credentials*.json
+
+# API Keys (extra protection)
+*_api_key.txt
+api_keys.json
+
+# IDEs (your existing rules)
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+desktop.ini
+Thumbs.db
+
+# Flask-specific
+instance/
+.webassets-cache
+*.db
+*.db-journal
+
+# Logs (your existing rules)
+*.log
+logs/
+*.log.*
+
+# Database (merged with your rules)
+*.sqlite
+*.sqlite3
+genex_sessions.db*
+
+# Backup files
+*_backup_*/
+*.bak
+*.backup
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Migration temporary files
+migrations/versions/*.pyc
+
+# Uploaded files (if you add file upload feature)
+webapp/static/uploads/*
+!webapp/static/uploads/.gitkeep
+
+# Compiled CSS/JS (if using preprocessors)
+webapp/static/css/*.min.css
+webapp/static/js/*.min.js
+
+# OS (your existing rules)
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Data (your existing rules)
+data/
+data_raw/
+data_proc/
+**/data_raw/
+**/data_proc/
+*.parquet
+*.feather
+*.csv
+
+# Office temp / lock files (your existing rules)
+~$*.pptx
+~$*.docx
+~$*.xlsx
+
+# Local preview outputs / caches (your existing rules)
+*_previews/
+**/_previews/
+
+# Documentation builds
+docs/_build/
+site/
+
+# Cache
+.cache/
+*.cache
+
+# Celery (if used for async tasks)
+celerybeat-schedule
+celerybeat.pid
+
+# Redis dump (if used)
+dump.rdb
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Keep these folders but ignore contents
+!notebooks/.gitkeep
+!prototypes/.gitkeep
+!tests/.gitkeep
+!data/.gitkeep
