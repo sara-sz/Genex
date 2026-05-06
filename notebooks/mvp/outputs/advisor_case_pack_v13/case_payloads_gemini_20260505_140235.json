@@ -1,0 +1,2181 @@
+[
+  {
+    "case_id": "C01",
+    "child_name": "Noah",
+    "age_label": "10 months",
+    "age_months": 10,
+    "diagnosis": "Down syndrome",
+    "concerns_bullets": [
+      "Not sitting independently yet",
+      "Hypotonia",
+      "slow feeding",
+      "socially engaged"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[4m | postural_control_and_transitions] holds head steady without support when you are holding him -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[4m | postural_control_and_transitions] pushes up onto elbows or forearms when on tummy -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[4m | fine_motor_hand_use] bring hands to mouth -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[6m | postural_control_and_transitions] leans on hands to support herself when sitting -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[6m | postural_control_and_transitions] pushes up with straight arms when on tummy -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[6m | postural_control_and_transitions] rolls from tummy to back -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[9m | postural_control_and_transitions] gets to sitting position by herself -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[9m | postural_control_and_transitions] sits without support -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[9m | fine_motor_hand_use] moves things from one hand to her other hand -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[2m | early_vocalization_and_babbling] makes sounds other than crying -> yes (ok)",
+      "[2m | receptive_language] reacts to loud sounds -> yes (ok)",
+      "[4m | early_vocalization_and_babbling] makes cooing sounds like ooooo or aahhh -> yes (ok)",
+      "[4m | early_vocalization_and_babbling] makes sounds back when you talk to him -> yes (ok)",
+      "[4m | receptive_language] turns head towards the sound of your voice -> yes (ok)",
+      "[6m | early_vocalization_and_babbling] blows raspberries or sticks tongue out and blows -> yes (ok)",
+      "[6m | early_vocalization_and_babbling] makes squealing noises -> yes (ok)",
+      "[6m | early_vocalization_and_babbling] takes turns making sounds with you -> yes (ok)",
+      "[2m | attention_and_processing] looks at a toy for sevedral seconds -> yes (ok)",
+      "[2m | attention_and_processing] watches you as you move -> yes (ok)",
+      "[4m | adaptive_feeding_cues] if hungry open mouth when she sees breast or bottle -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[4m | attention_and_processing] looks at her hands with interest -> yes (ok)",
+      "[6m | adaptive_feeding_cues] closes lips to show she doesn't want more food -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[6m | exploration_and_object_use] puts things in her mouth to explore them -> yes (ok)",
+      "[6m | exploration_and_object_use] reaches to grab a toy she wants -> yes (ok)",
+      "[4m | social_engagement_and_joint_attention] chuckles when you try to make him laugh but not yet a full laugh -> yes (ok)",
+      "[4m | social_engagement_and_joint_attention] looks at you moves or makes sounds to get or keep you attention -> yes (ok)",
+      "[4m | social_engagement_and_joint_attention] smiles on his own to get your attention -> yes (ok)",
+      "[6m | social_engagement_and_joint_attention] laughs -> yes (ok)",
+      "[6m | social_engagement_and_joint_attention] likes to look at self in a mirror -> yes (ok)",
+      "[6m | attachment_and_separation] knows familiar people -> yes (ok)",
+      "[9m | social_engagement_and_joint_attention] looks when you call her name -> yes (ok)",
+      "[9m | social_engagement_and_joint_attention] shows several facial expressions like happy or sad or angry or surprised -> yes (ok)",
+      "[9m | social_engagement_and_joint_attention] smiles or laughs when you play peek a boo -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[4m | postural_control_and_transitions] holds head steady without support when you are holding him -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[4m | postural_control_and_transitions] pushes up onto elbows or forearms when on tummy -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[4m | fine_motor_hand_use] bring hands to mouth -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[6m | postural_control_and_transitions] leans on hands to support herself when sitting -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[6m | postural_control_and_transitions] pushes up with straight arms when on tummy -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[6m | postural_control_and_transitions] rolls from tummy to back -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[9m | postural_control_and_transitions] gets to sitting position by herself -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[9m | postural_control_and_transitions] sits without support -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[9m | fine_motor_hand_use] moves things from one hand to her other hand -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[2m | early_vocalization_and_babbling] makes sounds other than crying -> yes (ok)",
+      "[2m | receptive_language] reacts to loud sounds -> yes (ok)",
+      "[4m | early_vocalization_and_babbling] makes cooing sounds like ooooo or aahhh -> yes (ok)",
+      "[4m | early_vocalization_and_babbling] makes sounds back when you talk to him -> yes (ok)",
+      "[4m | receptive_language] turns head towards the sound of your voice -> yes (ok)",
+      "[6m | early_vocalization_and_babbling] blows raspberries or sticks tongue out and blows -> yes (ok)",
+      "[6m | early_vocalization_and_babbling] makes squealing noises -> yes (ok)"
+    ],
+    "top_concern_subdomains": [
+      "postural_control_and_transitions",
+      "adaptive_feeding_cues",
+      "self_help_motor_skills",
+      "social_engagement_and_joint_attention"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 4,
+        "gap_months": 6,
+        "support_tier": "needs_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical home activities to support Noah's movement and physical skills, focusing on posture, strength, balance, coordination, and fine motor use. Each activity is designed to be short, repeatable, and suitable for his developmental level."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 9,
+        "gap_months": 1,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Noah has a meaningful delay in Social / Emotional and may not need special support in this category right now."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 5,
+        "gap_months": 5,
+        "support_tier": "needs_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of language and communication-focused activities for Noah, designed to support his developmental needs while ensuring safety and practicality at home."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 6,
+        "gap_months": 4,
+        "support_tier": "monitor_and_enrich",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank provides a variety of cognitive and adaptive activities tailored for Noah, focusing on skill-building in a safe and engaging manner."
+      }
+    ],
+    "focus_areas": [
+      "Movement / Physical",
+      "Language / Communication",
+      "Cognitive / Adaptive"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Movement / Physical",
+        "title": "Tummy Time with Elbow Support",
+        "description": "Place Noah on his tummy on a soft surface. Support his elbows under his shoulders to help him push up and hold his head steady. Encourage him to look around and reach for toys placed in front of him. Keep the activity in short bouts and pause for rest if the child tires.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Sound Imitation Game",
+        "description": "Make different sounds like 'ma', 'ba', or 'ah' and encourage Noah to imitate you. Use a fun tone and facial expressions to engage him. Keep the activity in short bouts and pause for rest if the child tires.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Movement / Physical",
+        "title": "Supported Sitting Practice",
+        "description": "Sit Noah on the floor with pillows or a soft surface around him for support. Encourage him to lean on his hands while you place toys in front of him to reach for. Keep the activity in short bouts and pause for rest if the child tires.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Turn-Taking Sounds",
+        "description": "Sit facing Noah and take turns making sounds. Start with a sound, then pause for him to respond. Celebrate his attempts to make sounds. Keep the activity in short bouts and pause for rest if the child tires.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_3",
+        "category": "Movement / Physical",
+        "title": "Toy Grasping and Reaching",
+        "description": "Place a variety of toys within Noah's reach while he is lying on his back. Encourage him to reach for and grasp the toys, helping him bring them to his mouth. Keep the activity in short bouts and pause for rest if the child tires. Keep the child upright and closely supervised. Avoid choking-risk foods and stop if coughing, gagging, or distress occurs.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Language / Communication, Cognitive / Adaptive for Noah. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C02",
+    "child_name": "Maya",
+    "age_label": "18 months",
+    "age_months": 18,
+    "diagnosis": "No formal diagnosis",
+    "concerns_bullets": [
+      "No words yet",
+      "uses gestures",
+      "understands simple commands",
+      "good eye contact"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[9m | gestural_communication] lifts arms up to be picked up -> yes (ok)",
+      "[9m | early_vocalization_and_babbling] makes a lot of different sounds like mamamamama and bababababa -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[12m | gestural_communication] waves byebye -> yes (ok)",
+      "[12m | expressive_language] calls parents mama or dada or another special name -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[12m | receptive_language] understands no so pauses briefly or stops when you say it -> yes (ok)",
+      "[15m | gestural_communication] points to ask for something or to get help -> yes (ok)",
+      "[15m | receptive_language] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> yes (ok)",
+      "[15m | receptive_language] looks at a ffamiliar object when you name it -> yes (ok)",
+      "[9m | exploration_and_object_use] bangs to things together -> yes (ok)",
+      "[9m | object_permanence_and_problem_solving] looks for objects when dropped out of sight -> yes (ok)",
+      "[12m | object_permanence_and_problem_solving] looks for things he sees you hide like a toy under a blanket -> yes (ok)",
+      "[12m | exploration_and_object_use] puts something in a container like a block in a cap -> yes (ok)",
+      "[15m | attention_and_processing] stacks at least two small objects like blocks -> yes (ok)",
+      "[15m | exploration_and_object_use] tries to use things the right way like a phone or a cup or a book -> yes (ok)",
+      "[12m | self_help_motor_skills] drinks from a cup without a lid as you hold it -> yes (ok)",
+      "[12m | fine_motor_hand_use] picks things up between thumb and pointer finger like small bits of food -> yes (ok)",
+      "[12m | postural_control_and_transitions] pulls up to stand -> yes (ok)",
+      "[15m | gross_motor_mobility_and_coordination] takes a few steps on her own -> yes (ok)",
+      "[15m | self_help_motor_skills] uses fingers to feed herself some food -> yes (ok)",
+      "[18m | gross_motor_mobility_and_coordination] climbs on and off a couch or chair without help -> yes (ok)",
+      "[18m | self_help_motor_skills] drinks from a cup without a lid and may spill sometimes -> yes (ok)",
+      "[18m | self_help_motor_skills] feeds himself with his fingers -> yes (ok)",
+      "[12m | social_engagement_and_joint_attention] play games with you like pat a cake -> yes (ok)",
+      "[15m | social_engagement_and_joint_attention] claps when excited -> yes (ok)",
+      "[15m | social_engagement_and_joint_attention] shows you affection like hugs or cuddles or kisses you -> yes (ok)",
+      "[15m | social_engagement_and_joint_attention] shows you an object she likes -> yes (ok)",
+      "[18m | social_engagement_and_joint_attention] helps you dress him by pushing the arm through the sleeve or lifting up the foot -> yes (ok)",
+      "[18m | social_engagement_and_joint_attention] looks at a few pages in a book with you -> yes (ok)",
+      "[18m | social_engagement_and_joint_attention] points to show you something interesting -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[9m | gestural_communication] lifts arms up to be picked up -> yes (ok)",
+      "[9m | early_vocalization_and_babbling] makes a lot of different sounds like mamamamama and bababababa -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[12m | gestural_communication] waves byebye -> yes (ok)",
+      "[12m | expressive_language] calls parents mama or dada or another special name -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[12m | receptive_language] understands no so pauses briefly or stops when you say it -> yes (ok)",
+      "[15m | gestural_communication] points to ask for something or to get help -> yes (ok)",
+      "[15m | receptive_language] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> yes (ok)",
+      "[15m | receptive_language] looks at a ffamiliar object when you name it -> yes (ok)",
+      "[9m | exploration_and_object_use] bangs to things together -> yes (ok)",
+      "[9m | object_permanence_and_problem_solving] looks for objects when dropped out of sight -> yes (ok)",
+      "[12m | object_permanence_and_problem_solving] looks for things he sees you hide like a toy under a blanket -> yes (ok)",
+      "[12m | exploration_and_object_use] puts something in a container like a block in a cap -> yes (ok)",
+      "[15m | attention_and_processing] stacks at least two small objects like blocks -> yes (ok)",
+      "[15m | exploration_and_object_use] tries to use things the right way like a phone or a cup or a book -> yes (ok)",
+      "[12m | self_help_motor_skills] drinks from a cup without a lid as you hold it -> yes (ok)",
+      "[12m | fine_motor_hand_use] picks things up between thumb and pointer finger like small bits of food -> yes (ok)"
+    ],
+    "top_concern_subdomains": [
+      "gestural_communication",
+      "social_engagement_and_joint_attention",
+      "expressive_language",
+      "receptive_language"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 18,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Maya has a meaningful delay in Movement / Physical and may not need special support in this category right now."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 18,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Maya has a meaningful delay in Social / Emotional and may not need special support in this category right now."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 13,
+        "gap_months": 5,
+        "support_tier": "needs_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities to support Maya's language and communication skills at home. Each activity is designed to be short, repeatable, and focused on enhancing her expressive and receptive language abilities."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 15,
+        "gap_months": 3,
+        "support_tier": "monitor_and_enrich",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank provides a variety of short, engaging activities designed to support Maya's cognitive and adaptive skills at home. Each activity is tailored to her developmental level and encourages exploration, imitation, and problem-solving."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Cognitive / Adaptive"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Follow the Leader",
+        "description": "Use simple commands like 'clap your hands' or 'touch your nose' and encourage Maya to follow along. Use gestures to model the actions.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Block Stacking",
+        "description": "Provide Maya with a set of small blocks. Encourage her to stack at least two blocks on top of each other. You can model this by stacking the blocks yourself first.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Name That Toy",
+        "description": "Hold up a familiar toy and clearly say its name. Encourage Maya to look at the toy when you say its name. Repeat with different toys.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Cognitive / Adaptive",
+        "title": "Chores Imitation",
+        "description": "Pick a simple chore, like sweeping with a broom. Show Maya how to do it and encourage her to imitate you. You can use a small broom for her to use.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Point and Ask",
+        "description": "Place a few toys out of reach. Encourage Maya to point at the toy she wants and say 'please' or 'help'. Respond by giving her the toy.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Language / Communication, Cognitive / Adaptive for Maya. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C03",
+    "child_name": "Leo",
+    "age_label": "2y 2m",
+    "age_months": 26,
+    "diagnosis": "Autism spectrum disorder",
+    "concerns_bullets": [
+      "Limited eye contact and few words",
+      "Repetitive play",
+      "transitions hard",
+      "picky eating"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[12m | expressive_language] calls parents mama or dada or another special name -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[12m | receptive_language] understands no so pauses briefly or stops when you say it -> yes (ok)",
+      "[12m | gestural_communication] waves byebye -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[15m | expressive_language] tries to say or or two words besides mama or dada like ba for ball or da for dog -> yes (ok)",
+      "[15m | receptive_language] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> yes (ok)",
+      "[15m | receptive_language] looks at a ffamiliar object when you name it -> yes (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> yes (ok)",
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> yes (ok)",
+      "[12m | social_engagement_and_joint_attention] play games with you like pat a cake -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[15m | social_engagement_and_joint_attention] claps when excited -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[15m | social_engagement_and_joint_attention] shows you affection like hugs or cuddles or kisses you -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[15m | social_engagement_and_joint_attention] shows you an object she likes -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[18m | social_engagement_and_joint_attention] helps you dress him by pushing the arm through the sleeve or lifting up the foot -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[18m | social_engagement_and_joint_attention] looks at a few pages in a book with you -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[18m | social_engagement_and_joint_attention] points to show you something interesting -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[15m | gross_motor_mobility_and_coordination] takes a few steps on her own -> yes (ok)",
+      "[15m | self_help_motor_skills] uses fingers to feed herself some food -> yes (ok)",
+      "[18m | gross_motor_mobility_and_coordination] climbs on and off a couch or chair without help -> yes (ok)",
+      "[18m | self_help_motor_skills] drinks from a cup without a lid and may spill sometimes -> yes (ok)",
+      "[18m | self_help_motor_skills] feeds himself with his fingers -> yes (ok)",
+      "[24m | self_help_motor_skills] eats with a spoon -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> yes (ok)",
+      "[15m | attention_and_processing] stacks at least two small objects like blocks -> yes (ok)",
+      "[15m | exploration_and_object_use] tries to use things the right way like a phone or a cup or a book -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | imitation_and_play_skills] copies you doing chores like sweeping with a broom -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | imitation_and_play_skills] plays with toys in a simple way like pushing a toy car -> yes (ok)",
+      "[24m | exploration_and_object_use] holds something in one hand while using the other hand for example holding a container and taking the lid off -> yes (ok)",
+      "[24m | imitation_and_play_skills] plays with more than one toy at the same time like putting toy food on a toy plate -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | exploration_and_object_use] tries to use switches or knobs or buttons on a toy -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[12m | expressive_language] calls parents mama or dada or another special name -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[12m | receptive_language] understands no so pauses briefly or stops when you say it -> yes (ok)",
+      "[12m | gestural_communication] waves byebye -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[15m | expressive_language] tries to say or or two words besides mama or dada like ba for ball or da for dog -> yes (ok)",
+      "[15m | receptive_language] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> yes (ok)",
+      "[15m | receptive_language] looks at a ffamiliar object when you name it -> yes (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> yes (ok)",
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> yes (ok)",
+      "[12m | social_engagement_and_joint_attention] play games with you like pat a cake -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[15m | social_engagement_and_joint_attention] claps when excited -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[15m | social_engagement_and_joint_attention] shows you affection like hugs or cuddles or kisses you -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[15m | social_engagement_and_joint_attention] shows you an object she likes -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[18m | social_engagement_and_joint_attention] helps you dress him by pushing the arm through the sleeve or lifting up the foot -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[18m | social_engagement_and_joint_attention] looks at a few pages in a book with you -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[18m | social_engagement_and_joint_attention] points to show you something interesting -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[15m | gross_motor_mobility_and_coordination] takes a few steps on her own -> yes (ok)"
+    ],
+    "top_concern_subdomains": [
+      "social_engagement_and_joint_attention",
+      "adaptive_feeding_cues",
+      "expressive_language",
+      "play_and_symbolic_social_play"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 24,
+        "gap_months": 2,
+        "support_tier": "monitor_and_enrich",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank provides a variety of short, practical activities focused on movement and physical skills for Leo, supporting his development in a safe and engaging way."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 18,
+        "gap_months": 8,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of short, engaging activities designed to support Leo's social and emotional development, focusing on eye contact, shared attention, and social engagement."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 17,
+        "gap_months": 9,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities to support Leo's language and communication skills at home. Each activity is designed to be short, predictable, and focused on enhancing communication through play and interaction."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 24,
+        "gap_months": 2,
+        "support_tier": "monitor_and_enrich",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank provides practical, short activities to support Leo's cognitive and adaptive skills at home. Each activity is designed to be engaging, predictable, and suitable for his developmental level."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Social / Emotional",
+      "Movement / Physical"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Container Play",
+        "description": "Give Leo a container and a few small toys. Encourage him to put the toys in the container and take them out. You can model this action first. Keep it short and predictable, offer a simple choice, and stop before frustration escalates. Use lower-noise, lower-clutter materials when possible.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Book Pointing Game",
+        "description": "Choose a simple picture book. Ask Leo to point to items in the book when you say their names, like 'Where's the bear?' Keep it short and predictable, offer a simple choice, and stop before frustration escalates. Use lower-noise, lower-clutter materials when possible.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Dress-Up Game",
+        "description": "Play a game where you help Leo dress a doll or stuffed animal. Encourage him to push the arm through the sleeve or lift the foot to put on shoes. Keep it short and predictable, offer a simple choice, and stop before frustration escalates. Use lower-noise, lower-clutter materials when possible.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "More or All Done",
+        "description": "During snack time, use simple phrases like 'more' or 'all done.' Encourage Leo to use these words to express his needs. Keep it short and predictable, offer a simple choice, and stop before frustration escalates. Use lower-noise, lower-clutter materials when possible.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_3",
+        "category": "Social / Emotional",
+        "title": "Point and Show",
+        "description": "Go outside or look out the window. Encourage Leo to point at interesting things he sees, and respond with excitement or questions to promote engagement. Keep it short and predictable, offer a simple choice, and stop before frustration escalates. Use lower-noise, lower-clutter materials when possible.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Leo. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C04",
+    "child_name": "Sofia",
+    "age_label": "3y 1m",
+    "age_months": 37,
+    "diagnosis": "Prematurity history",
+    "concerns_bullets": [
+      "Speech hard to understand",
+      "Fine motor delay",
+      "good comprehension"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[24m | self_help_motor_skills] eats with a spoon -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> yes (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | fine_motor_hand_use] uses hands to twist things like turning doorknobs or unscrewing lids -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> yes (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | self_help_motor_skills] uses a fork -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> yes (ok)",
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> yes (ok)",
+      "[24m | expressive_language] says at least two words together like more milk -> yes (ok)",
+      "[24m | receptive_language] points at least two body parts when you ask her to show you -> yes (ok)",
+      "[24m | receptive_language] points to things in a book when you ask like where is the bear -> yes (ok)",
+      "[30m | expressive_language] name things in a book when you point and ask what is this -> yes (ok)",
+      "[30m | expressive_language] say two or more words toghether with one action word like doggie run -> yes (ok)",
+      "[30m | expressive_language] says about 50 words -> yes (ok)",
+      "[24m | exploration_and_object_use] holds something in one hand while using the other hand for example holding a container and taking the lid off -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | imitation_and_play_skills] plays with more than one toy at the same time like putting toy food on a toy plate -> yes (ok)",
+      "[24m | exploration_and_object_use] tries to use switches or knobs or buttons on a toy -> yes (ok)",
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> yes (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> yes (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> yes (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> yes (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | social_engagement_and_joint_attention] looks at your face to see how to react in a new situation -> yes (ok)",
+      "[24m | empathy_and_prosocial_behavior] notices when others are hurt or upset like pausing or looking sad when someone is crying -> yes (ok)",
+      "[30m | social_engagement_and_joint_attention] follos simple routines when told like helping to pick up toys when you say it is clean up time -> yes (ok)",
+      "[30m | peer_interaction_and_social_rules] plays next to other children and sometimes plays with them -> yes (ok)",
+      "[30m | social_engagement_and_joint_attention] shows you what she can do by saying look at me -> yes (ok)",
+      "[36m | emotional_regulation] calms down within 10 minutes after you leave her like at childcare drop off -> yes (ok)",
+      "[36m | peer_interaction_and_social_rules] notices other children and joins them to play -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[24m | self_help_motor_skills] eats with a spoon -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> yes (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | fine_motor_hand_use] uses hands to twist things like turning doorknobs or unscrewing lids -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> yes (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | self_help_motor_skills] uses a fork -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> yes (ok)",
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> yes (ok)",
+      "[24m | expressive_language] says at least two words together like more milk -> yes (ok)",
+      "[24m | receptive_language] points at least two body parts when you ask her to show you -> yes (ok)",
+      "[24m | receptive_language] points to things in a book when you ask like where is the bear -> yes (ok)",
+      "[30m | expressive_language] name things in a book when you point and ask what is this -> yes (ok)",
+      "[30m | expressive_language] say two or more words toghether with one action word like doggie run -> yes (ok)"
+    ],
+    "top_concern_subdomains": [
+      "expressive_language",
+      "speech_intelligibility",
+      "receptive_language",
+      "fine_motor_hand_use"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 24,
+        "gap_months": 13,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical home activities to support Sofia's movement and physical skills, focusing on her current level and near next steps."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 36,
+        "gap_months": 1,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Sofia has a meaningful delay in Social / Emotional and may not need special support in this category right now."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 27,
+        "gap_months": 10,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical, short activities to support Sofia's language and communication skills at home, focusing on expressive language development."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 30,
+        "gap_months": 7,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities to support Sofia's cognitive and adaptive skills development at home. Each activity is designed to be short, repeatable, and suitable for her developmental level."
+      }
+    ],
+    "focus_areas": [
+      "Movement / Physical",
+      "Language / Communication",
+      "Cognitive / Adaptive"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Movement / Physical",
+        "title": "Spoon Practice",
+        "description": "Provide Sofia with a bowl of soft food (like yogurt or applesauce) and a spoon. Encourage her to scoop and eat with the spoon, providing support as needed.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Color Hunt",
+        "description": "Ask Sofia to find objects around the house that match a specific color. For example, say 'Can you find something red?' and help her point to the object.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Movement / Physical",
+        "title": "Ball Kicking",
+        "description": "Set up a soft ball in a safe area. Encourage Sofia to kick the ball with her foot. You can roll the ball to her to encourage her to kick it back.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Cognitive / Adaptive",
+        "title": "Two-Step Instructions",
+        "description": "Give Sofia simple two-step instructions like 'Pick up the toy and put it in the box.' Encourage her to follow the directions.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_3",
+        "category": "Movement / Physical",
+        "title": "Jumping Fun",
+        "description": "Create a safe space with a soft surface. Encourage Sofia to jump off the ground with both feet. You can demonstrate and cheer her on.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Language / Communication, Cognitive / Adaptive for Sofia. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C05",
+    "child_name": "Ethan",
+    "age_label": "4y 6m",
+    "age_months": 54,
+    "diagnosis": "Cerebral palsy",
+    "concerns_bullets": [
+      "Trouble keeping up in preschool",
+      "Self-care delays",
+      "frequent falls",
+      "difficulty with stairs"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[24m | gross_motor_mobility_and_coordination] walks not climbs up a few stairs wih or without help -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | self_help_motor_skills] takes some clothes off by himself like loose pants or an open jacket -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | self_help_motor_skills] uses a fork -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> yes (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> yes (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> yes (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[48m | pre_academic_skills] draws a person with three or more body parts -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[48m | concepts_and_following_directions] names a few colors or items -> yes (ok)",
+      "[48m | concepts_and_following_directions] tell what comes next in a well known story -> yes (ok)",
+      "[36m | emotional_regulation] calms down within 10 minutes after you leave her like at childcare drop off -> not_sure | barrier: unclear (ok)",
+      "[36m | peer_interaction_and_social_rules] notices other children and joins them to play -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[48m | peer_interaction_and_social_rules] asks to go play with children if none are around like can I play with Alex -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[48m | social_engagement_and_joint_attention] avoids danger like not jumping from tall heights at the playgroung -> yes (ok)",
+      "[48m | peer_interaction_and_social_rules] changes behavior based on where she is like place of worship or library or playground -> yes (ok)",
+      "[60m | peer_interaction_and_social_rules] does simple chores at home like matching socks or cleaning the table after eating -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[60m | peer_interaction_and_social_rules] follows rules or takesake turns when playing games with other  children -> yes (ok)",
+      "[60m | social_engagement_and_joint_attention] sings dances or acts for you -> yes (ok)",
+      "[36m | expressive_language] ask who or what or where or why questions like where is mommy or where is daddy -> yes (ok)",
+      "[36m | expressive_language] says first name when asked -> yes (ok)",
+      "[36m | expressive_language] says what action is happening in a picture or book when asked like running or eating or playing -> yes (ok)",
+      "[48m | expressive_language] answers simple questions like what is a coat for or what is crayon for -> yes (ok)",
+      "[48m | expressive_language] says sentences with four or more words -> yes (ok)",
+      "[48m | conversation_narrative] says some words from a song or story or nursery rhyme -> yes (ok)",
+      "[60m | receptive_language] answers simple questions about a book or a story after you read or tell it to her -> yes (ok)",
+      "[60m | conversation_narrative] keep a conversation going with more than three back and forth exchanges -> yes (ok)",
+      "[60m | expressive_language] tells a storys she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[24m | gross_motor_mobility_and_coordination] walks not climbs up a few stairs wih or without help -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | self_help_motor_skills] takes some clothes off by himself like loose pants or an open jacket -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | self_help_motor_skills] uses a fork -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> yes (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> yes (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> yes (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[48m | pre_academic_skills] draws a person with three or more body parts -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[48m | concepts_and_following_directions] names a few colors or items -> yes (ok)"
+    ],
+    "top_concern_subdomains": [
+      "gross_motor_mobility_and_coordination",
+      "postural_control_and_transitions",
+      "self_help_motor_skills"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 36,
+        "gap_months": 18,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of movement and physical activities designed for Ethan, focusing on improving his self-care motor skills, fine motor hand use, and gross motor mobility in a safe and supportive environment."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 60,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Ethan has a meaningful delay in Social / Emotional and may not need special support in this category right now."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 60,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Ethan has a meaningful delay in Language / Communication and may not need special support in this category right now."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 48,
+        "gap_months": 6,
+        "support_tier": "monitor_and_enrich",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank includes six practical home activities designed to support Ethan's cognitive and adaptive skills, focusing on attention, problem-solving, and following directions. Each activity is tailored to his developmental level and safety needs."
+      }
+    ],
+    "focus_areas": [
+      "Movement / Physical",
+      "Cognitive / Adaptive"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Movement / Physical",
+        "title": "Bead Stringing",
+        "description": "Provide large beads and a shoelace or string. Encourage Ethan to thread the beads onto the string. Offer support by holding the string steady if needed. Use stable support and close adult supervision throughout.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Color Sorting",
+        "description": "Gather colored objects (like blocks or toys). Ask Ethan to sort them into groups by color. You can help him name each color as he sorts.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_2",
+        "category": "Movement / Physical",
+        "title": "Fork Practice",
+        "description": "Set up a small snack with cut-up soft fruits or vegetables. Encourage Ethan to use a fork to pick up the food. Provide guidance and support as needed. Use stable support and close adult supervision throughout.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Cognitive / Adaptive",
+        "title": "Counting Fun",
+        "description": "Count objects around the house together (like toys or snacks). Encourage Ethan to count to 10 with your support, pointing to each item as you count.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_3",
+        "category": "Movement / Physical",
+        "title": "Ball Catching",
+        "description": "Sit on the floor with Ethan and use a large, soft ball. Roll the ball to him and encourage him to catch it. Use hand support if necessary to help him position his hands correctly. Use stable support and close adult supervision throughout.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Cognitive / Adaptive for Ethan. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C06",
+    "child_name": "Amina",
+    "age_label": "5 years",
+    "age_months": 60,
+    "diagnosis": "Global developmental delay",
+    "concerns_bullets": [
+      "Learning and routines are hard",
+      "Short attention span",
+      "follows only simple directions"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | pre_academic_skills] draws a person with three or more body parts -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | concepts_and_following_directions] names a few colors or items -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | concepts_and_following_directions] tell what comes next in a well known story -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[48m | gross_motor_mobility_and_coordination] catches a large ball most of the times -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | fine_motor_hand_use] holds crayon or pencil between fingers and thumb not fist -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | self_help_motor_skills] serves herself food or pours water with adult supervision -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[60m | self_help_motor_skills] buttons some buttons -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[60m | gross_motor_mobility_and_coordination] hops on one foot -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | expressive_language] answers simple questions like what is a coat for or what is crayon for -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | expressive_language] says sentences with four or more words -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | conversation_narrative] says some words from a song or story or nursery rhyme -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[60m | receptive_language] answers simple questions about a book or a story after you read or tell it to her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[60m | conversation_narrative] keep a conversation going with more than three back and forth exchanges -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[60m | expressive_language] tells a storys she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[48m | peer_interaction_and_social_rules] asks to go play with children if none are around like can I play with Alex -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[48m | social_engagement_and_joint_attention] avoids danger like not jumping from tall heights at the playgroung -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[48m | peer_interaction_and_social_rules] changes behavior based on where she is like place of worship or library or playground -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[60m | peer_interaction_and_social_rules] does simple chores at home like matching socks or cleaning the table after eating -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[60m | peer_interaction_and_social_rules] follows rules or takesake turns when playing games with other  children -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[60m | social_engagement_and_joint_attention] sings dances or acts for you -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | pre_academic_skills] draws a person with three or more body parts -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | concepts_and_following_directions] names a few colors or items -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | concepts_and_following_directions] tell what comes next in a well known story -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[48m | gross_motor_mobility_and_coordination] catches a large ball most of the times -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | fine_motor_hand_use] holds crayon or pencil between fingers and thumb not fist -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | self_help_motor_skills] serves herself food or pours water with adult supervision -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[60m | self_help_motor_skills] buttons some buttons -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[60m | gross_motor_mobility_and_coordination] hops on one foot -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | expressive_language] answers simple questions like what is a coat for or what is crayon for -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | expressive_language] says sentences with four or more words -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | conversation_narrative] says some words from a song or story or nursery rhyme -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)"
+    ],
+    "top_concern_subdomains": [
+      "attention_and_processing"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 48,
+        "gap_months": 12,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of movement and physical activities tailored for Amina, focusing on her developmental needs while ensuring safety and engagement."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 60,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Amina has a meaningful delay in Social / Emotional and may not need special support in this category right now."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 52,
+        "gap_months": 8,
+        "support_tier": "monitor_and_enrich",
+        "severity": "moderate",
+        "needs_special_support": false,
+        "summary": "This activity bank provides engaging and practical language and communication activities for Amina, focusing on enhancing her receptive and expressive language skills while ensuring tasks are short and manageable."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 36,
+        "gap_months": 24,
+        "support_tier": "needs_special_support",
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical, short, and engaging activities to support Amina's cognitive and adaptive skills, focusing on attention, problem-solving, and following directions."
+      }
+    ],
+    "focus_areas": [
+      "Cognitive / Adaptive",
+      "Movement / Physical",
+      "Language / Communication"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Color Sorting",
+        "description": "Gather a few colored items (like blocks or toys). Ask Amina to sort them by color into different containers. You can help her by naming the colors as she sorts. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Movement / Physical",
+        "title": "Ball Toss",
+        "description": "Sit on the floor with Amina and roll a large ball back and forth. Encourage her to catch the ball when you roll it to her. Celebrate her successes! Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Cognitive / Adaptive",
+        "title": "Simple Story Sequencing",
+        "description": "Use a familiar storybook. Read a page and then ask Amina what happens next. Encourage her to point to pictures that represent the story. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Movement / Physical",
+        "title": "Crayon Drawing",
+        "description": "Provide Amina with crayons and paper. Encourage her to hold the crayon between her fingers and thumb while she draws simple shapes or lines. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_3",
+        "category": "Cognitive / Adaptive",
+        "title": "Drawing Shapes",
+        "description": "Show Amina how to draw a circle. Then, encourage her to try drawing it herself. Praise her efforts and guide her if needed. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Language / Communication, Cognitive / Adaptive for Amina. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C07",
+    "child_name": "Lucas",
+    "age_label": "14 months",
+    "age_months": 14,
+    "diagnosis": "Fragile X syndrome",
+    "concerns_bullets": [
+      "Not walking",
+      "limited babbling",
+      "Sensory sensitivity",
+      "shy socially"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[4m | early_vocalization_and_babbling] makes cooing sounds like ooooo or aahhh -> yes (ok)",
+      "[4m | early_vocalization_and_babbling] makes sounds back when you talk to him -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[4m | receptive_language] turns head towards the sound of your voice -> yes (ok)",
+      "[6m | early_vocalization_and_babbling] blows raspberries or sticks tongue out and blows -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[6m | early_vocalization_and_babbling] makes squealing noises -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[6m | early_vocalization_and_babbling] takes turns making sounds with you -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[9m | early_vocalization_and_babbling] makes a lot of different sounds like mamamamama and bababababa -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[9m | gestural_communication] lifts arms up to be picked up -> yes (ok)",
+      "[6m | postural_control_and_transitions] leans on hands to support herself when sitting -> yes (ok)",
+      "[6m | postural_control_and_transitions] pushes up with straight arms when on tummy -> yes (ok)",
+      "[6m | postural_control_and_transitions] rolls from tummy to back -> yes (ok)",
+      "[9m | postural_control_and_transitions] gets to sitting position by herself -> yes (ok)",
+      "[9m | postural_control_and_transitions] sits without support -> yes (ok)",
+      "[9m | fine_motor_hand_use] moves things from one hand to her other hand -> yes (ok)",
+      "[12m | gross_motor_mobility_and_coordination] walks holding on to furniture -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[12m | postural_control_and_transitions] pulls up to stand -> yes (ok)",
+      "[12m | self_help_motor_skills] drinks from a cup without a lid as you hold it -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[4m | social_engagement_and_joint_attention] chuckles when you try to make him laugh but not yet a full laugh -> yes (ok)",
+      "[4m | social_engagement_and_joint_attention] looks at you moves or makes sounds to get or keep you attention -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[4m | social_engagement_and_joint_attention] smiles on his own to get your attention -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[6m | attachment_and_separation] knows familiar people -> yes (ok)",
+      "[6m | social_engagement_and_joint_attention] laughs -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[6m | social_engagement_and_joint_attention] likes to look at self in a mirror -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[9m | attachment_and_separation] is shy or clingy or fearful around strangers -> yes (ok)",
+      "[9m | social_engagement_and_joint_attention] looks when you call her name -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[9m | emotional_regulation] reacts when you leave -> yes (ok)",
+      "[4m | adaptive_feeding_cues] if hungry open mouth when she sees breast or bottle -> yes (ok)",
+      "[4m | attention_and_processing] looks at her hands with interest -> yes (ok)",
+      "[6m | adaptive_feeding_cues] closes lips to show she doesn't want more food -> yes (ok)",
+      "[6m | exploration_and_object_use] puts things in her mouth to explore them -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[6m | exploration_and_object_use] reaches to grab a toy she wants -> yes (ok)",
+      "[9m | exploration_and_object_use] bangs to things together -> yes (ok)",
+      "[9m | object_permanence_and_problem_solving] looks for objects when dropped out of sight -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[4m | early_vocalization_and_babbling] makes cooing sounds like ooooo or aahhh -> yes (ok)",
+      "[4m | early_vocalization_and_babbling] makes sounds back when you talk to him -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[4m | receptive_language] turns head towards the sound of your voice -> yes (ok)",
+      "[6m | early_vocalization_and_babbling] blows raspberries or sticks tongue out and blows -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[6m | early_vocalization_and_babbling] makes squealing noises -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[6m | early_vocalization_and_babbling] takes turns making sounds with you -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[9m | early_vocalization_and_babbling] makes a lot of different sounds like mamamamama and bababababa -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[9m | gestural_communication] lifts arms up to be picked up -> yes (ok)",
+      "[6m | postural_control_and_transitions] leans on hands to support herself when sitting -> yes (ok)",
+      "[6m | postural_control_and_transitions] pushes up with straight arms when on tummy -> yes (ok)",
+      "[6m | postural_control_and_transitions] rolls from tummy to back -> yes (ok)",
+      "[9m | postural_control_and_transitions] gets to sitting position by herself -> yes (ok)",
+      "[9m | postural_control_and_transitions] sits without support -> yes (ok)",
+      "[9m | fine_motor_hand_use] moves things from one hand to her other hand -> yes (ok)",
+      "[12m | gross_motor_mobility_and_coordination] walks holding on to furniture -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[12m | postural_control_and_transitions] pulls up to stand -> yes (ok)"
+    ],
+    "top_concern_subdomains": [
+      "early_vocalization_and_babbling",
+      "gross_motor_mobility_and_coordination",
+      "postural_control_and_transitions"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 9,
+        "gap_months": 5,
+        "support_tier": "needs_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical home activities for Lucas, focusing on movement and physical skills appropriate for his developmental level. Each activity is designed to support his growth while considering his sensory sensitivities and need for short, manageable tasks."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 9,
+        "gap_months": 5,
+        "support_tier": "needs_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of short, practical home activities designed to support Lucas's social and emotional development. Each activity focuses on enhancing social engagement and emotional regulation while considering his specific needs and preferences."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 4,
+        "gap_months": 10,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities to support Lucas's language and communication development at home. Each activity is designed to be short, repeatable, and tailored to his current level while also promoting his next steps in communication."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 9,
+        "gap_months": 5,
+        "support_tier": "needs_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical, short activities to support Lucas's cognitive and adaptive skills at home, focusing on exploration, problem-solving, and functional play."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Movement / Physical",
+      "Social / Emotional"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Sound Imitation Game",
+        "description": "Make simple sounds like 'ahh', 'ooo', or 'ee' and encourage Lucas to imitate you. Use a mirror to make it fun and visually engaging. Keep the activity in short bouts and pause for rest if the child tires. Use lower-noise, lower-clutter materials when possible.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Peek-a-Boo with a Twist",
+        "description": "Sit in front of Lucas and cover your face with a soft cloth. Then, reveal your face with a big smile and say 'Peek-a-boo!' Encourage him to mimic your expression. Repeat several times. Keep the activity in short bouts and pause for rest if the child tires. Use lower-noise, lower-clutter materials when possible.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Turn-Taking Sounds",
+        "description": "Sit face-to-face with Lucas and take turns making sounds. Start with a sound, then wait for him to respond. Encourage him to make a sound back. Keep the activity in short bouts and pause for rest if the child tires. Use lower-noise, lower-clutter materials when possible.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Facial Expression Imitation",
+        "description": "Make different facial expressions (happy, sad, surprised) and encourage Lucas to imitate you. Use a mirror if possible to help him see his own expressions. Keep the activity in short bouts and pause for rest if the child tires. Use lower-noise, lower-clutter materials when possible.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Follow the Sound",
+        "description": "Make a sound (like clapping or a gentle bell) and see if Lucas turns his head towards the sound. Praise him when he does. Keep the activity in short bouts and pause for rest if the child tires. Use lower-noise, lower-clutter materials when possible.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Lucas. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C08",
+    "child_name": "Emma",
+    "age_label": "2y 8m",
+    "age_months": 32,
+    "diagnosis": "Suspected childhood apraxia of speech",
+    "concerns_bullets": [
+      "Very limited speech output",
+      "Uses gestures",
+      "gets frustrated",
+      "inconsistent sounds"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[15m | gestural_communication] points to ask for something or to get help -> yes (ok)",
+      "[15m | expressive_language] tries to say or or two words besides mama or dada like ba for ball or da for dog -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[15m | receptive_language] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> yes (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> yes (ok)",
+      "[24m | expressive_language] says at least two words together like more milk -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[24m | gestural_communication] uses more gestures than just waving or pointing like blowing a kiss or nodding yes -> yes (ok)",
+      "[24m | receptive_language] points at least two body parts when you ask her to show you -> yes (ok)",
+      "[18m | imitation_and_play_skills] copies you doing chores like sweeping with a broom -> yes (ok)",
+      "[18m | imitation_and_play_skills] plays with toys in a simple way like pushing a toy car -> yes (ok)",
+      "[24m | exploration_and_object_use] holds something in one hand while using the other hand for example holding a container and taking the lid off -> yes (ok)",
+      "[24m | imitation_and_play_skills] plays with more than one toy at the same time like putting toy food on a toy plate -> yes (ok)",
+      "[24m | exploration_and_object_use] tries to use switches or knobs or buttons on a toy -> yes (ok)",
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> yes (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> yes (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> yes (ok)",
+      "[24m | social_engagement_and_joint_attention] looks at your face to see how to react in a new situation -> yes (ok)",
+      "[24m | empathy_and_prosocial_behavior] notices when others are hurt or upset like pausing or looking sad when someone is crying -> yes (ok)",
+      "[30m | social_engagement_and_joint_attention] follos simple routines when told like helping to pick up toys when you say it is clean up time -> yes (ok)",
+      "[30m | peer_interaction_and_social_rules] plays next to other children and sometimes plays with them -> yes (ok)",
+      "[30m | social_engagement_and_joint_attention] shows you what she can do by saying look at me -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[36m | emotional_regulation] calms down within 10 minutes after you leave her like at childcare drop off -> yes (ok)",
+      "[36m | peer_interaction_and_social_rules] notices other children and joins them to play -> yes (ok)",
+      "[24m | self_help_motor_skills] eats with a spoon -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> yes (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> yes (ok)",
+      "[30m | self_help_motor_skills] takes some clothes off by himself like loose pants or an open jacket -> yes (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> yes (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> yes (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> yes (ok)",
+      "[36m | self_help_motor_skills] uses a fork -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[15m | gestural_communication] points to ask for something or to get help -> yes (ok)",
+      "[15m | expressive_language] tries to say or or two words besides mama or dada like ba for ball or da for dog -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[15m | receptive_language] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> yes (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> yes (ok)",
+      "[24m | expressive_language] says at least two words together like more milk -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[24m | gestural_communication] uses more gestures than just waving or pointing like blowing a kiss or nodding yes -> yes (ok)",
+      "[24m | receptive_language] points at least two body parts when you ask her to show you -> yes (ok)",
+      "[18m | imitation_and_play_skills] copies you doing chores like sweeping with a broom -> yes (ok)",
+      "[18m | imitation_and_play_skills] plays with toys in a simple way like pushing a toy car -> yes (ok)",
+      "[24m | exploration_and_object_use] holds something in one hand while using the other hand for example holding a container and taking the lid off -> yes (ok)",
+      "[24m | imitation_and_play_skills] plays with more than one toy at the same time like putting toy food on a toy plate -> yes (ok)",
+      "[24m | exploration_and_object_use] tries to use switches or knobs or buttons on a toy -> yes (ok)",
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> yes (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> yes (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> yes (ok)"
+    ],
+    "top_concern_subdomains": [
+      "speech_intelligibility",
+      "emotional_regulation",
+      "expressive_language",
+      "gestural_communication"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 36,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Emma has a meaningful delay in Movement / Physical and may not need special support in this category right now."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 36,
+        "gap_months": 0,
+        "support_tier": "monitor_and_enrich",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank provides short, engaging activities to support Emma's social and emotional development, focusing on emotional regulation and peer interaction."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 15,
+        "gap_months": 17,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical, short activities to support Emma's language and communication skills, focusing on sound production, gestures, and following directions."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 30,
+        "gap_months": 2,
+        "support_tier": "monitor_and_enrich",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank includes six practical home activities designed to support Emma's cognitive and adaptive skills, focusing on following directions, problem-solving, and imitation through play. Each activity is short and manageable to prevent frustration and encourage engagement."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Cognitive / Adaptive",
+      "Social / Emotional"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Toy Naming Game",
+        "description": "Show Emma a toy and say its name clearly. Encourage her to repeat the name or make a sound related to the toy. Use gestures to help her understand. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Color Sorting Game",
+        "description": "Gather a few colored items (like blocks or crayons). Ask Emma to find and hand you a specific color, like 'Can you give me the red one?'. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Follow the Simple Direction",
+        "description": "Give Emma a simple one-step direction like 'give me the toy' without gestures. Praise her when she follows the direction. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Cognitive / Adaptive",
+        "title": "Two-Step Instructions",
+        "description": "Give Emma a simple two-step instruction, such as 'Pick up the toy and put it in the box'. Praise her when she follows the instructions. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Point and Ask",
+        "description": "Place a few toys in front of Emma. Encourage her to point to a toy she wants and say its name or make a sound. Respond to her request. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Social / Emotional, Language / Communication, Cognitive / Adaptive for Emma. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C09",
+    "child_name": "Zain",
+    "age_label": "4 years",
+    "age_months": 48,
+    "diagnosis": "Attention and self-regulation concerns (possible ADHD)",
+    "concerns_bullets": [
+      "Very active",
+      "impulsive",
+      "Big emotional reactions",
+      "interrupts"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> yes (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> yes (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> yes (ok)",
+      "[48m | concepts_and_following_directions] names a few colors or items -> yes (ok)",
+      "[48m | concepts_and_following_directions] tell what comes next in a well known story -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | pre_academic_skills] draws a person with three or more body parts -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> yes (ok)",
+      "[30m | self_help_motor_skills] takes some clothes off by himself like loose pants or an open jacket -> yes (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> yes (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | self_help_motor_skills] uses a fork -> yes (ok)",
+      "[48m | gross_motor_mobility_and_coordination] catches a large ball most of the times -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | fine_motor_hand_use] holds crayon or pencil between fingers and thumb not fist -> yes (ok)",
+      "[48m | self_help_motor_skills] serves herself food or pours water with adult supervision -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | peer_interaction_and_social_rules] plays next to other children and sometimes plays with them -> yes (ok)",
+      "[30m | social_engagement_and_joint_attention] follos simple routines when told like helping to pick up toys when you say it is clean up time -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | social_engagement_and_joint_attention] shows you what she can do by saying look at me -> yes (ok)",
+      "[36m | emotional_regulation] calms down within 10 minutes after you leave her like at childcare drop off -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | peer_interaction_and_social_rules] notices other children and joins them to play -> yes (ok)",
+      "[48m | peer_interaction_and_social_rules] asks to go play with children if none are around like can I play with Alex -> yes (ok)",
+      "[48m | peer_interaction_and_social_rules] changes behavior based on where she is like place of worship or library or playground -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | peer_interaction_and_social_rules] likes to be a helper -> yes (ok)",
+      "[30m | expressive_language] name things in a book when you point and ask what is this -> yes (ok)",
+      "[30m | expressive_language] say two or more words toghether with one action word like doggie run -> yes (ok)",
+      "[30m | expressive_language] says about 50 words -> yes (ok)",
+      "[36m | expressive_language] ask who or what or where or why questions like where is mommy or where is daddy -> yes (ok)",
+      "[36m | expressive_language] says first name when asked -> yes (ok)",
+      "[36m | expressive_language] says what action is happening in a picture or book when asked like running or eating or playing -> yes (ok)",
+      "[48m | expressive_language] answers simple questions like what is a coat for or what is crayon for -> yes (ok)",
+      "[48m | expressive_language] says sentences with four or more words -> yes (ok)",
+      "[48m | conversation_narrative] says some words from a song or story or nursery rhyme -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> yes (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> yes (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> yes (ok)",
+      "[48m | concepts_and_following_directions] names a few colors or items -> yes (ok)",
+      "[48m | concepts_and_following_directions] tell what comes next in a well known story -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | pre_academic_skills] draws a person with three or more body parts -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> yes (ok)",
+      "[30m | self_help_motor_skills] takes some clothes off by himself like loose pants or an open jacket -> yes (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> yes (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | self_help_motor_skills] uses a fork -> yes (ok)",
+      "[48m | gross_motor_mobility_and_coordination] catches a large ball most of the times -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[48m | fine_motor_hand_use] holds crayon or pencil between fingers and thumb not fist -> yes (ok)"
+    ],
+    "top_concern_subdomains": [
+      "emotional_regulation",
+      "concepts_and_following_directions",
+      "attention_and_processing",
+      "peer_interaction_and_social_rules"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 36,
+        "gap_months": 12,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of short, practical activities focused on movement and physical skills for Zain, considering his attention and self-regulation needs."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 48,
+        "gap_months": 0,
+        "support_tier": "monitor_and_enrich",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank includes short, engaging activities designed to support Zain's social and emotional development, focusing on peer interaction, emotional regulation, and social rules."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 48,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Zain has a meaningful delay in Language / Communication and may not need special support in this category right now."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 30,
+        "gap_months": 18,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of short, practical activities designed to support Zain's cognitive and adaptive skills, focusing on attention, problem-solving, and following directions. Each activity is tailored to be engaging and manageable, considering Zain's developmental needs."
+      }
+    ],
+    "focus_areas": [
+      "Cognitive / Adaptive",
+      "Movement / Physical",
+      "Social / Emotional"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Color Sorting Game",
+        "description": "Gather a few colored items (like blocks or crayons). Ask Zain to sort them by color into different containers. Start with two colors and gradually add more as he becomes comfortable. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Movement / Physical",
+        "title": "Clothes Dressing Practice",
+        "description": "Lay out loose pants and a jacket. Encourage Zain to put them on by himself with your support as needed. Start with one item and gradually add another. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Cognitive / Adaptive",
+        "title": "Two-Step Instructions",
+        "description": "Give Zain simple two-step instructions, such as 'Pick up the toy and put it in the box.' Praise him for following the directions. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Movement / Physical",
+        "title": "Bead Stringing",
+        "description": "Provide large beads and a string. Show Zain how to string the beads together, encouraging him to try it independently. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_3",
+        "category": "Cognitive / Adaptive",
+        "title": "Pretend Play with Dolls",
+        "description": "Use dolls or stuffed animals to engage in pretend play. Encourage Zain to feed the doll or put it to bed, modeling the actions for him to imitate. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Cognitive / Adaptive for Zain. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C10",
+    "child_name": "Isla",
+    "age_label": "3y 8m",
+    "age_months": 44,
+    "diagnosis": "SYNGAP1-related disorder",
+    "concerns_bullets": [
+      "Delayed speech and balance",
+      "Attention issues",
+      "clumsy gait",
+      "limited pretend play"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | receptive_language] points at least two body parts when you ask her to show you -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | receptive_language] points to things in a book when you ask like where is the bear -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | expressive_language] says at least two words together like more milk -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | expressive_language] name things in a book when you point and ask what is this -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | expressive_language] say two or more words toghether with one action word like doggie run -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | expressive_language] says about 50 words -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | gross_motor_mobility_and_coordination] walks not climbs up a few stairs wih or without help -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | self_help_motor_skills] takes some clothes off by himself like loose pants or an open jacket -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | self_help_motor_skills] uses a fork -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[24m | exploration_and_object_use] holds something in one hand while using the other hand for example holding a container and taking the lid off -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[24m | imitation_and_play_skills] plays with more than one toy at the same time like putting toy food on a toy plate -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[24m | exploration_and_object_use] tries to use switches or knobs or buttons on a toy -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[24m | social_engagement_and_joint_attention] looks at your face to see how to react in a new situation -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[24m | empathy_and_prosocial_behavior] notices when others are hurt or upset like pausing or looking sad when someone is crying -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[30m | social_engagement_and_joint_attention] follos simple routines when told like helping to pick up toys when you say it is clean up time -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[30m | peer_interaction_and_social_rules] plays next to other children and sometimes plays with them -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[30m | social_engagement_and_joint_attention] shows you what she can do by saying look at me -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[36m | emotional_regulation] calms down within 10 minutes after you leave her like at childcare drop off -> not_sure | barrier: unclear (ok)",
+      "[36m | peer_interaction_and_social_rules] notices other children and joins them to play -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | receptive_language] points at least two body parts when you ask her to show you -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | receptive_language] points to things in a book when you ask like where is the bear -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | expressive_language] says at least two words together like more milk -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | expressive_language] name things in a book when you point and ask what is this -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | expressive_language] say two or more words toghether with one action word like doggie run -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | expressive_language] says about 50 words -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | gross_motor_mobility_and_coordination] walks not climbs up a few stairs wih or without help -> with_help | followup: physical help / hands-on support | barrier: physical_help (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | self_help_motor_skills] takes some clothes off by himself like loose pants or an open jacket -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)"
+    ],
+    "top_concern_subdomains": [
+      "gross_motor_mobility_and_coordination",
+      "play_and_symbolic_social_play",
+      "postural_control_and_transitions",
+      "attention_and_processing"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 30,
+        "gap_months": 14,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of movement and physical activities tailored for Isla, focusing on building her gross motor skills, self-help motor skills, and fine motor hand use in a safe and supportive environment."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 36,
+        "gap_months": 8,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of short, engaging activities designed to support Isla's social and emotional development, focusing on emotional regulation, peer interaction, and social engagement."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 18,
+        "gap_months": 26,
+        "support_tier": "needs_special_support",
+        "severity": "significant",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a variety of language and communication-focused activities designed for Isla, considering her developmental needs and safety constraints. Each activity is short, practical, and aims to enhance her communication skills in a fun and engaging way."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 30,
+        "gap_months": 14,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical and engaging activities to support Isla's cognitive and adaptive skills, focusing on following directions, problem-solving, and functional play. Each activity is designed to be short, safe, and suitable for home use."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Movement / Physical",
+      "Cognitive / Adaptive"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Body Part Show and Tell",
+        "description": "Ask Isla to point to specific body parts on herself or a doll when you name them. Start with simple parts like 'head' or 'hands'. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Cognitive / Adaptive",
+        "title": "Color Sorting",
+        "description": "Gather a few colored items (like blocks or crayons). Ask Isla to sort them by color, helping her point to each color as she sorts. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Book Pointing Game",
+        "description": "Read a picture book together. Ask Isla to point to specific items in the pictures, like 'Where is the bear?' or 'Show me the car.' Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Cognitive / Adaptive",
+        "title": "Two-Step Instructions Game",
+        "description": "Give Isla simple two-step instructions, like 'pick up the toy and put it in the box.' Praise her when she follows the directions correctly. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Sound Imitation Fun",
+        "description": "Make animal sounds and encourage Isla to imitate them. Start with simple sounds like 'moo' or 'quack'. Celebrate her attempts with claps or cheers. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Movement / Physical, Social / Emotional, Language / Communication for Isla. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C11",
+    "child_name": "Aria",
+    "age_label": "20 months",
+    "age_months": 20,
+    "diagnosis": "No diagnosis",
+    "concerns_bullets": [
+      "Only ~10 words",
+      "very active",
+      "good eye contact",
+      "understands well"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[12m | expressive_language] calls parents mama or dada or another special name -> yes (ok)",
+      "[12m | receptive_language] understands no so pauses briefly or stops when you say it -> yes (ok)",
+      "[12m | gestural_communication] waves byebye -> yes (ok)",
+      "[15m | expressive_language] tries to say or or two words besides mama or dada like ba for ball or da for dog -> yes (ok)",
+      "[15m | receptive_language] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> yes (ok)",
+      "[15m | receptive_language] looks at a ffamiliar object when you name it -> yes (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> yes (ok)",
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> yes (ok)",
+      "[15m | gross_motor_mobility_and_coordination] takes a few steps on her own -> yes (ok)",
+      "[15m | self_help_motor_skills] uses fingers to feed herself some food -> yes (ok)",
+      "[18m | gross_motor_mobility_and_coordination] climbs on and off a couch or chair without help -> yes (ok)",
+      "[18m | self_help_motor_skills] drinks from a cup without a lid and may spill sometimes -> yes (ok)",
+      "[18m | self_help_motor_skills] feeds himself with his fingers -> yes (ok)",
+      "[24m | self_help_motor_skills] eats with a spoon -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> yes (ok)",
+      "[15m | social_engagement_and_joint_attention] claps when excited -> yes (ok)",
+      "[15m | social_engagement_and_joint_attention] shows you affection like hugs or cuddles or kisses you -> yes (ok)",
+      "[15m | social_engagement_and_joint_attention] shows you an object she likes -> yes (ok)",
+      "[18m | social_engagement_and_joint_attention] helps you dress him by pushing the arm through the sleeve or lifting up the foot -> yes (ok)",
+      "[18m | social_engagement_and_joint_attention] looks at a few pages in a book with you -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[18m | social_engagement_and_joint_attention] points to show you something interesting -> yes (ok)",
+      "[24m | social_engagement_and_joint_attention] looks at your face to see how to react in a new situation -> yes (ok)",
+      "[24m | empathy_and_prosocial_behavior] notices when others are hurt or upset like pausing or looking sad when someone is crying -> yes (ok)",
+      "[15m | attention_and_processing] stacks at least two small objects like blocks -> yes (ok)",
+      "[15m | exploration_and_object_use] tries to use things the right way like a phone or a cup or a book -> yes (ok)",
+      "[18m | imitation_and_play_skills] copies you doing chores like sweeping with a broom -> yes (ok)",
+      "[18m | imitation_and_play_skills] plays with toys in a simple way like pushing a toy car -> yes (ok)",
+      "[24m | exploration_and_object_use] holds something in one hand while using the other hand for example holding a container and taking the lid off -> yes (ok)",
+      "[24m | imitation_and_play_skills] plays with more than one toy at the same time like putting toy food on a toy plate -> yes (ok)",
+      "[24m | exploration_and_object_use] tries to use switches or knobs or buttons on a toy -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[12m | expressive_language] calls parents mama or dada or another special name -> yes (ok)",
+      "[12m | receptive_language] understands no so pauses briefly or stops when you say it -> yes (ok)",
+      "[12m | gestural_communication] waves byebye -> yes (ok)",
+      "[15m | expressive_language] tries to say or or two words besides mama or dada like ba for ball or da for dog -> yes (ok)",
+      "[15m | receptive_language] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> yes (ok)",
+      "[15m | receptive_language] looks at a ffamiliar object when you name it -> yes (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> yes (ok)",
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> yes (ok)",
+      "[15m | gross_motor_mobility_and_coordination] takes a few steps on her own -> yes (ok)",
+      "[15m | self_help_motor_skills] uses fingers to feed herself some food -> yes (ok)",
+      "[18m | gross_motor_mobility_and_coordination] climbs on and off a couch or chair without help -> yes (ok)",
+      "[18m | self_help_motor_skills] drinks from a cup without a lid and may spill sometimes -> yes (ok)",
+      "[18m | self_help_motor_skills] feeds himself with his fingers -> yes (ok)",
+      "[24m | self_help_motor_skills] eats with a spoon -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> yes (ok)"
+    ],
+    "top_concern_subdomains": [
+      "social_engagement_and_joint_attention",
+      "emotional_regulation",
+      "expressive_language",
+      "receptive_language"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 24,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Aria has a meaningful delay in Movement / Physical and may not need special support in this category right now."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 24,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Aria has a meaningful delay in Social / Emotional and may not need special support in this category right now."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 17,
+        "gap_months": 3,
+        "support_tier": "monitor_and_enrich",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank provides engaging language and communication activities for Aria, focusing on her current abilities and near next steps."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 24,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Aria has a meaningful delay in Cognitive / Adaptive and may not need special support in this category right now."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Follow the Direction",
+        "description": "Say a simple direction like 'come here' or 'give me the toy' and encourage Aria to follow it without gestures.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Sound Imitation Game",
+        "description": "Make different animal sounds and encourage Aria to imitate them. Use sounds she enjoys to keep her engaged.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Two-Word Phrases",
+        "description": "Encourage Aria to use two-word phrases by modeling them yourself, like 'more juice' or 'big truck'.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_4",
+        "category": "Language / Communication",
+        "title": "Gesture Play",
+        "description": "Use gestures like waving, blowing kisses, or nodding while saying the words. Encourage Aria to imitate these gestures.",
+        "duration_min": 5,
+        "goal": "monitor_and_enrich"
+      },
+      {
+        "day": "day_5",
+        "category": "Language / Communication",
+        "title": "Point and Name",
+        "description": "Look at a picture book together and ask Aria to point to specific animals or objects while you name them.",
+        "duration_min": 7,
+        "goal": "monitor_and_enrich"
+      }
+    ],
+    "summary_text": "This plan prioritizes Language / Communication for Aria. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C12",
+    "child_name": "Mateo",
+    "age_label": "2y 6m",
+    "age_months": 30,
+    "diagnosis": "No formal diagnosis",
+    "concerns_bullets": [
+      "Good eye contact but no words",
+      "lines up toys",
+      "responds to name inconsistently"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[12m | expressive_language] calls parents mama or dada or another special name -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[12m | receptive_language] understands no so pauses briefly or stops when you say it -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[12m | gestural_communication] waves byebye -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[15m | expressive_language] tries to say or or two words besides mama or dada like ba for ball or da for dog -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[15m | receptive_language] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[15m | receptive_language] looks at a ffamiliar object when you name it -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | social_engagement_and_joint_attention] helps you dress him by pushing the arm through the sleeve or lifting up the foot -> yes (ok)",
+      "[18m | social_engagement_and_joint_attention] looks at a few pages in a book with you -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[18m | social_engagement_and_joint_attention] points to show you something interesting -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[24m | social_engagement_and_joint_attention] looks at your face to see how to react in a new situation -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | empathy_and_prosocial_behavior] notices when others are hurt or upset like pausing or looking sad when someone is crying -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | social_engagement_and_joint_attention] follos simple routines when told like helping to pick up toys when you say it is clean up time -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | social_engagement_and_joint_attention] shows you what she can do by saying look at me -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | peer_interaction_and_social_rules] plays next to other children and sometimes plays with them -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | imitation_and_play_skills] copies you doing chores like sweeping with a broom -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[18m | imitation_and_play_skills] plays with toys in a simple way like pushing a toy car -> yes (ok)",
+      "[24m | exploration_and_object_use] holds something in one hand while using the other hand for example holding a container and taking the lid off -> yes (ok)",
+      "[24m | imitation_and_play_skills] plays with more than one toy at the same time like putting toy food on a toy plate -> with_help | followup: showing first / demonstrating | barrier: needs_demonstration (ok)",
+      "[24m | exploration_and_object_use] tries to use switches or knobs or buttons on a toy -> yes (ok)",
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> with_help | followup: reminders or step-by-step prompting | barrier: needs_prompting (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | gross_motor_mobility_and_coordination] climbs on and off a couch or chair without help -> not_sure | barrier: unclear (ok)",
+      "[18m | self_help_motor_skills] drinks from a cup without a lid and may spill sometimes -> yes (ok)",
+      "[18m | self_help_motor_skills] feeds himself with his fingers -> yes (ok)",
+      "[24m | self_help_motor_skills] eats with a spoon -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] kicks a ball -> yes (ok)",
+      "[24m | gross_motor_mobility_and_coordination] runs -> yes (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> yes (ok)",
+      "[30m | self_help_motor_skills] takes some clothes off by himself like loose pants or an open jacket -> yes (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[12m | expressive_language] calls parents mama or dada or another special name -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[12m | receptive_language] understands no so pauses briefly or stops when you say it -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[12m | gestural_communication] waves byebye -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[15m | expressive_language] tries to say or or two words besides mama or dada like ba for ball or da for dog -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[15m | receptive_language] follows directions given with both a gesture and words for example she gives you a toy when you hold out your hand and say give me the toy -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[15m | receptive_language] looks at a ffamiliar object when you name it -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | expressive_language] tries to say three or more words besides mama or dada -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[18m | receptive_language] follows one step directions without any gestures like giving you the toy when you say give it to me -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[18m | social_engagement_and_joint_attention] helps you dress him by pushing the arm through the sleeve or lifting up the foot -> yes (ok)",
+      "[18m | social_engagement_and_joint_attention] looks at a few pages in a book with you -> sometimes | followup: can do it, but gets distracted | barrier: distractibility (ok)",
+      "[18m | social_engagement_and_joint_attention] points to show you something interesting -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[24m | social_engagement_and_joint_attention] looks at your face to see how to react in a new situation -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | empathy_and_prosocial_behavior] notices when others are hurt or upset like pausing or looking sad when someone is crying -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | social_engagement_and_joint_attention] follos simple routines when told like helping to pick up toys when you say it is clean up time -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | social_engagement_and_joint_attention] shows you what she can do by saying look at me -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[30m | peer_interaction_and_social_rules] plays next to other children and sometimes plays with them -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)"
+    ],
+    "top_concern_subdomains": [
+      "social_engagement_and_joint_attention",
+      "expressive_language",
+      "play_and_symbolic_social_play"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 30,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Mateo has a meaningful delay in Movement / Physical and may not need special support in this category right now."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 24,
+        "gap_months": 6,
+        "support_tier": "needs_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank provides engaging and practical activities to support Mateo's social and emotional development, focusing on enhancing social engagement and emotional regulation through play and interaction."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 12,
+        "gap_months": 18,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides a range of engaging and practical activities for Mateo to support his language and communication development. Each activity is designed to be short, repeatable, and suitable for home, focusing on enhancing expressive and receptive language skills through fun interactions."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 24,
+        "gap_months": 6,
+        "support_tier": "needs_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical home activities for Mateo to support his cognitive and adaptive skills. Each activity is designed to be engaging and suitable for his developmental level."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Social / Emotional",
+      "Cognitive / Adaptive"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Sound Imitation Game",
+        "description": "Make different animal sounds and encourage Mateo to imitate them. Start with simple sounds like 'moo' for a cow or 'meow' for a cat. Use toys or pictures of the animals to make it more engaging.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Face-to-Face Play",
+        "description": "Sit on the floor facing Mateo. Make different facial expressions (happy, sad, surprised) and encourage him to imitate you. Use a mirror if available to enhance engagement.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Follow the Gesture",
+        "description": "Use simple gestures like waving, pointing, or clapping and encourage Mateo to follow along. You can say 'wave bye-bye' or 'clap your hands' while demonstrating the action.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Clean-Up Time Game",
+        "description": "Turn clean-up time into a game. Sing a clean-up song while picking up toys together. Encourage Mateo to help by responding to your prompts.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Simple Direction Following",
+        "description": "Give Mateo simple directions using both words and gestures. For example, say 'Give me the ball' while holding out your hand. Praise him when he follows the direction.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Social / Emotional, Language / Communication, Cognitive / Adaptive for Mateo. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C13",
+    "child_name": "Luna",
+    "age_label": "3y 6m",
+    "age_months": 42,
+    "diagnosis": "Speech delay",
+    "concerns_bullets": [
+      "Limited speech",
+      "understands well",
+      "parents have very limited time for activities"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[24m | expressive_language] says at least two words together like more milk -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | receptive_language] points at least two body parts when you ask her to show you -> yes (ok)",
+      "[24m | receptive_language] points to things in a book when you ask like where is the bear -> yes (ok)",
+      "[30m | expressive_language] name things in a book when you point and ask what is this -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | expressive_language] say two or more words toghether with one action word like doggie run -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | expressive_language] says about 50 words -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[36m | expressive_language] ask who or what or where or why questions like where is mommy or where is daddy -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[36m | expressive_language] says first name when asked -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | expressive_language] says what action is happening in a picture or book when asked like running or eating or playing -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | social_engagement_and_joint_attention] looks at your face to see how to react in a new situation -> yes (ok)",
+      "[24m | empathy_and_prosocial_behavior] notices when others are hurt or upset like pausing or looking sad when someone is crying -> yes (ok)",
+      "[30m | social_engagement_and_joint_attention] follos simple routines when told like helping to pick up toys when you say it is clean up time -> yes (ok)",
+      "[30m | peer_interaction_and_social_rules] plays next to other children and sometimes plays with them -> yes (ok)",
+      "[30m | social_engagement_and_joint_attention] shows you what she can do by saying look at me -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | emotional_regulation] calms down within 10 minutes after you leave her like at childcare drop off -> yes (ok)",
+      "[36m | peer_interaction_and_social_rules] notices other children and joins them to play -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | exploration_and_object_use] holds something in one hand while using the other hand for example holding a container and taking the lid off -> yes (ok)",
+      "[24m | imitation_and_play_skills] plays with more than one toy at the same time like putting toy food on a toy plate -> yes (ok)",
+      "[24m | exploration_and_object_use] tries to use switches or knobs or buttons on a toy -> yes (ok)",
+      "[30m | concepts_and_following_directions] follows two step instructions like put the toy down and close the door -> yes (ok)",
+      "[30m | concepts_and_following_directions] shows she knows at least one color like pointing to a red crayon when you ask which one is red -> yes (ok)",
+      "[30m | object_permanence_and_problem_solving] shows simple problem solving skills like standing on a small stool to reach something -> yes (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> yes (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> yes (ok)",
+      "[30m | gross_motor_mobility_and_coordination] jumps off the ground with both feet -> yes (ok)",
+      "[30m | self_help_motor_skills] takes some clothes off by himself like loose pants or an open jacket -> yes (ok)",
+      "[30m | fine_motor_hand_use] turns book pages one at a time when you read to her -> yes (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> yes (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> yes (ok)",
+      "[36m | self_help_motor_skills] uses a fork -> yes (ok)",
+      "[48m | gross_motor_mobility_and_coordination] catches a large ball most of the times -> yes (ok)",
+      "[48m | fine_motor_hand_use] holds crayon or pencil between fingers and thumb not fist -> yes (ok)",
+      "[48m | self_help_motor_skills] serves herself food or pours water with adult supervision -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[24m | expressive_language] says at least two words together like more milk -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | receptive_language] points at least two body parts when you ask her to show you -> yes (ok)",
+      "[24m | receptive_language] points to things in a book when you ask like where is the bear -> yes (ok)",
+      "[30m | expressive_language] name things in a book when you point and ask what is this -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | expressive_language] say two or more words toghether with one action word like doggie run -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[30m | expressive_language] says about 50 words -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[36m | expressive_language] ask who or what or where or why questions like where is mommy or where is daddy -> no | followup: not able yet | barrier: not_able_yet (ok)",
+      "[36m | expressive_language] says first name when asked -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | expressive_language] says what action is happening in a picture or book when asked like running or eating or playing -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[24m | social_engagement_and_joint_attention] looks at your face to see how to react in a new situation -> yes (ok)",
+      "[24m | empathy_and_prosocial_behavior] notices when others are hurt or upset like pausing or looking sad when someone is crying -> yes (ok)",
+      "[30m | social_engagement_and_joint_attention] follos simple routines when told like helping to pick up toys when you say it is clean up time -> yes (ok)",
+      "[30m | peer_interaction_and_social_rules] plays next to other children and sometimes plays with them -> yes (ok)",
+      "[30m | social_engagement_and_joint_attention] shows you what she can do by saying look at me -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | emotional_regulation] calms down within 10 minutes after you leave her like at childcare drop off -> yes (ok)",
+      "[36m | peer_interaction_and_social_rules] notices other children and joins them to play -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)"
+    ],
+    "top_concern_subdomains": [
+      "expressive_language",
+      "receptive_language"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 48,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Luna has a meaningful delay in Movement / Physical and may not need special support in this category right now."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 30,
+        "gap_months": 12,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical, short activities to support Luna's social and emotional development, focusing on engagement, interaction, and emotional regulation."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 24,
+        "gap_months": 18,
+        "support_tier": "needs_special_support",
+        "severity": "moderate",
+        "needs_special_support": true,
+        "summary": "This activity bank provides practical, short activities to support Luna's language and communication skills at home. Each activity is designed to be engaging and suitable for her developmental level, focusing on enhancing her expressive and receptive language abilities."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 36,
+        "gap_months": 6,
+        "support_tier": "monitor_and_enrich",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank provides practical, short activities to support Luna's cognitive and adaptive skills at home. Each activity is designed to be engaging and achievable within a few minutes, focusing on skill-building in a safe environment."
+      }
+    ],
+    "focus_areas": [
+      "Language / Communication",
+      "Social / Emotional",
+      "Cognitive / Adaptive"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Language / Communication",
+        "title": "Body Part Show and Tell",
+        "description": "Ask Luna to point to different body parts on herself or a doll when you name them. For example, say 'Where's your nose?' and encourage her to point.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Clean-Up Time Together",
+        "description": "At clean-up time, say 'It's clean-up time!' and encourage Luna to help pick up toys. Make it fun by singing a clean-up song together.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Language / Communication",
+        "title": "Book Pointing Game",
+        "description": "Choose a picture book and ask Luna to point to specific animals or objects when you ask, like 'Where is the bear?' or 'Show me the cat.'",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Look at Me Game",
+        "description": "Take turns showing each other something fun you can do, like jumping or spinning. Encourage Luna to say 'Look at me!' when it\u2019s her turn.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      },
+      {
+        "day": "day_3",
+        "category": "Language / Communication",
+        "title": "Two-Word Phrases",
+        "description": "Encourage Luna to use two-word phrases by modeling them. For example, say 'More juice' or 'Big truck' and prompt her to repeat after you.",
+        "duration_min": 5,
+        "goal": "needs_special_support"
+      }
+    ],
+    "summary_text": "This plan prioritizes Social / Emotional, Language / Communication, Cognitive / Adaptive for Luna. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  },
+  {
+    "case_id": "C14",
+    "child_name": "Ryan",
+    "age_label": "4y 2m",
+    "age_months": 50,
+    "diagnosis": "No diagnosis",
+    "concerns_bullets": [
+      "Tantrums",
+      "difficulty with transitions",
+      "strong language skills",
+      "social but rigid"
+    ],
+    "daily_time_min": 10,
+    "parent_qa_full": [
+      "[36m | emotional_regulation] calms down within 10 minutes after you leave her like at childcare drop off -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | peer_interaction_and_social_rules] notices other children and joins them to play -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[48m | peer_interaction_and_social_rules] asks to go play with children if none are around like can I play with Alex -> yes (ok)",
+      "[48m | peer_interaction_and_social_rules] changes behavior based on where she is like place of worship or library or playground -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[48m | peer_interaction_and_social_rules] likes to be a helper -> yes (ok)",
+      "[36m | expressive_language] ask who or what or where or why questions like where is mommy or where is daddy -> yes (ok)",
+      "[36m | expressive_language] says first name when asked -> yes (ok)",
+      "[36m | expressive_language] says what action is happening in a picture or book when asked like running or eating or playing -> yes (ok)",
+      "[48m | expressive_language] answers simple questions like what is a coat for or what is crayon for -> yes (ok)",
+      "[48m | expressive_language] says sentences with four or more words -> yes (ok)",
+      "[48m | conversation_narrative] says some words from a song or story or nursery rhyme -> yes (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> yes (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> yes (ok)",
+      "[48m | pre_academic_skills] draws a person with three or more body parts -> yes (ok)",
+      "[48m | concepts_and_following_directions] names a few colors or items -> yes (ok)",
+      "[48m | concepts_and_following_directions] tell what comes next in a well known story -> yes (ok)",
+      "[36m | self_help_motor_skills] puts on some clothes by himself like loose pants or a jacket -> yes (ok)",
+      "[36m | fine_motor_hand_use] strings items together like large beads or macaroni -> yes (ok)",
+      "[36m | self_help_motor_skills] uses a fork -> yes (ok)",
+      "[48m | gross_motor_mobility_and_coordination] catches a large ball most of the times -> yes (ok)",
+      "[48m | fine_motor_hand_use] holds crayon or pencil between fingers and thumb not fist -> yes (ok)",
+      "[48m | self_help_motor_skills] serves herself food or pours water with adult supervision -> yes (ok)",
+      "[60m | self_help_motor_skills] buttons some buttons -> yes (ok)",
+      "[60m | gross_motor_mobility_and_coordination] hops on one foot -> yes (ok)"
+    ],
+    "parent_qa_pdf": [
+      "[36m | emotional_regulation] calms down within 10 minutes after you leave her like at childcare drop off -> sometimes | followup: can do it, but not consistently yet | barrier: skill_emerging (ok)",
+      "[36m | peer_interaction_and_social_rules] notices other children and joins them to play -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[48m | peer_interaction_and_social_rules] asks to go play with children if none are around like can I play with Alex -> yes (ok)",
+      "[48m | peer_interaction_and_social_rules] changes behavior based on where she is like place of worship or library or playground -> sometimes | followup: can do it, but only in some situations | barrier: situational_inconsistency (ok)",
+      "[48m | peer_interaction_and_social_rules] likes to be a helper -> yes (ok)",
+      "[36m | expressive_language] ask who or what or where or why questions like where is mommy or where is daddy -> yes (ok)",
+      "[36m | expressive_language] says first name when asked -> yes (ok)",
+      "[36m | expressive_language] says what action is happening in a picture or book when asked like running or eating or playing -> yes (ok)",
+      "[48m | expressive_language] answers simple questions like what is a coat for or what is crayon for -> yes (ok)",
+      "[48m | expressive_language] says sentences with four or more words -> yes (ok)",
+      "[48m | conversation_narrative] says some words from a song or story or nursery rhyme -> yes (ok)",
+      "[36m | safety_awareness] avoids touching hot objects like the stove when you warn her -> yes (ok)",
+      "[36m | pre_academic_skills] draws a circle when you show her how -> yes (ok)",
+      "[48m | pre_academic_skills] draws a person with three or more body parts -> yes (ok)",
+      "[48m | concepts_and_following_directions] names a few colors or items -> yes (ok)",
+      "[48m | concepts_and_following_directions] tell what comes next in a well known story -> yes (ok)"
+    ],
+    "top_concern_subdomains": [
+      "emotional_regulation",
+      "peer_interaction_and_social_rules"
+    ],
+    "domain_rows": [
+      {
+        "category": "Movement / Physical",
+        "estimated_dev_age_months": 60,
+        "gap_months": 0,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Ryan has a meaningful delay in Movement / Physical and may not need special support in this category right now."
+      },
+      {
+        "category": "Social / Emotional",
+        "estimated_dev_age_months": 48,
+        "gap_months": 2,
+        "support_tier": "enrich_and_observe",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "This activity bank provides engaging and practical activities to support Ryan's social and emotional development. Each activity is designed to be short, predictable, and focused on enhancing social engagement and emotional regulation."
+      },
+      {
+        "category": "Language / Communication",
+        "estimated_dev_age_months": 48,
+        "gap_months": 2,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Ryan has a meaningful delay in Language / Communication and may not need special support in this category right now."
+      },
+      {
+        "category": "Cognitive / Adaptive",
+        "estimated_dev_age_months": 48,
+        "gap_months": 2,
+        "support_tier": "no_special_support",
+        "severity": "minimal / mild",
+        "needs_special_support": false,
+        "summary": "We do not think Ryan has a meaningful delay in Cognitive / Adaptive and may not need special support in this category right now."
+      }
+    ],
+    "focus_areas": [
+      "Social / Emotional"
+    ],
+    "activities": [
+      {
+        "day": "day_1",
+        "category": "Social / Emotional",
+        "title": "Emotion Charades",
+        "description": "Take turns making faces to show different emotions (happy, sad, surprised). Ryan can guess the emotion and then mimic it back. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "enrich_and_observe"
+      },
+      {
+        "day": "day_2",
+        "category": "Social / Emotional",
+        "title": "Feelings Storytime",
+        "description": "Read a short story together. Pause to discuss how the characters might feel and why. Encourage Ryan to express his thoughts. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "enrich_and_observe"
+      },
+      {
+        "day": "day_3",
+        "category": "Social / Emotional",
+        "title": "Role Play Helpers",
+        "description": "Pretend to be helpers in different scenarios (like a doctor, teacher, or firefighter). Take turns helping each other and discussing how it feels to help. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "enrich_and_observe"
+      },
+      {
+        "day": "day_4",
+        "category": "Social / Emotional",
+        "title": "Transition Countdown",
+        "description": "Use a timer to signal transitions between activities. When the timer goes off, practice saying goodbye to the current activity and hello to the next. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "enrich_and_observe"
+      },
+      {
+        "day": "day_5",
+        "category": "Social / Emotional",
+        "title": "Compliment Circle",
+        "description": "Sit in a circle (or face each other) and take turns giving compliments. Encourage Ryan to think of something nice to say about you. Keep it short and predictable, offer a simple choice, and stop before frustration escalates.",
+        "duration_min": 5,
+        "goal": "enrich_and_observe"
+      }
+    ],
+    "summary_text": "This plan prioritizes Social / Emotional for Ryan. The activities are intended to be short, parent-friendly, and aligned with the developmental areas that appeared most delayed or most worth enriching in the interview."
+  }
+]
