@@ -1,0 +1,21 @@
+# Secrets and environment
+.env
+.env.*
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Local outputs and sessions (not committed — saved to GCS in production)
+outputs/
+
+# Jupyter
+*.ipynb_checkpoints
+
+# Docker build cache
+.dockerignore
