@@ -1,17 +1,34 @@
 """
-app.py — Genex Parent Copilot v0.2
-Parent-led developmental home-support planning app.
-Private pilot: 5 families, shared password, no accounts.
+app.py — Genex Parent Copilot v0.3-auth-staging
+------------------------------------------------
+Privacy-first, per-account parent developmental support app.
+
+Changes from v0.2
+-----------------
+- Per-account email/password auth via Identity Platform (mock mode for local dev)
+- Allowlist-gated registration (open registration disabled)
+- Child first name stored only in session state — never persisted to GCS
+- GCS paths use user_id, not child name: sessions/{user_id}/{session_id}.json
+- Child name stripped before genex_core / OpenAI calls ("your child")
+- Session JSON uses new privacy schema (no name, adds user_id, session_id,
+  child_id, consent_given, consent_timestamp, app_version, engine_version)
+- Privacy notice + consent checkbox at registration
+- Persistent footer: "not a diagnostic tool" disclaimer + privacy notice link
+- Shared password gate removed
+
+Auth modes (AUTH_MODE env var):
+  mock               — local dev, in-memory users, no cloud setup needed
+  identity_platform  — Google Cloud Identity Platform / Firebase Auth
 
 Run: streamlit run app.py
 """
 
-import os
 import copy
 import json
-import base64
+import os
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime
 
 import streamlit as st
 
@@ -23,7 +40,11 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── Load CSS (cached so it doesn't re-read on every rerun) ────────────────
+# ── Auth + allowlist modules ───────────────────────────────────────────────
+import auth
+import allowlist as al
+
+# ── Load CSS (cached) ──────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def _load_css() -> str:
     p = Path(__file__).parent / "assets" / "style.css"
@@ -31,7 +52,7 @@ def _load_css() -> str:
 
 st.markdown(f"<style>{_load_css()}</style>", unsafe_allow_html=True)
 
-# ── Imports from genex_core ────────────────────────────────────────────────
+# ── genex_core imports ─────────────────────────────────────────────────────
 from genex_core.storage import save_json as _storage_save
 from genex_core.config import DOMAIN_CONFIG
 from genex_core.interview_engine import (
@@ -50,9 +71,7 @@ from genex_core.activity_engine import generate_category_activity_bank
 from genex_core.scheduler import allocate_weekly_slots, build_weekly_schedule
 from genex_core.summaries import build_domain_results, build_doctor_visit_prep
 
-# Pre-warm the CDC milestone table once at startup so the first interview
-# page doesn't pay the Excel-load cost. Uses Streamlit's resource cache
-# which persists across reruns for the lifetime of the server process.
+# Pre-warm CDC milestone table once at startup
 @st.cache_resource(show_spinner=False)
 def _prewarm_milestones():
     from genex_core.milestones import get_cdc_df
@@ -61,25 +80,21 @@ def _prewarm_milestones():
 _prewarm_milestones()
 
 # ── Constants ──────────────────────────────────────────────────────────────
-SCREENS = [
-    "welcome",
-    "profile",
-    "interview",
-    "weekly_plan",
-    "doctor_prep",
-    "feedback",
-]
+APP_VERSION    = "parent-copilot-v0.3-auth-staging"
+ENGINE_VERSION = "v11"
+
+# Screens visible after login
+MAIN_SCREENS = ["welcome", "profile", "interview", "weekly_plan", "doctor_prep", "feedback"]
 
 SCREEN_LABELS = {
-    "welcome":     "Welcome",
-    "profile":     "Your Child",
-    "interview":   "Quick Questions",
-    "weekly_plan": "Weekly Plan",
-    "doctor_prep": "Doctor Notes",
-    "feedback":    "Share Feedback",
+    "welcome":      "Welcome",
+    "profile":      "Your Child",
+    "interview":    "Quick Questions",
+    "weekly_plan":  "Weekly Plan",
+    "doctor_prep":  "Doctor Notes",
+    "feedback":     "Share Feedback",
 }
 
-# Parent-friendly answer labels → internal genex_core values
 ANSWER_OPTIONS = {
     "Yes, usually":    "yes",
     "Sometimes":       "sometimes",
@@ -88,26 +103,39 @@ ANSWER_OPTIONS = {
     "Not sure":        "not_sure",
 }
 
-# Parent-facing domain labels
 DOMAIN_LABELS = {
-    "movement_and_physical":    "Moving and Playing",
-    "language_and_communication": "Talking and Communicating",
-    "social_and_emotional":     "Connecting and Feeling",
-    "cognitive":                "Learning and Exploring",
+    "movement_and_physical":       "Moving and Playing",
+    "language_and_communication":  "Talking and Communicating",
+    "social_and_emotional":        "Connecting and Feeling",
+    "cognitive":                   "Learning and Exploring",
 }
 
 DOMAIN_ICONS = {
-    "movement_and_physical":    "🏃",
-    "language_and_communication": "💬",
-    "social_and_emotional":     "💛",
-    "cognitive":                "🧩",
+    "movement_and_physical":       "🏃",
+    "language_and_communication":  "💬",
+    "social_and_emotional":        "💛",
+    "cognitive":                   "🧩",
 }
 
-SESSION_DIR = Path(os.environ.get("SESSION_DIR", "outputs/sessions"))
+SESSION_DIR  = Path(os.environ.get("SESSION_DIR", "outputs/sessions"))
+FEEDBACK_DIR = SESSION_DIR.parent / "feedback"   # outputs/feedback (or /tmp/feedback on Cloud Run)
 SESSION_DIR.mkdir(parents=True, exist_ok=True)
+FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────
+# ── Display name helpers ───────────────────────────────────────────────────
+
+def get_child_display_name() -> str:
+    """
+    Return the child's first name for UI display only.
+    Falls back to "your child" — never reads from stored state to avoid
+    accidentally using a name that was passed to the engine.
+    """
+    return st.session_state.get("child_display_name", "your child")
+
+
+# ── Logo ───────────────────────────────────────────────────────────────────
+import base64
 
 @st.cache_data(show_spinner=False)
 def _load_logo_b64() -> str | None:
@@ -127,13 +155,15 @@ def _render_logo(height: int = 48):
         )
 
 
+# ── Navigation helpers ─────────────────────────────────────────────────────
+
 def go_to(screen: str):
     st.session_state["screen"] = screen
     st.rerun()
 
 
 def current_screen() -> str:
-    return st.session_state.get("screen", "welcome")
+    return st.session_state.get("screen", "login")
 
 
 def get_state() -> dict:
@@ -143,15 +173,15 @@ def get_state() -> dict:
 
 
 def progress_bar():
-    screens_with_progress = [s for s in SCREENS if s != "welcome"]
     screen = current_screen()
-    if screen == "welcome":
+    if screen not in MAIN_SCREENS or screen == "welcome":
         return
+    screens_with_progress = [s for s in MAIN_SCREENS if s != "welcome"]
     try:
         idx = screens_with_progress.index(screen)
     except ValueError:
         idx = 0
-    pct = int(((idx + 1) / len(screens_with_progress)) * 100)
+    pct   = int(((idx + 1) / len(screens_with_progress)) * 100)
     label = SCREEN_LABELS.get(screen, "")
     st.progress(pct, text=f"**{label}** — Step {idx + 1} of {len(screens_with_progress)}")
     st.markdown("")
@@ -159,61 +189,354 @@ def progress_bar():
 
 def restart_button():
     if st.button("🔄 Start Over", use_container_width=True):
+        # Keep auth, clear session/plan
+        for key in [
+            "genex_state", "parent_plan", "interview_domain_idx",
+            "child_display_name", "child_concern", "plan_just_built",
+            "session_id", "child_id",
+        ]:
+            st.session_state.pop(key, None)
         for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+            if key.startswith(("bq_", "bm_", "bi_", "bf_", "bc_")):
+                del st.session_state[key]
+        go_to("welcome")
 
+
+# ── Session storage ────────────────────────────────────────────────────────
 
 def save_session_json(state: dict):
-    """Save a de-identified session snapshot. Never raises."""
+    """
+    Persist a de-identified session snapshot to GCS (or local fallback).
+    - No child name stored anywhere in the JSON or file path.
+    - Stored under sessions/{user_id}/{session_id}.json
+    - Never raises.
+    """
     try:
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        user       = auth.get_current_user()
+        user_id    = user["uid"] if user else "anonymous"
+        session_id = st.session_state.setdefault("session_id", str(uuid.uuid4()))
+        child_id   = st.session_state.setdefault("child_id",   str(uuid.uuid4()))
+
         child = state.get("child", {})
-        fname = f"{child.get('name', 'child')}_{stamp}.json"
         snapshot = {
-            "child": {
-                "name": child.get("name"),
-                "chronological_months": child.get("chronological_months"),
-                "diagnosis": child.get("diagnosis"),
-            },
-            "dev_age": state.get("dev_age", {}),
-            "generated_at": stamp,
-            "app_version": "parent-copilot-v0.2",
+            "user_id":                user_id,
+            "session_id":             session_id,
+            "child_id":               child_id,
+            "age_months":             child.get("chronological_months"),
+            "diagnosis_or_condition": child.get("diagnosis"),
+            "concern":                st.session_state.get("child_concern", ""),
+            "answers":                state.get("qna", {}),
+            "generated_plan":         state.get("weekly_schedule", {}),
+            "feedback":               None,
+            "created_at":             datetime.now(timezone.utc).isoformat(),
+            "app_version":            APP_VERSION,
+            "engine_version":         ENGINE_VERSION,
+            "consent_given":          st.session_state.get("consent_given", False),
+            "consent_timestamp":      st.session_state.get("consent_timestamp", ""),
         }
-        _storage_save(snapshot, f"sessions/{fname}", SESSION_DIR)
-    except Exception:
-        pass
+        blob_name = f"sessions/{user_id}/{session_id}.json"
+        _storage_save(snapshot, blob_name, SESSION_DIR / user_id)
+    except Exception as exc:
+        print(f"[app] save_session_json failed: {exc}")
 
 
-# ── Password gate ──────────────────────────────────────────────────────────
+# ── Auth header (shown on every authenticated screen) ─────────────────────
 
-def _password_gate():
-    """
-    Parent Copilot pilot access gate.
-    Reads PARENT_PASSWORD env var (from Secret Manager on Cloud Run).
-    No-op when env var is not set (local dev).
-    """
-    required = os.environ.get("PARENT_PASSWORD", "").strip()
-    if not required:
+def _render_auth_header():
+    """Small top bar showing signed-in email and a sign-out button."""
+    user = auth.get_current_user()
+    if not user:
         return
-    if st.session_state.get("_authenticated"):
-        return
-
-    _render_logo(height=44)
-    st.markdown("## Welcome to Genex")
-    st.markdown("Please enter the access code to continue.")
-    pwd = st.text_input("Access code", type="password", key="_pwd_input",
-                        placeholder="Enter your access code")
-    if st.button("Continue →", type="primary", use_container_width=True):
-        if pwd == required:
-            st.session_state["_authenticated"] = True
+    col_email, col_btn = st.columns([5, 1])
+    with col_email:
+        st.markdown(
+            f"<p style='font-size:0.8rem;color:#9CA3AF;margin:0;padding-top:0.3rem'>"
+            f"Signed in as <strong>{user['email']}</strong></p>",
+            unsafe_allow_html=True,
+        )
+    with col_btn:
+        if st.button("Sign out", key="top_signout"):
+            auth.sign_out()
             st.rerun()
+    st.markdown(
+        "<hr style='margin:0.4rem 0 1rem;border-top:1px solid #EDE9FE'>",
+        unsafe_allow_html=True,
+    )
+
+
+# ── Footer ─────────────────────────────────────────────────────────────────
+
+def _render_footer():
+    st.markdown(
+        "<div style='text-align:center;margin-top:2.5rem;padding-top:1rem;"
+        "border-top:1px solid #EDE9FE'>"
+        "<p style='font-size:0.8rem;color:#9CA3AF;margin:0'>"
+        "Genex is not a diagnostic tool and does not provide medical advice. "
+        "Always consult a qualified healthcare professional for your child's development."
+        "</p></div>",
+        unsafe_allow_html=True,
+    )
+    # Privacy notice link as a low-profile button
+    col = st.columns([1, 2, 1])[1]
+    with col:
+        if st.button("Privacy Notice", key="footer_privacy", use_container_width=True):
+            st.session_state["_return_screen"] = current_screen()
+            go_to("privacy_policy")
+
+
+# ── AUTH SCREENS ───────────────────────────────────────────────────────────
+
+def screen_login():
+    _render_logo(height=64)
+    st.markdown("## Welcome to Genex")
+    st.markdown("Sign in to access your child's plan.")
+    st.markdown("")
+
+    if auth.AUTH_MODE == "mock":
+        st.info(
+            "**Local dev mode** (AUTH_MODE=mock) — "
+            "register with any allowlisted email and a 6+ character password.",
+            icon="🔧",
+        )
+
+    with st.form("login_form"):
+        email    = st.text_input("Email address", placeholder="you@example.com")
+        password = st.text_input("Password", type="password", placeholder="Your password")
+        submitted = st.form_submit_button(
+            "Sign in →", type="primary", use_container_width=True
+        )
+
+    if submitted:
+        if not email.strip() or not password:
+            st.error("Please enter your email and password.")
         else:
-            st.error("That code doesn't match — please try again or contact the team.")
-    st.stop()
+            ok, err, uid, token = auth.login(email, password)
+            if ok:
+                st.session_state["auth_user"] = {
+                    "uid":      uid,
+                    "email":    email.strip().lower(),
+                    "id_token": token,
+                }
+                go_to("welcome")
+            else:
+                st.error(err)
+
+    st.markdown("")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Create an account", use_container_width=True):
+            go_to("register")
+    with col2:
+        if st.button("Forgot password?", use_container_width=True):
+            go_to("reset_password")
+
+    _render_footer()
 
 
-# ── Screen 1: Welcome ──────────────────────────────────────────────────────
+def screen_register():
+    _render_logo(height=64)
+    st.markdown("## Create your Genex account")
+    st.markdown(
+        "Genex is currently in private beta. "
+        "Only email addresses on our beta list can register."
+    )
+    st.markdown("")
+
+    if auth.AUTH_MODE == "mock":
+        st.info(
+            "**Local dev mode** — edit `config/allowlist.json` to add test emails.",
+            icon="🔧",
+        )
+
+    with st.form("register_form"):
+        email    = st.text_input("Email address", placeholder="you@example.com")
+        password = st.text_input(
+            "Create a password",
+            type="password",
+            placeholder="At least 6 characters",
+        )
+        confirm  = st.text_input(
+            "Confirm password",
+            type="password",
+            placeholder="Repeat your password",
+        )
+
+        st.markdown("")
+        st.markdown(
+            "<div class='genex-card' style='background:#F5F0FF;border:1px solid #DDD6FE;"
+            "font-size:0.88rem;padding:0.85rem 1rem'>"
+            "<strong>Before you register, please read:</strong><br><br>"
+            "• Genex collects your child's age, developmental concern, and milestone answers "
+            "to generate a personalised activity plan.<br>"
+            "• We use your child's first name only to personalise the on-screen experience. "
+            "We do not store it in files or send it to AI services.<br>"
+            "• We do <strong>not</strong> collect full name, date of birth, "
+            "school, doctor's name, photos, or documents.<br>"
+            "• The Genex team may review de-identified pilot data to improve the product, "
+            "safety, and quality. We do not sell your data.<br>"
+            "• Genex is <strong>not a diagnostic tool</strong> and does not replace "
+            "professional medical or developmental evaluation.<br><br>"
+            "<a href='#' style='color:#7C3AED'>Read full Privacy Notice →</a>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("")
+
+        consent = st.checkbox(
+            "I have read and agree to the Genex Privacy Notice. "
+            "I understand Genex is not a diagnostic tool.",
+        )
+
+        submitted = st.form_submit_button(
+            "Create account →", type="primary", use_container_width=True
+        )
+
+    if submitted:
+        errors = []
+        if not email.strip():
+            errors.append("Please enter your email address.")
+        if not password:
+            errors.append("Please create a password.")
+        if password != confirm:
+            errors.append("Passwords don't match.")
+        if not consent:
+            errors.append("Please read and accept the Privacy Notice to continue.")
+
+        if errors:
+            for e in errors:
+                st.error(e)
+        elif not al.is_allowed(email):
+            st.error(
+                "This email isn't on our beta list. "
+                "Sign up at genex.dev to join the waitlist."
+            )
+        else:
+            ok, err, uid = auth.register(email, password)
+            if ok:
+                now = datetime.now(timezone.utc).isoformat()
+                st.session_state["auth_user"] = {
+                    "uid":      uid,
+                    "email":    email.strip().lower(),
+                    "id_token": "",
+                }
+                st.session_state["consent_given"]     = True
+                st.session_state["consent_timestamp"] = now
+                go_to("welcome")
+            else:
+                st.error(err)
+
+    st.markdown("")
+    if st.button("← Already have an account? Sign in", use_container_width=True):
+        go_to("login")
+
+    _render_footer()
+
+
+def screen_reset_password():
+    _render_logo(height=56)
+    st.markdown("## Reset your password")
+    st.markdown(
+        "Enter the email you registered with and we'll send you a reset link."
+    )
+    st.markdown("")
+
+    with st.form("reset_form"):
+        email     = st.text_input("Email address", placeholder="you@example.com")
+        submitted = st.form_submit_button(
+            "Send reset link →", type="primary", use_container_width=True
+        )
+
+    if submitted:
+        if not email.strip():
+            st.error("Please enter your email address.")
+        else:
+            ok, msg = auth.send_password_reset(email)
+            if ok:
+                st.success(msg)
+            else:
+                st.error(msg)
+
+    st.markdown("")
+    if st.button("← Back to sign in", use_container_width=True):
+        go_to("login")
+
+    _render_footer()
+
+
+def screen_privacy_policy():
+    _render_logo(height=48)
+    st.markdown("## Genex Privacy Notice")
+    st.caption(f"Version: {APP_VERSION} · Last updated: May 2026")
+    st.markdown("")
+
+    st.markdown("""
+**What we collect**
+
+When you use Genex, we collect:
+- Your email address (for account access)
+- Your child's age in months
+- Your child's primary diagnosis or developmental concern (free text)
+- Your answers to developmental milestone questions
+- The activity plan we generate for your child
+- Any feedback you choose to submit
+
+**What we do not collect**
+
+- Your child's full name or date of birth
+- Your child's school, doctor, or therapist name
+- Your address or phone number
+- Photos, videos, documents, or voice recordings
+- Payment or insurance information
+
+**How we use your data**
+
+- To generate your child's personalised activity plan
+- To save your plan so you can return to it
+- The Genex team may review de-identified or limited pilot data to improve the
+  product, evaluate quality, and ensure safety. We do not use your data for
+  advertising.
+- We do not sell your data to any third party.
+
+**Where your data is stored**
+
+Data is stored on Google Cloud (us-central1). Genex has reviewed and accepted
+Google Cloud's data processing terms. We use your child's first name only to
+personalize the on-screen experience during the session. We do not store it in
+session files, feedback files, or send it to AI services.
+
+**AI-generated content**
+
+Activity suggestions may be generated with the help of an AI service
+(OpenAI). We send only your child's age, developmental domain, and concern
+summary — never their name or identifying details.
+
+**Your rights**
+
+You can request deletion of your data at any time by emailing:
+**info@getgenex.com**. We will delete your account and all associated session
+data within 7 days.
+
+**Not a medical tool**
+
+Genex is not a diagnostic tool and does not provide medical advice.
+The activity plans and notes Genex generates are for informational and
+home-support purposes only. They do not replace assessment or treatment by a
+qualified healthcare or educational professional. Always consult your child's
+doctor, therapist, or specialist for medical or developmental decisions.
+
+**Contact**
+
+Questions about this notice: info@getgenex.com
+""")
+
+    st.markdown("")
+    return_screen = st.session_state.pop("_return_screen", None)
+    label = "← Back" if return_screen else "← Sign in"
+    if st.button(label, use_container_width=True):
+        go_to(return_screen if return_screen else "login")
+
+
+# ── MAIN APP SCREENS ───────────────────────────────────────────────────────
 
 def screen_welcome():
     _render_logo(height=72)
@@ -228,35 +551,21 @@ def screen_welcome():
         "<div class='genex-card'>"
         "<div class='genex-section-label'>What to expect</div>"
         "<p style='margin:0.4rem 0 0'>✦ &nbsp;A few short questions about your child<br>"
-        "✦ &nbsp;A personalised activity for today<br>"
-        "✦ &nbsp;A gentle weekly plan — only a few minutes a day<br>"
+        "✦ &nbsp;A personalised weekly activity plan<br>"
+        "✦ &nbsp;A gentle routine — only a few minutes a day<br>"
         "✦ &nbsp;Notes to help you talk with your doctor if needed</p>"
         "</div>",
         unsafe_allow_html=True,
     )
-
     st.markdown("")
-    st.markdown(
-        "<div class='genex-card' style='background:#F5F0FF;border:1px solid #DDD6FE'>"
-        "<div class='genex-section-label'>Privacy & safety</div>"
-        "<p style='margin:0.4rem 0 0;font-size:0.92rem'>"
-        "Genex is a support tool, not a medical service. "
-        "It does not diagnose, treat, or replace professional advice.<br><br>"
-        "Please use your child's <strong>first name only</strong>, age in months, "
-        "and no other identifying details. "
-        "No photos, documents, or full names.<br><br>"
-        "<em>This is a private pilot — please do not share the link.</em>"
-        "</p>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
 
-    st.markdown("")
+    user = auth.get_current_user()
+    if user:
+        st.caption(f"Signed in as {user['email']}")
+
     if st.button("Let's get started →", type="primary", use_container_width=True):
         go_to("profile")
 
-
-# ── Screen 2: Child Profile ────────────────────────────────────────────────
 
 def screen_profile():
     progress_bar()
@@ -266,26 +575,22 @@ def screen_profile():
     st.markdown("")
 
     with st.form("profile_form"):
-
         child_name = st.text_input(
             "Child's first name *",
             placeholder="e.g. Maya",
-            help="Please use first name only, not full legal name.",
+            help="First name only — used to personalise your screen. Never stored in files or sent to AI services.",
         )
-        st.caption("Please use first name only, not full legal name.")
+        st.caption("First name only — used on-screen during this session. Not stored in files or sent to AI services.")
 
         age_months = st.number_input(
             "Age in months *",
-            min_value=2,
-            max_value=72,
-            value=24,
-            step=1,
-            help="Count from birth. For a 2-year-old, this is around 24 months.",
+            min_value=2, max_value=72, value=24, step=1,
+            help="Count from birth. A 2-year-old is around 24 months.",
         )
 
         diagnosis = st.text_input(
             "Does your child have a diagnosis or condition? (optional)",
-            placeholder="e.g. none, not sure, speech delay, autism, developmental delay, ADHD concern",
+            placeholder="e.g. none, not sure, speech delay, autism, developmental delay",
         )
 
         concern = st.text_area(
@@ -296,16 +601,11 @@ def screen_profile():
 
         daily_time = st.number_input(
             "How many minutes a day can you spend on activities with your child? *",
-            min_value=5,
-            max_value=60,
-            value=15,
-            step=5,
+            min_value=5, max_value=60, value=15, step=5,
         )
 
         submitted = st.form_submit_button(
-            "Start the questions →",
-            type="primary",
-            use_container_width=True,
+            "Start the questions →", type="primary", use_container_width=True
         )
 
     if submitted:
@@ -318,8 +618,15 @@ def screen_profile():
             for e in errors:
                 st.error(e)
         else:
+            # Store display name in session state only — never pass to engine
+            st.session_state["child_display_name"] = child_name.strip()
+            st.session_state["child_concern"]      = concern.strip()
+            st.session_state["session_id"]         = str(uuid.uuid4())
+            st.session_state["child_id"]           = str(uuid.uuid4())
+
+            # Pass "your child" as the name so it never reaches OpenAI
             state = init_state_from_profile(
-                name=child_name.strip(),
+                name="your child",
                 chronological_months=int(age_months),
                 diagnosis=diagnosis.strip() if diagnosis.strip() else "not specified",
                 concern=concern.strip(),
@@ -335,7 +642,6 @@ def screen_profile():
 # ── Interview helpers ──────────────────────────────────────────────────────
 
 def _band_score(questions: list, responses: dict) -> float:
-    """Average answer score for a band. Pass threshold >= 0.5."""
     from genex_core.interview_engine import normalize_answer, score_answer
     if not questions:
         return 0.0
@@ -356,12 +662,10 @@ def _clear_domain_band_state(category_key: str):
 
 def _advance_domain(state: dict, category_key: str, domain_idx: int):
     _clear_domain_band_state(category_key)
-    st.session_state["genex_state"] = state
+    st.session_state["genex_state"]         = state
     st.session_state["interview_domain_idx"] = domain_idx + 1
     st.rerun()
 
-
-# ── Screen 3: Interview ────────────────────────────────────────────────────
 
 def screen_interview():
     progress_bar()
@@ -375,24 +679,19 @@ def screen_interview():
 
     domain_keys = list(DOMAIN_CONFIG.keys())
     domain_idx  = st.session_state.get("interview_domain_idx", 0)
+    child_name  = get_child_display_name()
 
-    # All domains done → finalise and generate plan
+    # All domains done → build plan
     if domain_idx >= len(domain_keys):
-        # Full-page loading experience — clears previous content
         st.markdown(
             """
-            <div style="
-                display:flex;flex-direction:column;align-items:center;
-                justify-content:center;min-height:65vh;text-align:center;
-                padding:2rem
-            ">
+            <div style="display:flex;flex-direction:column;align-items:center;
+                        justify-content:center;min-height:65vh;text-align:center;padding:2rem">
                 <div style="font-size:3.5rem;margin-bottom:1rem">🌱</div>
                 <h2 style="font-size:1.8rem;font-weight:700;color:#5B21B6;margin:0 0 0.5rem">
                     Building your personalised plan…
                 </h2>
-                <p style="color:#6B7280;font-size:1.05rem;margin:0">
-                    This takes just a moment.
-                </p>
+                <p style="color:#6B7280;font-size:1.05rem;margin:0">This takes just a moment.</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -404,17 +703,16 @@ def screen_interview():
             generate_category_activity_bank(state, dk)
         allocate_weekly_slots(state)
         build_weekly_schedule(state)
-        st.session_state["genex_state"] = state
+        st.session_state["genex_state"]  = state
         st.session_state.pop("parent_plan", None)
         st.session_state["plan_just_built"] = True
         save_session_json(state)
         go_to("weekly_plan")
         return
 
-    category_key     = domain_keys[domain_idx]
-    parent_label     = DOMAIN_LABELS.get(category_key, DOMAIN_CONFIG[category_key]["display"])
-    icon             = DOMAIN_ICONS.get(category_key, "📋")
-    child_name       = state["child"]["name"]
+    category_key = domain_keys[domain_idx]
+    parent_label = DOMAIN_LABELS.get(category_key, DOMAIN_CONFIG[category_key]["display"])
+    icon         = DOMAIN_ICONS.get(category_key, "📋")
 
     # Initialise band state
     if f"bq_{category_key}" not in st.session_state:
@@ -449,28 +747,23 @@ def screen_interview():
     current_month = band_months[band_idx]
     questions     = bands[current_month]
 
-    # ── Header ────────────────────────────────────────────────────────────
+    # Header
     _render_logo(height=48)
     st.markdown(f"## {icon} {parent_label}")
 
     # Domain progress dots
     dots = ""
     for i, dk in enumerate(domain_keys):
-        if i < domain_idx:
-            dots += "🟣 "
-        elif i == domain_idx:
-            dots += "⚪ "
-        else:
-            dots += "○ "
-    st.markdown(f"<span style='font-size:0.85rem;color:#7C3AED'>{dots.strip()}</span>",
-                unsafe_allow_html=True)
+        dots += ("🟣 " if i < domain_idx else "⚪ " if i == domain_idx else "○ ")
+    st.markdown(
+        f"<span style='font-size:0.85rem;color:#7C3AED'>{dots.strip()}</span>",
+        unsafe_allow_html=True,
+    )
 
-    # Band progress bar within domain
-    band_pct = int(((band_idx) / max(len(band_months), 1)) * 100)
+    band_pct = int((band_idx / max(len(band_months), 1)) * 100)
     st.progress(band_pct)
     st.markdown("")
 
-    # Microcopy
     st.markdown(
         "<div class='genex-card' style='background:#F5F0FF;padding:0.75rem 1rem;"
         "margin-bottom:0.75rem;border:1px solid #DDD6FE'>"
@@ -481,17 +774,16 @@ def screen_interview():
         unsafe_allow_html=True,
     )
 
-    # ── Question form ──────────────────────────────────────────────────────
     cache_key = f"bc_{category_key}_{current_month}"
     if cache_key not in st.session_state:
         st.session_state[cache_key] = {}
 
     with st.form(f"band_form_{category_key}_{current_month}"):
-        responses = {}
+        responses   = {}
         answer_keys = list(ANSWER_OPTIONS.keys())
 
         for q in questions:
-            milestone_text = q['milestone'].rstrip('.?')
+            milestone_text = q["milestone"].rstrip(".?")
             st.markdown(
                 f"<div class='genex-card' style='margin:0.5rem 0'>"
                 f"<p style='font-size:1.08rem;font-weight:600;margin:0'>"
@@ -511,23 +803,17 @@ def screen_interview():
             st.markdown("")
 
         submitted = st.form_submit_button(
-            "Next →",
-            type="primary",
-            use_container_width=True,
+            "Next →", type="primary", use_container_width=True
         )
 
     if submitted:
-        # Cache selections for back navigation
         for qid, sel in responses.items():
             st.session_state[cache_key][qid] = answer_keys.index(sel)
-
-        # Record answers
         for q in questions:
             record_answer(state, category_key, q,
                           ANSWER_OPTIONS[responses[q["question_id"]]])
         st.session_state["genex_state"] = state
 
-        # Adaptive stopping: 2 consecutive fails → advance domain
         score  = _band_score(questions, responses)
         passed = score >= 0.5
 
@@ -545,19 +831,19 @@ def screen_interview():
             st.session_state[f"bi_{category_key}"] = next_idx
             st.rerun()
 
-    # ── Back navigation ────────────────────────────────────────────────────
+    # Back navigation
     st.markdown("")
     col_back, _ = st.columns([1, 3])
     with col_back:
         if band_idx > 0:
-            if st.button(f"← Back", key="back_band"):
+            if st.button("← Back", key="back_band"):
                 prev_month = band_months[band_idx - 1]
                 n = len(bands[prev_month])
                 if state["qna"].get(category_key):
                     state["qna"][category_key] = state["qna"][category_key][:-n]
-                st.session_state["genex_state"] = state
-                st.session_state[f"bi_{category_key}"] = band_idx - 1
-                st.session_state[f"bf_{category_key}"] = 0
+                st.session_state["genex_state"]         = state
+                st.session_state[f"bi_{category_key}"]  = band_idx - 1
+                st.session_state[f"bf_{category_key}"]  = 0
                 st.rerun()
         elif domain_idx > 0:
             if st.button("← Back", key="back_domain"):
@@ -566,27 +852,14 @@ def screen_interview():
                 state["qna"][category_key] = []
                 _clear_domain_band_state(prev_key)
                 state["qna"][prev_key] = []
-                st.session_state["genex_state"] = state
+                st.session_state["genex_state"]          = state
                 st.session_state["interview_domain_idx"] = domain_idx - 1
                 st.rerun()
 
 
-# ── Screen 4: Today's Activity (hero) ─────────────────────────────────────
-
-def _get_today_activities(state: dict) -> list:
-    """Return all activities scheduled for today (Monday first weekday with activities)."""
-    schedule = state.get("weekly_schedule", {})
-    days = schedule.get("days", {})
-    for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]:
-        items = days.get(day, {}).get("items", [])
-        if items:
-            return items
-    return []
-
+# ── Activity helpers ───────────────────────────────────────────────────────
 
 def _build_why_helps(activity: dict, state: dict) -> str:
-    """Generate a parent-friendly 'why this helps' sentence."""
-    category_key = activity.get("category_key", "")
     WHY = {
         "movement_and_physical": (
             "Physical play builds strength, coordination, and body confidence — "
@@ -605,12 +878,11 @@ def _build_why_helps(activity: dict, state: dict) -> str:
             "build attention, memory, and the ability to learn new things."
         ),
     }
-    return WHY.get(category_key, "This activity supports your child's development in a meaningful way.")
-
+    return WHY.get(activity.get("category_key", ""),
+                   "This activity supports your child's development in a meaningful way.")
 
 
 def _render_activity_detail(item: dict, child_name: str, key_prefix: str = ""):
-    """Render full activity detail inside an expander or section."""
     icon      = DOMAIN_ICONS.get(item.get("category_key", ""), "🌱")
     cat_label = DOMAIN_LABELS.get(item.get("category_key", ""), item.get("category", ""))
     why       = _build_why_helps(item, {})
@@ -644,74 +916,7 @@ def _render_activity_detail(item: dict, child_name: str, key_prefix: str = ""):
         )
 
 
-def screen_today():
-    progress_bar()
-
-    state = get_state()
-    if not state.get("weekly_schedule"):
-        st.warning("No plan yet — please complete the questions first.")
-        if st.button("← Start Over"):
-            go_to("welcome")
-        return
-
-    child_name  = state["child"]["name"]
-    activities  = _get_today_activities(state)
-
-    _render_logo(height=52)
-    st.markdown(f"## Your plan is ready, {child_name}'s parent! 🎉")
-    st.markdown(
-        "Here are today's activities. They're short and playful — "
-        "even one a day makes a real difference."
-    )
-    st.markdown("")
-
-    if not activities:
-        st.info("We couldn't generate specific activities. Please check the weekly plan.")
-    else:
-        for i, activity in enumerate(activities):
-            icon      = DOMAIN_ICONS.get(activity.get("category_key", ""), "🌱")
-            cat_label = DOMAIN_LABELS.get(activity.get("category_key", ""),
-                                          activity.get("category", ""))
-            is_hero   = (i == 0)
-
-            if is_hero:
-                # First activity gets the full hero treatment
-                st.markdown(
-                    f"<div class='genex-hero-card'>"
-                    f"<div class='genex-section-label'>Today's focus — {icon} {cat_label}</div>"
-                    f"<div class='genex-hero-title'>{activity.get('title', '')}</div>"
-                    f"<p style='color:#6B7280;font-size:0.9rem;margin:0'>"
-                    f"⏱ {activity.get('duration_min', 5)} min &nbsp;·&nbsp; "
-                    f"🧰 {activity.get('materials', 'common household items')}</p>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-                _render_activity_detail(activity, child_name, key_prefix=f"today_{i}")
-            else:
-                # Additional activities as secondary cards with expander
-                st.markdown("")
-                with st.expander(
-                    f"{icon} Also today: **{activity.get('title', '')}** "
-                    f"— {activity.get('duration_min', 5)} min",
-                    expanded=False,
-                ):
-                    _render_activity_detail(activity, child_name, key_prefix=f"today_{i}")
-
-            st.markdown("")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📅 See Weekly Plan", use_container_width=True, type="primary"):
-            go_to("weekly_plan")
-    with col2:
-        if st.button("🩺 Doctor Notes", use_container_width=True):
-            go_to("doctor_prep")
-
-
-# ── Screen 5: Weekly Plan ──────────────────────────────────────────────────
-
 def _get_activity_bank_flat(state: dict) -> list:
-    """Return all activities from all banks as a flat list."""
     result = []
     for category_key in DOMAIN_CONFIG:
         bank = state.get("activity_banks", {}).get(category_key, {})
@@ -719,6 +924,8 @@ def _get_activity_bank_flat(state: dict) -> list:
             result.append({**a, "category_key": category_key})
     return result
 
+
+# ── Screen: Weekly Plan ────────────────────────────────────────────────────
 
 def screen_weekly_plan():
     progress_bar()
@@ -730,10 +937,9 @@ def screen_weekly_plan():
             go_to("interview")
         return
 
-    child_name = state["child"]["name"]
+    child_name = get_child_display_name()
     schedule   = state["weekly_schedule"]
 
-    # Initialise editable plan once per session
     if "parent_plan" not in st.session_state:
         st.session_state["parent_plan"] = copy.deepcopy(schedule.get("days", {}))
 
@@ -741,7 +947,6 @@ def screen_weekly_plan():
 
     _render_logo(height=52)
 
-    # Show "plan ready" banner only on first arrival after generation
     if st.session_state.pop("plan_just_built", False):
         st.markdown(
             f"<div class='genex-hero-card' style='text-align:center;padding:1.5rem'>"
@@ -756,16 +961,12 @@ def screen_weekly_plan():
         st.markdown("")
 
     st.markdown(f"## 📅 {child_name}'s Weekly Plan")
-    st.caption(
-        "Tap any activity to see details. "
-        "Remove activities you don't like — or add new ones on the weekend."
-    )
+    st.caption("Tap any activity to see details. Remove or add activities to suit your week.")
     st.markdown("")
 
-    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-    WEEKEND  = ["Saturday", "Sunday"]
-    ALL_DAYS = WEEKDAYS + WEEKEND
-
+    WEEKDAYS  = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    WEEKEND   = ["Saturday", "Sunday"]
+    ALL_DAYS  = WEEKDAYS + WEEKEND
     activity_bank = _get_activity_bank_flat(state)
 
     for day in ALL_DAYS:
@@ -791,26 +992,21 @@ def screen_weekly_plan():
             )
         else:
             for idx in range(len(items)):
-                item = plan[day]["items"][idx]
+                item      = plan[day]["items"][idx]
                 icon      = DOMAIN_ICONS.get(item.get("category_key", ""), "🌱")
-                cat_label = DOMAIN_LABELS.get(item.get("category_key", ""),
-                                              item.get("category", ""))
-
                 col_exp, col_del = st.columns([11, 1])
                 with col_exp:
                     with st.expander(
                         f"{icon} **{item.get('title', '')}** — {item.get('duration_min', 5)} min",
                         expanded=False,
                     ):
-                        _render_activity_detail(item, child_name,
-                                                key_prefix=f"{day}_{idx}")
+                        _render_activity_detail(item, child_name, key_prefix=f"{day}_{idx}")
                 with col_del:
-                    if st.button("✕", key=f"remove_{day}_{idx}",
-                                 help="Remove this activity"):
+                    if st.button("✕", key=f"remove_{day}_{idx}", help="Remove this activity"):
                         plan[day]["items"].pop(idx)
                         st.rerun()
 
-        # Add from activity bank — available on every day
+        # Add from bank — available every day
         bank_options = {
             f"{DOMAIN_ICONS.get(a.get('category_key',''), '🌱')} "
             f"{a.get('title','')} ({a.get('duration_min',5)} min)": a
@@ -826,7 +1022,6 @@ def screen_weekly_plan():
                     label_visibility="collapsed",
                 )
                 selected_activity = bank_options[selected_label]
-                # Preview
                 st.markdown(
                     f"<div class='genex-section' style='margin:0.4rem 0'>"
                     f"<p style='font-size:0.93rem;margin:0'>"
@@ -844,12 +1039,13 @@ def screen_weekly_plan():
 
         st.markdown("")
 
-    # Download
-    plan_text = _build_plan_text_from(plan, child_name)
+    # Download (no child name in filename)
+    session_id = st.session_state.get("session_id", "plan")
+    plan_text  = _build_plan_text_from(plan, child_name)
     st.download_button(
         label="⬇️ Download Weekly Plan",
         data=plan_text,
-        file_name=f"genex_plan_{child_name}_{datetime.now().strftime('%Y%m%d')}.txt",
+        file_name=f"genex_plan_{datetime.now().strftime('%Y%m%d')}.txt",
         mime="text/plain",
         use_container_width=True,
     )
@@ -867,12 +1063,14 @@ def screen_weekly_plan():
 
 
 def _build_plan_text_from(plan: dict, child_name: str) -> str:
-    """Build a plain-text version of the editable weekly plan for download."""
     lines = [
         "Genex Parent Copilot — Weekly Plan",
         f"Child: {child_name}",
         f"Generated: {datetime.now().strftime('%B %d, %Y')}",
         "=" * 50,
+        "",
+        "This plan is for home support only.",
+        "It does not replace professional advice.",
         "",
     ]
     for day in ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]:
@@ -886,16 +1084,10 @@ def _build_plan_text_from(plan: dict, child_name: str) -> str:
                 lines.append(f"  Duration: {item.get('duration_min',5)} min")
                 lines.append(f"  Materials: {item.get('materials','')}")
                 lines.append(f"  {item.get('instructions','')}")
-    lines += [
-        "",
-        "=" * 50,
-        "This plan is for home support only.",
-        "It does not replace professional advice.",
-    ]
     return "\n".join(lines)
 
 
-# ── Screen 6: Doctor-Prep Notes ────────────────────────────────────────────
+# ── Screen: Doctor Notes ───────────────────────────────────────────────────
 
 def screen_doctor_prep():
     progress_bar()
@@ -908,26 +1100,24 @@ def screen_doctor_prep():
     _render_logo(height=52)
     st.markdown("## 🩺 Notes for Your Doctor")
     st.caption(
-        "These are just conversation starters — things you might want to bring up "
-        "at your child's next appointment. Genex does not make diagnoses."
+        "These are conversation starters — things you might want to bring up at your child's "
+        "next appointment. Genex does not make diagnoses."
     )
     st.markdown("")
 
     prep       = build_doctor_visit_prep(state)
-    child_name = state["child"]["name"]
+    child_name = get_child_display_name()
 
-    # Domains with something to discuss
     if prep.get("priority_domains"):
         st.markdown(
             "<div class='genex-doctor-card'>"
-            "<div class='genex-section-label' style='color:#4A6080'>Areas worth discussing</div>"
-            "<p style='margin:0.4rem 0 0;font-size:0.95rem'>",
+            "<div class='genex-section-label' style='color:#4A6080'>Areas worth discussing</div>",
             unsafe_allow_html=True,
         )
         for r in prep["priority_domains"]:
             parent_label = DOMAIN_LABELS.get(
                 next((k for k,v in DOMAIN_CONFIG.items() if v["display"]==r["category"]), ""),
-                r["category"]
+                r["category"],
             )
             st.markdown(
                 f"<div class='genex-section' style='margin:0.5rem 0'>"
@@ -937,7 +1127,7 @@ def screen_doctor_prep():
                 f"</p></div>",
                 unsafe_allow_html=True,
             )
-        st.markdown("</p></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     if prep.get("monitor_domains"):
         st.markdown("")
@@ -948,11 +1138,10 @@ def screen_doctor_prep():
         for r in prep["monitor_domains"]:
             parent_label = DOMAIN_LABELS.get(
                 next((k for k,v in DOMAIN_CONFIG.items() if v["display"]==r["category"]), ""),
-                r["category"]
+                r["category"],
             )
             st.markdown(f"- **{parent_label}**")
 
-    # Questions to ask
     st.markdown("")
     st.markdown(
         "<div class='genex-card'>"
@@ -960,7 +1149,6 @@ def screen_doctor_prep():
         unsafe_allow_html=True,
     )
     for q in prep.get("questions_for_doctor", []):
-        # Personalise the question with child's name
         q_personal = q.replace("the child", child_name).replace("your child", child_name)
         st.markdown(
             f"<p style='margin:0.4rem 0;font-size:0.95rem'>❓ {q_personal}</p>",
@@ -968,7 +1156,6 @@ def screen_doctor_prep():
         )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Disclaimer
     st.markdown("")
     st.info(
         "**Remember:** Genex is a support tool, not a medical service. "
@@ -988,11 +1175,10 @@ def screen_doctor_prep():
         restart_button()
 
 
-# ── Screen 7: Feedback ─────────────────────────────────────────────────────
+# ── Screen: Feedback ───────────────────────────────────────────────────────
 
 def screen_feedback():
     progress_bar()
-
     _render_logo(height=52)
     st.markdown("## 💬 Share Your Feedback")
     st.markdown(
@@ -1003,81 +1189,83 @@ def screen_feedback():
 
     state = get_state()
     child = state.get("child", {})
+    user  = auth.get_current_user()
 
     with st.form("feedback_form"):
-
         overall = st.radio(
             "Overall, how useful did you find Genex?",
             options=["Very useful", "Somewhat useful", "Not very useful", "Not useful at all"],
             horizontal=True,
         )
-
         activity_rating = st.radio(
-            "How relevant did Today's Activity feel for your child?",
+            "How relevant did the weekly plan feel for your child?",
             options=["Very relevant", "Somewhat relevant", "Not very relevant", "Not sure"],
             horizontal=True,
         )
-
         language_rating = st.radio(
             "Was the language clear and easy to understand?",
             options=["Yes, very clear", "Mostly clear", "Sometimes confusing", "Hard to understand"],
             horizontal=True,
         )
-
         st.markdown("")
-        what_helped = st.text_area(
-            "What was most helpful?",
-            height=80,
-            placeholder="Anything you found useful or reassuring…",
-        )
-        what_change = st.text_area(
-            "What would you change or improve?",
-            height=80,
-            placeholder="Anything confusing, missing, or that didn't feel right…",
-        )
-        general = st.text_area(
-            "Anything else you'd like to share?",
-            height=80,
-            placeholder="Open comments…",
-        )
-
+        what_helped  = st.text_area("What was most helpful?", height=80,
+                                    placeholder="Anything you found useful or reassuring…")
+        what_change  = st.text_area("What would you change or improve?", height=80,
+                                    placeholder="Anything confusing, missing, or that didn't feel right…")
+        general      = st.text_area("Anything else you'd like to share?", height=80,
+                                    placeholder="Open comments…")
         submitted = st.form_submit_button(
-            "Submit Feedback",
-            type="primary",
-            use_container_width=True,
+            "Submit Feedback", type="primary", use_container_width=True
         )
 
     if submitted:
         try:
-            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            session_id = st.session_state.get("session_id", str(uuid.uuid4()))
+            user_id    = user["uid"] if user else "anonymous"
+            stamp      = datetime.now(timezone.utc).isoformat()
+
             feedback = {
-                "child_name":     child.get("name", "unknown"),
-                "age_months":     child.get("chronological_months"),
-                "diagnosis":      child.get("diagnosis"),
+                "user_id":     user_id,
+                "session_id":  session_id,
+                # No child name — only age and diagnosis stored
+                "age_months":             child.get("chronological_months"),
+                "diagnosis_or_condition": child.get("diagnosis"),
                 "ratings": {
-                    "overall_usefulness":     overall,
-                    "activity_relevance":     activity_rating,
-                    "language_clarity":       language_rating,
+                    "overall_usefulness": overall,
+                    "activity_relevance": activity_rating,
+                    "language_clarity":   language_rating,
                 },
                 "comments": {
-                    "what_helped":   what_helped,
+                    "what_helped":    what_helped,
                     "what_to_change": what_change,
-                    "general":       general,
+                    "general":        general,
                 },
-                "submitted_at": stamp,
-                "app_version":  "parent-copilot-v0.2",
+                "submitted_at":  stamp,
+                "app_version":   APP_VERSION,
+                "engine_version": ENGINE_VERSION,
             }
-            fname  = f"feedback_{child.get('name','parent')}_{stamp}.json"
-            result = _storage_save(feedback, f"feedback/{fname}", SESSION_DIR)
-            if result in ("gcs", "local"):
+            blob_name      = f"feedback/{user_id}/{session_id}_feedback.json"
+            local_fb_dir   = FEEDBACK_DIR / user_id
+            local_fb_dir.mkdir(parents=True, exist_ok=True)
+            result         = _storage_save(feedback, blob_name, local_fb_dir)
+
+            if result == "gcs":
+                from genex_core.storage import GCS_BUCKET_NAME
+                saved_at = f"gs://{GCS_BUCKET_NAME}/{blob_name}"
                 st.success(
-                    "✅ Thank you — your feedback has been saved. "
-                    "It will directly shape the next version of Genex."
+                    f"✅ Thank you — your feedback has been saved.\n\n"
+                    f"📍 Saved to: `{saved_at}`"
+                )
+            elif result == "local":
+                local_path = local_fb_dir / f"{session_id}_feedback.json"
+                st.success(
+                    f"✅ Thank you — your feedback has been saved.\n\n"
+                    f"📍 Saved locally: `{local_path}`"
                 )
             else:
                 st.warning("Feedback could not be saved automatically. Please screenshot this page.")
-        except Exception as e:
-            st.error(f"Could not save feedback: {e}")
+        except Exception as exc:
+            st.error(f"Could not save feedback: {exc}")
 
     st.markdown("")
     col1, col2 = st.columns(2)
@@ -1095,42 +1283,72 @@ def sidebar_nav():
         _render_logo(height=52)
         st.markdown("### Genex Parent Copilot")
         st.caption("Navigation")
-        for s in SCREENS:
+
+        for s in MAIN_SCREENS:
             label = SCREEN_LABELS[s]
             if st.button(label, key=f"nav_{s}", use_container_width=True):
                 go_to(s)
+
         state = get_state()
         if state.get("child"):
             child = state["child"]
             st.divider()
             st.caption(
-                f"**{child.get('name', '—')}** · {child.get('chronological_months', '—')} months"
+                f"**{get_child_display_name()}** · "
+                f"{child.get('chronological_months', '—')} months"
             )
+
+        user = auth.get_current_user()
+        if user:
+            st.divider()
+            st.caption(f"Signed in as\n{user['email']}")
+            if st.button("Sign out", use_container_width=True):
+                auth.sign_out()
+                st.rerun()
 
 
 # ── Router ─────────────────────────────────────────────────────────────────
 
 def main():
-    if "screen" not in st.session_state:
-        st.session_state["screen"] = "welcome"
+    # Pre-auth screens — accessible without login
+    screen = st.session_state.get("screen", "login")
 
-    _password_gate()
+    if not auth.is_authenticated():
+        if screen == "register":
+            screen_register()
+        elif screen == "reset_password":
+            screen_reset_password()
+        elif screen == "privacy_policy":
+            screen_privacy_policy()
+        else:
+            st.session_state["screen"] = "login"
+            screen_login()
+        return
+
+    # Authenticated — show sidebar + top auth bar, then route
     sidebar_nav()
-
+    _render_auth_header()
     screen = current_screen()
 
-    if screen == "welcome":
+    if screen == "privacy_policy":
+        screen_privacy_policy()
+    elif screen == "welcome":
         screen_welcome()
+        _render_footer()
     elif screen == "profile":
         screen_profile()
+        _render_footer()
     elif screen == "interview":
         screen_interview()
     elif screen == "weekly_plan":
         screen_weekly_plan()
+        _render_footer()
     elif screen == "doctor_prep":
         screen_doctor_prep()
+        _render_footer()
     elif screen == "feedback":
         screen_feedback()
+        _render_footer()
     else:
         go_to("welcome")
 
