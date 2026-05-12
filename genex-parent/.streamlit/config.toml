@@ -1,0 +1,13 @@
+[theme]
+# Genex Parent Copilot — brand colours extracted from logo
+# Primary purple: GENEX wordmark
+# Blue-grey: DNA helix / secondary
+primaryColor        = "#7C3AED"
+backgroundColor     = "#FAF9F7"
+secondaryBackgroundColor = "#F0EBF8"
+textColor           = "#2D2D2D"
+font                = "sans serif"
+
+[server]
+headless = true
+enableCORS = false

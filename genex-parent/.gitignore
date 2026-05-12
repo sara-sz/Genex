@@ -1,0 +1,10 @@
+.env
+.env.*
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+outputs/
+*.ipynb_checkpoints
+.dockerignore

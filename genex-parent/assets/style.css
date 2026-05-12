@@ -1,0 +1,285 @@
+/* ============================================================
+   Genex Parent Copilot — Design System
+   Brand: purple #7C3AED (primary), blue-grey #4A6080 (secondary)
+   Palette: warm off-white bg, soft purple tints, rounded cards
+   ============================================================ */
+
+/* ── Google Font ──────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ── Global reset ─────────────────────────────────────────── */
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* ── Page width + centering (mobile-first) ────────────────── */
+.block-container {
+    max-width: 720px !important;
+    padding: 1.5rem 1.25rem 3rem !important;
+    margin: 0 auto !important;
+}
+
+/* ── Hide Streamlit chrome ────────────────────────────────── */
+#MainMenu { visibility: hidden; }
+footer    { visibility: hidden; }
+header    { visibility: hidden; }
+
+/* ── Typography ───────────────────────────────────────────── */
+h1, h2, h3 {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 700 !important;
+    color: #2D2D2D !important;
+    letter-spacing: -0.01em;
+}
+h2 { font-size: 1.6rem !important; margin-bottom: 0.25rem !important; }
+h3 { font-size: 1.15rem !important; }
+
+p, li, .stMarkdown p {
+    font-size: 1.02rem !important;
+    line-height: 1.65 !important;
+    color: #2D2D2D !important;
+}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.stButton > button {
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    padding: 0.6rem 1.4rem !important;
+    transition: all 0.15s ease !important;
+    border: none !important;
+}
+
+/* Primary button — medium purple, always white text */
+.stButton > button[kind="primary"],
+.stButton > button[data-testid*="primary"] {
+    background: linear-gradient(135deg, #9333EA, #7C3AED) !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(147, 51, 234, 0.25) !important;
+}
+.stButton > button[kind="primary"]:hover {
+    background: linear-gradient(135deg, #A855F7, #9333EA) !important;
+    box-shadow: 0 4px 14px rgba(147, 51, 234, 0.35) !important;
+    transform: translateY(-1px) !important;
+    color: #ffffff !important;
+}
+
+/* Secondary / default button */
+.stButton > button:not([kind="primary"]) {
+    background: #ffffff !important;
+    color: #7C3AED !important;
+    border: 1.5px solid #DDD6FE !important;
+}
+.stButton > button:not([kind="primary"]):hover {
+    background: #F5F0FF !important;
+    border-color: #9333EA !important;
+    color: #7C3AED !important;
+}
+
+/* Force white text on ALL buttons regardless of Streamlit theme injection */
+.stButton > button[kind="primary"] p,
+.stButton > button[kind="primary"] span,
+.stButton > button[kind="primary"] div {
+    color: #ffffff !important;
+}
+
+/* Form submit button */
+.stFormSubmitButton > button {
+    background: linear-gradient(135deg, #9333EA, #7C3AED) !important;
+    color: #ffffff !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    padding: 0.65rem 1.4rem !important;
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(147, 51, 234, 0.25) !important;
+    width: 100% !important;
+}
+.stFormSubmitButton > button:hover {
+    background: linear-gradient(135deg, #A855F7, #9333EA) !important;
+    box-shadow: 0 4px 14px rgba(147, 51, 234, 0.35) !important;
+    color: #ffffff !important;
+}
+
+/* ── Cards ────────────────────────────────────────────────── */
+.genex-card {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    margin: 0.75rem 0;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+    border: 1px solid #F3F0FF;
+}
+
+/* Hero — Today's Activity card */
+.genex-hero-card {
+    background: linear-gradient(145deg, #ffffff, #F5F0FF);
+    border-radius: 18px;
+    padding: 1.5rem 1.75rem;
+    margin: 0.75rem 0 1.25rem;
+    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.12);
+    border-left: 5px solid #7C3AED;
+}
+
+.genex-hero-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #5B21B6;
+    margin-bottom: 0.5rem;
+}
+
+/* Section cards inside hero */
+.genex-section {
+    background: #FAF9F7;
+    border-radius: 12px;
+    padding: 0.9rem 1.1rem;
+    margin: 0.6rem 0;
+    border: 1px solid #EDE9FE;
+}
+
+.genex-section-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #7C3AED;
+    margin-bottom: 0.3rem;
+}
+
+/* ── Activity week cards ──────────────────────────────────── */
+.genex-day-header {
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #4A6080;
+    margin: 1.2rem 0 0.4rem;
+}
+
+.genex-activity-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 0.9rem 1.1rem;
+    margin: 0.4rem 0;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+    border: 1px solid #F3F0FF;
+}
+
+/* Weekend tint */
+.genex-weekend-card {
+    background: #FEFCE8;
+    border-color: #FDE68A;
+}
+
+/* ── Doctor prep cards ────────────────────────────────────── */
+.genex-doctor-card {
+    background: #F0F9FF;
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
+    margin: 0.6rem 0;
+    border-left: 4px solid #4A6080;
+}
+
+/* ── Progress bar ─────────────────────────────────────────── */
+.stProgress > div > div > div > div {
+    background: linear-gradient(90deg, #7C3AED, #A78BFA) !important;
+    border-radius: 99px !important;
+}
+.stProgress > div > div {
+    border-radius: 99px !important;
+    background: #EDE9FE !important;
+}
+
+/* ── Radio buttons (interview answers) ───────────────────── */
+.stRadio > div {
+    gap: 0.4rem !important;
+}
+.stRadio > div > label {
+    background: #ffffff !important;
+    border: 1.5px solid #DDD6FE !important;
+    border-radius: 10px !important;
+    padding: 0.45rem 0.85rem !important;
+    font-size: 0.95rem !important;
+    transition: all 0.12s ease !important;
+    cursor: pointer !important;
+}
+.stRadio > div > label:hover {
+    border-color: #7C3AED !important;
+    background: #F5F0FF !important;
+}
+
+/* ── Text inputs ──────────────────────────────────────────── */
+.stTextInput > div > div > input,
+.stNumberInput > div > div > input,
+.stTextArea > div > div > textarea {
+    border-radius: 10px !important;
+    border: 1.5px solid #DDD6FE !important;
+    font-size: 1rem !important;
+    padding: 0.55rem 0.85rem !important;
+    background: #ffffff !important;
+}
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+    border-color: #7C3AED !important;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12) !important;
+}
+
+/* ── Selectbox ────────────────────────────────────────────── */
+.stSelectbox > div > div {
+    border-radius: 10px !important;
+    border: 1.5px solid #DDD6FE !important;
+}
+
+/* ── Captions and helper text ─────────────────────────────── */
+.stCaption, small {
+    font-size: 0.85rem !important;
+    color: #6B7280 !important;
+    line-height: 1.5 !important;
+}
+
+/* ── Divider ──────────────────────────────────────────────── */
+hr {
+    border: none !important;
+    border-top: 1px solid #EDE9FE !important;
+    margin: 1rem 0 !important;
+}
+
+/* ── Alert / info boxes ───────────────────────────────────── */
+.stAlert {
+    border-radius: 12px !important;
+    font-size: 0.95rem !important;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: #F5F0FF !important;
+}
+[data-testid="stSidebar"] .stButton > button {
+    background: transparent !important;
+    border: none !important;
+    color: #5B21B6 !important;
+    text-align: left !important;
+    font-weight: 500 !important;
+    font-size: 0.9rem !important;
+    padding: 0.3rem 0.5rem !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: #EDE9FE !important;
+    border-radius: 8px !important;
+}
+
+/* ── Slider ───────────────────────────────────────────────── */
+.stSlider > div > div > div > div {
+    background: #7C3AED !important;
+}
+
+/* ── Mobile tweaks ────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .block-container {
+        padding: 1rem 0.75rem 2.5rem !important;
+    }
+    h2 { font-size: 1.35rem !important; }
+    .genex-hero-title { font-size: 1.2rem !important; }
+    .stRadio > div { flex-direction: column !important; }
+    .stRadio > div > label { width: 100% !important; }
+}
