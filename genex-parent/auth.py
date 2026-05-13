@@ -96,7 +96,7 @@ def register(email: str, password: str) -> Tuple[bool, str, str]:
 
     if AUTH_MODE == "identity_platform":
         if not _FIREBASE_API_KEY:
-            return False, "Auth service not configured. Please contact support.", ""
+            return False, "Auth service not configured. Please email info@getgenex.com for help.", ""
         ok, err, data = _ip_post(_IP_REGISTER_URL, {
             "email": email,
             "password": password,
@@ -125,7 +125,7 @@ def login(email: str, password: str) -> Tuple[bool, str, str, str]:
 
     if AUTH_MODE == "identity_platform":
         if not _FIREBASE_API_KEY:
-            return False, "Auth service not configured. Please contact support.", "", ""
+            return False, "Auth service not configured. Please email info@getgenex.com for help.", "", ""
         ok, err, data = _ip_post(_IP_SIGN_IN_URL, {
             "email": email,
             "password": password,
@@ -155,7 +155,7 @@ def send_password_reset(email: str) -> Tuple[bool, str]:
 
     if AUTH_MODE == "identity_platform":
         if not _FIREBASE_API_KEY:
-            return False, "Auth service not configured. Please contact support."
+            return False, "Auth service not configured. Please email info@getgenex.com for help."
         ok, err, _ = _ip_post(_IP_RESET_URL, {
             "requestType": "PASSWORD_RESET",
             "email": email,
