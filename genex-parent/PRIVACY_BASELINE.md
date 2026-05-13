@@ -52,7 +52,7 @@ covered services used in this project:
 | Allowlist-gated registration         | ✅ Implemented | config/allowlist.json via GCS              |
 | Email/password auth                  | ✅ Implemented | Identity Platform — staging tested         |
 | Persistent accounts                  | ✅ Implemented | Verified: sign out → reopen → sign in ✅   |
-| Password reset email                 | ⏳ Pending     | Test pending                               |
+| Password reset email                 | ✅ Implemented | Verified: reset email received ✅          |
 | GCS session storage (staging)        | ✅ Implemented | Verified: sessions + feedback in GCS ✅    |
 | Audit logging                        | ❌ Not yet     | Planned post-pilot                         |
 | Per-user encryption at rest          | ❌ Not yet     | Planned post-pilot                         |
@@ -78,18 +78,21 @@ Steps completed:
 - [x] Grant staging service account access to secret
 - [x] Redeploy genex-parent-staging with AUTH_MODE=identity_platform
 - [x] Test persistent accounts — sign out, reopen browser, sign back in ✅
-- [ ] Test password reset email delivery — pending
+- [x] Test password reset email delivery ✅
 
 ---
 
 ## What Remains Before 100-Parent Beta
 
 1. ~~Identity Platform connected to staging and tested~~ ✅ Done
-2. Password reset email delivery confirmed
-3. staging promoted to production (genex-parent v0.3)
-4. v0.2 pilot service retired
-5. Privacy policy published at getgenex.com
-6. Data deletion workflow tested end-to-end (delete_user_data.py)
+2. ~~Password reset email delivery confirmed~~ ✅ Done
+3. ~~Consent persistence verified in session JSON~~ ✅ Done
+4. ~~Internal tier labels sanitized in saved plan~~ ✅ Done
+5. 5-family pilot on v0.2 completed and feedback collected
+6. staging promoted to production (genex-parent v0.3)
+7. v0.2 pilot service retired
+8. Privacy policy published at getgenex.com
+9. Data deletion workflow tested end-to-end (delete_user_data.py)
 
 ---
 
@@ -101,6 +104,17 @@ Steps completed:
 4. Audit logging enabled
 5. BAAs with any additional vendors (OpenAI, etc.)
 6. Legal review of privacy policy and terms of service
+
+---
+
+---
+
+## Compliance Summary
+
+- Google Cloud BAA reviewed and accepted under sara@getgenex.com for project genex-mvp-2026.
+- Covered-service baseline includes Cloud Run, Cloud Storage, Secret Manager, and Identity Platform.
+- Genex is not claiming HIPAA compliance at this stage.
+- Current status: privacy-first / HIPAA-aligned beta baseline.
 
 ---
 
