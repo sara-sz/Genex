@@ -204,11 +204,83 @@ def restart_button():
 
 # ── Session storage ────────────────────────────────────────────────────────
 
+# Internal tier keys → parent-safe labels (mirrors activity_engine._tier_to_display)
+_TIER_DISPLAY = {
+    "needs_special_support": "Extra Support",
+    "monitor_and_enrich":    "Monitor & Enrich",
+    "enrich_and_observe":    "Monitor & Enrich",
+    "no_special_support":    "On Track",
+}
+
+
+def _sanitize_plan_for_storage(weekly_schedule: dict) -> dict:
+    """
+    Replace internal tier keys in activity goal fields with parent-safe labels.
+    Operates on a deep copy so the live UI state is never mutated.
+    """
+    import copy
+    plan = copy.deepcopy(weekly_schedule)
+    days = plan.get("days", {})
+    for day_data in days.values():
+        for item in day_data.get("items", []):
+            raw_goal = item.get("goal", "")
+            item["goal"] = _TIER_DISPLAY.get(raw_goal, raw_goal)
+    return plan
+
+
+def _save_consent_record(user_id: str, email: str, timestamp: str):
+    """
+    Persist consent record to consent/{user_id}.json in GCS (or local fallback).
+    Called once at registration. Never raises.
+    """
+    try:
+        record = {
+            "user_id":           user_id,
+            "email":             email,
+            "consent_given":     True,
+            "consent_timestamp": timestamp,
+            "app_version":       APP_VERSION,
+        }
+        blob_name = f"consent/{user_id}.json"
+        consent_dir = SESSION_DIR.parent / "consent"
+        _storage_save(record, blob_name, consent_dir)
+    except Exception as exc:
+        print(f"[app] _save_consent_record failed: {exc}")
+
+
+def _load_consent_record(user_id: str) -> tuple:
+    """
+    Load consent record for a returning user from GCS (or local fallback).
+    Returns (consent_given: bool, consent_timestamp: str).
+    Falls back to (False, "") if not found.
+    """
+    from genex_core.storage import GCS_BUCKET_NAME
+    try:
+        if GCS_BUCKET_NAME:
+            from google.cloud import storage as gcs
+            client = gcs.Client()
+            blob = client.bucket(GCS_BUCKET_NAME).blob(f"consent/{user_id}.json")
+            if blob.exists():
+                import json as _json
+                data = _json.loads(blob.download_as_text())
+                return data.get("consent_given", False), data.get("consent_timestamp", "")
+        else:
+            consent_path = SESSION_DIR.parent / "consent" / f"{user_id}.json"
+            if consent_path.exists():
+                import json as _json
+                data = _json.loads(consent_path.read_text(encoding="utf-8"))
+                return data.get("consent_given", False), data.get("consent_timestamp", "")
+    except Exception as exc:
+        print(f"[app] _load_consent_record failed: {exc}")
+    return False, ""
+
+
 def save_session_json(state: dict):
     """
     Persist a de-identified session snapshot to GCS (or local fallback).
     - No child name stored anywhere in the JSON or file path.
     - Stored under sessions/{user_id}/{session_id}.json
+    - Internal tier labels remapped to parent-safe labels before saving.
     - Never raises.
     """
     try:
@@ -226,7 +298,8 @@ def save_session_json(state: dict):
             "diagnosis_or_condition": child.get("diagnosis"),
             "concern":                st.session_state.get("child_concern", ""),
             "answers":                state.get("qna", {}),
-            "generated_plan":         state.get("weekly_schedule", {}),
+            "generated_plan":         _sanitize_plan_for_storage(
+                                          state.get("weekly_schedule", {})),
             "feedback":               None,
             "created_at":             datetime.now(timezone.utc).isoformat(),
             "app_version":            APP_VERSION,
@@ -317,6 +390,9 @@ def screen_login():
                     "email":    email.strip().lower(),
                     "id_token": token,
                 }
+                consent_given, consent_ts = _load_consent_record(uid)
+                st.session_state["consent_given"]     = consent_given
+                st.session_state["consent_timestamp"] = consent_ts
                 go_to("welcome")
             else:
                 st.error(err)
@@ -421,6 +497,7 @@ def screen_register():
                 }
                 st.session_state["consent_given"]     = True
                 st.session_state["consent_timestamp"] = now
+                _save_consent_record(uid, email.strip().lower(), now)
                 go_to("welcome")
             else:
                 st.error(err)
