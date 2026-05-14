@@ -274,14 +274,15 @@ def screen_profile():
         )
         st.caption("Please use first name only, not full legal name.")
 
-        age_months = st.number_input(
-            "Age in months *",
-            min_value=2,
-            max_value=72,
-            value=24,
-            step=1,
-            help="Count from birth. For a 2-year-old, this is around 24 months.",
-        )
+        st.markdown("**Child's age \\***")
+        col_y, col_m = st.columns(2)
+        with col_y:
+            age_years = st.number_input("Years", min_value=0, max_value=6, value=2, step=1)
+        with col_m:
+            age_months_part = st.number_input("Months (0–11)", min_value=0, max_value=11, value=0, step=1)
+        age_months = int(age_years) * 12 + int(age_months_part)
+        if age_months >= 2:
+            st.caption(f"= {age_months} months total")
 
         diagnosis = st.text_input(
             "Does your child have a diagnosis or condition? (optional)",
@@ -312,6 +313,8 @@ def screen_profile():
         errors = []
         if not child_name.strip():
             errors.append("Please enter your child's first name.")
+        if age_months < 2:
+            errors.append("Please enter your child's age (must be at least 2 months).")
         if not concern.strip():
             errors.append("Please describe your main concern.")
         if errors:
@@ -451,24 +454,18 @@ def screen_interview():
 
     # ── Header ────────────────────────────────────────────────────────────
     _render_logo(height=48)
-    st.markdown(f"## {icon} {parent_label}")
 
-    # Domain progress dots
-    dots = ""
-    for i, dk in enumerate(domain_keys):
-        if i < domain_idx:
-            dots += "🟣 "
-        elif i == domain_idx:
-            dots += "⚪ "
-        else:
-            dots += "○ "
-    st.markdown(f"<span style='font-size:0.85rem;color:#7C3AED'>{dots.strip()}</span>",
-                unsafe_allow_html=True)
-
-    # Band progress bar within domain
-    band_pct = int(((band_idx) / max(len(band_months), 1)) * 100)
-    st.progress(band_pct)
+    # Overall interview progress bar (1/4 per domain)
+    overall_pct = domain_idx / len(domain_keys)
+    st.markdown(
+        f"<p style='font-size:0.82rem;color:#7C3AED;margin:0 0 0.2rem'>"
+        f"Section {domain_idx + 1} of {len(domain_keys)}: {parent_label}</p>",
+        unsafe_allow_html=True,
+    )
+    st.progress(overall_pct)
     st.markdown("")
+
+    st.markdown(f"## {icon} {parent_label}")
 
     # Microcopy
     st.markdown(
@@ -502,7 +499,7 @@ def screen_interview():
             sel = st.radio(
                 label=f"answer_{q['question_id']}",
                 options=answer_keys,
-                index=st.session_state[cache_key].get(q["question_id"], 0),
+                index=st.session_state[cache_key].get(q["question_id"], None),
                 key=f"bq_{q['question_id']}",
                 horizontal=True,
                 label_visibility="collapsed",
@@ -517,6 +514,12 @@ def screen_interview():
         )
 
     if submitted:
+        # Validate all questions answered
+        unanswered = [qid for qid, val in responses.items() if val is None]
+        if unanswered:
+            st.error("Please answer all questions before continuing.")
+            st.stop()
+
         # Cache selections for back navigation
         for qid, sel in responses.items():
             st.session_state[cache_key][qid] = answer_keys.index(sel)
@@ -639,6 +642,14 @@ def _render_activity_detail(item: dict, child_name: str, key_prefix: str = ""):
             f"<div class='genex-section'>"
             f"<div class='genex-section-label'>🧰 What you need</div>"
             f"<p style='margin:0'>{item.get('materials')}</p>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    if item.get("group_note"):
+        st.markdown(
+            f"<div class='genex-section' style='background:#F0FDF4;border:1px solid #BBF7D0'>"
+            f"<div class='genex-section-label'>👧👦 With other kids around</div>"
+            f"<p style='margin:0'>{item.get('group_note')}</p>"
             f"</div>",
             unsafe_allow_html=True,
         )
