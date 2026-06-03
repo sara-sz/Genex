@@ -148,3 +148,7 @@ data/*
 # Generated evaluation exports
 advisor_feedback_round1.csv
 *_generated.csv
+# Generated Genex outputs
+genex-parent/outputs/
+outputs/
+.ipynb_checkpoints/
