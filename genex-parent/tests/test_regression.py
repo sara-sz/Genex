@@ -1,7 +1,7 @@
 """
 tests/test_regression.py
 -------------------------
-V22 regression test suite (8 cases).
+V22 regression test suite (10 cases).
 
 Run: python3 -m pytest tests/test_regression.py -v
   or: python3 tests/test_regression.py
@@ -16,6 +16,10 @@ Cases:
   6. parent_explanation present and non-empty in question dicts.
   7. No "(variation N)" labels; no duplicate instructions across different-titled activities.
   8. No bridge/internal/clinical language in parent-facing activity fields.
+  9. Week 1 schedule uniqueness: no same-day duplicate titles; no Easier/Stretch variants
+     on weekdays; no duplicate titles across the whole week per category.
+ 10. Activity bank uniqueness: capped core_variants produces no duplicate titles within
+     a single bridge's core activities.
 """
 
 import sys
@@ -35,6 +39,7 @@ from genex_core.activity_engine import generate_category_activity_bank, get_core
 from genex_core.activity_validator import validate_activity
 from genex_core.feedback_engine import record_activity_feedback, detect_mastery_signal
 from genex_core.progress_tracker import advance_milestone, apply_fallback, apply_theme_rotation
+from genex_core.scheduler import allocate_weekly_slots, build_weekly_schedule
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +458,148 @@ def test_case8_no_internal_language_in_parent_fields():
     print(f"  ✓ {len(acts)} activities — no internal language in parent-facing fields")
 
 # ---------------------------------------------------------------------------
+# Case 9: Week 1 schedule uniqueness
+# ---------------------------------------------------------------------------
+
+def _make_maya_state():
+    """Approximate Maya test case: 54m chrono, speech delay + social concern, 10m/day."""
+    state = init_state_from_profile("your child", 54, "None", "speech delay and social concern", 10)
+    state["dev_age"]["language_and_communication"] = 36
+    state["dev_age"]["social_and_emotional"] = 36
+    state["delay_estimates"]["language_and_communication"] = {"delay_months": 18}
+    state["delay_estimates"]["social_and_emotional"] = {"delay_months": 18}
+    state["concern_profile"]["domain_weights"]["language_and_communication"] = 0.70
+    state["concern_profile"]["domain_weights"]["social_and_emotional"] = 0.70
+    state["child"]["daily_time_min"] = 10
+    return state
+
+
+def test_case9_week1_schedule_uniqueness():
+    print("\n─── Case 9: Week 1 schedule uniqueness ───")
+    state = _make_maya_state()
+
+    from genex_core.config import DOMAIN_CONFIG
+    from genex_core.support_tiers import build_v22_plan_for_category
+
+    focus_domains = [
+        dk for dk in DOMAIN_CONFIG
+        if state["concern_profile"]["domain_weights"].get(dk, 0) >= 0.5
+    ]
+    if not focus_domains:
+        focus_domains = ["language_and_communication"]
+
+    for dk in focus_domains:
+        plan = build_v22_plan_for_category(state, dk)
+        state.setdefault("bridge_plans", {})[dk] = plan
+        bank = generate_category_activity_bank(state, dk)
+        state.setdefault("activity_banks", {})[dk] = bank
+
+    state["cycle_week"] = 1
+    allocate_weekly_slots(state)
+    build_weekly_schedule(state)
+
+    schedule = state["weekly_schedule"]
+    days = schedule.get("days", {})
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    same_day_dups = []
+    easier_stretch_found = []
+
+    for day_name in WEEKDAYS:
+        items = days.get(day_name, {}).get("items", [])
+        day_titles = [i.get("title", "") for i in items]
+
+        # No same-day duplicate titles (case-insensitive)
+        lower_titles = [t.lower() for t in day_titles]
+        if len(lower_titles) != len(set(lower_titles)):
+            same_day_dups.append(f"{day_name}: {day_titles}")
+
+        # No Easier:/Stretch: variants in Week 1 weekdays
+        for t in day_titles:
+            if t.startswith("Easier:") or t.startswith("Stretch:"):
+                easier_stretch_found.append(f"{day_name}: {t!r}")
+
+    assert not same_day_dups, (
+        f"Same-day duplicate titles found in Week 1:\n" + "\n".join(same_day_dups)
+    )
+    assert not easier_stretch_found, (
+        f"Easier/Stretch variants appeared in Week 1 weekdays:\n" + "\n".join(easier_stretch_found)
+    )
+
+    # Also check: per-category, no title repeated across the week
+    cat_titles: dict = {}
+    for day_name in WEEKDAYS:
+        for item in days.get(day_name, {}).get("items", []):
+            ck = item.get("category_key", "unknown")
+            t = item.get("title", "").lower()
+            cat_titles.setdefault(ck, []).append((day_name, t))
+
+    cross_week_dups = []
+    for ck, entries in cat_titles.items():
+        seen: dict = {}
+        for day_name, t in entries:
+            if t in seen:
+                cross_week_dups.append(f"{ck}: {t!r} on {seen[t]} AND {day_name}")
+            else:
+                seen[t] = day_name
+
+    assert not cross_week_dups, (
+        "Same title appears for the same category on multiple days in Week 1:\n"
+        + "\n".join(cross_week_dups)
+    )
+
+    total_slots = sum(
+        len(days.get(d, {}).get("items", [])) for d in WEEKDAYS
+    )
+    print(f"  ✓ No same-day duplicate titles")
+    print(f"  ✓ No Easier:/Stretch: variants in Week 1 weekdays")
+    print(f"  ✓ No cross-week per-category title repeats")
+    print(f"  ✓ Total Week 1 weekday activity slots: {total_slots}")
+    for d in WEEKDAYS:
+        titles = [i.get("title", "?") for i in days.get(d, {}).get("items", [])]
+        print(f"    {d}: {titles}")
+
+
+# ---------------------------------------------------------------------------
+# Case 10: Activity bank — capped variants produce no per-bridge title duplicates
+# ---------------------------------------------------------------------------
+
+def test_case10_activity_bank_no_per_bridge_core_duplicates():
+    print("\n─── Case 10: Activity bank — no per-bridge core duplicate titles ───")
+    state = _make_maya_state()
+
+    for dk in ["social_and_emotional", "language_and_communication"]:
+        bank = generate_category_activity_bank(state, dk)
+        acts = bank.get("activities", [])
+
+        # Group core activities by (milestone, activity_family) — i.e., per bridge
+        per_bridge: dict = {}
+        for a in acts:
+            debug = a.get("_debug", {})
+            if debug.get("activity_type", "core") != "core":
+                continue
+            key = (debug.get("milestone", ""), debug.get("activity_family", ""))
+            per_bridge.setdefault(key, []).append(a.get("title", ""))
+
+        bridge_dups = []
+        for (milestone, fam), titles in per_bridge.items():
+            lower = [t.lower() for t in titles]
+            if len(lower) != len(set(lower)):
+                from collections import Counter
+                counts = Counter(lower)
+                dups = {t: c for t, c in counts.items() if c > 1}
+                bridge_dups.append(
+                    f"{dk} | fam={fam!r} | milestone={milestone[:40]!r} → dup titles: {dups}"
+                )
+
+        assert not bridge_dups, (
+            f"Per-bridge core duplicate titles found (capping not working):\n"
+            + "\n".join(bridge_dups)
+        )
+        print(f"  ✓ {dk}: {len(per_bridge)} bridges, no per-bridge core duplicate titles")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -466,6 +613,8 @@ def run_all():
         test_case6_parent_explanation_in_questions,
         test_case7_no_variation_labels_no_duplicate_instructions,
         test_case8_no_internal_language_in_parent_fields,
+        test_case9_week1_schedule_uniqueness,
+        test_case10_activity_bank_no_per_bridge_core_duplicates,
     ]
     passed = 0
     failed = 0

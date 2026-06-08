@@ -234,6 +234,123 @@ def render_state_snapshot(state: Dict[str, Any]) -> str:
 # Streamlit-friendly helper (returns dict for st.json / st.expander)
 # ---------------------------------------------------------------------------
 
+def get_v22_qa_diagnostic(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a QA-focused diagnostic dict for ADMIN_DEBUG=1.
+
+    Covers the four areas Sara checks during local QA:
+      1. Focus domains selected
+      2. Questions per domain — total and parent_explanation status
+      3. Activity bank — size, bridge families, duplicate titles
+      4. Week 1 schedule — activity count, unique titles, duplicates
+    """
+    from genex_core.interview_engine import build_milestone_questions  # lazy
+    from genex_core.activity_engine import (  # lazy
+        _family_bucket,
+        _FAMILY_VARIANTS,
+        _BUCKET_VARIANTS,
+    )
+
+    diag: Dict[str, Any] = {}
+
+    # ── 1. Focus domains ────────────────────────────────────────────────────
+    allocation = state.get("weekly_slot_allocation", {})
+    focus_domains = allocation.get("supported_categories", [])
+    diag["focus_domains"] = focus_domains
+    diag["focus_domain_count"] = len(focus_domains)
+
+    # ── 2. Questions per domain ─────────────────────────────────────────────
+    q_info: Dict[str, Any] = {}
+    for dk in focus_domains:
+        try:
+            qs = build_milestone_questions(state, dk, max_questions_total=15)
+            missing = [
+                q.get("milestone", "?")[:60]
+                for q in qs
+                if not q.get("parent_explanation", "").strip()
+            ]
+            q_info[dk] = {
+                "total_questions": len(qs),
+                "with_parent_explanation": len(qs) - len(missing),
+                "missing_parent_explanation": missing,
+            }
+        except Exception as exc:
+            q_info[dk] = {"error": str(exc)}
+    diag["questions_per_domain"] = q_info
+
+    # ── 3. Activity banks ────────────────────────────────────────────────────
+    bank_info: Dict[str, Any] = {}
+    banks = state.get("activity_banks", {})
+    for dk, bank in banks.items():
+        acts = bank.get("activities", [])
+        title_counts: Dict[str, int] = {}
+        instr_counts: Dict[str, int] = {}
+        families_seen: List[str] = []
+        for a in acts:
+            t = a.get("title", "")
+            instr = a.get("instructions", "")
+            title_counts[t] = title_counts.get(t, 0) + 1
+            instr_counts[instr] = instr_counts.get(instr, 0) + 1
+            fam = a.get("_debug", {}).get("activity_family", a.get("activity_family", "?"))
+            bucket = _family_bucket(fam, dk)
+            in_fv = fam in _FAMILY_VARIANTS
+            in_bv = bucket in _BUCKET_VARIANTS
+            bv_size = len(_BUCKET_VARIANTS.get(bucket, []))
+            entry = f"{fam} | bucket={bucket} | FV={in_fv} | BV={in_bv}({bv_size})"
+            if entry not in families_seen:
+                families_seen.append(entry)
+
+        dup_titles = {t: c for t, c in title_counts.items() if c > 1}
+        dup_instrs = {
+            instr[:60]: c for instr, c in instr_counts.items() if c > 1
+        }
+        bank_info[dk] = {
+            "total_activities": len(acts),
+            "active_bridges": bank.get("active_bridges", 0),
+            "core_variants_per_bridge": bank.get("core_variants_per_bridge", "?"),
+            "duplicate_titles": dup_titles,
+            "duplicate_instructions": dup_instrs,
+            "bridge_families": families_seen,
+        }
+    diag["activity_banks"] = bank_info
+
+    # ── 4. Week 1 schedule ───────────────────────────────────────────────────
+    schedule = state.get("weekly_schedule", {})
+    cycle_week = schedule.get("cycle_week", state.get("cycle_week", 1))
+    days = schedule.get("days", {})
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    sched_display: Dict[str, Any] = {}
+    all_w1_titles: List[str] = []
+    same_day_dup_days: List[str] = []
+
+    for d in weekdays:
+        items = days.get(d, {}).get("items", [])
+        day_titles = [i.get("title", "?") for i in items]
+        sched_display[d] = day_titles
+        all_w1_titles.extend(day_titles)
+        # Same-day duplicate check
+        if len(day_titles) != len(set(t.lower() for t in day_titles)):
+            same_day_dup_days.append(d)
+
+    title_counts_w1: Dict[str, int] = {}
+    for t in all_w1_titles:
+        title_counts_w1[t] = title_counts_w1.get(t, 0) + 1
+    week1_dup_titles = {t: c for t, c in title_counts_w1.items() if c > 1}
+    easier_stretch_in_w1 = [
+        t for t in all_w1_titles
+        if t.startswith("Easier:") or t.startswith("Stretch:")
+    ]
+
+    diag["week1_schedule"] = sched_display
+    diag["week1_cycle_week"] = cycle_week
+    diag["week1_total_activity_slots"] = len(all_w1_titles)
+    diag["week1_unique_titles"] = len(set(all_w1_titles))
+    diag["week1_duplicate_titles_across_week"] = week1_dup_titles
+    diag["week1_same_day_duplicate_days"] = same_day_dup_days
+    diag["week1_easier_stretch_variants_present"] = easier_stretch_in_w1
+
+    return diag
+
+
 def get_debug_payload(
     state: Dict[str, Any],
     category_key: Optional[str] = None,

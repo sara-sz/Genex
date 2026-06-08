@@ -130,10 +130,23 @@ def _pick_activity_that_fits(
     activities: List[Dict[str, Any]],
     used_indices: set,
     remaining_minutes: int,
+    used_keys: Optional[set] = None,
 ) -> Optional[Dict[str, Any]]:
+    """Return the shortest activity that fits in remaining_minutes.
+
+    used_indices — set of list positions already committed (mutated in-place).
+    used_keys    — set of lowercase titles to pre-filter (NOT mutated here;
+                   the caller is responsible for adding the picked title after
+                   a successful pick so it can combine week-level and same-day sets).
+    """
+    if used_keys is None:
+        used_keys = set()
     candidates = []
     for idx, activity in enumerate(activities):
         if idx in used_indices:
+            continue
+        title_key = activity.get("title", "").strip().lower()
+        if title_key in used_keys:
             continue
         if activity.get("is_extended_activity", False):
             continue
@@ -540,6 +553,9 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
 
     assigned_minutes_by_category = {k: 0 for k in target_minutes_by_category.keys()}
     used_activity_indices = {k: set() for k in target_minutes_by_category.keys()}
+    # Week-level title dedup per category — prevents the same title appearing on
+    # multiple days within the same category (belt-and-suspenders on top of index dedup).
+    used_activity_keys: Dict[str, set] = {k: set() for k in target_minutes_by_category.keys()}
     day_names = list(days.keys())
 
     progress_made = True
@@ -565,18 +581,40 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                     continue
 
                 bank = state["activity_banks"].get(category_key, {})
-                activities = bank.get("activities", [])
+
+                # Week 1: only core-type activities (no easier_backup / harder_stretch).
+                # Easier/Stretch variants exist for Week-2 repeat-adapt only.
+                if cycle_week == 1:
+                    activities = [
+                        a for a in bank.get("activities", [])
+                        if a.get("_debug", {}).get("activity_type", "core") == "core"
+                    ]
+                else:
+                    activities = bank.get("activities", [])
+
                 if not activities:
                     continue
+
+                # Combine week-level title set with titles already on today's schedule
+                # (cross-category same-day uniqueness check).
+                day_titles_placed = {
+                    item.get("title", "").strip().lower()
+                    for item in days[day_name]["items"]
+                }
+                combined_blocked = used_activity_keys[category_key] | day_titles_placed
 
                 activity = _pick_activity_that_fits(
                     activities=activities,
                     used_indices=used_activity_indices[category_key],
                     remaining_minutes=remaining_day_minutes,
+                    used_keys=combined_blocked,
                 )
 
                 if activity is None:
                     continue
+
+                # Update week-level title tracker (caller responsibility — not mutated inside picker).
+                used_activity_keys[category_key].add(activity.get("title", "").strip().lower())
 
                 duration = int(activity.get("duration_min", activity.get("duration_minutes", 5) or 5))
                 slot = {

@@ -846,6 +846,108 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "what_to_avoid": "Avoid rushing — each squat-and-pick takes effort; let your child go at their own pace.",
         },
     ],
+    "gesture": [
+        {
+            "title": "Show Me What You Want",
+            "theme": "requesting a favourite thing",
+            "materials": "two favourite small objects or a clear container with a treat inside",
+            "instructions": (
+                "Put a favourite item in view but slightly out of reach — or in a clear container. "
+                "Wait silently. "
+                "When your child looks, reaches, points, or makes any sound, give it immediately. "
+                "Name the item as you hand it over: 'banana!' "
+                "Repeat with a different item. Do 3-4 turns."
+            ),
+            "success_criteria": "Your child uses any gesture, reach, gaze, or sound to request at least one item.",
+            "make_easier": "Place the item right in front of your child and just wait — any reaching counts.",
+            "make_harder": "Move the item farther away so your child must point or come to you.",
+            "group_play_line": "With another child, one holds the item and the other practises requesting.",
+            "what_to_avoid": "Avoid giving the item before any communication attempt — the wait is the key step.",
+        },
+        {
+            "title": "Help Me Open It",
+            "theme": "requesting help with a container",
+            "materials": "a small container (jar, bag, or box) with a favourite snack or toy inside",
+            "instructions": (
+                "Hand your child a closed container they can't easily open. "
+                "Wait. "
+                "If they struggle, look at you, or make a sound — say 'you need help!' and open it together. "
+                "Do 3-4 turns, letting your child initiate the request each time."
+            ),
+            "success_criteria": "Your child looks at you, reaches toward you, or vocalises to ask for help.",
+            "make_easier": "Slightly loosen the lid first so a small effort gets it open — celebrate the attempt.",
+            "make_harder": "Wait until your child makes eye contact before you help.",
+            "group_play_line": "Two children take turns: one holds the container, the other asks for help.",
+            "what_to_avoid": "Avoid opening the container for your child before they've had a chance to request.",
+        },
+        {
+            "title": "Point and Get",
+            "theme": "pointing to get something",
+            "materials": "two objects placed across the room or on a high shelf",
+            "instructions": (
+                "Stand with your child facing two items they like (placed a little out of reach). "
+                "Ask 'which one do you want?' "
+                "Wait for any pointing, reaching, or looking. "
+                "When they indicate one, walk over and get it together. "
+                "Do 3-4 choices."
+            ),
+            "success_criteria": "Your child points, reaches toward, or clearly looks at one item to make a choice.",
+            "make_easier": "Hold one item in each hand and wait for any lean, reach, or gaze.",
+            "make_harder": "Name three options and wait for your child to point to the right one.",
+            "group_play_line": "Two children take turns pointing to what they want from a shared set of toys.",
+            "what_to_avoid": "Avoid guessing which item your child wants before they've communicated.",
+        },
+    ],
+    "sound": [
+        {
+            "title": "Animal Sound Game",
+            "theme": "animal sounds",
+            "materials": "no materials needed",
+            "instructions": (
+                "Say an animal name and make its sound slowly: 'cow — moo!' "
+                "Wait and look expectantly at your child. "
+                "Accept any attempt — a sound, a word, or just a smile. "
+                "Try 4-5 animals. Celebrate each attempt."
+            ),
+            "success_criteria": "Your child attempts any sound or word for at least one animal.",
+            "make_easier": "Just make the sound and pause — wait for any reaction at all.",
+            "make_harder": "Make the sound without naming the animal and see if your child names it.",
+            "group_play_line": "Two children take turns: one names the animal, the other makes the sound.",
+            "what_to_avoid": "Avoid repeating the same sound more than twice before moving to the next animal.",
+        },
+        {
+            "title": "Sing and Pause",
+            "theme": "song pause game",
+            "materials": "a simple song your child knows",
+            "instructions": (
+                "Start singing a familiar song together. "
+                "Pause just before a well-known word or sound. "
+                "Wait 3 seconds for your child to fill it in — any sound or approximation is perfect. "
+                "Finish the word together and keep going. Pause 4-5 times."
+            ),
+            "success_criteria": "Your child fills in or attempts at least one word or sound during a pause.",
+            "make_easier": "Sing the word yourself first, then go back and pause at the same spot again.",
+            "make_harder": "Pause at a less predictable part of the song and wait a full 5 seconds.",
+            "group_play_line": "Two children take turns filling in the pauses — one pause each.",
+            "what_to_avoid": "Avoid moving on before giving your child the full 3-second pause to try.",
+        },
+        {
+            "title": "Silly Sounds Mirror",
+            "theme": "sound imitation game",
+            "materials": "no materials needed",
+            "instructions": (
+                "Sit facing your child. "
+                "Make a simple mouth sound — a pop, a raspberry, a click, or a hum. "
+                "Say 'you try!' and wait. Accept any sound. "
+                "Let your child make a sound for you to copy back. Do 4-5 rounds each way."
+            ),
+            "success_criteria": "Your child attempts to copy or produce any sound during the game.",
+            "make_easier": "Make a very simple sound (just a hum or a long 'aah') and wait.",
+            "make_harder": "Do two sounds in a row and see if your child can copy the sequence.",
+            "group_play_line": "With another child, one leads the sounds while the other copies.",
+            "what_to_avoid": "Avoid expecting an exact copy — any sound attempt counts.",
+        },
+    ],
 }
 
 
@@ -1255,7 +1357,28 @@ def generate_category_activity_bank(
 
     raw_activities: List[Dict[str, Any]] = []
     for bridge in active_bridges:
-        for variant in range(1, core_variants + 1):
+        # Cap core_variants to the number of genuinely distinct cards available for
+        # this bridge's activity_family/bucket.  Without this cap, variant N % 3 wraps
+        # back to card 0 of a 3-card bucket, producing content-duplicate activities at
+        # different list indices — which the index-based scheduler dedup cannot catch.
+        fam_b = bridge.get("activity_family", "")
+        bucket_b = _family_bucket(fam_b, category_key)
+        fam_cards_b = _FAMILY_VARIANTS.get(fam_b, [])
+        bucket_cards_b = _BUCKET_VARIANTS.get(bucket_b, [])
+        if fam_cards_b:
+            max_distinct_b = len(fam_cards_b)
+        elif bucket_cards_b:
+            max_distinct_b = len(bucket_cards_b)
+        else:
+            # Generic fallback: cap at the number of theme slots to avoid title cycling.
+            # If there are no theme slots at all, produce only 1 card per bridge — otherwise
+            # every variant would generate the same title (generic fallback returns one fixed
+            # title for buckets without theme variants).
+            bucket_themes = _FAMILY_THEMES.get(bucket_b, [])
+            max_distinct_b = len(bucket_themes) if bucket_themes else 1
+        effective_variants = max(1, min(core_variants, max_distinct_b))
+
+        for variant in range(1, effective_variants + 1):
             raw_activities.append(
                 _v22_make_activity(category_key, bridge, "core", variant, state, week=1)
             )

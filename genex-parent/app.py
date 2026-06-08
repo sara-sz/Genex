@@ -78,7 +78,7 @@ from genex_core.interview_engine import (
     normalize_followup_answer,
     derive_performance_interpretation,
 )
-from genex_core.admin_debug_view import is_admin_debug, get_debug_payload, render_activity_debug_card
+from genex_core.admin_debug_view import is_admin_debug, get_debug_payload, render_activity_debug_card, get_v22_qa_diagnostic
 
 _ADMIN_DEBUG = is_admin_debug()
 
@@ -1161,8 +1161,10 @@ def screen_weekly_plan():
                      3: "Week 3 — Fresh themes", 4: "Week 4 — New themes"}
     st.caption(f"📅 {_cycle_labels.get(cycle_week, f'Cycle week {cycle_week}')}")
 
-    # V22: admin debug panel
+    # V22: admin debug panels (ADMIN_DEBUG=1 only)
     if _ADMIN_DEBUG:
+        with st.expander("🔧 Admin Debug — V22 QA Diagnostic", expanded=True):
+            st.json(get_v22_qa_diagnostic(state))
         with st.expander("🔧 Admin Debug — V22 State Snapshot", expanded=False):
             st.json(get_debug_payload(state))
 
