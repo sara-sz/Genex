@@ -1,15 +1,25 @@
 """
 genex_core/support_tiers.py
 ---------------------------
-Support tier assignment, next milestone selection, and family guidance floor.
-Extracted from genex_interview_activity_v11.ipynb — logic unchanged.
+Support tier assignment, bridge plan building, and family guidance floor.
+
+V22 update:
+- select_next_milestones() now delegates to bridge_selector.select_next_milestones()
+  (uses bridge_step_number=1 rows, V22 scoring rules).
+- build_v22_plan_for_category() is the new V22 entry point; wraps
+  bridge_selector.build_bridge_plan_for_category() with tier context.
+- determine_family_guidance_floor() privacy fix: no longer includes child name
+  in summary text.
+- No-clear-gap mode ("parent_concern_support_no_clear_gap") is handled by
+  bridge_selector and surfaced here via planning_mode in the returned plan dict.
+- All pre-V22 public APIs (compute_support_metrics, get_support_tier, etc.) unchanged.
 """
 
 from typing import Any, Dict, List, Optional
 
 from genex_core.config import DOMAIN_CONFIG
 from genex_core.interview_engine import ensure_concern_profile
-from genex_core.milestones import get_category_questions, get_category_to_subdomains
+from genex_core.milestones import get_category_to_subdomains
 from genex_core.scoring import get_effective_dev_age, compute_language_scoring_profile
 
 
@@ -100,7 +110,10 @@ def no_special_support_needed(state: Dict[str, Any], category_key: str) -> bool:
 
 
 def determine_family_guidance_floor(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Soft planning floor when all categories are technically no special support."""
+    """Soft planning floor when all categories are technically no special support.
+
+    V22: summary text no longer includes child name (privacy rule).
+    """
     concern_profile = ensure_concern_profile(state)
     child = state["child"]
 
@@ -131,10 +144,11 @@ def determine_family_guidance_floor(state: Dict[str, Any]) -> Dict[str, Any]:
     daily_time_min = int(child.get("daily_time_min", 10))
     target_weekly_minutes = min(max(15, daily_time_min * 3), daily_time_min * 5)
 
+    # V22 privacy: "your child" — child name never included in summary text
     summary = (
-        f"Based on the milestone interview, {child['name']} does not currently appear to need "
+        "Based on the milestone interview, your child does not currently appear to need "
         f"scheduled special support. Because the family expressed concern about {category_display}, "
-        f"the system will still provide short age-appropriate enrich-and-observe activities in this category."
+        "Genex will still provide short age-appropriate enrich-and-observe activities in this category."
     )
 
     info = {
@@ -160,8 +174,17 @@ def select_next_milestones(
     category_key: str,
     max_milestones: int = 6,
 ) -> Dict[str, Any]:
-    """Select milestones for support planning or soft enrich-and-observe guidance."""
-    child = state["child"]
+    """Select milestones for support planning.
+
+    V22: delegates to bridge_selector.select_next_milestones(), which uses
+    bridge_step_number=1 rows, V22 scoring_norm_answer, and the no-clear-gap
+    concern-support path.
+
+    Returns dict with keys: status, milestones, mode, message, source.
+    """
+    from genex_core.bridge_selector import select_next_milestones as _v22_select  # noqa
+
+    child = state.get("child", {})
     dev_age = get_effective_dev_age(state, category_key)
     soft_floor_active = is_family_guidance_category(state, category_key)
 
@@ -172,48 +195,79 @@ def select_next_milestones(
         return {
             "status": "no_special_support",
             "message": (
-                f"We do not think {child['name']} has a meaningful delay in "
+                f"Your child does not appear to have a meaningful delay in "
                 f"{DOMAIN_CONFIG[category_key]['display']} and may not need special support "
                 f"in this category right now."
             ),
             "milestones": [],
+            "mode": "no_special_support",
+            "source": "tier_check",
         }
 
-    chrono = min(child["chronological_months"], 60)
-    if soft_floor_active:
-        min_m = max(2, chrono - 3)
-        max_m = min(60, chrono + 3)
-    else:
-        min_m = max(2, dev_age)
-        max_m = min(60, dev_age + 12)
+    result = _v22_select(state, category_key, max_milestones=max_milestones)
+    milestones = result.get("milestones", [])
 
-    subset = get_category_questions(category_key, min_months=min_m, max_months=max_m)
-    if subset.empty:
-        return {
-            "status": "success",
-            "milestones": [],
-            "mode": "soft_floor" if soft_floor_active else "support",
-        }
-
-    subset = subset.sort_values(["months", "milestone"]).copy()
-    milestones = []
-    seen = set()
-
-    for _, row in subset.iterrows():
-        key = (int(row["months"]), str(row["milestone"]).strip())
-        if key in seen:
-            continue
-        seen.add(key)
-        milestones.append({
-            "months": int(row["months"]),
-            "milestone": row["milestone"],
-            "subdomain": str(row.get("subdomain", "unspecified")),
-        })
+    # Soft floor override: if bridge_selector found nothing, use enrich-and-observe path
+    if not milestones and soft_floor_active:
+        result["mode"] = "soft_floor"
+        result["message"] = (
+            f"No gap milestones found for {DOMAIN_CONFIG.get(category_key, {}).get('display', category_key)}, "
+            "but age-appropriate enrichment activities will be provided."
+        )
 
     return {
-        "status": "success",
-        "milestones": milestones[:max_milestones],
-        "mode": "soft_floor" if soft_floor_active else "support",
+        "status": "success" if milestones else "no_milestones",
+        "milestones": milestones,
+        "mode": result.get("mode", "standard"),
+        "message": result.get("message", ""),
+        "source": result.get("source", "table"),
+    }
+
+
+def build_v22_plan_for_category(
+    state: Dict[str, Any],
+    category_key: str,
+) -> Dict[str, Any]:
+    """V22 entry point: build the full bridge plan for one domain category.
+
+    Combines support tier check + bridge_selector.build_bridge_plan_for_category().
+
+    Returns:
+        active_bridge_steps : List[Dict]  — bridges for activity_engine
+        planning_mode       : str         — "standard" | "parent_concern_support_no_clear_gap" | etc.
+        target_milestones   : List[Dict]
+        tier                : str         — support tier for this category
+        tier_metrics        : Dict        — full compute_support_metrics output
+        skipped             : bool        — True if no support needed and no floor active
+        skip_reason         : str | None
+    """
+    from genex_core.bridge_selector import build_bridge_plan_for_category as _v22_build  # noqa
+
+    soft_floor_active = is_family_guidance_category(state, category_key)
+    tier_metrics = compute_support_metrics(state, category_key)
+    tier = tier_metrics["tier"]
+
+    if tier == "no_special_support" and not soft_floor_active:
+        return {
+            "active_bridge_steps": [],
+            "planning_mode": "skipped",
+            "target_milestones": [],
+            "tier": tier,
+            "tier_metrics": tier_metrics,
+            "skipped": True,
+            "skip_reason": "no_special_support",
+        }
+
+    plan = _v22_build(state, category_key)
+
+    return {
+        "active_bridge_steps": plan.get("active_bridge_steps", []),
+        "planning_mode": plan.get("planning_mode", "standard"),
+        "target_milestones": plan.get("target_milestones", []),
+        "tier": tier,
+        "tier_metrics": tier_metrics,
+        "skipped": False,
+        "skip_reason": None,
     }
 
 

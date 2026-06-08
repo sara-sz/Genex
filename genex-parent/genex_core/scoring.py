@@ -2,7 +2,12 @@
 genex_core/scoring.py
 ---------------------
 Band-stage classification, developmental age estimation, and language scoring profile.
-Extracted from genex_interview_activity_v11.ipynb — logic unchanged.
+
+V22 update:
+- summarize_answers_by_band now prefers scoring_norm_answer (performance-barrier-adjusted)
+  over raw norm_answer when present on each QnA item.
+- finalize_domain_dev_age likewise uses scoring_norm_answer.
+- All public APIs unchanged.
 """
 
 from typing import Any, Dict, List, Optional
@@ -87,17 +92,33 @@ def classify_band_stage(
     }
 
 
+def _v22_effective_norm(answer_item: Dict[str, Any]) -> str:
+    """V22: prefer scoring_norm_answer (performance-barrier-adjusted) over raw norm_answer.
+
+    scoring_norm_answer is set by interview_engine.record_answer() when a follow-up
+    sub-question reveals the raw answer was a barrier (e.g. distraction) rather than
+    a true skill gap.  If absent, fall back to norm_answer.
+    """
+    sna = answer_item.get("scoring_norm_answer")
+    if sna and str(sna).strip().lower() not in {"", "none", "nan"}:
+        return str(sna).strip().lower()
+    return str(answer_item.get("norm_answer", "no")).strip().lower()
+
+
 def summarize_answers_by_band(
     answers: List[Dict[str, Any]],
     min_yes_confirm: int = 2,
     yes_ratio_confirm: float = 0.60,
 ) -> Dict[int, Dict[str, Any]]:
-    """Summarize answers by month band with 3-stage labels."""
+    """Summarize answers by month band with 3-stage labels.
+
+    V22: uses scoring_norm_answer (barrier-adjusted) when present.
+    """
     band_summary = {}
 
     for a in answers:
         month = int(a["months"])
-        norm = a["norm_answer"]
+        norm = _v22_effective_norm(a)  # V22: barrier-adjusted answer
 
         if month not in band_summary:
             band_summary[month] = {
@@ -270,7 +291,11 @@ def compute_language_scoring_profile(
 
 
 def finalize_domain_dev_age(state: Dict[str, Any], category_key: str) -> None:
-    """After QnA for a domain, compute and store dev_age in state."""
+    """After QnA for a domain, compute and store dev_age in state.
+
+    V22: answers fed to compute_dev_age_from_answers now include scoring_norm_answer,
+    which summarize_answers_by_band will prefer over raw norm_answer.
+    """
     answers = [
         a for a in state.get("qna", {}).get(category_key, [])
         if a.get("answer_status", "ok") != "api_error"

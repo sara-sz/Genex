@@ -1,33 +1,57 @@
 """
 genex_core/activity_engine.py
------------------------------
-Home-support activity bank generation per domain.
-Uses OpenAI if available; falls back to milestone-based deterministic activities.
-AI is used only for parent-friendly wording — scoring and tier logic are deterministic.
+------------------------------
+V22 activity bank generation.
+
+Rules:
+- activity_family is a hard guardrail — LLM cannot switch domains.
+- LLM is used only for parent-friendly wording (title, theme, instructions).
+  All scoring, routing, and bridge selection are deterministic.
+- Child first name is NEVER sent to the LLM ("your child" always).
+- Uses ACTIVITY_MODEL env var; falls back to deterministic text if not set.
+- initial plans: bridge_step_number = 1 only (enforced by bridge_selector).
+- previous_bridge_step stored in activity debug fields but NOT used.
+- Validators run before any activity is returned.
+- Parent-facing card schema:
+    title, duration_minutes, why, instructions, success,
+    easier, harder, group_play, avoid, materials, feedback_options
+- Debug-only fields (in _debug sub-dict):
+    subdomain, milestone, bridge_step_1, activity_family,
+    planning_mode, source_table_row, validation_warnings
 """
 
+from __future__ import annotations
+
 import json
+import logging
+import math
 import os
-from typing import Any, Dict, List, Optional
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
-from genex_core.config import DOMAIN_CONFIG
+from genex_core.activity_validator import filter_valid_activities
+from genex_core.bridge_selector import build_bridge_plan_for_category, select_next_milestones
+from genex_core.config import (
+    ACTIVITY_FEEDBACK_OPTIONS,
+    ACTIVITY_MODEL,
+    DOMAIN_CONFIG,
+    ENGINE_VERSION,
+    V22_MAX_MILESTONES_PER_DOMAIN,
+    V22_MIN_MILESTONES_PER_DOMAIN,
+    V22_PER_ACTIVITY_MIN,
+    V22_WEEK1_DAYS,
+    V22_MAX_DAILY_ACTIVITIES,
+)
 from genex_core.interview_engine import ensure_concern_profile
-from genex_core.safety import (
-    ensure_safety_profile,
-    format_safety_constraints_for_prompt,
-    apply_safety_constraints_to_activities,
-    is_context_dependent_bonus_activity,
-)
-from genex_core.support_tiers import (
-    get_support_tier,
-    no_special_support_needed,
-    is_family_guidance_category,
-    select_next_milestones,
-    compute_support_metrics,
-)
-from genex_core.scoring import get_effective_dev_age
+from genex_core.safety import ensure_safety_profile, format_safety_constraints_for_prompt
+from genex_core.table_loader import get_family_description
 
-# Lazy OpenAI client
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# OpenAI client (lazy)
+# ---------------------------------------------------------------------------
+
 _openai_client = None
 _openai_initialized = False
 
@@ -37,626 +61,572 @@ def _get_openai_client():
     if _openai_initialized:
         return _openai_client
     _openai_initialized = True
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if api_key:
-        try:
-            from openai import OpenAI
-            _openai_client = OpenAI(api_key=api_key)
-        except ImportError:
-            _openai_client = None
+    if not ACTIVITY_MODEL:
+        logger.warning(
+            "[activity_engine] ACTIVITY_MODEL env var not set. "
+            "Using deterministic fallback activity wording."
+        )
+        return None
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        logger.warning("[activity_engine] OPENAI_API_KEY not set.")
+        return None
+    try:
+        from openai import OpenAI
+        _openai_client = OpenAI(api_key=api_key)
+    except ImportError:
+        logger.warning("[activity_engine] openai package not installed.")
+        _openai_client = None
     return _openai_client
 
 
-def get_category_activity_guardrails(category_key: str) -> str:
-    """Return domain-specific activity guardrails to reduce cross-domain drift."""
-    if category_key == "movement_and_physical":
-        return (
-            "Category-specific rules for Movement / Physical:\n"
-            "- Focus on posture, strength, balance, coordination, reaching, grasping, sitting, "
-            "crawling, standing, walking, or fine-motor use.\n"
-            "- The main goal should be physical skill practice.\n"
-            "- Do NOT make this mainly about speech, naming, or social-emotional labeling."
-        )
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _norm(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def _clean(value: Any) -> str:
+    s = str(value or "").strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+def _family_bucket(fam: str, category_key: str = "") -> str:
+    fam = _norm(fam)
+    patterns = [
+        ("book_page", r"book_page|page_turn"),
+        ("fork_spoon", r"fork|spoon|utensil|feeding"),
+        ("dressing_on", r"dressing_on|clothes_on"),
+        ("dressing_off", r"dressing_off|clothes_off"),
+        ("buttoning", r"button|fastener|zipper"),
+        ("beading", r"bead|thread|peg|pincer|grasp|prewriting|scribble|crayon|draw|stack|block|fine_motor"),
+        ("catch_ball", r"catch_ball|ball"),
+        ("jump_prep", r"jump|hop|squat|balance|walk|stair|gross_motor|safe_"),
+        ("expressive_word", r"expressive|vocabulary|first_word|single_word|three_words|book_object_naming|object_naming"),
+        ("sound", r"sound|vocal|babbl|raspberr|squeal|coo|early_vocal"),
+        ("gesture", r"gesture|request|attention_getting|arms_up|social_caregiver"),
+        ("receptive_direction", r"receptive|direction|body_part|book_picture"),
+        ("action_label", r"action_picture|action_label|action_words"),
+        ("function_question", r"function_question"),
+        ("sentence", r"sentence|phrase|two_word"),
+        ("conversation", r"conversation"),
+        ("time_words", r"time_words"),
+        ("counting", r"count|number"),
+        ("letters", r"letter"),
+        ("attention", r"attention"),
+        ("matching", r"match|sort|color|shape"),
+        ("routine", r"routine|cleanup"),
+        ("social_turn", r"peer|turn_taking|sharing|imitation|peekaboo|laughter|social|referencing|emotion|pretend|helper|affection|face"),
+    ]
+    for bucket, pat in patterns:
+        if re.search(pat, fam):
+            return bucket
     if category_key == "language_and_communication":
-        return (
-            "Category-specific rules for Language / Communication:\n"
-            "- Focus on sounds, babbling, turn-taking vocalization, following simple verbal directions, "
-            "gestures for communication, word use, imitation of sounds, naming, requesting, "
-            "commenting, comprehension, or speech clarity.\n"
-            "- The main goal should be communication.\n"
-            "- Do NOT make this mainly about gross motor practice."
-        )
+        return "expressive_word"
     if category_key == "social_and_emotional":
-        return (
-            "Category-specific rules for Social / Emotional:\n"
-            "- Focus on eye contact, shared attention, social reciprocity, imitation of facial "
-            "expressions, joint play, turn-taking, response to name, emotional connection, "
-            "emotional regulation, or interaction with caregiver or peers.\n"
-            "- The main goal should be social engagement or emotional regulation."
-        )
+        return "social_turn"
+    if category_key == "movement_and_physical":
+        return "beading"
     if category_key == "cognitive":
-        return (
-            "Category-specific rules for Cognitive / Adaptive:\n"
-            "- Focus on attention, problem-solving, object permanence, simple cause-and-effect, "
-            "routines, imitation of actions, functional play, early self-help, or following directions.\n"
-            "- The main goal should be cognitive/adaptive skill building."
-        )
-    return ""
-
-
-def _milestone_to_activity_title(milestone: str, category_key: str) -> str:
-    """Convert a CDC milestone description into a short activity-style title."""
-    DOMAIN_VERB = {
-        "movement_and_physical": "Move & Play",
-        "language_and_communication": "Talk & Listen",
-        "social_and_emotional": "Connect & Play",
-        "cognitive": "Think & Explore",
-    }
-    prefix = DOMAIN_VERB.get(category_key, "Practice")
-    # Take the key verb + object from the milestone (first 4 words)
-    words = milestone.strip().split()
-    core = " ".join(words[:4]).rstrip(".,;:")
-    return f"{prefix}: {core.lower()}"
+        return "attention"
+    return "general"
 
 
 # ---------------------------------------------------------------------------
-# Fallback helpers: materials + instructions keyed to domain and milestone text
+# Theme rotation for weeks 3-4
 # ---------------------------------------------------------------------------
 
-_MOVEMENT_KEYWORD_MATERIALS = [
-    (["walk", "steps", "stand", "balance"],
-     "non-slip floor space, furniture to hold for balance"),
-    (["crawl", "creep", "climb"],
-     "soft mat or blanket on the floor, low cushions or pillows"),
-    (["reach", "grasp", "pick up", "transfer", "hold"],
-     "small soft toy, block, or safe household object to grasp"),
-    (["sit", "seated", "upright"],
-     "firm surface or supported seat, small pillow for positioning"),
-    (["kick", "jump", "hop", "run"],
-     "open floor space, soft ball"),
-    (["roll", "tummy"],
-     "soft mat or blanket on the floor"),
-    (["throw", "catch"],
-     "soft ball or balloon"),
-    (["draw", "scribble", "pincer", "finger", "stacking"],
-     "large crayons or chunky blocks, plain paper"),
-]
-
-_LANGUAGE_KEYWORD_MATERIALS = [
-    (["sound", "babble", "vocali", "coo"],
-     "quiet room, face-to-face positioning; no materials needed"),
-    (["word", "say", "name", "label", "request"],
-     "favourite toy or familiar object to name and request"),
-    (["gesture", "point", "wave", "sign"],
-     "familiar objects placed slightly out of reach"),
-    (["follow", "direction", "listen", "command"],
-     "two or three simple familiar objects (cup, ball, shoe)"),
-    (["book", "story", "picture", "read"],
-     "simple board book with clear pictures"),
-    (["song", "rhyme", "sing"],
-     "a short nursery rhyme or favourite song; no materials needed"),
-    (["imitat", "copy"],
-     "mirror or a face-to-face space"),
-]
-
-_SOCIAL_KEYWORD_MATERIALS = [
-    (["eye contact", "look at", "gaze"],
-     "quiet room; face-to-face positioning — no materials needed"),
-    (["smile", "laugh", "facial"],
-     "mirror; no other materials needed"),
-    (["turn-tak", "back-and-forth", "reciproc"],
-     "simple cause-and-effect toy or soft ball for rolling back and forth"),
-    (["play", "peer", "friend", "sibling"],
-     "a shared toy such as blocks, simple board game, or ball"),
-    (["imitat", "copy", "mimic"],
-     "common household objects (spoon, cup) to imitate in play"),
-    (["comfort", "regulat", "calm", "sooth"],
-     "comfort item (stuffed animal, blanket), calm space"),
-    (["response to name", "respond", "attention"],
-     "no materials; use child's name and a favourite toy as reward"),
-    (["separat", "goodbye", "transition"],
-     "a transitional comfort object; predictable routine cues"),
-]
-
-_COGNITIVE_KEYWORD_MATERIALS = [
-    (["object permanence", "hide", "peek", "under"],
-     "small toy and a cloth or cup to hide it under"),
-    (["cause", "effect", "push", "button", "activate"],
-     "simple cause-and-effect toy (pop-up, light-up toy)"),
-    (["sort", "match", "categor"],
-     "two sets of objects by colour or shape (blocks, cups)"),
-    (["stack", "nest", "put in", "container"],
-     "stacking cups or nesting bowls"),
-    (["puzzle", "shape"],
-     "simple shape sorter or 2–4 piece wooden puzzle"),
-    (["imitat", "pretend", "play with"],
-     "everyday objects for imitation (spoon, phone, cup)"),
-    (["routine", "self-help", "dress", "feed", "wash"],
-     "child's clothing items, spoon or cup, or a wash cloth"),
-    (["follow", "direction", "instruction"],
-     "two or three familiar household objects"),
-    (["attention", "focus", "concentrate"],
-     "preferred toy or activity with minimal distractions"),
-]
-
-_DOMAIN_DEFAULT_MATERIALS = {
-    "movement_and_physical": "open floor space, soft mat, age-appropriate small toys",
-    "language_and_communication": "familiar toys, simple board book, face-to-face space",
-    "social_and_emotional": "quiet space, favourite toy, mirror",
-    "cognitive": "simple household objects, blocks, cause-and-effect toy",
-}
-
-_DOMAIN_KEYWORD_MATERIALS = {
-    "movement_and_physical": _MOVEMENT_KEYWORD_MATERIALS,
-    "language_and_communication": _LANGUAGE_KEYWORD_MATERIALS,
-    "social_and_emotional": _SOCIAL_KEYWORD_MATERIALS,
-    "cognitive": _COGNITIVE_KEYWORD_MATERIALS,
+_FAMILY_THEMES: Dict[str, List[str]] = {
+    "book_page": ["board book", "picture book", "peek-a-boo book", "interactive book"],
+    "fork_spoon": ["snack time", "mealtime", "pretend restaurant", "teddy feeding"],
+    "dressing_on": ["morning routine", "dress-up game", "laundry helper", "mirror routine"],
+    "dressing_off": ["bath routine", "bedtime routine", "teddy dressing", "laundry pull"],
+    "buttoning": ["button board", "dress-up fasteners", "button treasure"],
+    "beading": ["bead game", "peg stacker", "art time", "block build"],
+    "catch_ball": ["soft ball game", "basket target", "rolling game"],
+    "jump_prep": ["frog game", "floor sticker", "squat toy game"],
+    "expressive_word": ["toy choice", "snack choice", "family photo names", "book naming"],
+    "sound": ["sound mirror", "animal sounds", "song pause", "silly sounds"],
+    "gesture": ["choice request", "help request", "routine pause", "pointing game"],
+    "receptive_direction": ["give-me game", "cleanup direction", "body part game"],
+    "action_label": ["action picture", "family action", "puppet action"],
+    "function_question": ["object function", "function basket", "pretend shopping"],
+    "sentence": ["photo sentence", "toy scene talk", "phrase expansion"],
+    "conversation": ["short chat", "puppet chat", "photo conversation"],
+    "time_words": ["routine sort", "now/later choice", "first/then routine"],
+    "counting": ["counting blocks", "snack counting", "toy lineup"],
+    "letters": ["letter hunt", "book letter search", "letter basket"],
+    "attention": ["two-minute finish", "sticker card", "block build finish"],
+    "matching": ["same/different match", "color sort", "sock match"],
+    "routine": ["cleanup routine", "helper job", "two-step routine"],
+    "social_turn": ["my-turn-your-turn", "peekaboo", "copy-me game", "social referencing"],
 }
 
 
-def _infer_materials(milestone_text: str, category_key: str) -> str:
-    """Pick the most specific materials string for this milestone."""
-    text = milestone_text.lower()
-    for keywords, materials in _DOMAIN_KEYWORD_MATERIALS.get(category_key, []):
-        if any(kw in text for kw in keywords):
-            return materials
-    return _DOMAIN_DEFAULT_MATERIALS.get(category_key, "common household items")
+def _variant_theme(fam: str, variant: int, week: int = 1) -> str:
+    bucket = _family_bucket(fam)
+    themes = _FAMILY_THEMES.get(bucket, ["home play", "daily routine", "family activity"])
+    # Week 3+ rotates to later theme slots for novelty (same bridge, different context)
+    offset = 2 if week >= 3 else 0
+    idx = ((variant - 1) + offset) % max(1, len(themes))
+    return themes[idx]
+
+
+def _get_allowed_themes(fam: str) -> List[str]:
+    bucket = _family_bucket(fam)
+    return _FAMILY_THEMES.get(bucket, ["home play", "daily routine"])
 
 
 # ---------------------------------------------------------------------------
-# Domain-specific instruction templates
+# LLM prompt  (V22 — privacy: "your child" always)
 # ---------------------------------------------------------------------------
 
-def _build_fallback_instructions(
-    child_name: str,
-    milestone_text: str,
+def _v22_activity_prompt(
+    state: Dict[str, Any],
     category_key: str,
-    materials: str,
+    bridge: Dict[str, Any],
+    variant: int,
+    week: int = 1,
 ) -> str:
-    """Return a warm, specific instruction paragraph for one fallback activity."""
-    text = milestone_text.lower()
+    child = state.get("child", {})
+    fam = bridge.get("activity_family", "")
+    desc = get_family_description(fam) or ""
+    safety = format_safety_constraints_for_prompt(ensure_safety_profile(state))
+    focus = _clean(bridge.get("bridge_step", "") or bridge.get("activity_focus_step", ""))
+    theme = _variant_theme(fam, variant, week)
+    allowed_themes = ", ".join(_get_allowed_themes(fam))
 
-    if category_key == "movement_and_physical":
-        if any(k in text for k in ["walk", "steps", "stand", "balance"]):
-            return (
-                f"Set up a safe open space for {child_name} to practice standing or walking. "
-                f"Stand or kneel a short distance away and hold out your hands as a target. "
-                f"Cheer every attempt — even one step counts. "
-                f"Try 3–5 minutes and stop before {child_name} gets tired or frustrated."
-            )
-        if any(k in text for k in ["reach", "grasp", "pick up", "transfer", "hold"]):
-            return (
-                f"Place a small object just within {child_name}'s reach and encourage them to "
-                f"pick it up or pass it between hands. You can slowly move the object to one "
-                f"side to encourage reaching across the midline. Keep sessions short — 3 minutes "
-                f"is plenty. Celebrate every grasp with a smile or clap."
-            )
-        if any(k in text for k in ["crawl", "creep", "climb"]):
-            return (
-                f"Put a favourite toy just beyond {child_name}'s reach on a soft mat. "
-                f"Encourage them to crawl or creep toward it. You can also create a simple "
-                f"obstacle path with cushions to crawl around or over. Keep it playful — "
-                f"3 to 5 minutes at a time."
-            )
-        if any(k in text for k in ["roll", "tummy"]):
-            return (
-                f"Place {child_name} on a soft mat for tummy time or rolling practice. "
-                f"Get down to their level and use a toy or your face to encourage head lifting "
-                f"and weight shifting. Even 2–3 minutes of tummy time several times a day adds up. "
-                f"Stop if {child_name} becomes upset."
-            )
-        if any(k in text for k in ["draw", "scribble", "pincer", "finger"]):
-            return (
-                f"Set up a flat surface with large crayons or safe objects for {child_name} to "
-                f"handle. Demonstrate picking up, transferring, and placing the item, then let "
-                f"{child_name} try. Narrate what you see: 'You're picking it up!' Aim for 3–5 minutes."
-            )
-        # generic movement
-        return (
-            f"Create a short movement game around this skill: {milestone_text}. "
-            f"Get on the floor with {child_name}, demonstrate the movement, and invite them to try. "
-            f"Keep sessions to 3–5 minutes and follow {child_name}'s energy level."
-        )
-
-    if category_key == "language_and_communication":
-        if any(k in text for k in ["sound", "babble", "vocali", "coo"]):
-            return (
-                f"During a calm, quiet moment, get face-to-face with {child_name}. "
-                f"Make a simple sound (like 'ba' or 'ma') and wait a few seconds — leave space "
-                f"for {child_name} to respond. Mirror any sounds they make back to them. "
-                f"This back-and-forth turn-taking builds the foundation for conversation. "
-                f"3–5 minutes is enough."
-            )
-        if any(k in text for k in ["word", "say", "name", "label", "request"]):
-            return (
-                f"During play or daily routines, hold up a familiar object and name it clearly: "
-                f"'Ball!' or 'Cup!' Pause and give {child_name} time to try the word or a gesture. "
-                f"Accept any attempt — a sound or reaching counts. Don't prompt more than twice "
-                f"in a row. Repeat naturally across the day rather than in a drill."
-            )
-        if any(k in text for k in ["follow", "direction", "listen", "command"]):
-            return (
-                f"During a familiar routine (like tidying up or getting ready), give {child_name} "
-                f"one simple direction: 'Give me the cup.' Start with objects right in front of them. "
-                f"Demonstrate first if needed, then repeat the direction and wait. Build up to "
-                f"two-step directions once one-step is solid."
-            )
-        if any(k in text for k in ["book", "story", "picture", "read"]):
-            return (
-                f"Sit with {child_name} and open a simple picture book. Point to images and name "
-                f"them: 'Dog! The dog is running.' Pause to let {child_name} point or make a sound. "
-                f"You don't need to read every word — pointing and naming pictures is the goal. "
-                f"5 minutes of shared book time, once or twice a day, makes a real difference."
-            )
-        if any(k in text for k in ["gesture", "point", "wave"]):
-            return (
-                f"Throughout the day, use and encourage gestures alongside words. "
-                f"Wave 'bye-bye', point to things you see together, or hold out your hand to "
-                f"request an object. When {child_name} points, immediately name what they're "
-                f"pointing at. This connects gesture with meaning."
-            )
-        # generic language
-        return (
-            f"During play or a daily routine, create a natural opportunity for "
-            f"{child_name} to practice: {milestone_text}. "
-            f"Keep your language simple and clear. Pause and wait after you model — "
-            f"give {child_name} at least 5 seconds to respond before prompting again."
-        )
-
-    if category_key == "social_and_emotional":
-        if any(k in text for k in ["eye contact", "look at", "gaze"]):
-            return (
-                f"Get down to {child_name}'s level and place a favourite toy next to your face. "
-                f"When {child_name} looks at the toy, slowly move it toward your eyes so their "
-                f"gaze shifts to your face. Smile and react warmly the moment they make eye contact. "
-                f"Keep moments short — 1–2 seconds of contact is a real success."
-            )
-        if any(k in text for k in ["turn-tak", "back-and-forth"]):
-            return (
-                f"Roll a ball back and forth, take turns stacking a block, or pass an object "
-                f"between you. Each exchange is one turn. Narrate the turn-taking: 'My turn… "
-                f"your turn!' Start with just 3–4 exchanges and build from there. "
-                f"End before {child_name} loses interest."
-            )
-        if any(k in text for k in ["comfort", "regulat", "calm", "sooth"]):
-            return (
-                f"When {child_name} is starting to feel upset (not at peak distress), practice "
-                f"a simple calming routine together: deep breaths, a gentle squeeze, or a comfort "
-                f"object. Name the feeling calmly: 'You're frustrated. Let's take a breath.' "
-                f"Stay close and keep your own voice and body calm."
-            )
-        if any(k in text for k in ["imitat", "copy", "mimic"]):
-            return (
-                f"Sit facing {child_name} and do a simple action — clap, wave, tap the table. "
-                f"Then wait. If {child_name} copies you, copy them right back. This imitation "
-                f"game builds social connection and attention. Keep it playful and take turns "
-                f"being the leader. 3–5 minutes is ideal."
-            )
-        if any(k in text for k in ["response to name", "respond", "attention"]):
-            return (
-                f"From across the room or a short distance, say {child_name}'s name once in a "
-                f"warm, clear voice — no other words. Wait up to 5 seconds. If they turn or look, "
-                f"react with big enthusiasm. If not, move a little closer and try again. "
-                f"Practice during natural moments throughout the day (not as a drill)."
-            )
-        # generic social
-        return (
-            f"Create a short, calm social moment around this goal: {milestone_text}. "
-            f"Be face-to-face with {child_name}, keep distractions low, and follow their lead. "
-            f"Celebrate any social bid — a look, a smile, a gesture — with warm attention."
-        )
-
-    if category_key == "cognitive":
-        if any(k in text for k in ["hide", "peek", "object permanence", "under"]):
-            return (
-                f"Play a simple hiding game: show {child_name} a small toy, then cover it "
-                f"with a cloth while they watch. Ask 'Where did it go?' and wait. Lift the "
-                f"cloth together if needed at first. Gradually make it trickier by using "
-                f"two cloths. 3–5 minutes per session."
-            )
-        if any(k in text for k in ["sort", "match", "categor"]):
-            return (
-                f"Set out two groups of objects (e.g., red and blue blocks, or animals and "
-                f"vehicles). Sort one item yourself and narrate: 'This is red — it goes here.' "
-                f"Then hand {child_name} one and wait. Don't correct errors harshly — just "
-                f"model the right sort and move on."
-            )
-        if any(k in text for k in ["stack", "nest", "put in", "container"]):
-            return (
-                f"Put out stacking cups or nesting bowls. Demonstrate stacking 2–3 and then "
-                f"knock them down — make it fun! Hand {child_name} a cup and wait to see "
-                f"what they do. Encourage placing, nesting, or stacking. Keep it playful; "
-                f"3–5 minutes is enough."
-            )
-        if any(k in text for k in ["cause", "effect", "push", "button"]):
-            return (
-                f"Use a cause-and-effect toy (e.g., one where pressing a button makes something "
-                f"pop up or light up). Let {child_name} explore freely first. If they get stuck, "
-                f"point to the button: 'Try pushing here.' Name the result: 'You pushed it — "
-                f"it popped!' Repeat 5–6 times."
-            )
-        if any(k in text for k in ["routine", "self-help", "dress", "feed", "wash"]):
-            return (
-                f"During an everyday routine (dressing, mealtimes, washing hands), slow down "
-                f"and give {child_name} a chance to participate. Hand them the sock to pull on, "
-                f"or guide them to hold the spoon. Use simple, consistent words each time: "
-                f"'Your turn — pull it up!' Repetition across daily routines builds the skill."
-            )
-        if any(k in text for k in ["pretend", "play with", "imagin"]):
-            return (
-                f"Set out a few simple props (a cup, spoon, toy phone, or stuffed animal) and "
-                f"model a short pretend action: feed the teddy, talk on the phone. Then step "
-                f"back and see if {child_name} imitates or extends the play. Join in but "
-                f"don't direct — follow {child_name}'s imagination."
-            )
-        # generic cognitive
-        return (
-            f"Set up a brief, focused activity for {child_name} to practice: {milestone_text}. "
-            f"Demonstrate once, then wait and let them try. Offer help only if they seem stuck. "
-            f"Keep it to 3–5 minutes — short and successful beats long and frustrating."
-        )
-
-    # Fallback for unknown domain
     return (
-        f"Help {child_name} practice: {milestone_text}. "
-        f"Turn it into a short, playful activity at home — aim for 3–5 minutes. "
-        f"Follow {child_name}'s lead and keep the mood light and positive."
+        "You are writing one parent-facing Genex home activity card.\n\n"
+        "Hard rules:\n"
+        "- Write ONLY for bridge_step_1 and the specified activity_family.\n"
+        "- Do NOT use previous_bridge_step. It is hidden future troubleshooting metadata.\n"
+        "- Do NOT regress to earlier prerequisites.\n"
+        "- Do NOT create a motor game unless the domain is Movement / Physical.\n"
+        "- Do NOT create a generic placeholder activity.\n"
+        "- Instructions must say exactly what the parent does, what the child does, "
+        "what counts as success, and when to stop.\n"
+        "- Keep it playful, low-pressure, and doable in 5 minutes.\n"
+        "- Use safe household materials only.\n"
+        "- Privacy: refer to the child as 'your child' — never use a name.\n"
+        "- Return JSON only with exactly these keys: title, theme, instructions, "
+        "success_criteria, make_easier, make_harder, group_play_line, what_to_avoid, materials.\n\n"
+        f"Child profile (anonymised):\n"
+        f"- age: {child.get('chronological_months', '')} months\n"
+        f"- diagnosis/condition: {child.get('diagnosis', '') or 'none'}\n"
+        f"- parent concern: {child.get('concern', '') or 'none'}\n\n"
+        f"Planning inputs:\n"
+        f"- domain: {DOMAIN_CONFIG.get(category_key, {}).get('display', category_key)}\n"
+        f"- subdomain: {bridge.get('subdomain', '')}\n"
+        f"- CDC milestone: {bridge.get('milestone', '')}\n"
+        f"- bridge_step_1: {focus}\n"
+        f"- activity_family: {fam}\n"
+        f"- activity_family_description: {desc}\n"
+        f"- suggested theme for this variant: {theme}\n"
+        f"- allowed themes: {allowed_themes}\n"
+        f"- variant number: {variant}\n"
+        f"- safety notes: {safety}"
     )
 
 
-def _tier_to_display(planning_tier: str) -> str:
-    """Convert a raw tier key to a parent-friendly label."""
-    return {
-        "needs_special_support": "Extra Support",
-        "monitor_and_enrich": "Monitor & Enrich",
-        "enrich_and_observe": "Monitor & Enrich",
-        "no_special_support": "On Track",
-    }.get(planning_tier, planning_tier)
+# ---------------------------------------------------------------------------
+# LLM writer
+# ---------------------------------------------------------------------------
 
-
-def _make_fallback_activities(
+def _v22_call_llm_activity_writer(
     state: Dict[str, Any],
     category_key: str,
-    planning_tier: str,
-    next_steps: Dict[str, Any],
-    activities_per_category: int,
-) -> List[Dict[str, Any]]:
-    """
-    Deterministic fallback when no OpenAI key is configured.
-    Generates activity cards from milestone targets with domain-specific
-    materials, instruction templates, and readable goal labels.
-    NOTE: Add OPENAI_API_KEY via Secret Manager (see DEPLOY.md) for full AI-generated activities.
-    """
-    child_name = state.get("child", {}).get("name", "your child")
-    category_display = DOMAIN_CONFIG[category_key]["display"]
-    goal_display = _tier_to_display(planning_tier)
-    fallback_activities = []
+    bridge: Dict[str, Any],
+    variant: int,
+    week: int = 1,
+) -> Optional[Dict[str, Any]]:
+    client = _get_openai_client()
+    if not client or not ACTIVITY_MODEL:
+        return None
+    prompt = _v22_activity_prompt(state, category_key, bridge, variant, week)
+    try:
+        response = client.chat.completions.create(
+            model=ACTIVITY_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            response_format={"type": "json_object"},
+            max_tokens=600,
+        )
+        raw = (response.choices[0].message.content or "").strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        if isinstance(data, dict) and data.get("title") and data.get("instructions"):
+            return data
+    except Exception as exc:
+        logger.warning("[activity_engine] LLM call failed: %s", exc)
+    return None
 
-    for i, m in enumerate(next_steps.get("milestones", [])[:activities_per_category], start=1):
-        milestone_text = m["milestone"]
-        title = _milestone_to_activity_title(milestone_text, category_key)
-        materials = _infer_materials(milestone_text, category_key)
-        instructions = _build_fallback_instructions(child_name, milestone_text, category_key, materials)
-        fallback_activities.append({
-            "activity_id": f"{category_key}_{i}",
-            "title": title,
-            "instructions": instructions,
-            "duration_min": 5,
-            "materials": materials,
-            "level": "current_or_next",
-            "goal": goal_display,
-            "category": category_display,
-            "is_extended_activity": False,
-            "extended_reason": "",
-        })
 
-    while len(fallback_activities) < activities_per_category:
-        i = len(fallback_activities) + 1
-        default_materials = _DOMAIN_DEFAULT_MATERIALS.get(category_key, "common household items")
-        fallback_activities.append({
-            "activity_id": f"{category_key}_{i}",
-            "title": f"{category_display} Activity {i}",
+# ---------------------------------------------------------------------------
+# Deterministic fallback text  (V22)
+# ---------------------------------------------------------------------------
+
+def _v22_fallback_instructions(
+    bucket: str,
+    focus: str,
+    fam: str,
+    variant: int,
+    week: int = 1,
+) -> Dict[str, str]:
+    theme = _variant_theme(fam, variant, week)
+    base = {
+        "title": f"{theme.title()} Practice",
+        "theme": theme,
+        "materials": "simple household items",
+        "instructions": (
+            f"Choose a short activity using {theme}. "
+            f"Model the small step once: {focus}. "
+            f"Invite your child to try one turn with as much help as needed. "
+            f"Celebrate any attempt and stop after 2-3 turns."
+        ),
+        "success_criteria": f"Any calm attempt at: {focus}.",
+        "make_easier": "Use one item, model first, shorten the turn, or accept a smaller response.",
+        "make_harder": "Only if easy and enjoyable: add one small step or reduce support slightly.",
+        "group_play_line": (
+            "With another child: one person models, one supports, your child takes one short turn."
+        ),
+        "what_to_avoid": (
+            "Avoid pressure, repeated correction, or continuing after frustration or fatigue."
+        ),
+    }
+    overrides = {
+        "book_page": {
+            "title": f"Book Page Turn — {theme.title()}",
+            "materials": "board book or thick-page book",
             "instructions": (
-                f"Set up a short, calm activity with {child_name} that focuses on "
-                f"{category_display.lower()} skills. Keep it to 3–5 minutes, follow "
-                f"{child_name}'s lead, and stop before frustration sets in."
+                "Sit together with a thick-page book. Hold it steady, lift one page edge, "
+                "and invite your child to push or pull one page over. "
+                "One assisted page turn counts as success."
             ),
-            "duration_min": 5,
-            "materials": default_materials,
-            "level": "current_or_next",
-            "goal": goal_display,
-            "category": category_display,
-            "is_extended_activity": False,
-            "extended_reason": "",
-        })
+            "what_to_avoid": "Avoid thin paper pages, rushing, or turning pages for your child.",
+        },
+        "fork_spoon": {
+            "title": f"Fork/Spoon Practice — {theme.title()}",
+            "materials": "child fork or spoon, soft safe food pieces or pretend food, plate",
+            "instructions": (
+                "Sit at a table with soft food or pretend food. "
+                "Model one slow fork or spoon movement, then help your child stab or scoop one piece. "
+                "Keep it supervised and brief."
+            ),
+            "what_to_avoid": "Avoid choking-risk foods, pressure to eat, or rushing.",
+        },
+        "dressing_on": {
+            "title": f"Clothes On — {theme.title()}",
+            "materials": "loose jacket, shirt, or pants",
+            "instructions": (
+                "Hold one loose sleeve or waistband open. Say a simple cue like 'arm in' "
+                "and help your child push or pull one small clothing step. "
+                "Any partial movement counts."
+            ),
+            "what_to_avoid": "Avoid tight clothing, multiple steps at once, or rushing.",
+        },
+        "dressing_off": {
+            "title": f"Clothes Off — {theme.title()}",
+            "materials": "loose elastic-waist pants or jacket",
+            "instructions": (
+                "Start the removal movement for your child, then invite one small pull, "
+                "push, or arm-out movement. Sitting is fine if balance is difficult."
+            ),
+            "what_to_avoid": "Avoid tight clothing or multiple items at once.",
+        },
+        "buttoning": {
+            "title": f"Button Practice — {theme.title()}",
+            "materials": "large button board or shirt with big buttons",
+            "instructions": (
+                "Show one large button or closure. Help your child pull apart, push through, "
+                "or line up one closure step. One partial movement counts."
+            ),
+            "what_to_avoid": "Avoid small buttons, frustration, or requiring full completion.",
+        },
+        "catch_ball": {
+            "title": f"Soft Ball Game — {theme.title()}",
+            "materials": "soft ball or rolled socks",
+            "instructions": (
+                "Sit close. Roll or gently pass a soft ball toward your child. "
+                "Encourage looking at it and bringing hands toward it. Catching is not required."
+            ),
+            "what_to_avoid": "Avoid hard balls, long distances, or pressure to catch.",
+        },
+        "jump_prep": {
+            "title": f"Safe Movement Practice — {theme.title()}",
+            "materials": "clear flat floor, caregiver hand support",
+            "instructions": (
+                "On a clear flat floor, hold your child's hands or stay close. "
+                "Model bending knees and standing tall. "
+                "A knee bend, weight shift, or stand-up counts — do not require a jump."
+            ),
+            "what_to_avoid": "Avoid high surfaces, unsupported jumping, or speed.",
+        },
+        "expressive_word": {
+            "title": f"Word Practice — {theme.title()}",
+            "materials": "two favorite objects or pictures",
+            "instructions": (
+                f"Hold up two items related to {theme}. Pause and wait for your child "
+                "to look, reach, point, or make a sound. Name it once and give it right away."
+            ),
+            "what_to_avoid": "Avoid asking 'say the word' repeatedly or withholding the item.",
+        },
+        "gesture": {
+            "title": f"Gesture and Request — {theme.title()}",
+            "materials": "two favorite objects or a clear container",
+            "instructions": (
+                "Put a favorite item in reach or a clear container. "
+                "Pause and wait for your child to look, reach, point, gesture, or vocalize. "
+                "Give the item right away and name it once."
+            ),
+            "what_to_avoid": "Avoid requiring a verbal word; accept any communication.",
+        },
+        "receptive_direction": {
+            "title": f"One-Step Direction — {theme.title()}",
+            "materials": "one familiar toy and a basket or simple target",
+            "instructions": (
+                "Give one clear familiar direction like 'give me the [item]' or 'put it in.' "
+                "Add a gesture only if needed. Celebrate any attempt."
+            ),
+            "what_to_avoid": "Avoid two-step directions or repeating the direction more than once.",
+        },
+        "social_turn": {
+            "title": f"Turn-Taking — {theme.title()}",
+            "materials": "one favorite toy or no materials needed",
+            "instructions": (
+                "Use one toy or peekaboo. Say 'my turn,' take a brief turn, then 'your turn.' "
+                "Keep turns very short and predictable. 2-3 back-and-forth exchanges."
+            ),
+            "what_to_avoid": "Avoid long turns, competition, or keeping score.",
+        },
+        "attention": {
+            "title": f"Focus Practice — {theme.title()}",
+            "materials": "3-5 simple pieces or a sticker card",
+            "instructions": (
+                "Choose a tiny task with a clear finish: 3 blocks or 3 stickers. "
+                "Help your child stay with it until done, then stop."
+            ),
+            "what_to_avoid": "Avoid open-ended tasks or continuing past the clear finish.",
+        },
+    }
+    if bucket in overrides:
+        base.update(overrides[bucket])
+    return base
 
-    return apply_safety_constraints_to_activities(state, category_key, fallback_activities)
 
+# ---------------------------------------------------------------------------
+# Make one activity  (V22)
+# ---------------------------------------------------------------------------
+
+def _v22_make_activity(
+    category_key: str,
+    bridge: Dict[str, Any],
+    activity_type: str,
+    variant: int,
+    state: Dict[str, Any],
+    week: int = 1,
+) -> Dict[str, Any]:
+    fam = str(bridge.get("activity_family", "") or "")
+    bucket = _family_bucket(fam, category_key)
+    focus = _clean(bridge.get("bridge_step", "") or bridge.get("activity_focus_step", ""))
+    cdc_goal = _clean(bridge.get("milestone", "") or bridge.get("cdc_milestone", ""))
+    category_display = DOMAIN_CONFIG.get(category_key, {}).get("display", category_key)
+
+    fallback = _v22_fallback_instructions(bucket, focus, fam, variant, week)
+    llm_data = _v22_call_llm_activity_writer(state, category_key, bridge, variant, week)
+
+    data = dict(fallback)
+    if llm_data:
+        for k, v in llm_data.items():
+            if isinstance(v, str) and v.strip():
+                data[k] = _clean(v)
+
+    title = _clean(data.get("title", fallback["title"]))
+    theme = _clean(data.get("theme", fallback["theme"]))
+    instructions = _clean(data.get("instructions", fallback["instructions"]))
+    success = _clean(data.get("success_criteria", fallback["success_criteria"]))
+    easier = _clean(data.get("make_easier", fallback["make_easier"]))
+    harder = _clean(data.get("make_harder", fallback["make_harder"]))
+    group_play = _clean(data.get("group_play_line", fallback["group_play_line"]))
+    avoid = _clean(data.get("what_to_avoid", fallback["what_to_avoid"]))
+    materials = _clean(data.get("materials", fallback["materials"]))
+
+    if activity_type == "easier_backup":
+        title = f"Easier: {title}" if not title.startswith("Easier") else title
+        instructions += " Simplify: use one item, model first, or accept the smallest response."
+    elif activity_type == "harder_stretch":
+        title = f"Stretch: {title}" if not title.startswith("Stretch") else title
+        instructions += " Only try this if the main version is easy and enjoyable."
+
+    why = (
+        f"This activity works on bridge step 1 — {focus.lower()} — "
+        f'as a small step toward "{cdc_goal}".'
+        if cdc_goal else
+        f"This activity practices {focus.lower()} through playful repetition."
+    )
+
+    return {
+        # Parent-facing
+        "title": title,
+        "theme": theme,
+        "domain": category_display,
+        "duration_minutes": V22_PER_ACTIVITY_MIN,
+        "why": why,
+        "instructions": instructions,
+        "success": success,
+        "easier": easier,
+        "harder": harder,
+        "group_play": group_play,
+        "avoid": avoid,
+        "materials": materials,
+        "feedback_options": ACTIVITY_FEEDBACK_OPTIONS,
+        # Debug fields (hidden from parents by default)
+        "_debug": {
+            "activity_id": f"v22_{category_key}_{_norm(cdc_goal)[:24]}_b1_{activity_type}_{variant}",
+            "subdomain": bridge.get("subdomain", "unspecified"),
+            "milestone": cdc_goal,
+            "bridge_step_1": focus,
+            "activity_family": fam,
+            "activity_type": activity_type,
+            "planning_mode": bridge.get("planning_mode", "standard"),
+            "bridge_step_number": bridge.get("bridge_step_number", 1),
+            "previous_bridge_step": bridge.get("previous_bridge_step", ""),
+            "previous_bridge_status": "not_used_initial_plan__feedback_fallback_only",
+            "engine_version": ENGINE_VERSION,
+            "llm_used": bool(llm_data),
+            "variant": variant,
+            "week": week,
+        },
+        # For validator
+        "activity_family": fam,
+        "category_key": category_key,
+        "validation_warnings": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Uniquify titles
+# ---------------------------------------------------------------------------
+
+def _v22_title_key(title: str) -> str:
+    return re.sub(r"\W+", "_", title.lower()).strip("_")
+
+
+def _v22_uniquify_titles(activities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen: Dict[str, int] = {}
+    result = []
+    for act in activities:
+        key = _v22_title_key(act.get("title", ""))
+        if key in seen:
+            seen[key] += 1
+            act = dict(act)
+            act["title"] = f"{act['title']} (variation {seen[key]})"
+        else:
+            seen[key] = 1
+        result.append(act)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# generate_category_activity_bank  (V22)
+# ---------------------------------------------------------------------------
 
 def generate_category_activity_bank(
     state: Dict[str, Any],
     category_key: str,
-    activities_per_category: int = 6,
 ) -> Dict[str, Any]:
-    """Generate one activity bank per category.
+    """Generate the full activity bank for one category."""
+    category_display = DOMAIN_CONFIG.get(category_key, {}).get(
+        "display", category_key.replace("_", " ").title()
+    )
+    next_steps = select_next_milestones(
+        state, category_key,
+        max_milestones=V22_MAX_MILESTONES_PER_DOMAIN,
+        min_milestones=V22_MIN_MILESTONES_PER_DOMAIN,
+    )
+    targets = next_steps.get("milestones", [])
 
-    AI (OpenAI) is used here only for parent-friendly activity wording.
-    Tier assignment and milestone selection are always deterministic.
-    Falls back gracefully if OpenAI is unavailable.
-    """
-    child = state["child"]
-    category_display = DOMAIN_CONFIG[category_key]["display"]
-    support_tier = get_support_tier(state, category_key)
-    soft_floor_active = is_family_guidance_category(state, category_key)
-    planning_tier = "enrich_and_observe" if soft_floor_active else support_tier
-    support_metrics = compute_support_metrics(state, category_key)
-    safety_profile = ensure_safety_profile(state)
-    safety_constraints_block = format_safety_constraints_for_prompt(safety_profile)
-    next_steps = select_next_milestones(state, category_key)
+    if not targets:
+        bank = _empty_bank(category_key, category_display, next_steps)
+        state.setdefault("activity_banks", {})[category_key] = bank
+        return bank
 
-    if next_steps["status"] == "no_special_support":
-        result = {
-            "status": "no_special_support",
-            "support_tier": support_tier,
-            "planning_tier": planning_tier,
-            "summary": next_steps["message"],
-            "activities": [],
-        }
-        state["activity_banks"][category_key] = result
-        return result
+    bridge_plan = build_bridge_plan_for_category(state, category_key, targets)
+    active_bridges = bridge_plan.get("active_bridge_steps", [])
+    planning_mode = bridge_plan.get("planning_mode", "standard")
 
-    chrono_months = min(child["chronological_months"], 60)
-    dev_age = chrono_months if soft_floor_active else state["dev_age"].get(category_key, chrono_months)
-    milestone_gap = max(0, chrono_months - dev_age)
-    category_guardrails = get_category_activity_guardrails(category_key)
+    daily_time = int(state.get("child", {}).get("daily_time_min", 10) or 10)
+    daily_slots = min(max(1, daily_time // V22_PER_ACTIVITY_MIN), V22_MAX_DAILY_ACTIVITIES)
+    desired_week1_slots = V22_WEEK1_DAYS * daily_slots
+    core_variants = max(2, math.ceil(desired_week1_slots / max(1, len(active_bridges))))
+    core_variants = min(max(core_variants, 2), 7)
 
-    soft_floor_block = ""
-    if soft_floor_active:
-        soft_floor_block = (
-            "This category is being generated under the family guidance floor. "
-            "Use age-appropriate, low-intensity enrichment and observation activities. "
-            "Do not imply therapy-level intensity or a significant delay. "
-            "The goal is support, confidence-building, and structured observation."
+    raw_activities: List[Dict[str, Any]] = []
+    for bridge in active_bridges:
+        for variant in range(1, core_variants + 1):
+            raw_activities.append(
+                _v22_make_activity(category_key, bridge, "core", variant, state, week=1)
+            )
+        raw_activities.append(
+            _v22_make_activity(category_key, bridge, "easier_backup", 1, state, week=1)
+        )
+        raw_activities.append(
+            _v22_make_activity(category_key, bridge, "harder_stretch", 2, state, week=1)
         )
 
-    milestone_lines = "\n".join([
-        f"- ({m['months']} months | {m.get('subdomain', 'unspecified')}) {m['milestone']}"
-        for m in next_steps["milestones"]
-    ]) or "- No specific milestone items available in this range."
+    raw_activities = _v22_uniquify_titles(raw_activities)
+    valid_activities, blocked_activities = filter_valid_activities(raw_activities, category_key)
 
-    client = _get_openai_client()
+    warnings = list({w for a in raw_activities for w in a.get("validation_warnings", [])})
 
-    if client is None:
-        fallback = _make_fallback_activities(state, category_key, planning_tier, next_steps, activities_per_category)
-        result = {
-            "status": "fallback",
-            "support_tier": support_tier,
-            "planning_tier": planning_tier,
-            "summary": f"Fallback activity bank for {category_display} (no OpenAI key configured).",
-            "activities": fallback,
-        }
-        state["activity_banks"][category_key] = result
-        return result
+    bank = {
+        "status": "ok" if valid_activities else "no_valid_activities",
+        "version": ENGINE_VERSION,
+        "category_key": category_key,
+        "category": category_display,
+        "planning_mode": planning_mode,
+        "summary": next_steps.get("message", ""),
+        "target_milestones": targets,
+        "active_bridges": len(active_bridges),
+        "activities": valid_activities,
+        "blocked_activities": blocked_activities,
+        "validation_warnings": warnings,
+        "daily_slots": daily_slots,
+        "core_variants_per_bridge": core_variants,
+    }
+    state.setdefault("activity_banks", {})[category_key] = bank
+    return bank
 
-    prompt = f"""
-You are a pediatric home-support planning agent helping a parent at home.
 
-This is NOT a diagnosis and NOT a formal treatment plan.
-Create a CATEGORY ACTIVITY BANK, not a day-by-day schedule.
+def _empty_bank(
+    category_key: str,
+    category_display: str,
+    next_steps: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "status": "no_targets",
+        "version": ENGINE_VERSION,
+        "category_key": category_key,
+        "category": category_display,
+        "planning_mode": next_steps.get("mode", "no_targets"),
+        "summary": next_steps.get("message", "No target milestones found."),
+        "target_milestones": [],
+        "active_bridges": 0,
+        "activities": [],
+        "blocked_activities": [],
+        "validation_warnings": [next_steps.get("message", "no_targets")],
+        "daily_slots": 1,
+        "core_variants_per_bridge": 0,
+    }
 
-Child:
-- Name: {child['name']}
-- Chronological age: {child['chronological_months']} months
-- Diagnosis / condition: {child['diagnosis']}
-- Parent concern: {child['concern']}
-- Category: {category_display}
-- Support tier for this category: {planning_tier}
-- Estimated developmental age in this category: {dev_age} months
-- Estimated milestone gap in this category: {milestone_gap} months
-- Continuous support score: {support_metrics['support_score']}
 
-Relevant milestone targets:
-{milestone_lines}
-
-Category-specific guardrails:
-{category_guardrails}
-
-Safety / practical constraints inferred from diagnosis + concern:
-{safety_constraints_block}
-
-{soft_floor_block}
-
-Task:
-Create {activities_per_category} realistic home activities for this category.
-
-Instructions:
-1. Activities must fit the child's chronological age and estimated developmental level.
-2. Activities should be practical for home use.
-3. Keep language parent-friendly and warm.
-4. Include a mix of current-level practice and near next-step practice.
-5. Most activities should be short and repeatable: usually 3, 5, 7, or 10 minutes.
-6. Context-dependent activities (playdates, park, playground, group) must NEVER be written as normal daily home activities.
-7. If you include such an activity, mark is_extended_activity as true, duration 30-45 min.
-8. Max 1 context-dependent bonus activity per category.
-9. Each activity must clearly belong to THIS category.
-10. Avoid cross-domain drift.
-11. Set "goal" to exactly: {planning_tier}
-12. Return strict JSON only.
-
-Required JSON:
-{{
-  "summary": "...",
-  "activities": [
-    {{
-      "activity_id": "1",
-      "title": "...",
-      "instructions": "...",
-      "duration_min": 5,
-      "materials": "...",
-      "level": "current_or_next",
-      "goal": "{planning_tier}",
-      "category": "{category_display}",
-      "is_extended_activity": false,
-      "extended_reason": ""
-    }}
-  ]
-}}
-""".strip()
-
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            temperature=0.3,
-            response_format={"type": "json_object"},
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You return strict JSON only and stay non-diagnostic, "
-                        "practical, and parent-friendly."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-        )
-
-        bank = json.loads(resp.choices[0].message.content)
-
-        if "activities" not in bank or not isinstance(bank["activities"], list):
-            bank["activities"] = []
-
-        for idx, activity in enumerate(bank["activities"], start=1):
-            activity["activity_id"] = activity.get("activity_id", f"{category_key}_{idx}")
-            activity["category"] = activity.get("category", category_display)
-            activity["duration_min"] = activity.get("duration_min", 5)
-            activity["materials"] = activity.get("materials", "common household items")
-            activity["level"] = activity.get("level", "current_or_next")
-            activity["goal"] = planning_tier
-            activity["is_extended_activity"] = activity.get("is_extended_activity", False)
-            activity["extended_reason"] = activity.get("extended_reason", "")
-
-        activities = apply_safety_constraints_to_activities(
-            state, category_key, bank["activities"][:activities_per_category]
-        )
-
-        result = {
-            "status": "success",
-            "support_tier": support_tier,
-            "planning_tier": planning_tier,
-            "summary": bank.get("summary", f"Created activity bank for {category_display}."),
-            "activities": activities,
-        }
-        state["activity_banks"][category_key] = result
-        return result
-
-    except Exception as e:
-        fallback = _make_fallback_activities(state, category_key, planning_tier, next_steps, activities_per_category)
-        result = {
-            "status": "fallback",
-            "support_tier": support_tier,
-            "planning_tier": planning_tier,
-            "summary": f"Fallback activity bank for {category_display} (OpenAI failed: {e})",
-            "activities": fallback,
-        }
-        state["activity_banks"][category_key] = result
-        return result
+def get_core_pool(bank: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Return only 'core' type activities from a bank (used by scheduler)."""
+    return [
+        a for a in bank.get("activities", [])
+        if a.get("_debug", {}).get("activity_type", "core") == "core"
+    ]
