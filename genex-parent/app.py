@@ -29,6 +29,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 import streamlit as st
 
@@ -148,7 +149,7 @@ def get_child_display_name() -> str:
 import base64
 
 @st.cache_data(show_spinner=False)
-def _load_logo_b64() -> str | None:
+def _load_logo_b64() -> Optional[str]:
     logo_path = Path(__file__).parent / "assets" / "logo.png"
     if logo_path.exists():
         return base64.b64encode(logo_path.read_bytes()).decode()
