@@ -1,9 +1,37 @@
 """
 genex_core/config.py
 --------------------
-All domain configs, answer scores, subdomain keyword maps, and safety keyword maps.
-Extracted verbatim from genex_interview_activity_v11.ipynb — no logic changed.
+All domain configs, answer scores, subdomain keyword maps, safety keyword maps,
+V22 follow-up schemas, performance barrier scoring, and model configuration.
+
+Updated for Genex Brain V22.
 """
+
+import os
+
+# ------------------------------------------------------------------
+# Engine version
+# ------------------------------------------------------------------
+ENGINE_VERSION = "v22"
+APP_VERSION = "parent-copilot-v0.4-v22-staging"
+
+# ------------------------------------------------------------------
+# Model configuration  (read from environment — no hardcoded defaults)
+# If env var is not set, downstream code uses deterministic fallback
+# and logs a warning.
+# ------------------------------------------------------------------
+ACTIVITY_MODEL: str = os.environ.get("ACTIVITY_MODEL", "").strip()
+CONCERN_ROUTER_MODEL: str = os.environ.get("CONCERN_ROUTER_MODEL", "").strip()
+
+# ------------------------------------------------------------------
+# V22 schedule constants
+# ------------------------------------------------------------------
+V22_CYCLE_DAYS = 14           # total plan window (Week 1 + Week 2)
+V22_WEEK1_DAYS = 7            # unique activity days
+V22_PER_ACTIVITY_MIN = 5      # minutes per activity slot
+V22_MAX_DAILY_ACTIVITIES = 3  # hard cap regardless of daily time
+V22_MAX_MILESTONES_PER_DOMAIN = 5
+V22_MIN_MILESTONES_PER_DOMAIN = 1
 
 # ------------------------------------------------------------------
 # Domain config
@@ -29,18 +57,23 @@ DOMAIN_CONFIG = {
 
 ALIAS_TO_CATEGORY = {
     "movement and physical": "movement_and_physical",
+    "movement/physical": "movement_and_physical",
     "physical": "movement_and_physical",
     "motor": "movement_and_physical",
     "gross motor": "movement_and_physical",
     "social and emotional": "social_and_emotional",
     "social and emotial": "social_and_emotional",
+    "social/emotional": "social_and_emotional",
     "social_emotional": "social_and_emotional",
     "social": "social_and_emotional",
     "language and communication": "language_and_communication",
+    "language/communication": "language_and_communication",
     "language": "language_and_communication",
     "speech": "language_and_communication",
     "speech and language": "language_and_communication",
     "cognitive": "cognitive",
+    "cognitive / adaptive": "cognitive",
+    "cognitive/adaptive": "cognitive",
     "adaptive": "cognitive",
 }
 
@@ -59,6 +92,159 @@ VALID_ANSWERS = set(ANSWER_SCORES.keys())
 VALID_PARENT_ANSWERS = {"yes", "sometimes", "with_help", "no", "not_sure"}
 
 # ------------------------------------------------------------------
+# V22 follow-up schemas
+# Shown to parent after "sometimes" or "with_help" answers to
+# capture performance-barrier context without changing the score.
+# ------------------------------------------------------------------
+FOLLOWUP_SCHEMAS = {
+    "sometimes": {
+        "prompt": "Why only sometimes? Choose the best fit:",
+        "choices": [
+            ("not_consistent_yet", "can do it, but not consistently yet"),
+            ("distracted", "can do it, but gets distracted"),
+            ("upset_or_refuses", "can do it, but gets upset or refuses"),
+            ("only_some_situations", "can do it, but only in some situations"),
+            ("not_sure", "not sure"),
+        ],
+    },
+    "with_help": {
+        "prompt": "What kind of help is usually needed?",
+        "choices": [
+            ("physical_help", "physical help / hands-on support"),
+            ("reminders_prompting", "reminders or step-by-step prompting"),
+            ("emotional_support", "encouragement or emotional support"),
+            ("showing_first", "showing first / demonstrating"),
+            ("not_sure", "not sure"),
+        ],
+    },
+    "no": {
+        "prompt": "Can you tell us a little more about the 'no'? Choose the best fit:",
+        "choices": [
+            ("not_able_yet", "not able yet"),
+            ("does_not_do_even_when_we_try", "does not do it even when we try"),
+            ("upset_or_refuses", "gets upset or refuses"),
+            ("distracted_before_doing", "gets distracted before doing it"),
+            ("not_sure_why", "not sure why"),
+        ],
+    },
+}
+
+FOLLOWUP_LABEL_TO_KEY = {
+    answer_norm: {label.lower(): key for key, label in schema["choices"]}
+    for answer_norm, schema in FOLLOWUP_SCHEMAS.items()
+}
+
+# ------------------------------------------------------------------
+# V22 performance barrier scoring
+# Maps (answer_norm, followup_key) → skill_ability + scoring adjustment
+# ------------------------------------------------------------------
+PERFORMANCE_BARRIER_SCORING = {
+    ("yes", ""): {
+        "skill_ability": "yes",
+        "performance_barrier": "none",
+        "scoring_norm_answer": "yes",
+    },
+    ("not_sure", ""): {
+        "skill_ability": "unclear",
+        "performance_barrier": "unclear",
+        "scoring_norm_answer": "not_sure",
+    },
+    ("sometimes", "not_consistent_yet"): {
+        "skill_ability": "emerging",
+        "performance_barrier": "skill_emerging",
+        "scoring_norm_answer": "sometimes",
+    },
+    ("sometimes", "distracted"): {
+        "skill_ability": "yes",
+        "performance_barrier": "distractibility",
+        "scoring_norm_answer": "yes",
+    },
+    ("sometimes", "upset_or_refuses"): {
+        "skill_ability": "yes",
+        "performance_barrier": "emotional_dysregulation_refusal",
+        "scoring_norm_answer": "yes",
+    },
+    ("sometimes", "only_some_situations"): {
+        "skill_ability": "emerging",
+        "performance_barrier": "situational_inconsistency",
+        "scoring_norm_answer": "sometimes",
+    },
+    ("sometimes", "not_sure"): {
+        "skill_ability": "unclear",
+        "performance_barrier": "unclear",
+        "scoring_norm_answer": "sometimes",
+    },
+    ("with_help", "physical_help"): {
+        "skill_ability": "emerging",
+        "performance_barrier": "physical_help",
+        "scoring_norm_answer": "with_help",
+    },
+    ("with_help", "reminders_prompting"): {
+        "skill_ability": "yes",
+        "performance_barrier": "needs_prompting",
+        "scoring_norm_answer": "yes",
+    },
+    ("with_help", "emotional_support"): {
+        "skill_ability": "yes",
+        "performance_barrier": "emotional_support",
+        "scoring_norm_answer": "yes",
+    },
+    ("with_help", "showing_first"): {
+        "skill_ability": "yes",
+        "performance_barrier": "needs_demonstration",
+        "scoring_norm_answer": "yes",
+    },
+    ("with_help", "not_sure"): {
+        "skill_ability": "unclear",
+        "performance_barrier": "unclear",
+        "scoring_norm_answer": "with_help",
+    },
+    ("no", "not_able_yet"): {
+        "skill_ability": "no",
+        "performance_barrier": "not_able_yet",
+        "scoring_norm_answer": "no",
+    },
+    ("no", "does_not_do_even_when_we_try"): {
+        "skill_ability": "no",
+        "performance_barrier": "persistent_failure",
+        "scoring_norm_answer": "no",
+    },
+    ("no", "upset_or_refuses"): {
+        "skill_ability": "yes",
+        "performance_barrier": "emotional_dysregulation_refusal",
+        "scoring_norm_answer": "yes",
+    },
+    ("no", "distracted_before_doing"): {
+        "skill_ability": "yes",
+        "performance_barrier": "distractibility",
+        "scoring_norm_answer": "yes",
+    },
+    ("no", "not_sure_why"): {
+        "skill_ability": "unclear",
+        "performance_barrier": "unclear",
+        "scoring_norm_answer": "not_sure",
+    },
+}
+
+BEHAVIORAL_PERFORMANCE_BARRIERS = {
+    "distractibility",
+    "needs_prompting",
+    "needs_demonstration",
+    "emotional_support",
+    "emotional_dysregulation_refusal",
+    "situational_inconsistency",
+}
+
+# ------------------------------------------------------------------
+# V22 activity feedback options
+# ------------------------------------------------------------------
+ACTIVITY_FEEDBACK_OPTIONS = {
+    "difficulty": ["too_hard", "just_right", "too_easy"],
+    "performance": ["done_independently", "done_with_help", "couldnt_do_it"],
+    "engagement": ["enjoyed_it", "resisted_it", "didnt_like_it"],
+}
+
+# ------------------------------------------------------------------
 # Motor emerging subdomain weights
 # ------------------------------------------------------------------
 MOTOR_EMERGING_SUBDOMAINS = {
@@ -74,7 +260,7 @@ MOTOR_EMERGING_PARTIAL_WEIGHT = 0.70
 MOTOR_EMERGING_NO_PENALTY = 0.25
 
 # ------------------------------------------------------------------
-# Subdomain keyword map (concern router)
+# Subdomain keyword map (concern router — deterministic layer)
 # ------------------------------------------------------------------
 SUBDOMAIN_KEYWORD_MAP = {
     "speech_intelligibility": [
@@ -89,6 +275,8 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"articulation",
         r"motor speech",
         r"intelligib",
+        r"can't understand",
+        r"cannot understand",
     ],
     "expressive_language": [
         r"no words",
@@ -102,10 +290,12 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"two[- ]word",
         r"phrases",
         r"naming",
+        r"expressive",
+        r"not talking",
+        r"doesn't talk",
+        r"does not talk",
     ],
     "receptive_language": [
-        r"understands well",
-        r"good comprehension",
         r"comprehension",
         r"doesn't understand",
         r"does not understand",
@@ -157,6 +347,11 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"interrupts",
         r"social but rigid",
         r"social rules",
+        r"other kids",
+        r"birthday part",
+        r"preschool social",
+        r"join (other|kids|children)",
+        r"problem around other",
     ],
     "play_and_symbolic_social_play": [
         r"pretend play",
@@ -164,6 +359,7 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"symbolic play",
         r"repetitive play",
         r"lines up toys",
+        r"imaginative play",
     ],
     "emotional_regulation": [
         r"tantrum",
@@ -176,7 +372,11 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"impulsive",
         r"very active",
         r"hyperactive",
-        r"adhd",
+        r"\badhd\b",
+        r"lack of focus",
+        r"focus problem",
+        r"can't focus",
+        r"attention problem",
     ],
     "attachment_and_separation": [
         r"clingy",
@@ -199,10 +399,15 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"balance",
         r"clumsy gait",
         r"\bgait\b",
-        r"run",
-        r"jump",
+        r"\brun\b",
+        r"\bjump\b",
         r"walker",
         r"mobility",
+        r"keeping up",
+        r"trouble keeping up",
+        r"difficulty with stairs",
+        r"cerebral palsy",
+        r"\bcp\b",
     ],
     "postural_control_and_transitions": [
         r"not sitting",
@@ -224,15 +429,21 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"crayon",
         r"pencil",
         r"hand use",
+        r"manipulation",
     ],
     "self_help_motor_skills": [
         r"self-care",
-        r"dress",
+        r"self care",
+        r"\bdress",
         r"clothes",
         r"buttons?",
         r"zippers?",
         r"utensil",
         r"\bspoon\b",
+        r"dressing",
+        r"undressing",
+        r"putting on",
+        r"taking off",
     ],
     "adaptive_feeding_cues": [
         r"slow feeding",
@@ -241,12 +452,20 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"oral motor",
         r"open mouth",
         r"close lips",
+        r"\beat\b",
+        r"mealtime",
     ],
     "attention_and_processing": [
-        r"attention",
+        r"\battention\b",
         r"short attention span",
         r"\bfocus\b",
         r"processing",
+        r"lack of focus",
+        r"can't focus",
+        r"distractib",
+        r"\badhd\b",
+        r"stays on task",
+        r"task completion",
     ],
     "concepts_and_following_directions": [
         r"follow(s|) directions",
@@ -288,6 +507,10 @@ SUBDOMAIN_KEYWORD_MAP = {
     ],
 }
 
+# ------------------------------------------------------------------
+# Positive routing hints  (suppress over-routing into cognitive domain
+# when parent explicitly says cognition is a strength)
+# ------------------------------------------------------------------
 POSITIVE_ROUTING_HINTS = [
     "good eye contact",
     "good comprehension",
@@ -297,7 +520,14 @@ POSITIVE_ROUTING_HINTS = [
     "strong language skills",
     "strong language",
     "very verbal",
+    "very bright",
+    "bright child",
+    "smart",
+    "great understanding",
 ]
+
+# Weight applied to domain scores when a positive hint is present for that domain
+POSITIVE_HINT_WEIGHT_MULTIPLIER = 0.18
 
 # ------------------------------------------------------------------
 # Safety keyword map
@@ -313,7 +543,9 @@ SAFETY_KEYWORD_MAP = {
         r"walker",
         r"unsteady",
         r"cerebral palsy",
+        r"\bcp\b",
         r"ataxia",
+        r"wobbly",
     ],
     "postural_low_tone_fatigue": [
         r"hypotonia",
@@ -355,7 +587,7 @@ SAFETY_KEYWORD_MAP = {
         r"impuls",
         r"short attention",
         r"attention",
-        r"adhd",
+        r"\badhd\b",
     ],
     "sensory_sensitivity": [
         r"sensory",
@@ -376,6 +608,7 @@ SAFETY_KEYWORD_MAP = {
         r"seizure",
         r"epilep",
         r"drop attack",
+        r"dravet",
         r"medical frag",
     ],
     "high_activity_open_space_risk": [

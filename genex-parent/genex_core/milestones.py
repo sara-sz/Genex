@@ -1,224 +1,135 @@
 """
 genex_core/milestones.py
 ------------------------
-CDC milestone table loading, normalization, and question selection.
-Extracted from genex_interview_activity_v11.ipynb — logic unchanged.
+Public interface for milestone data access — V22 version.
+
+Delegates all data loading to table_loader.py (which reads the V22 Excel).
+The public API is unchanged so existing callers (interview_engine, scoring,
+activity_engine) continue to work without modification.
+
+Public API (preserved from pre-V22):
+    get_cdc_df()                  → pd.DataFrame
+    get_category_questions()      → List[Dict]
+    get_cdc_ages()                → List[int]
+    get_subdomain_to_category()   → Dict[str, str]
+    get_category_to_subdomains()  → Dict[str, List[str]]
 """
 
-from pathlib import Path
-from typing import Optional
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
 
-from genex_core.config import ALIAS_TO_CATEGORY, DOMAIN_CONFIG
-
-# ------------------------------------------------------------------
-# File discovery
-# ------------------------------------------------------------------
-PREFERRED_CDC_FILENAMES = [
-    "cdc_milestones.xlsx",
-    "milestone-cdc-table-improved-subdomains-advisor.xlsx",
-    "milestone-cdc-table-improved-subdomains.xlsx",
-    "milestone-cdc-table.xlsx",
-]
-ADVISOR_SUPPLEMENTAL_SHEET_NAME = "advisor_supplemental_review"
-
-# Module-level cache so we only load once per session
-_cdc_df: Optional[pd.DataFrame] = None
-_cdc_path: Optional[Path] = None
-_approved_supplemental_df: Optional[pd.DataFrame] = None
-CDC_AGES: list = []
+from genex_core.table_loader import get_bridge_df, get_bridge_step1_df
 
 
-def find_cdc_file(path: Optional[str] = None) -> Path:
-    """Find the CDC milestone table, preferring the improved subdomain-tagged version."""
-    if path:
-        p = Path(path)
-        if not p.exists():
-            raise FileNotFoundError(f"Provided CDC file path does not exist: {p}")
-        return p.resolve()
-
-    # Look relative to this file's location first (data/ folder)
-    this_dir = Path(__file__).parent.parent  # genex-alpha/
-    data_dir = this_dir / "data"
-
-    search_roots = [data_dir, this_dir, Path.cwd(), Path.cwd().parent]
-
-    for name in PREFERRED_CDC_FILENAMES:
-        for root in search_roots:
-            candidate = root / name
-            if candidate.exists():
-                return candidate.resolve()
-
-    # Fuzzy search
-    candidate_paths = []
-    for root in search_roots:
-        if root.exists():
-            candidate_paths.extend(root.rglob("*milestone*cdc*table*.xlsx"))
-            candidate_paths.extend(root.rglob("*milestone*subdomain*.xlsx"))
-            candidate_paths.extend(root.rglob("cdc_milestones*.xlsx"))
-
-    candidate_paths = list({p.resolve() for p in candidate_paths if p.exists()})
-    if candidate_paths:
-        def rank_path(p: Path):
-            name = p.name.lower()
-            if "subdomain" in name or "improved" in name:
-                return (0, len(name))
-            return (1, len(name))
-        candidate_paths = sorted(candidate_paths, key=rank_path)
-        return candidate_paths[0]
-
-    raise FileNotFoundError(
-        "Could not find a CDC milestone spreadsheet. "
-        "Expected at genex-alpha/data/cdc_milestones.xlsx"
-    )
-
-
-def _normalize_cdc_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    df.columns = [str(c).strip().lower() for c in df.columns]
-    df = df.rename(columns={"category ": "category", "milestone ": "milestone"})
-
-    if "subdomain" not in df.columns:
-        df["subdomain"] = "unspecified"
-
-    df["category"] = df["category"].astype(str).str.strip().str.lower()
-    df["milestone"] = df["milestone"].astype(str).str.strip()
-    df["subdomain"] = df["subdomain"].fillna("unspecified").astype(str).str.strip().str.lower()
-    df["months"] = pd.to_numeric(df["months"], errors="coerce")
-
-    df = df.dropna(subset=["months", "category", "milestone"]).copy()
-    df["months"] = df["months"].astype(int)
-    df["category_key"] = df["category"].map(
-        lambda x: ALIAS_TO_CATEGORY.get(x, x.replace(" ", "_"))
-    )
-    df["question_id"] = [
-        f"{row.category_key}_{row.months}_{i}"
-        for i, row in enumerate(df.itertuples(), start=1)
-    ]
-    return df
-
-
-def _normalize_supplemental_sheet(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    df.columns = [str(c).strip().lower() for c in df.columns]
-
-    rename_map = {
-        "main_category": "category",
-        "target_subdomain": "subdomain",
-        "proposed_supplemental_milestone_or_followup": "milestone",
-        "include_in_model_after_review": "include_in_model",
-    }
-    df = df.rename(columns=rename_map)
-
-    for col in ["category", "subdomain", "milestone", "include_in_model"]:
-        if col not in df.columns:
-            df[col] = None
-    if "months" not in df.columns:
-        df["months"] = None
-
-    df["category"] = df["category"].astype(str).str.strip().str.lower()
-    df["subdomain"] = df["subdomain"].astype(str).str.strip().str.lower()
-    df["milestone"] = df["milestone"].astype(str).str.strip()
-    df["include_in_model"] = df["include_in_model"].astype(str).str.strip().str.lower()
-    df["months"] = pd.to_numeric(df["months"], errors="coerce")
-
-    include_values = {"yes", "approved", "include", "1", "true", "y"}
-    df = df[
-        df["include_in_model"].isin(include_values)
-        & df["months"].notna()
-        & df["category"].astype(bool)
-        & df["milestone"].astype(bool)
-        & df["subdomain"].astype(bool)
-    ].copy()
-
-    if df.empty:
-        return df
-
-    df["months"] = df["months"].astype(int)
-    df["category_key"] = df["category"].map(
-        lambda x: ALIAS_TO_CATEGORY.get(x, x.replace(" ", "_"))
-    )
-    df["question_id"] = [
-        f"{row.category_key}_{row.months}_supp_{i}"
-        for i, row in enumerate(df.itertuples(), start=1)
-    ]
-    df["source"] = "advisor_supplemental"
-    return df[["months", "category", "milestone", "subdomain", "category_key", "question_id", "source"]]
-
-
-def load_cdc_table(path: Optional[str] = None):
-    """Load the CDC backbone and, if present, append advisor-approved supplemental items."""
-    path = find_cdc_file(path)
-    xls = pd.ExcelFile(path)
-
-    main_sheet = "all" if "all" in xls.sheet_names else xls.sheet_names[0]
-    base_df = pd.read_excel(xls, sheet_name=main_sheet)
-    base_df = _normalize_cdc_dataframe(base_df)
-    base_df["source"] = "cdc_backbone"
-
-    approved_supplemental_df = pd.DataFrame(columns=base_df.columns)
-
-    if ADVISOR_SUPPLEMENTAL_SHEET_NAME in xls.sheet_names:
-        supplemental_raw = pd.read_excel(xls, sheet_name=ADVISOR_SUPPLEMENTAL_SHEET_NAME)
-        approved_supplemental_df = _normalize_supplemental_sheet(supplemental_raw)
-
-        if not approved_supplemental_df.empty:
-            missing_cols = [c for c in base_df.columns if c not in approved_supplemental_df.columns]
-            for c in missing_cols:
-                approved_supplemental_df[c] = None
-            approved_supplemental_df = approved_supplemental_df[base_df.columns]
-
-    combined_df = pd.concat([base_df, approved_supplemental_df], ignore_index=True, sort=False)
-    combined_df = combined_df.sort_values(["months", "category", "milestone"]).reset_index(drop=True)
-
-    return combined_df, path, approved_supplemental_df
-
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 def get_cdc_df() -> pd.DataFrame:
-    """Return the cached CDC dataframe, loading it on first call."""
-    global _cdc_df, _cdc_path, _approved_supplemental_df, CDC_AGES
-    if _cdc_df is None:
-        _cdc_df, _cdc_path, _approved_supplemental_df = load_cdc_table()
-        CDC_AGES = sorted(_cdc_df["months"].dropna().unique().tolist())
-    return _cdc_df
+    """Return the full bridge milestone DataFrame (V22 table, all bridge steps).
+
+    Columns: months, category, subdomain, milestone, parent_explanation,
+             bridge_step_number, bridge_step, activity_family,
+             previous_bridge_step, previous_anchor_age, category_key
+    """
+    return get_bridge_df()
 
 
-def get_cdc_ages() -> list:
-    get_cdc_df()
-    return CDC_AGES
+def get_category_questions(
+    category_key: str,
+    age_months: int,
+    band_months: int = 6,
+    include_adjacent: bool = True,
+) -> List[Dict[str, Any]]:
+    """Return milestone questions for a category near the given age.
+
+    Returns bridge_step_number=1 rows only (the target milestone rows used
+    during the parent interview).  Each dict includes the fields the interview
+    engine expects: months, subdomain, milestone, parent_explanation.
+
+    Parameters
+    ----------
+    category_key     : e.g. "language_and_communication"
+    age_months       : estimated developmental age (or chronological)
+    band_months      : half-width of the age window to search (default 6)
+    include_adjacent : if True, also include adjacent band on misses
+    """
+    df = get_bridge_step1_df()
+
+    if "category_key" not in df.columns:
+        return []
+
+    cat_df = df[df["category_key"] == category_key].copy()
+    if cat_df.empty:
+        return []
+
+    lo = max(2, age_months - band_months)
+    hi = age_months + band_months
+
+    window = cat_df[(cat_df["months"] >= lo) & (cat_df["months"] <= hi)]
+
+    if window.empty and include_adjacent:
+        # Widen to ±2 bands
+        lo2 = max(2, age_months - band_months * 2)
+        hi2 = age_months + band_months * 2
+        window = cat_df[(cat_df["months"] >= lo2) & (cat_df["months"] <= hi2)]
+
+    if window.empty:
+        # Fall back to closest age band available
+        cat_df["_dist"] = (cat_df["months"] - age_months).abs()
+        closest_age = cat_df.loc[cat_df["_dist"].idxmin(), "months"]
+        window = cat_df[cat_df["months"] == closest_age]
+
+    questions: List[Dict[str, Any]] = []
+    seen_milestones: set = set()
+    for _, row in window.sort_values("months").iterrows():
+        milestone = str(row.get("milestone", "") or "").strip()
+        if not milestone or milestone in seen_milestones:
+            continue
+        seen_milestones.add(milestone)
+        questions.append({
+            "months": int(row["months"]) if pd.notna(row["months"]) else age_months,
+            "subdomain": str(row.get("subdomain", "") or "").strip(),
+            "milestone": milestone,
+            "parent_explanation": str(row.get("parent_explanation", "") or "").strip(),
+            "activity_family": str(row.get("activity_family", "") or "").strip(),
+            "bridge_step": str(row.get("bridge_step", "") or "").strip(),
+        })
+    return questions
 
 
-def get_category_questions(category_key: str, min_months: int, max_months: int) -> pd.DataFrame:
-    df = get_cdc_df()
-    subset = df[
-        (df["category_key"] == category_key)
-        & (df["months"] >= min_months)
-        & (df["months"] <= max_months)
-    ].sort_values(["months", "milestone"])
-    return subset.copy()
+def get_cdc_ages(category_key: Optional[str] = None) -> List[int]:
+    """Return sorted list of distinct milestone age bands for a category (or all)."""
+    df = get_bridge_step1_df()
+    if category_key and "category_key" in df.columns:
+        df = df[df["category_key"] == category_key]
+    ages = sorted(df["months"].dropna().astype(int).unique().tolist())
+    return ages
 
 
-def get_subdomain_to_category() -> dict:
-    """Build SUBDOMAIN_TO_CATEGORY mapping from the loaded CDC table."""
-    df = get_cdc_df()
-    mapping = {}
-    for subdomain, group in df.groupby("subdomain"):
-        cats = [c for c in group["category_key"].dropna().astype(str).unique().tolist() if c]
-        if cats:
-            mapping[subdomain] = cats[0]
-    return mapping
+def get_subdomain_to_category() -> Dict[str, str]:
+    """Return {subdomain: category_key} mapping derived from the V22 table."""
+    df = get_bridge_df()
+    if "category_key" not in df.columns or "subdomain" not in df.columns:
+        return {}
+    result: Dict[str, str] = {}
+    for subdomain, grp in df.groupby("subdomain"):
+        keys = [k for k in grp["category_key"].dropna().astype(str).unique() if k]
+        if keys:
+            result[str(subdomain)] = keys[0]
+    return result
 
 
-def get_category_to_subdomains() -> dict:
-    """Build CATEGORY_TO_SUBDOMAINS mapping from the loaded CDC table."""
-    df = get_cdc_df()
-    return {
-        category_key: sorted(
-            df.loc[df["category_key"] == category_key, "subdomain"]
-            .dropna()
-            .astype(str)
-            .unique()
-            .tolist()
-        )
-        for category_key in DOMAIN_CONFIG
-    }
+def get_category_to_subdomains() -> Dict[str, List[str]]:
+    """Return {category_key: [subdomain, ...]} mapping from the V22 table."""
+    df = get_bridge_df()
+    if "category_key" not in df.columns or "subdomain" not in df.columns:
+        return {}
+    result: Dict[str, List[str]] = {}
+    for category_key, grp in df.groupby("category_key"):
+        subs = sorted(grp["subdomain"].dropna().astype(str).unique().tolist())
+        result[str(category_key)] = subs
+    return result
