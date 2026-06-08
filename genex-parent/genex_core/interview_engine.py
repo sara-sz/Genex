@@ -580,3 +580,10 @@ def get_category_concern_peak(state: Dict[str, Any], category_key: str) -> float
         if subdomain_to_cat.get(subdomain) == category_key:
             peak = max(peak, float(weight))
     return peak
+
+
+# ---------------------------------------------------------------------------
+# Backward-compat aliases (app.py used pre-V22 names)
+# ---------------------------------------------------------------------------
+
+build_milestone_questions = build_domain_questions
