@@ -940,14 +940,6 @@ def screen_interview():
                 f"{expl_html}</div>",
                 unsafe_allow_html=True,
             )
-            if expl:
-                card_body += (
-                    f"<p style='font-size:0.87rem;color:#6B7280;margin:0'>{expl}</p>"
-                )
-            st.markdown(
-                f"<div class='genex-card' style='margin:0.5rem 0'>{card_body}</div>",
-                unsafe_allow_html=True,
-            )
             sel = st.radio(
                 label=f"answer_{q['question_id']}",
                 options=answer_keys,
