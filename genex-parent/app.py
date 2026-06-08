@@ -1,6 +1,6 @@
 """
-app.py — Genex Parent Copilot v0.3-auth-staging
-------------------------------------------------
+app.py — Genex Parent Copilot v0.4-v22-staging
+-----------------------------------------------
 Privacy-first, per-account parent developmental support app.
 
 Changes from v0.2
@@ -66,10 +66,19 @@ from genex_core.scoring import finalize_domain_dev_age
 from genex_core.support_tiers import (
     compute_support_metrics,
     determine_family_guidance_floor,
+    build_v22_plan_for_category,
 )
 from genex_core.activity_engine import generate_category_activity_bank
 from genex_core.scheduler import allocate_weekly_slots, build_weekly_schedule
 from genex_core.summaries import build_domain_results, build_doctor_visit_prep
+from genex_core.interview_engine import (
+    get_followup_schema,
+    normalize_followup_answer,
+    derive_performance_interpretation,
+)
+from genex_core.admin_debug_view import is_admin_debug, get_debug_payload, render_activity_debug_card
+
+_ADMIN_DEBUG = is_admin_debug()
 
 # Pre-warm CDC milestone table once at startup
 @st.cache_resource(show_spinner=False)
@@ -80,8 +89,9 @@ def _prewarm_milestones():
 _prewarm_milestones()
 
 # ── Constants ──────────────────────────────────────────────────────────────
-APP_VERSION    = "parent-copilot-v0.3-auth-staging"
-ENGINE_VERSION = "v11"
+from genex_core.config import APP_VERSION as _CFG_APP_VERSION, ENGINE_VERSION as _CFG_ENGINE_VERSION
+APP_VERSION    = _CFG_APP_VERSION    # "parent-copilot-v0.4-v22-staging"
+ENGINE_VERSION = _CFG_ENGINE_VERSION  # "v22"
 
 # Screens visible after login
 MAIN_SCREENS = ["welcome", "profile", "interview", "weekly_plan", "doctor_prep", "feedback"]
@@ -290,6 +300,15 @@ def save_session_json(state: dict):
         child_id   = st.session_state.setdefault("child_id",   str(uuid.uuid4()))
 
         child = state.get("child", {})
+        # V22: summarise bridge plans (without PII) for storage
+        bridge_summary = {
+            dk: {
+                "planning_mode": p.get("planning_mode"),
+                "active_bridge_count": len(p.get("active_bridge_steps", [])),
+                "skipped": p.get("skipped", False),
+            }
+            for dk, p in state.get("bridge_plans", {}).items()
+        }
         snapshot = {
             "user_id":                user_id,
             "session_id":             session_id,
@@ -300,6 +319,8 @@ def save_session_json(state: dict):
             "answers":                state.get("qna", {}),
             "generated_plan":         _sanitize_plan_for_storage(
                                           state.get("weekly_schedule", {})),
+            "bridge_plans_summary":   bridge_summary,
+            "cycle_week":             state.get("cycle_week", 1),
             "feedback":               None,
             "created_at":             datetime.now(timezone.utc).isoformat(),
             "app_version":            APP_VERSION,
@@ -776,8 +797,14 @@ def screen_interview():
         for dk in domain_keys:
             finalize_domain_dev_age(state, dk)
         determine_family_guidance_floor(state)
+        # V22: build bridge plan per domain, then generate activity bank
+        state.setdefault("bridge_plans", {})
         for dk in domain_keys:
-            generate_category_activity_bank(state, dk)
+            plan = build_v22_plan_for_category(state, dk)
+            state["bridge_plans"][dk] = plan
+            bank = generate_category_activity_bank(state, dk)
+            state.setdefault("activity_banks", {})[dk] = bank
+        state["cycle_week"] = 1
         allocate_weekly_slots(state)
         build_weekly_schedule(state)
         st.session_state["genex_state"]  = state
@@ -823,6 +850,69 @@ def screen_interview():
 
     current_month = band_months[band_idx]
     questions     = bands[current_month]
+
+    # ── V22: follow-up sub-questions (performance barrier capture) ────────────
+    followup_key = f"bu_pending_{category_key}_{current_month}"
+    if followup_key in st.session_state:
+        _render_logo(height=48)
+        st.markdown(f"## {icon} {parent_label}")
+        st.markdown("")
+        st.markdown(
+            "<div class='genex-card' style='background:#FFFBEB;border:1px solid #FCD34D;"
+            "padding:0.75rem 1rem;margin-bottom:0.75rem'>"
+            "<p style='margin:0;font-size:0.92rem;color:#92400E'>"
+            "A couple of quick follow-up questions to help us understand better:"
+            "</p></div>",
+            unsafe_allow_html=True,
+        )
+        pending = st.session_state[followup_key]  # list of {question, main_answer, q_obj}
+        with st.form(f"followup_form_{category_key}_{current_month}"):
+            followup_responses = {}
+            for pf in pending:
+                schema = pf.get("schema", {})
+                q_text = schema.get("prompt", f"A bit more about: {pf['q_obj']['milestone'][:60]}")
+                choices = [c[1] for c in schema.get("choices", [])]
+                choice_keys = [c[0] for c in schema.get("choices", [])]
+                if choices:
+                    sel_idx = st.radio(
+                        label=q_text,
+                        options=choices,
+                        key=f"fu_{pf['q_obj']['question_id']}",
+                    )
+                    sel_key = choice_keys[choices.index(sel_idx)] if sel_idx in choices else choice_keys[0]
+                    followup_responses[pf["q_obj"]["question_id"]] = {
+                        "followup_key": sel_key,
+                        "main_answer": pf["main_answer"],
+                        "q_obj": pf["q_obj"],
+                    }
+            submitted_fu = st.form_submit_button("Continue →", type="primary", use_container_width=True)
+
+        if submitted_fu:
+            for qid, fu_data in followup_responses.items():
+                # Update the already-recorded QnA entry with followup + scoring_norm_answer
+                interp = derive_performance_interpretation(
+                    fu_data["main_answer"], fu_data["followup_key"]
+                )
+                qna_list = state.get("qna", {}).get(category_key, [])
+                for entry in reversed(qna_list):
+                    if str(entry.get("question_id", "")) == str(qid):
+                        entry["followup_key"]        = fu_data["followup_key"]
+                        entry["skill_ability"]       = interp.get("skill_ability", "")
+                        entry["performance_barrier"] = interp.get("performance_barrier", "")
+                        entry["scoring_norm_answer"] = interp.get("scoring_norm_answer", fu_data["main_answer"])
+                        break
+            st.session_state.pop(followup_key, None)
+            st.session_state["genex_state"] = state
+            # Advance band (score already computed and stored before follow-up prompt)
+            _pend_meta = st.session_state.pop(f"bu_meta_{category_key}_{current_month}", {})
+            if _pend_meta.get("advance_domain"):
+                _advance_domain(state, category_key, domain_idx)
+            else:
+                next_idx = _pend_meta.get("next_band_idx", band_idx + 1)
+                st.session_state[f"bi_{category_key}"] = next_idx
+                st.rerun()
+        return
+    # ── end follow-up block ────────────────────────────────────────────────────
 
     # Header
     _render_logo(height=48)
@@ -901,8 +991,28 @@ def screen_interview():
 
         updated_fails = st.session_state[f"bf_{category_key}"]
         next_idx      = band_idx + 1
+        advance_dom   = (updated_fails >= 2 or next_idx >= len(band_months))
 
-        if updated_fails >= 2 or next_idx >= len(band_months):
+        # V22: check if any answers need follow-up sub-questions
+        pending_followups = []
+        for q in questions:
+            norm = ANSWER_OPTIONS[responses[q["question_id"]]]
+            schema = get_followup_schema(norm)
+            if schema:
+                pending_followups.append({
+                    "q_obj":       q,
+                    "main_answer": norm,
+                    "schema":      schema,
+                })
+
+        if pending_followups:
+            st.session_state[f"bu_pending_{category_key}_{current_month}"] = pending_followups
+            st.session_state[f"bu_meta_{category_key}_{current_month}"] = {
+                "advance_domain":  advance_dom,
+                "next_band_idx":   next_idx,
+            }
+            st.rerun()
+        elif advance_dom:
             _advance_domain(state, category_key, domain_idx)
         else:
             st.session_state[f"bi_{category_key}"] = next_idx
@@ -962,13 +1072,30 @@ def _build_why_helps(activity: dict, state: dict) -> str:
 def _render_activity_detail(item: dict, child_name: str, key_prefix: str = ""):
     icon      = DOMAIN_ICONS.get(item.get("category_key", ""), "🌱")
     cat_label = DOMAIN_LABELS.get(item.get("category_key", ""), item.get("category", ""))
-    why       = _build_why_helps(item, {})
+
+    # V22: prefer 'why' field from activity card; fall back to static domain text
+    why = item.get("why") or _build_why_helps(item, {})
 
     st.markdown(
         f"<p style='font-size:0.88rem;color:#6B7280;margin:0 0 0.6rem'>"
-        f"{icon} {cat_label} &nbsp;·&nbsp; ⏱ {item.get('duration_min', 5)} min</p>",
+        f"{icon} {cat_label} &nbsp;·&nbsp; ⏱ {item.get('duration_min', item.get('duration_minutes', 5))} min</p>",
         unsafe_allow_html=True,
     )
+
+    # V22: Week 2 repeat badge
+    if item.get("is_repeat"):
+        mode_label = {"harder": "Try it harder", "easier": "Try it easier", "same": "Repeat"}.get(
+            item.get("repeat_mode", "same"), "Repeat"
+        )
+        st.markdown(
+            f"<div style='background:#FEF3C7;border:1px solid #FCD34D;border-radius:6px;"
+            "padding:0.5rem 0.75rem;margin-bottom:0.5rem;font-size:0.88rem;color:#92400E'>"
+            f"🔁 <strong>Week 2 — {mode_label}:</strong> "
+            f"{item.get('repeat_guidance', 'Try this activity again this week.')}"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
     st.markdown(
         f"<div class='genex-section'>"
         f"<div class='genex-section-label'>⭐ Why this helps</div>"
@@ -991,6 +1118,34 @@ def _render_activity_detail(item: dict, child_name: str, key_prefix: str = ""):
             f"</div>",
             unsafe_allow_html=True,
         )
+    # V22: success criteria
+    if item.get("success"):
+        st.markdown(
+            f"<div class='genex-section'>"
+            f"<div class='genex-section-label'>✅ You'll know it's working when</div>"
+            f"<p style='margin:0'>{item.get('success')}</p>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    # V22: adapt options
+    if item.get("make_easier") or item.get("make_harder"):
+        with st.expander("⚙️ Adapt this activity", expanded=False):
+            if item.get("make_easier"):
+                st.markdown(f"**Too hard?** {item.get('make_easier')}")
+            if item.get("make_harder"):
+                st.markdown(f"**Too easy?** {item.get('make_harder')}")
+    # V22: group play
+    if item.get("group_play"):
+        with st.expander("👫 Group / playdate version", expanded=False):
+            st.markdown(item.get("group_play"))
+    # V22: avoid
+    if item.get("avoid"):
+        with st.expander("⚠️ Things to avoid", expanded=False):
+            st.markdown(item.get("avoid"))
+    # V22: admin debug
+    if _ADMIN_DEBUG:
+        with st.expander("🔧 Debug info", expanded=False):
+            st.code(render_activity_debug_card(item))
 
 
 def _get_activity_bank_flat(state: dict) -> list:
@@ -1036,6 +1191,17 @@ def screen_weekly_plan():
             unsafe_allow_html=True,
         )
         st.markdown("")
+
+    # V22: cycle week indicator
+    cycle_week = int(state.get("cycle_week", 1))
+    _cycle_labels = {1: "Week 1 — New activities", 2: "Week 2 — Repeat & adapt",
+                     3: "Week 3 — Fresh themes", 4: "Week 4 — New themes"}
+    st.caption(f"📅 {_cycle_labels.get(cycle_week, f'Cycle week {cycle_week}')}")
+
+    # V22: admin debug panel
+    if _ADMIN_DEBUG:
+        with st.expander("🔧 Admin Debug — V22 State Snapshot", expanded=False):
+            st.json(get_debug_payload(state))
 
     st.markdown(f"## 📅 {child_name}'s Weekly Plan")
     st.caption("Tap any activity to see details. Remove or add activities to suit your week.")
