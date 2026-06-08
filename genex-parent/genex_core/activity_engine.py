@@ -212,6 +212,10 @@ def _v22_activity_prompt(
         "- Keep it playful, low-pressure, and doable in 5 minutes.\n"
         "- Use safe household materials only.\n"
         "- Privacy: refer to the child as 'your child' — never use a name.\n"
+        "- PARENT-FACING LANGUAGE: Do NOT mention 'bridge step', CDC milestone text, "
+        "subdomain names, internal planning terms, or any clinical/system terminology in "
+        "the title, instructions, or any output field. Write as if speaking directly to a "
+        "parent — warm, concrete, and jargon-free.\n"
         "- Return JSON only with exactly these keys: title, theme, instructions, "
         "success_criteria, make_easier, make_harder, group_play_line, what_to_avoid, materials.\n\n"
         f"Child profile (anonymised):\n"
@@ -279,7 +283,7 @@ def _v22_fallback_instructions(
 ) -> Dict[str, str]:
     theme = _variant_theme(fam, variant, week)
     base = {
-        "title": f"{theme.title()} Practice",
+        "title": _bucket_title(bucket, theme),
         "theme": theme,
         "materials": "simple household items",
         "instructions": (
@@ -300,7 +304,7 @@ def _v22_fallback_instructions(
     }
     overrides = {
         "book_page": {
-            "title": f"Book Page Turn — {theme.title()}",
+            "title": "Turn the Page Together",
             "materials": "board book or thick-page book",
             "instructions": (
                 "Sit together with a thick-page book. Hold it steady, lift one page edge, "
@@ -310,7 +314,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid thin paper pages, rushing, or turning pages for your child.",
         },
         "fork_spoon": {
-            "title": f"Fork/Spoon Practice — {theme.title()}",
+            "title": _bucket_title("fork_spoon", theme),
             "materials": "child fork or spoon, soft safe food pieces or pretend food, plate",
             "instructions": (
                 "Sit at a table with soft food or pretend food. "
@@ -320,7 +324,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid choking-risk foods, pressure to eat, or rushing.",
         },
         "dressing_on": {
-            "title": f"Clothes On — {theme.title()}",
+            "title": _bucket_title("dressing_on", theme),
             "materials": "loose jacket, shirt, or pants",
             "instructions": (
                 "Hold one loose sleeve or waistband open. Say a simple cue like 'arm in' "
@@ -330,7 +334,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid tight clothing, multiple steps at once, or rushing.",
         },
         "dressing_off": {
-            "title": f"Clothes Off — {theme.title()}",
+            "title": _bucket_title("dressing_off", theme),
             "materials": "loose elastic-waist pants or jacket",
             "instructions": (
                 "Start the removal movement for your child, then invite one small pull, "
@@ -339,7 +343,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid tight clothing or multiple items at once.",
         },
         "buttoning": {
-            "title": f"Button Practice — {theme.title()}",
+            "title": "Button Challenge Game",
             "materials": "large button board or shirt with big buttons",
             "instructions": (
                 "Show one large button or closure. Help your child pull apart, push through, "
@@ -348,7 +352,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid small buttons, frustration, or requiring full completion.",
         },
         "catch_ball": {
-            "title": f"Soft Ball Game — {theme.title()}",
+            "title": _bucket_title("catch_ball", theme),
             "materials": "soft ball or rolled socks",
             "instructions": (
                 "Sit close. Roll or gently pass a soft ball toward your child. "
@@ -357,7 +361,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid hard balls, long distances, or pressure to catch.",
         },
         "jump_prep": {
-            "title": f"Safe Movement Practice — {theme.title()}",
+            "title": _bucket_title("jump_prep", theme),
             "materials": "clear flat floor, caregiver hand support",
             "instructions": (
                 "On a clear flat floor, hold your child's hands or stay close. "
@@ -367,7 +371,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid high surfaces, unsupported jumping, or speed.",
         },
         "expressive_word": {
-            "title": f"Word Practice — {theme.title()}",
+            "title": _bucket_title("expressive_word", theme),
             "materials": "two favorite objects or pictures",
             "instructions": (
                 f"Hold up two items related to {theme}. Pause and wait for your child "
@@ -376,7 +380,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid asking 'say the word' repeatedly or withholding the item.",
         },
         "gesture": {
-            "title": f"Gesture and Request — {theme.title()}",
+            "title": "Show Me What You Want",
             "materials": "two favorite objects or a clear container",
             "instructions": (
                 "Put a favorite item in reach or a clear container. "
@@ -386,7 +390,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid requiring a verbal word; accept any communication.",
         },
         "receptive_direction": {
-            "title": f"One-Step Direction — {theme.title()}",
+            "title": _bucket_title("receptive_direction", theme),
             "materials": "one familiar toy and a basket or simple target",
             "instructions": (
                 "Give one clear familiar direction like 'give me the [item]' or 'put it in.' "
@@ -395,7 +399,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid two-step directions or repeating the direction more than once.",
         },
         "social_turn": {
-            "title": f"Turn-Taking — {theme.title()}",
+            "title": _bucket_title("social_turn", theme),
             "materials": "one favorite toy or no materials needed",
             "instructions": (
                 "Use one toy or peekaboo. Say 'my turn,' take a brief turn, then 'your turn.' "
@@ -404,7 +408,7 @@ def _v22_fallback_instructions(
             "what_to_avoid": "Avoid long turns, competition, or keeping score.",
         },
         "attention": {
-            "title": f"Focus Practice — {theme.title()}",
+            "title": _bucket_title("attention", theme),
             "materials": "3-5 simple pieces or a sticker card",
             "instructions": (
                 "Choose a tiny task with a clear finish: 3 blocks or 3 stickers. "
@@ -416,6 +420,110 @@ def _v22_fallback_instructions(
     if bucket in overrides:
         base.update(overrides[bucket])
     return base
+
+
+# ---------------------------------------------------------------------------
+# Parent-facing "why this helps" text — no bridge/clinical language
+# ---------------------------------------------------------------------------
+
+_DOMAIN_WHY: Dict[str, str] = {
+    "movement_and_physical": (
+        "Physical play builds strength, coordination, and body confidence — "
+        "skills that support everything from dressing independently to playing with friends."
+    ),
+    "language_and_communication": (
+        "Practising communication in small, playful moments builds the connection between "
+        "hearing, understanding, and expressing — the foundation of language."
+    ),
+    "social_and_emotional": (
+        "Small social moments teach your child how to connect, trust, and feel safe — "
+        "building emotional skills one shared turn at a time."
+    ),
+    "cognitive": (
+        "Play that involves thinking and exploring helps your child build attention, "
+        "curiosity, and the ability to learn new things."
+    ),
+}
+
+
+def _bucket_title(bucket: str, theme: str) -> str:
+    """Return a playful, concrete activity title for a bucket+theme combination."""
+    t = theme.lower().strip()
+    if bucket == "jump_prep":
+        if "frog" in t:        return "Frog Jump Game"
+        if "sticker" in t:     return "Stomp the Sticker"
+        if "squat" in t:       return "Squat & Reach"
+        return "Move & Balance Game"
+    if bucket == "expressive_word":
+        if "snack" in t:       return "Snack Choice Words"
+        if "photo" in t or "name" in t: return "Name the Faces"
+        if "book" in t:        return "What's That?"
+        if "toy" in t:         return "Pick Your Toy"
+        return "Point and Name Game"
+    if bucket == "receptive_direction":
+        if "body" in t:        return "Touch Your Nose!"
+        if "give" in t:        return "Give Me! Game"
+        if "cleanup" in t:     return "Cleanup Helper"
+        return "Do This! Game"
+    if bucket == "social_turn":
+        if "peekaboo" in t:    return "Peekaboo Together"
+        if "copy" in t:        return "Copy Me!"
+        return "My Turn, Your Turn!"
+    if bucket == "attention":
+        if "sticker" in t:     return "Sticker Finish Game"
+        if "block" in t:       return "Build & Finish"
+        return "Finish It! Game"
+    if bucket == "gesture":
+        return "Show Me What You Want"
+    if bucket == "book_page":
+        return "Turn the Page Together"
+    if bucket == "fork_spoon":
+        if "snack" in t or "meal" in t: return "Snack Time Practice"
+        if "teddy" in t:       return "Feed the Teddy"
+        return "Spoon & Fork Game"
+    if bucket == "dressing_on":
+        if "morning" in t:     return "Morning Clothes Game"
+        if "dress" in t:       return "Dress-Up Star"
+        return "Arms In! Game"
+    if bucket == "dressing_off":
+        if "bedtime" in t:     return "Bedtime Undress Game"
+        if "teddy" in t:       return "Undress the Teddy"
+        return "Pull It Off! Game"
+    if bucket == "buttoning":
+        return "Button Challenge Game"
+    if bucket == "catch_ball":
+        if "rolling" in t:     return "Roll the Ball Game"
+        if "basket" in t:      return "Basket Target Toss"
+        return "Soft Ball Fun"
+    if bucket == "sound":
+        if "animal" in t:      return "Animal Sound Game"
+        if "song" in t:        return "Sing & Pause"
+        return "Silly Sounds Together"
+    if bucket == "sentence":
+        if "photo" in t:       return "Photo Story Game"
+        return "Let's Talk About It"
+    if bucket == "counting":
+        if "snack" in t:       return "Count the Snacks"
+        if "block" in t:       return "Count the Blocks"
+        return "Count Along Game"
+    if bucket == "matching":
+        if "sock" in t:        return "Sock Match Game"
+        if "color" in t:       return "Color Sort Game"
+        return "Same or Different?"
+    if bucket == "routine":
+        if "cleanup" in t:     return "Cleanup Helper"
+        return "Helper's Job"
+    if bucket == "action_label":
+        return "What Are They Doing?"
+    if bucket == "function_question":
+        return "What's It For? Game"
+    if bucket == "conversation":
+        return "Let's Chat Game"
+    if bucket == "time_words":
+        return "First and Then Game"
+    if bucket == "letters":
+        return "Letter Hunt Game"
+    return f"{theme.title()} Game"
 
 
 # ---------------------------------------------------------------------------
@@ -462,11 +570,11 @@ def _v22_make_activity(
         title = f"Stretch: {title}" if not title.startswith("Stretch") else title
         instructions += " Only try this if the main version is easy and enjoyable."
 
-    why = (
-        f"This activity works on bridge step 1 — {focus.lower()} — "
-        f'as a small step toward "{cdc_goal}".'
-        if cdc_goal else
-        f"This activity practices {focus.lower()} through playful repetition."
+    # Parent-facing explanation — no bridge/CDC/clinical language.
+    # Full domain context is shown in _build_why_helps() in app.py if why is blank.
+    why = _DOMAIN_WHY.get(
+        category_key,
+        "This activity supports your child's development through playful everyday practice.",
     )
 
     return {

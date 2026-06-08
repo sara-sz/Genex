@@ -61,6 +61,7 @@ from genex_core.interview_engine import (
     build_milestone_questions,
     record_answer,
     ensure_concern_profile,
+    choose_focus_domains,
 )
 from genex_core.delay_engine import estimate_all_delays
 from genex_core.scoring import finalize_domain_dev_age
@@ -127,6 +128,40 @@ DOMAIN_ICONS = {
     "social_and_emotional":        "💛",
     "cognitive":                   "🧩",
 }
+
+# ── Interview question grammar helper ─────────────────────────────────────
+
+def _milestone_to_question(milestone: str, child_name: str) -> str:
+    """
+    Convert a CDC milestone phrase (third-person present) to a natural parent question.
+    'walks independently'         → 'Does Maya walk independently?'
+    'comforts a friend when upset'→ 'Does Maya comfort a friend when upset?'
+    'uses 2-word phrases'         → 'Does Maya use 2-word phrases?'
+    """
+    import re as _re
+    text = milestone.strip().rstrip(".?")
+    words = text.split()
+    if not words:
+        return f"Does {child_name} {text}?"
+    verb = words[0]
+    rest = " ".join(words[1:])
+
+    # De-conjugate third-person singular present tense → base form
+    if verb.endswith("ies") and len(verb) > 3:
+        root = verb[:-3] + "y"                           # identifies → identify
+    elif _re.search(r"(ch|sh|x)es$", verb):
+        root = verb[:-2]                                  # watches → watch, pushes → push
+    elif verb.endswith("ses"):
+        # vowel before "ses" (uses, closes) → strip "s"; consonant (passes, presses) → strip "es"
+        root = verb[:-1] if (len(verb) >= 4 and verb[-4] in "aeiou") else verb[:-2]
+    elif verb.endswith("s") and len(verb) > 2 and not verb.endswith("ss"):
+        root = verb[:-1]                                  # walks → walk, comforts → comfort
+    else:
+        root = verb                                       # already base form
+
+    de_verb = (root + " " + rest).strip() if rest else root
+    return f"Does {child_name} {de_verb}?"
+
 
 SESSION_DIR  = Path(os.environ.get("SESSION_DIR", "outputs/sessions"))
 FEEDBACK_DIR = SESSION_DIR.parent / "feedback"   # outputs/feedback (or /tmp/feedback on Cloud Run)
@@ -208,7 +243,7 @@ def restart_button():
         ]:
             st.session_state.pop(key, None)
         for key in list(st.session_state.keys()):
-            if key.startswith(("bq_", "bm_", "bi_", "bf_", "bc_")):
+            if key.startswith(("bq_", "bm_", "bi_", "bf_", "bc_", "bu_")):
                 del st.session_state[key]
         go_to("welcome")
 
@@ -776,7 +811,10 @@ def screen_interview():
             go_to("welcome")
         return
 
-    domain_keys = list(DOMAIN_CONFIG.keys())
+    # V22: only ask about the 1-2 domains with strongest concern signal
+    domain_keys = choose_focus_domains(state)
+    # Per-domain question budget: fewer questions when covering 2 domains
+    _max_q_per_domain = 7 if len(domain_keys) == 1 else 5
     domain_idx  = st.session_state.get("interview_domain_idx", 0)
     child_name  = get_child_display_name()
 
@@ -821,7 +859,9 @@ def screen_interview():
 
     # Initialise band state
     if f"bq_{category_key}" not in st.session_state:
-        all_qs = build_milestone_questions(state, category_key)
+        all_qs = build_milestone_questions(
+            state, category_key, max_questions_total=_max_q_per_domain
+        )
         bands: dict = {}
         for q in all_qs:
             bands.setdefault(q["months"], []).append(q)
@@ -851,69 +891,6 @@ def screen_interview():
 
     current_month = band_months[band_idx]
     questions     = bands[current_month]
-
-    # ── V22: follow-up sub-questions (performance barrier capture) ────────────
-    followup_key = f"bu_pending_{category_key}_{current_month}"
-    if followup_key in st.session_state:
-        _render_logo(height=48)
-        st.markdown(f"## {icon} {parent_label}")
-        st.markdown("")
-        st.markdown(
-            "<div class='genex-card' style='background:#FFFBEB;border:1px solid #FCD34D;"
-            "padding:0.75rem 1rem;margin-bottom:0.75rem'>"
-            "<p style='margin:0;font-size:0.92rem;color:#92400E'>"
-            "A couple of quick follow-up questions to help us understand better:"
-            "</p></div>",
-            unsafe_allow_html=True,
-        )
-        pending = st.session_state[followup_key]  # list of {question, main_answer, q_obj}
-        with st.form(f"followup_form_{category_key}_{current_month}"):
-            followup_responses = {}
-            for pf in pending:
-                schema = pf.get("schema", {})
-                q_text = schema.get("prompt", f"A bit more about: {pf['q_obj']['milestone'][:60]}")
-                choices = [c[1] for c in schema.get("choices", [])]
-                choice_keys = [c[0] for c in schema.get("choices", [])]
-                if choices:
-                    sel_idx = st.radio(
-                        label=q_text,
-                        options=choices,
-                        key=f"fu_{pf['q_obj']['question_id']}",
-                    )
-                    sel_key = choice_keys[choices.index(sel_idx)] if sel_idx in choices else choice_keys[0]
-                    followup_responses[pf["q_obj"]["question_id"]] = {
-                        "followup_key": sel_key,
-                        "main_answer": pf["main_answer"],
-                        "q_obj": pf["q_obj"],
-                    }
-            submitted_fu = st.form_submit_button("Continue →", type="primary", use_container_width=True)
-
-        if submitted_fu:
-            for qid, fu_data in followup_responses.items():
-                # Update the already-recorded QnA entry with followup + scoring_norm_answer
-                interp = derive_performance_interpretation(
-                    fu_data["main_answer"], fu_data["followup_key"]
-                )
-                qna_list = state.get("qna", {}).get(category_key, [])
-                for entry in reversed(qna_list):
-                    if str(entry.get("question_id", "")) == str(qid):
-                        entry["followup_key"]        = fu_data["followup_key"]
-                        entry["skill_ability"]       = interp.get("skill_ability", "")
-                        entry["performance_barrier"] = interp.get("performance_barrier", "")
-                        entry["scoring_norm_answer"] = interp.get("scoring_norm_answer", fu_data["main_answer"])
-                        break
-            st.session_state.pop(followup_key, None)
-            st.session_state["genex_state"] = state
-            # Advance band (score already computed and stored before follow-up prompt)
-            _pend_meta = st.session_state.pop(f"bu_meta_{category_key}_{current_month}", {})
-            if _pend_meta.get("advance_domain"):
-                _advance_domain(state, category_key, domain_idx)
-            else:
-                next_idx = _pend_meta.get("next_band_idx", band_idx + 1)
-                st.session_state[f"bi_{category_key}"] = next_idx
-                st.rerun()
-        return
-    # ── end follow-up block ────────────────────────────────────────────────────
 
     # Header
     _render_logo(height=48)
@@ -951,12 +928,18 @@ def screen_interview():
         answer_keys = list(ANSWER_OPTIONS.keys())
 
         for q in questions:
-            milestone_text = q["milestone"].rstrip(".?")
+            q_text = _milestone_to_question(q["milestone"], child_name)
+            expl   = q.get("parent_explanation", "").strip()
+            card_body = (
+                f"<p style='font-size:1.08rem;font-weight:600;margin:0 0 "
+                f"{'0.35rem' if expl else '0'}'>{q_text}</p>"
+            )
+            if expl:
+                card_body += (
+                    f"<p style='font-size:0.87rem;color:#6B7280;margin:0'>{expl}</p>"
+                )
             st.markdown(
-                f"<div class='genex-card' style='margin:0.5rem 0'>"
-                f"<p style='font-size:1.08rem;font-weight:600;margin:0'>"
-                f"Can {child_name} {milestone_text}?</p>"
-                f"</div>",
+                f"<div class='genex-card' style='margin:0.5rem 0'>{card_body}</div>",
                 unsafe_allow_html=True,
             )
             sel = st.radio(
@@ -994,26 +977,7 @@ def screen_interview():
         next_idx      = band_idx + 1
         advance_dom   = (updated_fails >= 2 or next_idx >= len(band_months))
 
-        # V22: check if any answers need follow-up sub-questions
-        pending_followups = []
-        for q in questions:
-            norm = ANSWER_OPTIONS[responses[q["question_id"]]]
-            schema = get_followup_schema(norm)
-            if schema:
-                pending_followups.append({
-                    "q_obj":       q,
-                    "main_answer": norm,
-                    "schema":      schema,
-                })
-
-        if pending_followups:
-            st.session_state[f"bu_pending_{category_key}_{current_month}"] = pending_followups
-            st.session_state[f"bu_meta_{category_key}_{current_month}"] = {
-                "advance_domain":  advance_dom,
-                "next_band_idx":   next_idx,
-            }
-            st.rerun()
-        elif advance_dom:
+        if advance_dom:
             _advance_domain(state, category_key, domain_idx)
         else:
             st.session_state[f"bi_{category_key}"] = next_idx
@@ -1211,7 +1175,8 @@ def screen_weekly_plan():
     WEEKDAYS  = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
     WEEKEND   = ["Saturday", "Sunday"]
     ALL_DAYS  = WEEKDAYS + WEEKEND
-    activity_bank = _get_activity_bank_flat(state)
+    activity_bank  = _get_activity_bank_flat(state)
+    daily_budget   = int(state.get("child", {}).get("daily_time_min", 15))
 
     for day in ALL_DAYS:
         day_info = plan.get(day, {"items": [], "total_minutes": 0, "is_weekend": day in WEEKEND})
@@ -1250,36 +1215,56 @@ def screen_weekly_plan():
                         plan[day]["items"].pop(idx)
                         st.rerun()
 
-        # Add from bank — available every day
-        bank_options = {
-            f"{DOMAIN_ICONS.get(a.get('category_key',''), '🌱')} "
-            f"{a.get('title','')} ({a.get('duration_min',5)} min)": a
-            for a in activity_bank
-            if a.get("title") not in [i.get("title") for i in plan.get(day, {}).get("items", [])]
-        }
-        if bank_options:
-            with st.expander(f"➕ Add an activity to {day}", expanded=False):
-                selected_label = st.selectbox(
-                    "Choose from your activity bank:",
-                    options=list(bank_options.keys()),
-                    key=f"add_select_{day}",
-                    label_visibility="collapsed",
-                )
-                selected_activity = bank_options[selected_label]
-                st.markdown(
-                    f"<div class='genex-section' style='margin:0.4rem 0'>"
-                    f"<p style='font-size:0.93rem;margin:0'>"
-                    f"{selected_activity.get('instructions','')[:180]}…</p>"
-                    f"<p style='font-size:0.82rem;color:#9CA3AF;margin:0.3rem 0 0'>"
-                    f"🧰 {selected_activity.get('materials','')}</p>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-                if st.button(f"Add to {day}", key=f"add_btn_{day}", type="primary"):
-                    if day not in plan:
-                        plan[day] = {"items": [], "total_minutes": 0, "is_weekend": is_wknd}
-                    plan[day]["items"].append(selected_activity)
-                    st.rerun()
+        # ── Add an activity ───────────────────────────────────────────────────
+        # Hide if day is already at or over daily budget
+        day_mins = sum(
+            int(it.get("duration_min", it.get("duration_minutes", 5))) for it in items
+        )
+        at_budget = day_mins >= daily_budget
+
+        if not at_budget:
+            # Exclude any activity title already used anywhere in the week
+            used_this_week = {
+                it.get("title")
+                for d, ddata in plan.items()
+                for it in ddata.get("items", [])
+            }
+            # Up to 5 unique options from unscheduled pool
+            candidates = [
+                a for a in activity_bank
+                if a.get("title") and a.get("title") not in used_this_week
+            ][:5]
+
+            if candidates:
+                bank_options = {
+                    f"{DOMAIN_ICONS.get(a.get('category_key',''), '🌱')} "
+                    f"{a.get('title','')} ({a.get('duration_min', a.get('duration_minutes', 5))} min)": a
+                    for a in candidates
+                }
+                with st.expander(f"➕ Add an activity to {day}", expanded=False):
+                    selected_label = st.selectbox(
+                        "Choose from your activity bank:",
+                        options=list(bank_options.keys()),
+                        key=f"add_select_{day}",
+                        label_visibility="collapsed",
+                    )
+                    selected_activity = bank_options[selected_label]
+                    instr_preview = selected_activity.get("instructions", "")
+                    if len(instr_preview) > 180:
+                        instr_preview = instr_preview[:180] + "…"
+                    st.markdown(
+                        f"<div class='genex-section' style='margin:0.4rem 0'>"
+                        f"<p style='font-size:0.93rem;margin:0'>{instr_preview}</p>"
+                        f"<p style='font-size:0.82rem;color:#9CA3AF;margin:0.3rem 0 0'>"
+                        f"🧰 {selected_activity.get('materials','')}</p>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(f"Add to {day}", key=f"add_btn_{day}", type="primary"):
+                        if day not in plan:
+                            plan[day] = {"items": [], "total_minutes": 0, "is_weekend": is_wknd}
+                        plan[day]["items"].append(selected_activity)
+                        st.rerun()
 
         st.markdown("")
 
