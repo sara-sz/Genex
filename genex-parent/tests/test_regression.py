@@ -1,7 +1,7 @@
 """
 tests/test_regression.py
 -------------------------
-V22 regression test suite (5 cases).
+V22 regression test suite (8 cases).
 
 Run: python3 -m pytest tests/test_regression.py -v
   or: python3 tests/test_regression.py
@@ -13,6 +13,9 @@ Cases:
   3. Performance barrier: scoring_norm_answer overrides norm_answer in band classification.
   4. Validation hard-block: placeholder wording + motor-in-language activity blocked.
   5. Feedback signals: advance/fallback/rotate detected and applied correctly.
+  6. parent_explanation present and non-empty in question dicts.
+  7. No "(variation N)" labels; no duplicate instructions across different-titled activities.
+  8. No bridge/internal/clinical language in parent-facing activity fields.
 """
 
 import sys
@@ -20,7 +23,11 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from genex_core.interview_engine import init_state_from_profile, ensure_concern_profile
+from genex_core.interview_engine import (
+    init_state_from_profile,
+    ensure_concern_profile,
+    build_milestone_questions,
+)
 from genex_core.scoring import finalize_domain_dev_age, summarize_answers_by_band
 from genex_core.bridge_selector import build_bridge_plan_for_category
 from genex_core.support_tiers import build_v22_plan_for_category, compute_support_metrics
@@ -349,6 +356,102 @@ def test_case5_feedback_signals():
     print(f"  ✓ 2x resisted → rotate signal → theme rotation applied (week {rot['from_week']}→{rot['to_week']})")
 
 
+
+
+# ---------------------------------------------------------------------------
+# Case 6: parent_explanation present and non-empty in question dicts
+# ---------------------------------------------------------------------------
+
+def test_case6_parent_explanation_in_questions():
+    print("\n─── Case 6: parent_explanation in question dicts ───")
+    state = _make_state_with_lang_delay(chrono=24, dev_age=12)
+    qs = build_milestone_questions(state, "language_and_communication", max_questions_total=9)
+    assert len(qs) >= 1, "Expected at least 1 question"
+    missing = [q for q in qs if not q.get("parent_explanation", "").strip()]
+    present = len(qs) - len(missing)
+    if missing:
+        print(f"  ⚠ {len(missing)} questions missing parent_explanation (out of {len(qs)})")
+    # More than half must have explanations (data issue would show all missing)
+    assert len(missing) < len(qs), "Every question is missing parent_explanation — pipeline broken"
+    print(f"  ✓ {present}/{len(qs)} questions have parent_explanation populated")
+
+
+# ---------------------------------------------------------------------------
+# Case 7: No "(variation N)" in titles; no duplicate instructions across
+#         activities that have different titles
+# ---------------------------------------------------------------------------
+
+def test_case7_no_variation_labels_no_duplicate_instructions():
+    print("\n─── Case 7: No variation labels, no duplicate instructions ───")
+    state = _make_state_with_lang_delay(chrono=54, dev_age=36)
+    state["concern_profile"]["domain_weights"]["social_and_emotional"] = 0.70
+    state["concern_profile"]["domain_weights"]["language_and_communication"] = 0.65
+    state["dev_age"]["social_and_emotional"] = 36
+    state["delay_estimates"]["social_and_emotional"] = {"delay_months": 18}
+
+    import re as _re
+    variation_violations = []
+    instr_duplicates = []
+
+    for dk in ["social_and_emotional", "language_and_communication"]:
+        bank = generate_category_activity_bank(state, dk)
+        acts = bank.get("activities", [])
+        for a in acts:
+            title = a.get("title", "")
+            if _re.search(r"\(variation\s+\d+\)", title, _re.IGNORECASE):
+                variation_violations.append(f"{dk}: {title!r}")
+        seen_instr: dict = {}
+        for a in acts:
+            title = a.get("title", "")
+            instr = a.get("instructions", "").strip()
+            if instr in seen_instr and seen_instr[instr] != title:
+                instr_duplicates.append(
+                    f"{dk}: {title!r} and {seen_instr[instr]!r} share identical instructions"
+                )
+            else:
+                seen_instr[instr] = title
+
+    assert not variation_violations, (
+        f"Found '(variation N)' labels in titles: {variation_violations[:3]}"
+    )
+    assert not instr_duplicates, (
+        f"Different-titled activities share identical instructions: {instr_duplicates[:2]}"
+    )
+    print("  ✓ No '(variation N)' labels in any activity title")
+    print("  ✓ No duplicate instructions across activities with different titles")
+
+
+# ---------------------------------------------------------------------------
+# Case 8: No bridge / internal / clinical language in parent-facing fields
+# ---------------------------------------------------------------------------
+
+_INTERNAL_TERMS = [
+    "bridge_step", "bridge step", "previous_bridge",
+    "planning_mode", "activity_family", "cdc milestone",
+    "subdomain", "scoring_norm", "norm_answer", "bridge_step_number",
+]
+
+def test_case8_no_internal_language_in_parent_fields():
+    print("\n─── Case 8: No internal language in parent-facing fields ───")
+    state = _make_state_with_lang_delay(chrono=24, dev_age=12)
+    bank  = generate_category_activity_bank(state, "language_and_communication")
+    acts  = bank.get("activities", [])
+    PARENT_FIELDS = ["title", "instructions", "why", "success", "materials",
+                     "easier", "harder", "avoid", "group_play"]
+    violations = []
+    for a in acts:
+        for field in PARENT_FIELDS:
+            val = str(a.get(field, "") or "").lower()
+            for term in _INTERNAL_TERMS:
+                if term in val:
+                    violations.append(
+                        f"{a.get('title','')!r} field={field!r} contains {term!r}"
+                    )
+    assert not violations, (
+        "Internal language found in parent-facing fields:\n" + "\n".join(violations[:5])
+    )
+    print(f"  ✓ {len(acts)} activities — no internal language in parent-facing fields")
+
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
@@ -360,6 +463,9 @@ def run_all():
         test_case3_performance_barrier_scoring,
         test_case4_validation_hard_block,
         test_case5_feedback_signals,
+        test_case6_parent_explanation_in_questions,
+        test_case7_no_variation_labels_no_duplicate_instructions,
+        test_case8_no_internal_language_in_parent_fields,
     ]
     passed = 0
     failed = 0

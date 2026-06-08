@@ -930,9 +930,15 @@ def screen_interview():
         for q in questions:
             q_text = _milestone_to_question(q["milestone"], child_name)
             expl   = q.get("parent_explanation", "").strip()
-            card_body = (
-                f"<p style='font-size:1.08rem;font-weight:600;margin:0 0 "
-                f"{'0.35rem' if expl else '0'}'>{q_text}</p>"
+            expl_html = (
+                f"<p style='font-size:0.87rem;color:#6B7280;margin:0.3rem 0 0'>{expl}</p>"
+                if expl else ""
+            )
+            st.markdown(
+                "<div class='genex-card' style='margin:0.5rem 0'>"
+                f"<p style='font-size:1.08rem;font-weight:600;margin:0'>{q_text}</p>"
+                f"{expl_html}</div>",
+                unsafe_allow_html=True,
             )
             if expl:
                 card_body += (
@@ -1215,57 +1221,7 @@ def screen_weekly_plan():
                         plan[day]["items"].pop(idx)
                         st.rerun()
 
-        # ── Add an activity ───────────────────────────────────────────────────
-        # Hide if day is already at or over daily budget
-        day_mins = sum(
-            int(it.get("duration_min", it.get("duration_minutes", 5))) for it in items
-        )
-        at_budget = day_mins >= daily_budget
-
-        if not at_budget:
-            # Exclude any activity title already used anywhere in the week
-            used_this_week = {
-                it.get("title")
-                for d, ddata in plan.items()
-                for it in ddata.get("items", [])
-            }
-            # Up to 5 unique options from unscheduled pool
-            candidates = [
-                a for a in activity_bank
-                if a.get("title") and a.get("title") not in used_this_week
-            ][:5]
-
-            if candidates:
-                bank_options = {
-                    f"{DOMAIN_ICONS.get(a.get('category_key',''), '🌱')} "
-                    f"{a.get('title','')} ({a.get('duration_min', a.get('duration_minutes', 5))} min)": a
-                    for a in candidates
-                }
-                with st.expander(f"➕ Add an activity to {day}", expanded=False):
-                    selected_label = st.selectbox(
-                        "Choose from your activity bank:",
-                        options=list(bank_options.keys()),
-                        key=f"add_select_{day}",
-                        label_visibility="collapsed",
-                    )
-                    selected_activity = bank_options[selected_label]
-                    instr_preview = selected_activity.get("instructions", "")
-                    if len(instr_preview) > 180:
-                        instr_preview = instr_preview[:180] + "…"
-                    st.markdown(
-                        f"<div class='genex-section' style='margin:0.4rem 0'>"
-                        f"<p style='font-size:0.93rem;margin:0'>{instr_preview}</p>"
-                        f"<p style='font-size:0.82rem;color:#9CA3AF;margin:0.3rem 0 0'>"
-                        f"🧰 {selected_activity.get('materials','')}</p>"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-                    if st.button(f"Add to {day}", key=f"add_btn_{day}", type="primary"):
-                        if day not in plan:
-                            plan[day] = {"items": [], "total_minutes": 0, "is_weekend": is_wknd}
-                        plan[day]["items"].append(selected_activity)
-                        st.rerun()
-
+        # Add-activity feature hidden until quality bar is met in QA.
         st.markdown("")
 
     # Download (no child name in filename)
