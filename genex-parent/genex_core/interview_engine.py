@@ -399,10 +399,16 @@ def choose_focus_domains(
     # Select the top-scoring domain unconditionally
     selected = [ranked[0]["category_key"]]
 
-    # Add second domain only if it has meaningful signal
+    # Add second domain only if it has BOTH a meaningful triage score AND
+    # an explicit concern signal (domain_weight from parent text ≥ 0.10).
+    # Without the concern_signal guard a developmental delay in an unmentioned
+    # domain (e.g. social_and_emotional for a speech-only concern) can
+    # push triage_score above the threshold via delay_signal alone —
+    # which would incorrectly add social/emotional questions for a parent
+    # who only mentioned speech delay.
     if len(ranked) > 1 and max_domains >= 2:
         second = ranked[1]
-        if second["triage_score"] >= 0.15:
+        if second["triage_score"] >= 0.15 and second["concern_signal"] >= 0.10:
             selected.append(second["category_key"])
 
     return selected

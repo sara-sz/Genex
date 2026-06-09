@@ -795,6 +795,91 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "group_play_line": "Two children each build a model and swap — try to copy each other's.",
             "what_to_avoid": "Avoid correcting your child's version mid-build — wait until they're done.",
         },
+        {
+            "title": "Timer Cleanup Race",
+            "theme": "toy cleanup with a timer",
+            "materials": "phone or kitchen timer, basket, 6-8 small toys on the floor",
+            "instructions": (
+                "Scatter 6-8 toys on the floor. "
+                "Show the timer and say 'let's put them all away before the beep!' "
+                "Set 1 minute and start picking up together. "
+                "Count each toy as it goes in: 'one… two… three!' "
+                "Celebrate when the basket is full or the timer goes off."
+            ),
+            "success_criteria": "Your child puts at least 3 toys in the basket before the timer ends.",
+            "make_easier": "Use 3 toys only and do the first one hand-over-hand together.",
+            "make_harder": "Let your child set the timer themselves and try to beat their own record.",
+            "group_play_line": "Two children each have their own basket and see who fills theirs first.",
+            "what_to_avoid": "Avoid extending the task if your child loses momentum — stop at the timer.",
+        },
+        {
+            "title": "Drawing Finish",
+            "theme": "drawing to a finish line",
+            "materials": "paper and crayons",
+            "instructions": (
+                "Draw a simple outline together — a house, a sun, or a face — and stop when there are "
+                "3–4 parts left to add (windows, rays, eyes). "
+                "Say 'let's finish it!' and point to each missing part in turn. "
+                "Wait for your child to colour or draw each one before moving to the next. "
+                "Celebrate when the last part is done."
+            ),
+            "success_criteria": "Your child adds at least 2 parts to finish the drawing.",
+            "make_easier": "Trace the missing parts lightly in pencil so your child colours inside the lines.",
+            "make_harder": "Ask your child to decide what to add next and do it without pointing.",
+            "group_play_line": "Two children take turns adding one part each to the same drawing.",
+            "what_to_avoid": "Avoid finishing parts yourself — the incompleteness is what drives attention.",
+        },
+        {
+            "title": "First-Then Routine Board",
+            "theme": "first/then visual routine",
+            "materials": "2 index cards or sticky notes, a simple drawing or photo of each step",
+            "instructions": (
+                "Before a short task (snack, getting shoes on, putting toys away), "
+                "hold up two cards: 'FIRST' and 'THEN.' "
+                "Say 'first… shoes — then… snack!' and show each card. "
+                "Help your child do the first step, then immediately do the reward. "
+                "Keep the routine under 3 minutes total."
+            ),
+            "success_criteria": "Your child completes the first step and waits for the 'then' moment.",
+            "make_easier": "Use only one card ('first') and give the reward right away.",
+            "make_harder": "Add a middle card: first — then — and then.",
+            "group_play_line": "With another child, each takes a turn doing the 'first' step while the other waits.",
+            "what_to_avoid": "Avoid using the first-then board for steps your child truly cannot do yet.",
+        },
+        {
+            "title": "Waiting Turn Game",
+            "theme": "taking turns with a prize",
+            "materials": "one small toy, snack, or sticker as a prize; a chair for each player",
+            "instructions": (
+                "Sit across from your child with the prize between you. "
+                "Take a turn using the toy (roll the car, place the sticker, eat one cracker). "
+                "Say 'my turn… your turn!' and slide it across. "
+                "Each turn is very short — 10 seconds maximum. "
+                "Do 5–6 turns, then declare 'all done — we both played!'"
+            ),
+            "success_criteria": "Your child waits for their turn and takes the prize without grabbing on your turn.",
+            "make_easier": "Shorten your turn to 3 seconds so the wait is very brief.",
+            "make_harder": "Add a 'stop and count to 3' rule before taking a turn.",
+            "group_play_line": "With another adult or child, add a third turn in the rotation.",
+            "what_to_avoid": "Avoid long turns — waiting is the practice; keep your turn visibly short.",
+        },
+        {
+            "title": "Snack Count and Finish",
+            "theme": "snack counting task",
+            "materials": "5–8 small snack pieces (crackers, raisins, cereal) on a plate",
+            "instructions": (
+                "Put 5–8 small snack pieces on a plate. "
+                "Point and count them together: 'one, two, three…' "
+                "Then say 'let's finish them all!' and take turns eating one at a time. "
+                "Count down as each one goes: 'four left… three left…' "
+                "Celebrate when the plate is empty."
+            ),
+            "success_criteria": "Your child stays at the table and eats (or hands over) each piece until the plate is empty.",
+            "make_easier": "Use 3 pieces only and count them together before eating each one.",
+            "make_harder": "Ask your child to count the remaining pieces before each turn.",
+            "group_play_line": "Two children take turns — each eats one piece and counts the ones left.",
+            "what_to_avoid": "Avoid adding more snack mid-task — the clear empty plate is the finish line.",
+        },
     ],
     "jump_prep": [
         {
@@ -1136,6 +1221,46 @@ _DOMAIN_WHY: Dict[str, str] = {
     ),
 }
 
+# Subdomain-specific "why this helps" text — overrides the domain-level text
+# when the bridge's subdomain matches.  Used for common high-specificity
+# concerns (e.g. ADHD / attention, emotional regulation) where the generic
+# domain text does not land meaningfully for the parent.
+_SUBDOMAIN_WHY: Dict[str, str] = {
+    "attention_and_processing": (
+        "Practising one small task to completion — with a clear start and a clear finish — "
+        "helps your child build the ability to stay on task, follow through, and feel proud of finishing. "
+        "Short, predictable routines with obvious end points are especially powerful for children "
+        "who find it hard to focus or who struggle to complete activities."
+    ),
+    "emotional_regulation": (
+        "Short, low-pressure turn-taking and waiting games help your child practise the pause "
+        "between wanting something and getting it — a core skill for managing frustration and "
+        "staying calm in everyday moments."
+    ),
+    "concepts_and_following_directions": (
+        "Following simple steps in a fun, game-like context builds the habit of listening, "
+        "holding information in mind, and following through — skills that underpin learning "
+        "at home and at school."
+    ),
+    "expressive_language": (
+        "Every time your child makes a choice, names something, or uses a word instead of "
+        "pointing, they are practising expressive language — the building block of communication."
+    ),
+    "gestural_communication": (
+        "Gestures, pointing, and reaching to communicate are the first language. "
+        "Responding immediately when your child points or reaches teaches them that "
+        "communication works — and encourages them to use it more."
+    ),
+    "gross_motor_mobility_and_coordination": (
+        "Supported movement practice — even slow, small steps — builds the muscle patterns "
+        "and body confidence your child needs for independent mobility."
+    ),
+    "social_engagement_and_joint_attention": (
+        "Sharing attention with you on a toy, book, or activity is the foundation of "
+        "communication and learning. Every moment of looking-together counts."
+    ),
+}
+
 
 def _bucket_title(bucket: str, theme: str) -> str:
     """Return a playful, concrete activity title for a bucket+theme combination."""
@@ -1262,10 +1387,15 @@ def _v22_make_activity(
         instructions += " Only try this if the main version is easy and enjoyable."
 
     # Parent-facing explanation — no bridge/CDC/clinical language.
-    # Full domain context is shown in _build_why_helps() in app.py if why is blank.
-    why = _DOMAIN_WHY.get(
-        category_key,
-        "This activity supports your child's development through playful everyday practice.",
+    # Use subdomain-specific text when available (e.g. ADHD/attention, emotional regulation).
+    # Fall back to domain-level text, then a safe generic string.
+    subdomain = bridge.get("subdomain", "")
+    why = (
+        _SUBDOMAIN_WHY.get(subdomain)
+        or _DOMAIN_WHY.get(
+            category_key,
+            "This activity supports your child's development through playful everyday practice.",
+        )
     )
 
     return {
@@ -1356,6 +1486,12 @@ def generate_category_activity_bank(
     core_variants = min(max(core_variants, 2), 7)
 
     raw_activities: List[Dict[str, Any]] = []
+    # Global counter so successive bridges that share the same bucket/family
+    # draw DIFFERENT cards from the pool instead of all starting at card[0].
+    # Example: if two cognitive bridges both map to the "attention" bucket,
+    # bridge 0 gets cards [0,1,2] and bridge 1 gets cards [3,4,5].
+    _global_core_variant = 0
+
     for bridge in active_bridges:
         # Cap core_variants to the number of genuinely distinct cards available for
         # this bridge's activity_family/bucket.  Without this cap, variant N % 3 wraps
@@ -1378,10 +1514,12 @@ def generate_category_activity_bank(
             max_distinct_b = len(bucket_themes) if bucket_themes else 1
         effective_variants = max(1, min(core_variants, max_distinct_b))
 
-        for variant in range(1, effective_variants + 1):
+        for _local_v in range(effective_variants):
+            _global_core_variant += 1
             raw_activities.append(
-                _v22_make_activity(category_key, bridge, "core", variant, state, week=1)
+                _v22_make_activity(category_key, bridge, "core", _global_core_variant, state, week=1)
             )
+        # easier/harder use per-bridge local variants (Week 2 only, filtered out in Week 1)
         raw_activities.append(
             _v22_make_activity(category_key, bridge, "easier_backup", 1, state, week=1)
         )

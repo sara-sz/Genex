@@ -11,6 +11,114 @@ from typing import Any, Dict, List
 from genex_core.config import SAFETY_KEYWORD_MAP, SAFETY_CONSTRAINT_TEMPLATES
 
 
+# ---------------------------------------------------------------------------
+# Safe movement replacement cards  (seizure / unstable-walk profiles)
+# ---------------------------------------------------------------------------
+# Used when jump/hop/climb activities are hard-blocked.  Cycling through the
+# pool ensures no duplicate titles even when multiple activities are replaced.
+
+_SAFE_MOVEMENT_CARDS: List[Dict[str, str]] = [
+    {
+        "title": "Supported Squat-and-Reach Game",
+        "instructions": (
+            "With your child standing near a wall or holding your hands for support, "
+            "place a favourite toy on the floor in front of them. "
+            "Help them bend their knees slowly to reach down and pick it up, then stand back up. "
+            "Do 4–5 slow squat-and-reach turns. Keep both feet flat on the floor throughout. "
+            "Use stable support and close adult supervision throughout."
+        ),
+        "materials": "wall or caregiver hand support, 5 small favourite toys, a basket",
+        "avoid": (
+            "Avoid any jumping, hopping, or movement without full caregiver support. "
+            "Keep both feet flat and stable at all times."
+        ),
+        "success_criteria": "Your child bends and reaches to pick up one toy with support.",
+        "make_easier": "Support under both arms and guide through a very gentle knee bend together.",
+        "make_harder": "Let your child reach slightly farther forward while holding just one hand.",
+        "group_play_line": "With another child, one drops the toy and the other picks it up.",
+    },
+    {
+        "title": "Sticker Tap While Seated",
+        "instructions": (
+            "Sit your child on a stable chair or cushion on the floor. "
+            "Place 4–5 round stickers on a low surface in front of them at arm's reach. "
+            "Say 'tap the sticker!' and model pressing one sticker firmly. "
+            "Let your child tap each sticker in turn. Celebrate each tap. "
+            "Keep everything within safe reaching distance — no standing needed. "
+            "Use stable support and close adult supervision throughout."
+        ),
+        "materials": "stable chair or cushion, 4–5 round stickers on a low table or tray",
+        "avoid": (
+            "Avoid asking your child to stand, balance on one leg, or reach far sideways. "
+            "This is a fully seated activity."
+        ),
+        "success_criteria": "Your child taps at least 2 stickers while seated.",
+        "make_easier": "Hold the sticker sheet yourself and let your child reach to press each dot.",
+        "make_harder": "Spread stickers across a slightly wider area to encourage gentle trunk rotation.",
+        "group_play_line": "Two children sit side by side and each tap their own row of stickers.",
+    },
+    {
+        "title": "Slow Stand-and-Sit Practice",
+        "instructions": (
+            "Place a low sturdy chair or the couch in front of your child. "
+            "Hold their hands or forearms for support. "
+            "Say 'sit down slowly… now stand up slowly' and move together at a gentle pace. "
+            "Count 'one, two, three' on the way up and on the way down. "
+            "Do 4–5 slow sit-stand turns. Rest between each one. "
+            "Use stable support and close adult supervision throughout."
+        ),
+        "materials": "low sturdy chair or couch edge, caregiver hand support",
+        "avoid": (
+            "Avoid rushing, unsupported standing, or asking your child to push off without full support. "
+            "No jumping or hopping."
+        ),
+        "success_criteria": "Your child completes one slow stand-up or sit-down movement with support.",
+        "make_easier": "Only practise the sit-down direction and hold both hands throughout.",
+        "make_harder": "Count to 3 before offering the next hand — let your child begin the movement alone.",
+        "group_play_line": "An older sibling can model the slow stand-sit while you support your child.",
+    },
+    {
+        "title": "Seated Animal Arms Game",
+        "instructions": (
+            "Sit together on the floor or on low chairs facing each other. "
+            "Say an animal name and show what its arms do: "
+            "'elephant — swing your arms like a trunk!' "
+            "'bird — flap slowly!' 'bear — big hug arms!' "
+            "Stay seated throughout. Do 4–5 animals, celebrating each attempt. "
+            "Use stable support and close adult supervision throughout."
+        ),
+        "materials": "no materials needed",
+        "avoid": (
+            "Avoid standing up, jumping, or any fast movements. "
+            "Keep this a calm, fully seated game throughout."
+        ),
+        "success_criteria": "Your child copies at least one arm movement while staying seated.",
+        "make_easier": "Hold your child's hands and gently move them through the motion together.",
+        "make_harder": "Do the motion without naming the animal and let your child guess which one.",
+        "group_play_line": "With another child, one calls the animal and both copy the arms together.",
+    },
+    {
+        "title": "Supported Step-and-Stop Game",
+        "instructions": (
+            "Hold your child's hand firmly on flat, clear floor. "
+            "Take one step forward together, then stop and stand still for 3 seconds. "
+            "Say 'step… and stop!' with each move. "
+            "Take 4–5 single steps with pauses — no rushing or running. "
+            "Use stable support and close adult supervision throughout."
+        ),
+        "materials": "clear flat floor space, caregiver hand support",
+        "avoid": (
+            "Avoid multiple quick steps in a row, turning fast, stepping on uneven surfaces, "
+            "or letting go of the caregiver's hand at any point. No jumping or hopping."
+        ),
+        "success_criteria": "Your child takes at least one controlled step and pauses with support.",
+        "make_easier": "Start from sitting — just practise standing up and stopping before adding a step.",
+        "make_harder": "Add a fun stop signal: say 'freeze!' and see if your child pauses on the word.",
+        "group_play_line": "An older sibling holds the other hand to give extra balance support.",
+    },
+]
+
+
 def build_safety_profile(child: Dict[str, Any]) -> Dict[str, Any]:
     """Build a broad safety/practical constraint profile from diagnosis + concern text."""
     diagnosis = str(child.get("diagnosis", "") or "")
@@ -44,21 +152,26 @@ def build_safety_profile(child: Dict[str, Any]) -> Dict[str, Any]:
     hard_avoid = []
     preferred_adaptations = []
 
+    # Seizure / Dravet / medical-monitoring profiles also require the same
+    # fall/jump hard-blocks — sudden loss of awareness during jumping or
+    # unsupported balancing is a serious injury risk.
     high_fall_or_mobility = (
         risk_scores.get("falls_balance_gait", 0.0) >= 0.35
         or risk_scores.get("mobility_equipment_support", 0.0) >= 0.35
+        or risk_scores.get("seizure_or_medical_monitoring", 0.0) >= 0.35
     )
     if high_fall_or_mobility:
         hard_avoid.extend([
             "jumping from heights or unsupported jumping drills",
-            "trampoline-style activities",
+            "hopping, trampoline-style activities, or any unsupported airborne movement",
             "playground climbing or high unstable surfaces",
             "unsupported balance challenges on unstable surfaces",
+            "racing, obstacle courses, or fast-paced movement sequences",
         ])
         preferred_adaptations.extend([
-            "prefer ground-level or seated versions when possible",
-            "use hand support, wall support, or equipment support as needed",
-            "favor supported reaching, weight shifting, step-up, and transfer practice over high-risk movement tasks",
+            "prefer ground-level or fully seated versions of movement activities",
+            "use hand support, wall support, or equipment support at all times",
+            "favour supported reaching, slow weight shifting, and step-and-stop practice",
         ])
 
     if risk_scores.get("postural_low_tone_fatigue", 0.0) >= 0.35:
@@ -180,9 +293,12 @@ def apply_safety_constraints_to_activities(
     profile = ensure_safety_profile(state)
     risk_scores = profile.get("risk_scores", {})
 
+    # Seizure / Dravet / medical-monitoring also triggers the movement hard-block —
+    # sudden loss of awareness during jumping or unsupported balance is a fall risk.
     high_fall_or_mobility = (
         risk_scores.get("falls_balance_gait", 0.0) >= 0.35
         or risk_scores.get("mobility_equipment_support", 0.0) >= 0.35
+        or risk_scores.get("seizure_or_medical_monitoring", 0.0) >= 0.35
     )
     low_tone_or_fatigue = risk_scores.get("postural_low_tone_fatigue", 0.0) >= 0.35
     feeding_risk = risk_scores.get("feeding_or_oral_motor", 0.0) >= 0.35
@@ -190,6 +306,9 @@ def apply_safety_constraints_to_activities(
     sensory_risk = risk_scores.get("sensory_sensitivity", 0.0) >= 0.35
 
     safe_activities = []
+    # Counter for cycling through safe replacement cards so each replaced
+    # activity gets a distinct title — avoids duplicate titles on the schedule.
+    _replace_counter = 0
 
     for activity in activities:
         a = dict(activity)
@@ -200,24 +319,34 @@ def apply_safety_constraints_to_activities(
         lower_text = f"{title} {instructions}".lower()
 
         if high_fall_or_mobility and re.search(
-            r'\b(jump|jumping|trampoline|hop|hopping|climb|climbing|playground)\b', lower_text
+            r'\b(jump|jumping|trampoline|hop|hopping|frog|climb|climbing|playground|race|racing)\b',
+            lower_text,
         ):
-            a["title"] = "Supported Balance and Reach Practice"
-            a["instructions"] = (
-                "Use a ground-level activity with close adult support. Practice supported standing, "
-                "seated or supported reaching, and safe weight shifts while keeping both feet on a stable surface. "
-                "Avoid jumping, climbing, or unstable surfaces."
-            )
-            a["materials"] = "stable chair or couch, wall or caregiver support, favorite toys"
+            card = _SAFE_MOVEMENT_CARDS[_replace_counter % len(_SAFE_MOVEMENT_CARDS)]
+            _replace_counter += 1
+            a["title"] = card["title"]
+            a["instructions"] = card["instructions"]
+            a["materials"] = card["materials"]
+            a["avoid"] = card["avoid"]
+            a["success"] = card.get("success_criteria", a.get("success", ""))
+            a["make_easier"] = card.get("make_easier", a.get("make_easier", ""))
+            a["make_harder"] = card.get("make_harder", a.get("make_harder", ""))
+            a["group_play"] = card.get("group_play_line", a.get("group_play", ""))
             a["duration_min"] = min(duration_min, 7)
+            if a.get("_debug"):
+                a["_debug"]["safety_replaced"] = True
+                a["_debug"]["safety_replace_reason"] = "jump_hop_blocked_high_fall_or_seizure_risk"
             title = a["title"]
             instructions = a["instructions"]
             duration_min = a["duration_min"]
             lower_text = f"{title} {instructions}".lower()
 
         if high_fall_or_mobility and category_key == "movement_and_physical":
-            if "close adult support" not in instructions.lower() and "stable support" not in instructions.lower():
-                a["instructions"] = instructions.rstrip() + " Use stable support and close adult supervision throughout."
+            support_note = " Use stable support and close adult supervision throughout."
+            if ("close adult support" not in instructions.lower()
+                    and "stable support" not in instructions.lower()
+                    and "supervision throughout" not in instructions.lower()):
+                a["instructions"] = instructions.rstrip() + support_note
                 instructions = a["instructions"]
 
         if low_tone_or_fatigue:
