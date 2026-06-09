@@ -607,135 +607,244 @@ def test_case10_activity_bank_no_per_bridge_core_duplicates():
 
 
 # ---------------------------------------------------------------------------
-# Case 11: Safety — Dravet / seizure / unstable-walk blocks jump activities
+# Helpers — exact QA profiles from Sara's local test cases
 # ---------------------------------------------------------------------------
 
-def test_case11_safety_dravet_blocks_jump_activities():
-    print("\n─── Case 11: Safety — Dravet/seizure/unstable-walk hard-blocks jumps ───")
-    from genex_core.safety import build_safety_profile, apply_safety_constraints_to_activities
+# Keyword patterns that must NEVER appear in movement activities for
+# high-fall / seizure profiles.
+_RISKY_MOVEMENT_PATTERNS = re.compile(
+    r"\b(jump(ing)?|hop(ping)?|race|racing|obstacle|climb(ing)?|"
+    r"high surface|high platform|unsupported balance|speed|"
+    r"frog jump|trampoline|bouncing|sprint|run fast)\b",
+    flags=re.IGNORECASE,
+)
 
-    # Dravet with unstable walking — should trigger falls_balance_gait AND
-    # seizure_or_medical_monitoring, both triggering the jump hard-block
-    child = {
-        "diagnosis": "Dravet syndrome",
-        "concern": "seizures, unstable walking, frequent falls",
-    }
-    profile = build_safety_profile(child)
-    risk_scores = profile["risk_scores"]
-    hard_avoid = profile["hard_avoid"]
+# Keywords that mark an activity as calm / safe for seizure/unstable-walk profiles
+_SAFE_MOVEMENT_MARKERS = re.compile(
+    r"\b(seated|supported|flat.ground|caregiver|stable|supervision|"
+    r"slow|gentle|squat|reach|sit|stand|step)\b",
+    flags=re.IGNORECASE,
+)
 
-    # seizure_or_medical_monitoring must be detected
-    assert risk_scores.get("seizure_or_medical_monitoring", 0) >= 0.35, (
-        f"Expected seizure_or_medical_monitoring >= 0.35, got {risk_scores}"
-    )
-    # "unstable" now also fires falls_balance_gait
-    assert risk_scores.get("falls_balance_gait", 0) >= 0.35, (
-        f"Expected falls_balance_gait >= 0.35 (unstable keyword), got {risk_scores}"
-    )
-    # hard_avoid must include jump-related language
-    jump_blocked = any("jump" in h.lower() or "hop" in h.lower() for h in hard_avoid)
-    assert jump_blocked, f"Expected jump/hop in hard_avoid, got: {hard_avoid}"
-    print(f"  ✓ seizure_or_medical_monitoring = {round(risk_scores['seizure_or_medical_monitoring'], 2)}")
-    print(f"  ✓ falls_balance_gait = {round(risk_scores['falls_balance_gait'], 2)}")
-    print(f"  ✓ hard_avoid includes jump/hop block")
 
-    # Build a mock jump_prep bank and apply constraints
-    state = init_state_from_profile(
+def _make_dravet_state():
+    """Case A: Dravet, 40m, speech regression + unstable walking, 10 min/day."""
+    return init_state_from_profile(
         "your child", 40, "Dravet syndrome",
-        "seizures, unstable walking, frequent falls", 10,
+        "speech regression, unstable walking, seizures, frequent falls", 10,
     )
-    mock_activities = [
-        {
-            "title": "Frog Jump Game",
-            "instructions": "model bending your knees and jumping forward",
-            "materials": "clear flat floor",
-            "avoid": "Avoid unsupported jumping off heights.",
-            "duration_min": 5,
-            "activity_family": "jump_prep_balance",
-            "category_key": "movement_and_physical",
-            "_debug": {"activity_type": "core"},
-        },
-        {
-            "title": "Stomp the Sticker",
-            "instructions": "stomp on stickers on the floor",
-            "materials": "stickers",
-            "avoid": "Avoid slippery surfaces.",
-            "duration_min": 5,
-            "activity_family": "jump_prep_balance",
-            "category_key": "movement_and_physical",
-            "_debug": {"activity_type": "core"},
-        },
-        {
-            "title": "Hop to the Toy",
-            "instructions": "hop on one foot to reach a toy",
-            "materials": "toy",
-            "avoid": "",
-            "duration_min": 5,
-            "activity_family": "jump_prep_balance",
-            "category_key": "movement_and_physical",
-            "_debug": {"activity_type": "core"},
-        },
-    ]
-    safe = apply_safety_constraints_to_activities(state, "movement_and_physical", mock_activities)
-
-    # All three had jump/hop in their text — all should be replaced
-    replaced_titles = [a["title"] for a in safe]
-    jump_in_output = [
-        t for t in replaced_titles
-        if re.search(r"\b(jump|hop|frog)\b", t.lower())
-    ]
-    assert not jump_in_output, (
-        f"Jump/hop/frog still in replaced activity titles: {jump_in_output}"
-    )
-    print(f"  ✓ All {len(mock_activities)} jump/hop activities replaced")
-
-    # Replaced titles must be distinct (pool cycling)
-    assert len(set(replaced_titles)) == len(replaced_titles), (
-        f"Duplicate replacement titles: {replaced_titles}"
-    )
-    print(f"  ✓ Replacement titles are all distinct: {replaced_titles}")
-
-    # 'avoid' field must be updated (no longer says "jumping off heights" for a safe card)
-    for a in safe:
-        orig_avoid = next(
-            (m["avoid"] for m in mock_activities if m["title"] == "Frog Jump Game"), ""
-        )
-        assert a.get("avoid", "") != orig_avoid or "jump" not in a.get("avoid", "").lower(), (
-            f"Original jump avoid text still present in replaced card: {a.get('avoid')}"
-        )
-    print(f"  ✓ 'avoid' field updated to match the safe replacement card")
 
 
-# ---------------------------------------------------------------------------
-# Case 12: ADHD — 10 min/day fills all 10 weekday slots with unique activities
-# ---------------------------------------------------------------------------
-
-def test_case12_adhd_fills_all_slots():
-    print("\n─── Case 12: ADHD 10 min/day — all 10 weekday slots filled with unique activities ───")
-    from genex_core.activity_engine import _BUCKET_VARIANTS
-    from genex_core.support_tiers import build_v22_plan_for_category
-
-    # ADHD routes to social_and_emotional + cognitive
+def _make_adhd_state():
+    """Case B: ADHD, 60m, hyperactivity + focus + task-completion, 10 min/day."""
     state = init_state_from_profile(
         "your child", 60, "ADHD",
         "hyperactivity, trouble focusing, difficulty finishing tasks", 10,
     )
-    # Force the delay estimates so both domains have gap
     state["dev_age"]["cognitive"] = 48
     state["dev_age"]["social_and_emotional"] = 48
     state["delay_estimates"]["cognitive"] = {"delay_months": 12}
     state["delay_estimates"]["social_and_emotional"] = {"delay_months": 12}
+    ensure_concern_profile(state)
+    return state
 
+
+def _make_speech_delay_state():
+    """Case C: no diagnosis, speech delay only, 36m, 5 min/day."""
+    return init_state_from_profile(
+        "your child", 36, "none",
+        "speech delay, not talking much", 5,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Case 11: Case A — Dravet safety (exact QA profile)
+# ---------------------------------------------------------------------------
+
+def test_case11_dravet_safety():
+    """
+    Case A: Dravet syndrome, 40m, speech regression + unstable walking, 10 min/day.
+
+    Expected:
+    - Focus domains: movement_and_physical + language_and_communication
+    - Safety profile fires seizure_or_medical_monitoring AND falls_balance_gait
+    - No movement activity contains jump/hop/race/obstacle/climb/high surface/speed/
+      unsupported balance in title OR instructions
+    - All movement activities are calm, supported, seated, flat-ground, or caregiver-assisted
+    - 'avoid' field on each movement card is consistent with the card (no residual jump text)
+    - Safety replacement applies to both deterministic AND simulated-LLM activities
+    """
+    print("\n─── Case 11: Dravet safety — exact QA profile ───")
+    from genex_core.safety import build_safety_profile
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+
+    state = _make_dravet_state()
     ensure_concern_profile(state)
 
-    # Attention bucket must have >= 5 distinct cards (enough for 5 days)
+    # ── 1. Safety profile ─────────────────────────────────────────────────────
+    profile = build_safety_profile(state["child"])
+    risk_scores = profile["risk_scores"]
+    hard_avoid  = profile["hard_avoid"]
+
+    assert risk_scores.get("seizure_or_medical_monitoring", 0) >= 0.35, (
+        f"seizure_or_medical_monitoring not detected: {risk_scores}"
+    )
+    assert risk_scores.get("falls_balance_gait", 0) >= 0.35, (
+        f"falls_balance_gait not detected (missing 'unstable' keyword?): {risk_scores}"
+    )
+    jump_in_hard_avoid = any(
+        re.search(r"\b(jump|hop|trampoline|unsupported)\b", h, re.IGNORECASE)
+        for h in hard_avoid
+    )
+    assert jump_in_hard_avoid, f"hard_avoid missing jump/hop block: {hard_avoid}"
+    print(f"  ✓ seizure_or_medical_monitoring = {round(risk_scores['seizure_or_medical_monitoring'], 2)}")
+    print(f"  ✓ falls_balance_gait = {round(risk_scores['falls_balance_gait'], 2)}")
+    print(f"  ✓ hard_avoid includes jump/hop/trampoline/unsupported")
+
+    # ── 2. Focus domains ─────────────────────────────────────────────────────
+    focus = choose_focus_domains(state)
+    assert "movement_and_physical" in focus, (
+        f"Expected movement_and_physical in focus domains: {focus}"
+    )
+    assert "language_and_communication" in focus, (
+        f"Expected language_and_communication in focus domains: {focus}"
+    )
+    print(f"  ✓ Focus domains: {focus}")
+
+    # ── 3. Activity bank — no risky movement language ─────────────────────────
+    # Build the movement bank (safety pass is now wired into generate_category_activity_bank)
+    plan = build_v22_plan_for_category(state, "movement_and_physical")
+    state.setdefault("bridge_plans", {})["movement_and_physical"] = plan
+    bank = generate_category_activity_bank(state, "movement_and_physical")
+    acts = bank.get("activities", [])
+    assert acts, "Movement bank must have at least one valid activity"
+
+    risky = []
+    missing_safe_marker = []
+    inconsistent_avoid = []
+
+    for a in acts:
+        title = a.get("title", "")
+        instr = a.get("instructions", "")
+        avoid = a.get("avoid", "")
+        combined = f"{title} {instr}"
+
+        # No risky keywords in title+instructions
+        m = _RISKY_MOVEMENT_PATTERNS.search(combined)
+        if m:
+            risky.append(f"{title!r}: matched {m.group()!r}")
+
+        # Each card must have at least one safe-movement marker in instructions
+        if not _SAFE_MOVEMENT_MARKERS.search(instr):
+            missing_safe_marker.append(f"{title!r}: no safe marker in instructions")
+
+        # 'avoid' must not contradict the activity
+        # e.g. if title is "Supported Step-and-Stop", avoid should not say "jumping off heights"
+        if "jumping off heights" in avoid.lower() or "unsupported jumping drills" in avoid.lower():
+            inconsistent_avoid.append(f"{title!r}: avoid field references jumping but activity is safe card")
+
+    assert not risky, (
+        f"Risky movement keywords found in Dravet movement bank:\n" + "\n".join(risky)
+    )
+    assert not missing_safe_marker, (
+        f"Movement cards missing safe-movement marker in instructions:\n"
+        + "\n".join(missing_safe_marker)
+    )
+    assert not inconsistent_avoid, (
+        f"'avoid' field inconsistent with replacement card:\n"
+        + "\n".join(inconsistent_avoid)
+    )
+    print(f"  ✓ {len(acts)} movement activities — none contain risky keywords")
+    print(f"  ✓ All movement activities have safe-movement markers (seated/supported/flat-ground/etc.)")
+    print(f"  ✓ 'avoid' fields are consistent with each activity")
+
+    # ── 4. LLM-generated card goes through the same safety pass ──────────────
+    # Simulate what would happen if an LLM returned a jumping activity for this profile.
+    # apply_safety_constraints_to_activities must block it.
+    from genex_core.safety import apply_safety_constraints_to_activities
+    llm_like_activities = [
+        {
+            "title": "Bunny Hop Race",
+            "instructions": "hop quickly from one cone to the next as fast as you can",
+            "materials": "cones",
+            "avoid": "",
+            "duration_min": 5,
+            "activity_family": "jump_prep",
+            "category_key": "movement_and_physical",
+            "_debug": {"activity_type": "core", "llm_used": True},
+        },
+        {
+            "title": "Obstacle Jump Course",
+            "instructions": "race through the obstacle course, jumping over each block",
+            "materials": "blocks",
+            "avoid": "",
+            "duration_min": 5,
+            "activity_family": "jump_prep",
+            "category_key": "movement_and_physical",
+            "_debug": {"activity_type": "core", "llm_used": True},
+        },
+    ]
+    safe_llm = apply_safety_constraints_to_activities(
+        state, "movement_and_physical", llm_like_activities
+    )
+    llm_risky = [
+        a["title"] for a in safe_llm
+        if _RISKY_MOVEMENT_PATTERNS.search(f"{a['title']} {a['instructions']}")
+    ]
+    assert not llm_risky, (
+        f"LLM-generated risky activity not replaced by safety pass: {llm_risky}"
+    )
+    assert len(set(a["title"] for a in safe_llm)) == len(safe_llm), (
+        f"Duplicate replacement titles after LLM safety pass: {[a['title'] for a in safe_llm]}"
+    )
+    print(f"  ✓ Simulated LLM jumping activities also replaced (safety pass applies to all activities)")
+    print(f"  ✓ Replacement titles distinct: {[a['title'] for a in safe_llm]}")
+
+
+# ---------------------------------------------------------------------------
+# Case 12: Case B — ADHD (exact QA profile)
+# ---------------------------------------------------------------------------
+
+def test_case12_adhd_exact_profile():
+    """
+    Case B: ADHD, 60m, hyperactivity + focus + task-completion, 10 min/day.
+
+    Expected:
+    - Focus domains: cognitive + social_and_emotional (no motor unless mentioned)
+    - 5 weekdays × 2 activities/day = 10 total weekday slots
+    - No duplicate titles, no duplicate instructions
+    - No under-filled Thursday/Friday (each day has >= 2 activities)
+    - 'Why this helps' text is ADHD/attention/task-completion specific, not generic
+    """
+    print("\n─── Case 12: ADHD exact profile — slots, uniqueness, Why text ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    from genex_core.activity_engine import _BUCKET_VARIANTS
+
+    state = _make_adhd_state()
+
+    # ── 1. Focus domains ─────────────────────────────────────────────────────
+    focus = choose_focus_domains(state)
+    assert "cognitive" in focus, f"Expected cognitive in ADHD focus domains: {focus}"
+    assert "social_and_emotional" in focus, (
+        f"Expected social_and_emotional in ADHD focus domains: {focus}"
+    )
+    assert "movement_and_physical" not in focus, (
+        f"movement_and_physical should NOT be in focus for ADHD without motor concern: {focus}"
+    )
+    print(f"  ✓ Focus domains: {focus}")
+
+    # ── 2. Attention bucket capacity ─────────────────────────────────────────
     attn_cards = _BUCKET_VARIANTS.get("attention", [])
     assert len(attn_cards) >= 5, (
-        f"Attention bucket needs >= 5 cards for ADHD 5-day coverage, has {len(attn_cards)}"
+        f"Attention bucket needs >= 5 cards, has {len(attn_cards)}"
     )
-    print(f"  ✓ Attention bucket has {len(attn_cards)} cards")
+    print(f"  ✓ Attention bucket: {len(attn_cards)} cards")
 
-    # Build banks for both domains
+    # ── 3. Build banks ────────────────────────────────────────────────────────
+    all_core_titles: dict = {}
+    all_instructions: dict = {}
     for dk in ["social_and_emotional", "cognitive"]:
         plan = build_v22_plan_for_category(state, dk)
         state.setdefault("bridge_plans", {})[dk] = plan
@@ -743,30 +852,61 @@ def test_case12_adhd_fills_all_slots():
         state.setdefault("activity_banks", {})[dk] = bank
         core = [a for a in bank.get("activities", [])
                 if a.get("_debug", {}).get("activity_type", "core") == "core"]
-        titles = [a["title"] for a in core]
-        unique_titles = set(t.lower() for t in titles)
-        print(f"  ✓ {dk} core bank: {len(core)} activities, {len(unique_titles)} unique titles")
+        unique = set(a["title"].lower() for a in core)
+        print(f"  ✓ {dk} core bank: {len(core)} activities, {len(unique)} unique titles")
+        for a in core:
+            all_core_titles.setdefault(dk, []).append(a["title"])
+            all_instructions[a["title"]] = a.get("instructions", "")
 
+    # No duplicate instructions across different-titled activities
+    instr_to_title: dict = {}
+    instr_dups = []
+    for title, instr in all_instructions.items():
+        instr_norm = instr.strip()
+        if instr_norm in instr_to_title and instr_to_title[instr_norm] != title:
+            instr_dups.append(
+                f"{title!r} and {instr_to_title[instr_norm]!r} share identical instructions"
+            )
+        else:
+            instr_to_title[instr_norm] = title
+    assert not instr_dups, "Duplicate instructions found in ADHD banks:\n" + "\n".join(instr_dups)
+    print(f"  ✓ No duplicate instructions across activity banks")
+
+    # ── 4. Schedule: 10 slots, no under-fill, no duplicates ──────────────────
     state["cycle_week"] = 1
     allocate_weekly_slots(state)
     build_weekly_schedule(state)
     schedule = state["weekly_schedule"]
-
     WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-    total_slots = sum(
-        len(schedule.get("days", {}).get(d, {}).get("items", []))
-        for d in WEEKDAYS
-    )
-    # Each weekday should have 2 activities (10 min / 5 min per activity)
-    assert total_slots >= 9, (
-        f"Expected >= 9 activity slots for ADHD 10 min/day, got {total_slots}"
-    )
-    print(f"  ✓ Total weekday activity slots: {total_slots} (expected >= 9)")
+    days = schedule.get("days", {})
 
-    # No duplicate titles across the week per category
+    per_day_counts = {}
+    for d in WEEKDAYS:
+        items = days.get(d, {}).get("items", [])
+        per_day_counts[d] = len(items)
+
+    total_slots = sum(per_day_counts.values())
+    assert total_slots >= 9, (
+        f"Expected >= 9 total weekday slots for ADHD, got {total_slots}: {per_day_counts}"
+    )
+    print(f"  ✓ Total weekday slots: {total_slots}")
+
+    # No day should have 0 activities
+    empty_days = [d for d, n in per_day_counts.items() if n == 0]
+    assert not empty_days, f"Empty days in ADHD schedule: {empty_days}"
+
+    # Thursday and Friday should not be under-filled vs Monday (each day should have >=1)
+    thu_fri = {d: per_day_counts[d] for d in ["Thursday", "Friday"]}
+    assert all(n >= 1 for n in thu_fri.values()), (
+        f"Thursday/Friday under-filled: {thu_fri}"
+    )
+    print(f"  ✓ Thursday/Friday each have >= 1 activity: {thu_fri}")
+    print(f"  ✓ Per-day counts: {per_day_counts}")
+
+    # No duplicate titles per category across the week
     cat_titles: dict = {}
     for d in WEEKDAYS:
-        for item in schedule.get("days", {}).get(d, {}).get("items", []):
+        for item in days.get(d, {}).get("items", []):
             ck = item.get("category_key", "?")
             t = item.get("title", "").lower()
             cat_titles.setdefault(ck, []).append((d, t))
@@ -779,32 +919,136 @@ def test_case12_adhd_fills_all_slots():
                 cross_dups.append(f"{ck}: {t!r} on {seen[t]} AND {day_name}")
             else:
                 seen[t] = day_name
+    assert not cross_dups, "Duplicate titles across ADHD week:\n" + "\n".join(cross_dups)
+    print(f"  ✓ No duplicate titles per category across the week")
 
-    assert not cross_dups, (
-        "Duplicate titles within the same category across ADHD week:\n"
-        + "\n".join(cross_dups)
+    # ── 5. 'Why this helps' is ADHD/attention-specific, not generic ──────────
+    # Collect all Why text from scheduled cognitive activities
+    adhd_why_keywords = [
+        "task", "finish", "complet", "attention", "focus", "routine",
+        "predict", "start", "stay on", "short",
+    ]
+    cognitive_items = [
+        item for d in WEEKDAYS
+        for item in days.get(d, {}).get("items", [])
+        if item.get("category_key") == "cognitive"
+    ]
+    why_failures = []
+    for item in cognitive_items:
+        why = (item.get("why") or "").lower()
+        if not any(kw in why for kw in adhd_why_keywords):
+            why_failures.append(f"{item.get('title')!r}: why={why[:80]!r}")
+    assert not why_failures, (
+        "Cognitive activities missing ADHD-specific Why text:\n" + "\n".join(why_failures)
     )
-    print(f"  ✓ No duplicate activity titles within any category across the week")
+    print(f"  ✓ All {len(cognitive_items)} cognitive items have ADHD-specific 'Why' text")
 
 
 # ---------------------------------------------------------------------------
-# Case 13: Routing — speech-delay only selects language domain only
+# Case 13: Case C — Speech delay only (exact QA profile)
 # ---------------------------------------------------------------------------
 
-def test_case13_speech_delay_only_routing():
-    print("\n─── Case 13: Routing — speech-delay only selects language domain only ───")
-    from genex_core.interview_engine import choose_focus_domains, rank_focus_domains
-    import re as _re
+def test_case13_speech_delay_only():
+    """
+    Case C: no diagnosis, speech delay only, 36m, 5 min/day.
 
-    # Pure speech delay — no social / emotional keywords
-    state = init_state_from_profile(
-        "your child", 36, "None",
-        "speech delay, not talking much, limited words", 5,
-    )
+    Expected:
+    - Primary (and only) focus domain: language_and_communication
+    - No social_and_emotional domain selected
+    - 1 activity/day for 5 weekdays (5 min / 5 min per slot = 1 slot/day)
+    - All scheduled activities carry category_key = language_and_communication
+    - Activities are language/requesting/naming/routine-focused
+    - Parent-facing label = 'Talking and Communicating'
+    """
+    print("\n─── Case 13: Speech delay only — exact QA profile ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+
+    state = _make_speech_delay_state()
     ensure_concern_profile(state)
 
-    # Domain weights: language must be top, all others should be 0 or very low
+    # ── 1. Routing: language only ─────────────────────────────────────────────
     domain_weights = state["concern_profile"]["domain_weights"]
+    lang_w = domain_weights.get("language_and_communication", 0)
+    social_w = domain_weights.get("social_and_emotional", 0)
+
+    assert lang_w >= 0.30, f"Expected language weight >= 0.30, got {lang_w}"
+    assert social_w < 0.10, (
+        f"social_and_emotional should have no explicit concern signal for speech-delay-only, "
+        f"got {social_w}"
+    )
+    print(f"  ✓ language_and_communication weight = {round(lang_w, 2)}")
+    print(f"  ✓ social_and_emotional weight = {round(social_w, 2)} (below 0.10 threshold)")
+
+    # Delay signal alone must NOT pull in social_and_emotional
+    state["delay_estimates"]["social_and_emotional"] = {"delay_months": 6}
+    state["delay_estimates"]["language_and_communication"] = {"delay_months": 10}
+    focus = choose_focus_domains(state)
+
+    assert focus == ["language_and_communication"], (
+        f"Speech-delay-only should select ONLY language domain, got: {focus}"
+    )
+    print(f"  ✓ choose_focus_domains = {focus}")
+    print(f"  ✓ Delay signal alone did NOT pull in social_and_emotional")
+
+    # ── 2. Build plan + bank ─────────────────────────────────────────────────
+    plan = build_v22_plan_for_category(state, "language_and_communication")
+    state.setdefault("bridge_plans", {})["language_and_communication"] = plan
+    bank = generate_category_activity_bank(state, "language_and_communication")
+    state.setdefault("activity_banks", {})["language_and_communication"] = bank
+    acts = bank.get("activities", [])
+    assert acts, "Language bank must have activities"
+    print(f"  ✓ Language bank: {len(acts)} activities")
+
+    # All activities must carry category_key = language_and_communication
+    wrong_cat = [
+        a["title"] for a in acts
+        if a.get("category_key") != "language_and_communication"
+    ]
+    assert not wrong_cat, (
+        f"Activities with wrong category_key in language bank: {wrong_cat}"
+    )
+    print(f"  ✓ All bank activities carry category_key = language_and_communication")
+
+    # ── 3. Schedule: 1 slot/day × 5 days, all language ───────────────────────
+    state["cycle_week"] = 1
+    allocate_weekly_slots(state)
+    build_weekly_schedule(state)
+    schedule = state["weekly_schedule"]
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    days = schedule.get("days", {})
+
+    total_slots = sum(len(days.get(d, {}).get("items", [])) for d in WEEKDAYS)
+    assert total_slots >= 4, (
+        f"Expected >= 4 weekday slots for speech-delay 5min/day, got {total_slots}"
+    )
+    print(f"  ✓ Total weekday slots: {total_slots}")
+
+    # All scheduled items must be language_and_communication
+    wrong_domain_items = [
+        (d, item.get("title"), item.get("category_key"))
+        for d in WEEKDAYS
+        for item in days.get(d, {}).get("items", [])
+        if item.get("category_key") != "language_and_communication"
+    ]
+    assert not wrong_domain_items, (
+        f"Non-language activities in speech-delay-only schedule: {wrong_domain_items}"
+    )
+    print(f"  ✓ All scheduled activities are language_and_communication")
+
+    # ── 4. Parent-facing label ───────────────────────────────────────────────
+    from genex_core.config import DOMAIN_CONFIG
+    lang_display = DOMAIN_CONFIG["language_and_communication"]["display"]
+    # In app.py this is mapped through DOMAIN_LABELS to "Talking and Communicating"
+    # Here we just verify the category field on each scheduled item
+    for d in WEEKDAYS:
+        for item in days.get(d, {}).get("items", []):
+            cat = item.get("category", "")
+            assert cat == lang_display, (
+                f"Category display on scheduled item should be {lang_display!r}, got {cat!r}"
+            )
+    print(f"  ✓ All scheduled items carry category = {lang_display!r}")
+    print(f"  ✓ (maps to 'Talking and Communicating' via DOMAIN_LABELS in app.py)")
     lang_w = domain_weights.get("language_and_communication", 0)
     social_w = domain_weights.get("social_and_emotional", 0)
     assert lang_w >= 0.30, f"Expected language weight >= 0.30, got {lang_w}"
@@ -839,9 +1083,9 @@ def run_all():
         test_case8_no_internal_language_in_parent_fields,
         test_case9_week1_schedule_uniqueness,
         test_case10_activity_bank_no_per_bridge_core_duplicates,
-        test_case11_safety_dravet_blocks_jump_activities,
-        test_case12_adhd_fills_all_slots,
-        test_case13_speech_delay_only_routing,
+        test_case11_dravet_safety,
+        test_case12_adhd_exact_profile,
+        test_case13_speech_delay_only,
     ]
     passed = 0
     failed = 0

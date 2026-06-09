@@ -294,6 +294,12 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"not talking",
         r"doesn't talk",
         r"does not talk",
+        r"speech regression",   # Dravet / neurological regression
+        r"language regression",
+        r"lost words",
+        r"lost speech",
+        r"losing words",
+        r"word loss",
     ],
     "receptive_language": [
         r"comprehension",

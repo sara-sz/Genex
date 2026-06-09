@@ -43,7 +43,11 @@ from genex_core.config import (
     V22_MAX_DAILY_ACTIVITIES,
 )
 from genex_core.interview_engine import ensure_concern_profile
-from genex_core.safety import ensure_safety_profile, format_safety_constraints_for_prompt
+from genex_core.safety import (
+    ensure_safety_profile,
+    format_safety_constraints_for_prompt,
+    apply_safety_constraints_to_activities,
+)
 from genex_core.table_loader import get_family_description
 
 logger = logging.getLogger(__name__)
@@ -1238,9 +1242,9 @@ _SUBDOMAIN_WHY: Dict[str, str] = {
         "staying calm in everyday moments."
     ),
     "concepts_and_following_directions": (
-        "Following simple steps in a fun, game-like context builds the habit of listening, "
-        "holding information in mind, and following through — skills that underpin learning "
-        "at home and at school."
+        "Finishing short tasks — one clear start, one clear finish — builds the habit of "
+        "staying focused, completing a routine, and starting the next step with confidence. "
+        "These attention and task-completion skills underpin learning at home and at school."
     ),
     "expressive_language": (
         "Every time your child makes a choice, names something, or uses a word instead of "
@@ -1529,6 +1533,12 @@ def generate_category_activity_bank(
 
     raw_activities = _v22_uniquify_titles(raw_activities)
     valid_activities, blocked_activities = filter_valid_activities(raw_activities, category_key)
+
+    # Apply safety constraints AFTER validation so the pass runs on every activity
+    # regardless of whether it was LLM-generated or deterministic fallback.
+    # This is the enforcement layer — activities containing jump/hop/climb/race are
+    # replaced with safe alternatives for high-fall, mobility, and seizure profiles.
+    valid_activities = apply_safety_constraints_to_activities(state, category_key, valid_activities)
 
     warnings = list({w for a in raw_activities for w in a.get("validation_warnings", [])})
 
