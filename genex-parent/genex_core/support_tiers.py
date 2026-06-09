@@ -142,7 +142,10 @@ def determine_family_guidance_floor(state: Dict[str, Any]) -> Dict[str, Any]:
     category_key = ranked[0] if ranked else "language_and_communication"
     category_display = DOMAIN_CONFIG[category_key]["display"]
     daily_time_min = int(child.get("daily_time_min", 10))
-    target_weekly_minutes = min(max(15, daily_time_min * 3), daily_time_min * 5)
+    # Always honour the parent's full daily time budget — never cap below weekly_minutes.
+    # Previous formula (daily*3 to daily*5 range) created "soft floor ghost" where
+    # a 15 min/day parent only received 45 min (3 days) instead of 75 min (5 days).
+    target_weekly_minutes = daily_time_min * 5
 
     # V22 privacy: "your child" — child name never included in summary text
     summary = (

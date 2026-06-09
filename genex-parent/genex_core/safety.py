@@ -318,8 +318,9 @@ def apply_safety_constraints_to_activities(
         duration_min = int(a.get("duration_min", 5))
         lower_text = f"{title} {instructions}".lower()
 
-        if high_fall_or_mobility and re.search(
-            r'\b(jump|jumping|trampoline|hop|hopping|frog|climb|climbing|playground|race|racing)\b',
+        if high_fall_or_mobility and category_key == "movement_and_physical" and re.search(
+            r'\b(jump|jumping|trampoline|hop|hopping|frog|climb|climbing|playground|race|racing|stomp|stomping)\b'
+            r'|squat\s+and\s+reach',
             lower_text,
         ):
             card = _SAFE_MOVEMENT_CARDS[_replace_counter % len(_SAFE_MOVEMENT_CARDS)]

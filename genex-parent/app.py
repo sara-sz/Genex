@@ -1163,7 +1163,7 @@ def screen_weekly_plan():
 
     # V22: admin debug panels (ADMIN_DEBUG=1 only)
     if _ADMIN_DEBUG:
-        with st.expander("🔧 Admin Debug — V22 QA Diagnostic", expanded=True):
+        with st.expander("🔧 Admin Debug — V22 QA Diagnostic", expanded=False):
             st.json(get_v22_qa_diagnostic(state))
         with st.expander("🔧 Admin Debug — V22 State Snapshot", expanded=False):
             st.json(get_debug_payload(state))

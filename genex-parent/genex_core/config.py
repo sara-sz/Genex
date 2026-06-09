@@ -406,7 +406,13 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"clumsy gait",
         r"\bgait\b",
         r"\brun\b",
+        r"\brunning\b",          # "wobbly running" — Chang profile
         r"\bjump\b",
+        r"\bjumping\b",          # "not yet jumping" — Chang profile
+        r"not yet jumping",
+        r"not yet walking",
+        r"not yet running",
+        r"wobbly",               # "wobbly running", "wobbly gait"
         r"walker",
         r"mobility",
         r"keeping up",
@@ -481,6 +487,13 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"colors?",
         r"letters?",
         r"numbers?",
+        r"developmental delay",  # Chang / global delay profiles
+        r"global delay",
+        r"globally delayed",
+        r"learning delay",
+        r"learning difficulties",
+        r"developmental regression",
+        r"cognitive delay",
     ],
     "exploration_and_object_use": [
         r"explore",

@@ -62,14 +62,22 @@ def allocate_weekly_slots(state: Dict[str, Any]) -> Dict[str, Any]:
     soft_floor = determine_family_guidance_floor(state)
 
     if not supported_categories and soft_floor.get("enabled"):
-        category_key = soft_floor["category_key"]
-        target_minutes = min(int(soft_floor.get("target_weekly_minutes", 20)), weekly_minutes)
+        # Use all focus domains (not just the top-ranked one) so multi-domain
+        # profiles (e.g. language + movement) both get scheduled time.
+        from genex_core.interview_engine import choose_focus_domains  # lazy to avoid circular
+        focus_domains = choose_focus_domains(state) or [soft_floor["category_key"]]
+        per_cat_minutes = max(5, weekly_minutes // max(1, len(focus_domains)))
+        target_minutes_by_category = {ck: per_cat_minutes for ck in focus_domains}
+        # Trim to weekly_minutes exactly
+        total = sum(target_minutes_by_category.values())
+        if total > weekly_minutes and focus_domains:
+            target_minutes_by_category[focus_domains[0]] -= (total - weekly_minutes)
         allocation = {
             "daily_time_min": daily_time_min,
             "weekly_minutes": weekly_minutes,
-            "supported_categories": [category_key],
-            "gap_by_category": {category_key: 0},
-            "target_minutes_by_category": {category_key: target_minutes},
+            "supported_categories": focus_domains,
+            "gap_by_category": {ck: 0 for ck in focus_domains},
+            "target_minutes_by_category": target_minutes_by_category,
             "planning_mode": "family_guidance_floor",
         }
         state["weekly_slot_allocation"] = allocation
@@ -644,6 +652,85 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                 days[day_name]["total_minutes"] += duration
                 assigned_minutes_by_category[category_key] += duration
                 progress_made = True
+                break
+
+    # Fill-up pass: top up any weekday that is still below daily_time_min.
+    # Two explicit passes per day:
+    #   Pass 1 (strict)  — respect week-level title uniqueness per category.
+    #   Pass 2 (relaxed) — allow cross-day repeats; only block same-day duplicates.
+    #                      Reset used_indices so the picker can revisit all cards.
+    # This guarantees no silent rest days when the bank has enough cards to fill the day.
+    def _do_fill_slot(day_name: str, strict: bool) -> bool:
+        """Try to place one activity on day_name.  Returns True if placed."""
+        remaining = daily_time_min - days[day_name]["total_minutes"]
+        if remaining <= 0:
+            return False
+        day_titles_placed = {
+            item.get("title", "").strip().lower()
+            for item in days[day_name]["items"]
+        }
+        for ck in list(target_minutes_by_category.keys()):
+            bank = state["activity_banks"].get(ck, {})
+            if cycle_week == 1:
+                pool = [
+                    a for a in bank.get("activities", [])
+                    if a.get("_debug", {}).get("activity_type", "core") == "core"
+                ]
+            else:
+                pool = bank.get("activities", [])
+            if not pool:
+                continue
+            if strict:
+                blocked = used_activity_keys[ck] | day_titles_placed
+                idx_set = used_activity_indices[ck]
+            else:
+                blocked = day_titles_placed   # cross-day repeats allowed
+                idx_set = set()               # revisit any card in the bank
+            activity = _pick_activity_that_fits(
+                activities=pool,
+                used_indices=idx_set,
+                remaining_minutes=remaining,
+                used_keys=blocked,
+            )
+            if activity is None:
+                continue
+            used_activity_keys[ck].add(activity.get("title", "").strip().lower())
+            duration = int(activity.get("duration_min", activity.get("duration_minutes", 5) or 5))
+            slot = {
+                "category_key": ck,
+                "category": DOMAIN_CONFIG[ck]["display"],
+                "title": activity.get("title"),
+                "instructions": activity.get("instructions"),
+                "duration_min": duration,
+                "materials": activity.get("materials", "common household items"),
+                "level": activity.get("level", "current_or_next"),
+                "goal": activity.get("goal", get_support_tier(state, ck)),
+                "why": activity.get("why", ""),
+                "success": activity.get("success", ""),
+                "make_easier": activity.get("make_easier", ""),
+                "make_harder": activity.get("make_harder", ""),
+                "avoid": activity.get("avoid", ""),
+                "group_play": activity.get("group_play", ""),
+                "feedback_options": activity.get("feedback_options", {}),
+                "activity_family": activity.get("activity_family", ""),
+                "bridge_step": activity.get("bridge_step", ""),
+                "cycle_week": cycle_week,
+                "_source_activity": activity,
+            }
+            days[day_name]["items"].append(slot)
+            days[day_name]["total_minutes"] += duration
+            assigned_minutes_by_category[ck] += duration
+            return True
+        return False
+
+    for day_name in day_names:
+        # Strict pass: preserve week-level uniqueness
+        while days[day_name]["total_minutes"] < daily_time_min:
+            if not _do_fill_slot(day_name, strict=True):
+                break
+        # Relaxed pass: allow cross-day repeats when pool is exhausted
+        while days[day_name]["total_minutes"] < daily_time_min:
+            if not _do_fill_slot(day_name, strict=False):
                 break
 
     days = _ensure_minimum_presence_for_monitor_categories(state, days)

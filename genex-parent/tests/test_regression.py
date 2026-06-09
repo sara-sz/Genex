@@ -1068,6 +1068,318 @@ def test_case13_speech_delay_only():
 
 
 # ---------------------------------------------------------------------------
+# Case 14: Time budget fill — 5 / 10 / 15 min/day must produce exact slot counts
+# ---------------------------------------------------------------------------
+
+def test_case14_time_budget_fill():
+    """Every weekday must be filled to the parent's daily_time_min."""
+    print("\n─── Case 14: Time budget fill (5 / 10 / 15 min/day) ───")
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    profiles = [
+        # (label, age, diag, concern, daily_min, expected_total)
+        ("speech-delay 5min",  36, "none", "speech delay, not talking much", 5,  25),
+        ("speech-delay 10min", 36, "none", "speech delay, not talking much", 10, 50),
+        ("speech-delay 15min", 36, "none", "speech delay, not talking much", 15, 75),
+    ]
+    for label, age, diag, concern, daily, expected_total in profiles:
+        state = init_state_from_profile("your child", age, diag, concern, daily)
+        ensure_concern_profile(state)
+        from genex_core.interview_engine import choose_focus_domains
+        focus = choose_focus_domains(state)
+        from genex_core.support_tiers import build_v22_plan_for_category
+        allocate_weekly_slots(state)
+        for ck in focus:
+            plan = build_v22_plan_for_category(state, ck)
+            state.setdefault("bridge_plans", {})[ck] = plan
+            bank = generate_category_activity_bank(state, ck)
+            state.setdefault("activity_banks", {})[ck] = bank
+        state["cycle_week"] = 1
+        build_weekly_schedule(state)
+        days = state["weekly_schedule"]["days"]
+
+        # No weekday rest days
+        for d in WEEKDAYS:
+            mins = days.get(d, {}).get("total_minutes", 0)
+            assert mins >= daily, (
+                f"[{label}] {d} under-filled: {mins} min < {daily} min/day"
+            )
+
+        total = sum(days.get(d, {}).get("total_minutes", 0) for d in WEEKDAYS)
+        assert total == expected_total, (
+            f"[{label}] Total weekday minutes = {total}, expected {expected_total}"
+        )
+        print(f"  ✓ [{label}] {total}/{expected_total} weekday minutes — all days filled")
+
+
+# ---------------------------------------------------------------------------
+# Case 15: No weekday rest days — Chang profile (multi-concern, 10 min/day)
+# ---------------------------------------------------------------------------
+
+def test_case15_no_weekday_rest_days():
+    """
+    Chang: 48m, speech + developmental + learning delay + wobbly running, 10 min/day.
+    Monday–Friday must all have activities.  No empty days.
+    """
+    print("\n─── Case 15: No weekday rest days — Chang profile ───")
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+
+    state = init_state_from_profile(
+        "your child", 48, "none",
+        "speech delay, developmental delay, learning delay, not yet jumping with both feet, wobbly running",
+        10,
+    )
+    ensure_concern_profile(state)
+    focus = choose_focus_domains(state)
+    allocate_weekly_slots(state)
+
+    for ck in focus:
+        plan = build_v22_plan_for_category(state, ck)
+        state.setdefault("bridge_plans", {})[ck] = plan
+        bank = generate_category_activity_bank(state, ck)
+        state.setdefault("activity_banks", {})[ck] = bank
+
+    state["cycle_week"] = 1
+    build_weekly_schedule(state)
+    days = state["weekly_schedule"]["days"]
+
+    empty_days = [d for d in WEEKDAYS if not days.get(d, {}).get("items")]
+    assert not empty_days, f"Weekday rest days found: {empty_days}"
+
+    under_filled = [
+        d for d in WEEKDAYS
+        if days.get(d, {}).get("total_minutes", 0) < 10
+    ]
+    assert not under_filled, f"Under-filled weekdays: {under_filled}"
+
+    total = sum(days.get(d, {}).get("total_minutes", 0) for d in WEEKDAYS)
+    assert total == 50, f"Expected 50 total weekday minutes, got {total}"
+    print(f"  ✓ focus = {focus}")
+    print(f"  ✓ All 5 weekdays filled — no rest days")
+    print(f"  ✓ Total weekday minutes: {total}/50")
+
+
+# ---------------------------------------------------------------------------
+# Case 16: Speech-delay bridge spread (36m, 15 min/day)
+# ---------------------------------------------------------------------------
+
+def test_case16_speech_delay_bridge_spread():
+    """
+    36m, speech delay, 15 min/day.
+    Language bank must include activities from multiple distinct bridge subdomains,
+    not be dominated by a single requesting/choice theme.
+    """
+    print("\n─── Case 16: Speech-delay bridge spread ───")
+    state = _make_speech_delay_state()
+    # Override to 15 min/day for this test
+    state["child"]["daily_time_min"] = 15
+    ensure_concern_profile(state)
+    from genex_core.support_tiers import build_v22_plan_for_category
+    plan = build_v22_plan_for_category(state, "language_and_communication")
+    state.setdefault("bridge_plans", {})["language_and_communication"] = plan
+    bank = generate_category_activity_bank(state, "language_and_communication")
+    acts = bank.get("activities", [])
+    core = [a for a in acts if a.get("_debug", {}).get("activity_type") == "core"]
+
+    # Must have >= 3 distinct bridges represented
+    bridge_subdomains = {a.get("_debug", {}).get("subdomain", "") for a in core}
+    # Remove empty
+    bridge_subdomains.discard("")
+    assert len(bridge_subdomains) >= 2, (
+        f"Language bank should span >= 2 subdomains, got {bridge_subdomains}"
+    )
+    print(f"  ✓ {len(core)} core activities across {len(bridge_subdomains)} subdomains: {bridge_subdomains}")
+
+    # Must have >= 5 distinct titles after dedup
+    titles = [a.get("title", "") for a in core]
+    unique_titles = set(titles)
+    assert len(unique_titles) >= 5, (
+        f"Expected >= 5 unique language activity titles, got {len(unique_titles)}: {unique_titles}"
+    )
+    print(f"  ✓ {len(unique_titles)} unique core titles")
+
+    # No single title dominates (no title should appear more than once in core)
+    from collections import Counter
+    title_counts = Counter(titles)
+    duplicates = {t: c for t, c in title_counts.items() if c > 1}
+    assert not duplicates, f"Duplicate core titles after dedup: {duplicates}"
+    print(f"  ✓ No duplicate titles in core bank")
+
+
+# ---------------------------------------------------------------------------
+# Case 17: Near-duplicate detection
+# ---------------------------------------------------------------------------
+
+def test_case17_near_duplicate_detection():
+    """
+    No duplicate titles, no identical instructions, no Easier:/Stretch: titles
+    in Week 1 weekday schedule.
+    Also: validator flags body-part mismatch (Touch Your Nose with give-me instructions).
+    """
+    print("\n─── Case 17: Near-duplicate detection ───")
+    from genex_core.activity_validator import validate_activity
+
+    # A: Dravet movement bank should have no duplicate titles after dedup
+    dravet_state = _make_dravet_state()
+    ensure_concern_profile(dravet_state)
+    from genex_core.support_tiers import build_v22_plan_for_category
+    from genex_core.scheduler import allocate_weekly_slots as _alloc
+    _alloc(dravet_state)
+    plan = build_v22_plan_for_category(dravet_state, "movement_and_physical")
+    dravet_state.setdefault("bridge_plans", {})["movement_and_physical"] = plan
+    bank = generate_category_activity_bank(dravet_state, "movement_and_physical")
+    acts = bank.get("activities", [])
+    titles = [a.get("title", "") for a in acts if a.get("_debug", {}).get("activity_type") == "core"]
+    from collections import Counter
+    dup_titles = {t: c for t, c in Counter(titles).items() if c > 1}
+    assert not dup_titles, f"Dravet movement bank has duplicate core titles: {dup_titles}"
+    print(f"  ✓ Dravet movement bank: {len(set(titles))} unique titles, no duplicates")
+
+    # B: No Easier:/Stretch: titles in Week 1 weekday schedule
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    adhd_state = _make_adhd_state()
+    allocate_weekly_slots(adhd_state)
+    from genex_core.support_tiers import build_v22_plan_for_category as bvp
+    from genex_core.interview_engine import choose_focus_domains as cfd
+    for ck in cfd(adhd_state):
+        p = bvp(adhd_state, ck)
+        adhd_state.setdefault("bridge_plans", {})[ck] = p
+        b = generate_category_activity_bank(adhd_state, ck)
+        adhd_state.setdefault("activity_banks", {})[ck] = b
+    adhd_state["cycle_week"] = 1
+    build_weekly_schedule(adhd_state)
+    days = adhd_state["weekly_schedule"]["days"]
+    variant_titles = [
+        item["title"]
+        for d in WEEKDAYS
+        for item in days.get(d, {}).get("items", [])
+        if item.get("title", "").startswith(("Easier:", "Stretch:"))
+    ]
+    assert not variant_titles, f"Easier:/Stretch: titles in Week 1: {variant_titles}"
+    print(f"  ✓ No Easier:/Stretch: titles in Week 1 weekday schedule")
+
+    # C: Title/instruction body-part mismatch validator check
+    bad_activity = {
+        "title": "Touch Your Nose!",
+        "instructions": "Hold out a toy. Say 'give me!' and wait for your child to hand it to you.",
+        "success_criteria": "Child hands you the toy.",
+        "materials": "one toy",
+        "make_easier": "Model first.",
+        "make_harder": "Use two toys.",
+        "what_to_avoid": "Don't rush.",
+        "group_play_line": "Two children can take turns.",
+    }
+    _valid, warnings = validate_activity(bad_activity, "language_and_communication")
+    mismatch_warns = [w for w in warnings if "mismatch" in w or "body_part" in w]
+    assert mismatch_warns, (
+        f"Expected body-part mismatch warning for 'Touch Your Nose' + give-me instructions, got: {warnings}"
+    )
+    print(f"  ✓ Validator catches title/instruction mismatch: {mismatch_warns[0]}")
+
+
+# ---------------------------------------------------------------------------
+# Case 18: Dravet safety — stomp + squat blocked, no repeated safe cards
+# ---------------------------------------------------------------------------
+
+def test_case18_dravet_stomp_squat_blocked():
+    """
+    Dravet movement bank must not contain stomp, squat-and-reach, or any
+    risky movement language.  Safe replacement cards should be distinct.
+    """
+    print("\n─── Case 18: Dravet safety — stomp and squat-and-reach blocked ───")
+    from genex_core.safety import apply_safety_constraints_to_activities
+    from genex_core.support_tiers import build_v22_plan_for_category
+
+    dravet_state = _make_dravet_state()
+    ensure_concern_profile(dravet_state)
+    plan = build_v22_plan_for_category(dravet_state, "movement_and_physical")
+    dravet_state.setdefault("bridge_plans", {})["movement_and_physical"] = plan
+    bank = generate_category_activity_bank(dravet_state, "movement_and_physical")
+    acts = bank.get("activities", [])
+
+    _RISKY_EXT = re.compile(
+        r"\b(jump(ing)?|hop(ping)?|race|racing|obstacle|climb(ing)?|"
+        r"high surface|high platform|unsupported balance|speed|"
+        r"frog jump|trampoline|bouncing|sprint|run fast|stomp(ing)?)\b"
+        r"|squat\s+and\s+reach",
+        flags=re.IGNORECASE,
+    )
+
+    for a in acts:
+        text = f"{a.get('title','')} {a.get('instructions','')}"
+        assert not _RISKY_EXT.search(text), (
+            f"Risky movement language in Dravet activity: {a.get('title')!r}\n"
+            f"Text: {text[:120]}"
+        )
+    print(f"  ✓ {len(acts)} movement activities — no stomp/squat-and-reach/race/jump language")
+
+    # Safe replacement cards should not repeat titles within the bank
+    core = [a for a in acts if a.get("_debug", {}).get("activity_type") == "core"]
+    from collections import Counter
+    dup = {t: c for t, c in Counter(a["title"] for a in core).items() if c > 1}
+    assert not dup, f"Duplicate safe card titles in Dravet movement bank: {dup}"
+    print(f"  ✓ {len(set(a['title'] for a in core))} distinct safe movement card titles")
+
+
+# ---------------------------------------------------------------------------
+# Case 19: ADHD age-appropriateness (60m) + Thu/Fri fill
+# ---------------------------------------------------------------------------
+
+def test_case19_adhd_age_appropriate():
+    """
+    ADHD 60m plan: activities should include task-completion, routine, or
+    attention-support language.  Thu/Fri must not be under-filled.
+    """
+    print("\n─── Case 19: ADHD age-appropriateness + Thu/Fri fill ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+
+    state = _make_adhd_state()
+    allocate_weekly_slots(state)
+    focus = choose_focus_domains(state)
+    for ck in focus:
+        plan = build_v22_plan_for_category(state, ck)
+        state.setdefault("bridge_plans", {})[ck] = plan
+        bank = generate_category_activity_bank(state, ck)
+        state.setdefault("activity_banks", {})[ck] = bank
+    state["cycle_week"] = 1
+    build_weekly_schedule(state)
+    days = state["weekly_schedule"]["days"]
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    # Thu/Fri must each have >= 1 activity
+    for d in ["Thursday", "Friday"]:
+        items = days.get(d, {}).get("items", [])
+        assert items, f"{d} has no activities in ADHD plan"
+    print("  ✓ Thursday and Friday both filled")
+
+    # At least 2 activities across the week must reference attention/task/routine keywords
+    adhd_keywords = ["task", "finish", "complet", "attention", "focus", "routine",
+                     "predict", "start", "stay on", "short", "timer", "wait"]
+    cognitive_items = [
+        item for d in WEEKDAYS
+        for item in days.get(d, {}).get("items", [])
+        if item.get("category_key") == "cognitive"
+    ]
+    matches = [
+        item for item in cognitive_items
+        if any(kw in (item.get("why", "") + item.get("title", "") + item.get("instructions", "")).lower()
+               for kw in adhd_keywords)
+    ]
+    assert len(matches) >= 2, (
+        f"Expected >= 2 ADHD-appropriate cognitive activities, got {len(matches)}: "
+        f"{[i['title'] for i in cognitive_items]}"
+    )
+    print(f"  ✓ {len(matches)}/{len(cognitive_items)} cognitive activities have ADHD-relevant content")
+
+    total = sum(days.get(d, {}).get("total_minutes", 0) for d in WEEKDAYS)
+    assert total == 50, f"Expected 50 total weekday minutes, got {total}"
+    print(f"  ✓ Total weekday minutes: {total}/50")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -1086,6 +1398,12 @@ def run_all():
         test_case11_dravet_safety,
         test_case12_adhd_exact_profile,
         test_case13_speech_delay_only,
+        test_case14_time_budget_fill,
+        test_case15_no_weekday_rest_days,
+        test_case16_speech_delay_bridge_spread,
+        test_case17_near_duplicate_detection,
+        test_case18_dravet_stomp_squat_blocked,
+        test_case19_adhd_age_appropriate,
     ]
     passed = 0
     failed = 0

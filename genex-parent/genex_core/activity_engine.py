@@ -698,6 +698,74 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "group_play_line": "Two children take turns: one hands the item, the other puts it away.",
             "what_to_avoid": "Avoid doing the task faster yourself — wait for your child's turn.",
         },
+        {
+            "title": "Peekaboo with Object",
+            "theme": "peekaboo hiding game",
+            "materials": "a cloth or small blanket, one favourite toy",
+            "instructions": (
+                "Hide a toy under a cloth in front of your child. "
+                "Say 'where did it go?' and wait 3 seconds. "
+                "If your child reaches or looks expectantly, lift the cloth: 'peekaboo!' "
+                "Let your child hide it next — hold the cloth while they put the toy under. "
+                "Do 4-5 turns."
+            ),
+            "success_criteria": "Your child reaches for, lifts, or looks toward the hidden toy.",
+            "make_easier": "Only partially cover the toy so it is still visible.",
+            "make_harder": "Use two cloths and hide the toy under one — ask 'which one?'",
+            "group_play_line": "Two children take turns hiding and finding.",
+            "what_to_avoid": "Avoid moving too fast — let your child lead the reveal.",
+        },
+        {
+            "title": "Face-Copy Mirror",
+            "theme": "face imitation game",
+            "materials": "no materials needed",
+            "instructions": (
+                "Sit face-to-face with your child very close. "
+                "Make a big, slow expression: wide eyes, puffed cheeks, or a big smile. "
+                "Hold it for 3 seconds and say 'you try!' "
+                "Copy whatever your child does — even if it is not the same. "
+                "Take turns: one leads, one copies. Do 4-5 expressions."
+            ),
+            "success_criteria": "Your child attempts to change their face expression in response.",
+            "make_easier": "Just smile big and wait — any facial response counts.",
+            "make_harder": "Do two expressions in a row and see if your child copies the sequence.",
+            "group_play_line": "Two children sit side by side and both copy the adult's expression.",
+            "what_to_avoid": "Avoid laughing at attempts — keep it warm and encouraging.",
+        },
+        {
+            "title": "Shared Book Point",
+            "theme": "joint book looking",
+            "materials": "a picture book with clear, interesting images",
+            "instructions": (
+                "Open the book between you. "
+                "Point to something interesting and say 'look — a dog!' "
+                "Wait to see if your child points too or looks where you pointed. "
+                "Then let your child point to something — name it right away. "
+                "Do 4-5 shared points per page."
+            ),
+            "success_criteria": "Your child points or looks at what you point to at least twice.",
+            "make_easier": "Tap the picture gently so it is easier to follow your point.",
+            "make_harder": "Say the name and wait — let your child point to it without your help.",
+            "group_play_line": "Two children take turns pointing to one thing each on the same page.",
+            "what_to_avoid": "Avoid turning pages too fast — stay on each page long enough to share a point.",
+        },
+        {
+            "title": "Name and Wave Hello",
+            "theme": "greeting routine game",
+            "materials": "no materials needed",
+            "instructions": (
+                "Stand or sit across from your child. "
+                "Wave and say 'hello [name]!' using your own name as a model. "
+                "Wait for any response — a wave, a sound, a smile, or eye contact. "
+                "Then encourage your child to wave and say their own name or 'hi.' "
+                "Do 3-4 greetings with different pretend visitors (a toy, a sibling)."
+            ),
+            "success_criteria": "Your child waves or vocalises in response to a greeting.",
+            "make_easier": "Gently guide your child's hand in a wave and celebrate the attempt.",
+            "make_harder": "Turn away and wait for your child to initiate the greeting unprompted.",
+            "group_play_line": "Two children greet each other with a wave and say each other's names.",
+            "what_to_avoid": "Avoid correcting the wave form — any gesture toward the greeter counts.",
+        },
     ],
     "expressive_word": [
         {
@@ -747,6 +815,90 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "make_harder": "Ask 'where is the [item]?' and wait for your child to point on a busy page.",
             "group_play_line": "Two children take turns pointing: one points, the other names.",
             "what_to_avoid": "Avoid moving past a page before waiting the full 5 seconds.",
+        },
+        {
+            "title": "Family Photo Names",
+            "theme": "family photo naming",
+            "materials": "3-5 photos of familiar family members on your phone or printed",
+            "instructions": (
+                "Show one photo at a time. "
+                "Ask 'who is this?' and wait 5 seconds. "
+                "Accept any sound, word, or point. "
+                "Say the name clearly: 'That's grandma!' and show the next photo. "
+                "Do 4-5 photos per round."
+            ),
+            "success_criteria": "Your child attempts to name or point to at least two people in the photos.",
+            "make_easier": "Name the person first, then show the photo again and wait for any response.",
+            "make_harder": "Mix in a photo of an unfamiliar person and see if your child says 'don't know.'",
+            "group_play_line": "Two children take turns guessing who is in each photo.",
+            "what_to_avoid": "Avoid correcting close attempts — 'dada' for daddy is a great start.",
+        },
+        {
+            "title": "Give Me Two! Game",
+            "theme": "two-choice requesting game",
+            "materials": "four small familiar objects (spoon, block, ball, cup)",
+            "instructions": (
+                "Lay out four objects in a row. "
+                "Point to two and name them slowly: 'spoon… ball.' "
+                "Ask 'can you give me the spoon?' and wait 5 seconds. "
+                "If correct, celebrate and put it in a basket. "
+                "Try all four objects across 2-3 rounds."
+            ),
+            "success_criteria": "Your child gives you the named object at least twice.",
+            "make_easier": "Use only two objects and give a visual cue (point gently toward the correct one).",
+            "make_harder": "Ask for two objects in one request: 'give me the cup AND the ball.'",
+            "group_play_line": "Two children take turns: one asks, the other gives the object.",
+            "what_to_avoid": "Avoid pointing to the correct object immediately — wait the full 5 seconds first.",
+        },
+        {
+            "title": "What's Missing? Box",
+            "theme": "object memory naming",
+            "materials": "a shoe box or bag, 4-5 small familiar objects",
+            "instructions": (
+                "Put 4-5 objects on the table and name each one together. "
+                "Ask your child to close or cover their eyes. "
+                "Remove one object and hide it in the box. "
+                "Say 'open your eyes — what's missing?' "
+                "Wait for any attempt — a point, word, or sound."
+            ),
+            "success_criteria": "Your child notices something is gone and attempts to name or indicate the missing object.",
+            "make_easier": "Use only 2 objects so the missing one is obvious.",
+            "make_harder": "Use 6 objects and remove two at once.",
+            "group_play_line": "Two children take turns hiding an object for the other to find.",
+            "what_to_avoid": "Avoid removing the object before your child has had a chance to name all the objects first.",
+        },
+        {
+            "title": "Quick Naming Walk",
+            "theme": "home object naming walk",
+            "materials": "no materials needed — walk around one room",
+            "instructions": (
+                "Walk slowly around one room with your child. "
+                "Stop at an object, tap it, and ask 'what's this?' "
+                "Wait 5 seconds. Accept any sound, point, or word. "
+                "Name it and move on. Visit 5-6 objects per walk."
+            ),
+            "success_criteria": "Your child attempts to name or respond to at least 3 objects on the walk.",
+            "make_easier": "Name the object first, then visit it again and ask 'what's this?'",
+            "make_harder": "Ask 'what do we do with this?' for each object to practise function words.",
+            "group_play_line": "Two children walk together — one points, the other names.",
+            "what_to_avoid": "Avoid asking about the same object twice in one walk.",
+        },
+        {
+            "title": "Action Word Match",
+            "theme": "action word game",
+            "materials": "no materials needed",
+            "instructions": (
+                "Do a simple action slowly: wave, jump, clap, or eat. "
+                "Ask 'what am I doing?' and wait 5 seconds. "
+                "Accept any sound or word attempt. "
+                "Name the action: 'waving!' "
+                "Do 4-5 different actions."
+            ),
+            "success_criteria": "Your child attempts to label or copy at least one action.",
+            "make_easier": "Give a choice: 'Am I waving or sleeping?' and wait for any response.",
+            "make_harder": "Describe what your child is doing in the moment: 'You are eating — say eat!'",
+            "group_play_line": "Two children take turns doing an action while the other names it.",
+            "what_to_avoid": "Avoid performing actions too quickly — slow, big movements are easier to name.",
         },
     ],
     "attention": [
@@ -986,6 +1138,56 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "group_play_line": "Two children take turns pointing to what they want from a shared set of toys.",
             "what_to_avoid": "Avoid guessing which item your child wants before they've communicated.",
         },
+        {
+            "title": "Routine Pause Point",
+            "theme": "pause and gesture routine",
+            "materials": "a familiar daily routine (getting shoes, wash hands, snack time)",
+            "instructions": (
+                "During a familiar routine, pause before the next step. "
+                "Wait silently and look expectantly at the next item needed. "
+                "If your child points, reaches, or looks toward the correct item — do the step immediately. "
+                "Do 3-4 pauses across the routine."
+            ),
+            "success_criteria": "Your child points to, reaches for, or looks at the next item in the routine.",
+            "make_easier": "Hold the item close and just wait — any reach toward it counts.",
+            "make_harder": "Pause at a less familiar step and see if your child navigates the break.",
+            "group_play_line": "With a sibling, one child can model pointing to the next step.",
+            "what_to_avoid": "Avoid completing the step before your child has had a chance to gesture.",
+        },
+        {
+            "title": "Wave Bye-Bye Practice",
+            "theme": "goodbye wave routine",
+            "materials": "no materials needed",
+            "instructions": (
+                "At the end of a play session, a mealtime, or when leaving a room, "
+                "slow down and say 'bye-bye!' with an exaggerated wave. "
+                "Wait for any wave, arm movement, or sound. "
+                "Copy whatever your child does and celebrate. "
+                "Do this consistently at 3-4 natural goodbye moments."
+            ),
+            "success_criteria": "Your child produces any wave-like arm movement or vocalization at a goodbye moment.",
+            "make_easier": "Gently pick up your child's hand and wave it together, then let go and wait.",
+            "make_harder": "Step into another room and see if your child follows you to wave.",
+            "group_play_line": "Two children wave to each other at the end of play.",
+            "what_to_avoid": "Avoid doing the wave for your child every time — leave space for their attempt.",
+        },
+        {
+            "title": "High-Five Choice",
+            "theme": "high-five request game",
+            "materials": "two small preferred objects or photos",
+            "instructions": (
+                "Hold up one object in each hand at your child's eye level. "
+                "Say 'which one?' and open both hands flat like a high-five. "
+                "Wait for your child to tap or point to one hand. "
+                "Give whatever is in that hand immediately. "
+                "Do 3-4 choices."
+            ),
+            "success_criteria": "Your child taps or touches one of your hands to communicate a choice.",
+            "make_easier": "Hold just one hand flat and wait for any tap or touch.",
+            "make_harder": "Slowly move the hands apart so your child must reach to make their choice.",
+            "group_play_line": "With another adult, each holds one option — your child chooses between two people.",
+            "what_to_avoid": "Avoid giving the item before your child has touched your hand.",
+        },
     ],
     "sound": [
         {
@@ -1035,6 +1237,56 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "make_harder": "Do two sounds in a row and see if your child can copy the sequence.",
             "group_play_line": "With another child, one leads the sounds while the other copies.",
             "what_to_avoid": "Avoid expecting an exact copy — any sound attempt counts.",
+        },
+        {
+            "title": "Clap and Sound Game",
+            "theme": "clapping rhythm with sounds",
+            "materials": "no materials needed",
+            "instructions": (
+                "Clap a slow rhythm (clap… clap… clap) and add a sound: 'bah… bah… bah!' "
+                "Do 3-4 claps in rhythm and stop. "
+                "Wait for your child to continue the sound or clap. "
+                "Accept any vocalization or clap. "
+                "Try a different sound next round: 'moo… moo… moo!'"
+            ),
+            "success_criteria": "Your child produces any sound or clap during or after the rhythm.",
+            "make_easier": "Just clap once and wait for any reaction — sound or clap both count.",
+            "make_harder": "Change the rhythm mid-game and see if your child adjusts.",
+            "group_play_line": "Two children sit side by side — one claps, the other makes the sound.",
+            "what_to_avoid": "Avoid doing more than 4 claps before pausing — the gap is where the learning happens.",
+        },
+        {
+            "title": "Noisy Toy Turn",
+            "theme": "cause-and-effect sound toy",
+            "materials": "one noisy toy (squeaky toy, drum, shaker, or xylophone)",
+            "instructions": (
+                "Put the noisy toy in front of your child. "
+                "Model making one sound with it: squeeze, tap, or shake. "
+                "Say 'your turn!' and wait. "
+                "After your child makes a sound, copy exactly what they did. "
+                "Alternate: you model, they copy. Do 4-5 turns."
+            ),
+            "success_criteria": "Your child makes the toy produce a sound intentionally at least twice.",
+            "make_easier": "Guide your child's hand to the toy and help them make the first sound.",
+            "make_harder": "Make a specific sound (two taps) and see if your child copies the pattern.",
+            "group_play_line": "Two children take turns — one makes a sound, the other copies it.",
+            "what_to_avoid": "Avoid taking long turns — keep each model very short so your child gets many turns.",
+        },
+        {
+            "title": "First Sound Try",
+            "theme": "first-sound practice game",
+            "materials": "3-4 familiar objects (ball, cup, spoon, book)",
+            "instructions": (
+                "Hold up an object and say just the first sound very slowly: 'buh…' for ball. "
+                "Wait 3 seconds for your child to add a sound or finish the word. "
+                "Then say the full word: 'ball!' "
+                "Try 4-5 objects. Celebrate any sound attempt."
+            ),
+            "success_criteria": "Your child produces any sound within 5 seconds of hearing the first sound cue.",
+            "make_easier": "Say the full word slowly and then just wait for any response.",
+            "make_harder": "Ask for the first sound without holding up the object — description only.",
+            "group_play_line": "Two children take turns: one gives the first sound, the other finishes the word.",
+            "what_to_avoid": "Avoid moving to the next object before the full 3-second wait.",
         },
     ],
 }
@@ -1539,6 +1791,18 @@ def generate_category_activity_bank(
     # This is the enforcement layer — activities containing jump/hop/climb/race are
     # replaced with safe alternatives for high-fall, mobility, and seizure profiles.
     valid_activities = apply_safety_constraints_to_activities(state, category_key, valid_activities)
+
+    # Deduplicate by title: multiple bridges drawing from the same small card pool
+    # can produce identical titles at different variant indices.  Keep only the first
+    # occurrence — later occurrences are functionally identical cards.
+    _seen_titles: set = set()
+    _deduped: List[Dict[str, Any]] = []
+    for _a in valid_activities:
+        _t = _a.get("title", "").strip().lower()
+        if _t not in _seen_titles:
+            _seen_titles.add(_t)
+            _deduped.append(_a)
+    valid_activities = _deduped
 
     warnings = list({w for a in raw_activities for w in a.get("validation_warnings", [])})
 

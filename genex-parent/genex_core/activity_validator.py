@@ -227,6 +227,20 @@ def validate_activity(
         if pat.search(harder):
             warnings.append(f"unsafe_harder_version:{pat.pattern[:40]}")
 
+    # 9. Title/instruction body-part mismatch
+    _BODY_PARTS = ["nose", "ear", "head", "belly", "toe", "knee", "elbow", "hand", "arm"]
+    title_lower = title.lower()
+    instructions_lower = instructions.lower()
+    for part in _BODY_PARTS:
+        if re.search(r'\b' + part + r'\b', title_lower):
+            if not re.search(r'\b' + part + r'\b', instructions_lower):
+                warnings.append(f"title_body_part_mismatch:{part}")
+
+    # 10. Title says "touch" but instructions talk about giving/putting
+    if re.search(r'\btouch\b', title_lower):
+        if re.search(r'\b(give me|put it in)\b', instructions_lower):
+            warnings.append("title_instruction_action_mismatch")
+
     # Determine is_valid: block on critical warnings
     critical = {w for w in warnings if any(
         w.startswith(prefix) for prefix in [
