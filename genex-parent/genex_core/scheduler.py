@@ -771,8 +771,11 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                 week_fam_blocked = used_activity_families[ck]
                 root_blocked = used_activity_roots[ck]
             else:
-                blocked = day_titles_placed   # cross-day repeats allowed
-                idx_set = set()               # revisit any card in the bank
+                # Relaxed pass: still respect week-level title dedup to prevent
+                # exact duplicate titles appearing on multiple days.
+                # Only fall back to allowing repeats if the bank is truly exhausted.
+                blocked = used_activity_keys[ck] | day_titles_placed
+                idx_set = set()               # revisit any card position in the bank
                 week_fam_blocked = set()
                 root_blocked = set()
             activity = _pick_activity_that_fits(
@@ -785,9 +788,8 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                 used_roots=root_blocked,
             )
             if activity is None and not strict:
-                # Last-resort relaxation: allow same-day family repeat rather than
-                # repeating a title from another day.  Bank is genuinely exhausted of
-                # cross-family options for this day.
+                # Last-resort relaxation: bank truly exhausted of unique titles —
+                # allow same-day family repeat but still prefer week-unique titles.
                 activity = _pick_activity_that_fits(
                     activities=pool,
                     used_indices=idx_set,
@@ -796,6 +798,18 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                     hard_block_families=set(),   # lift family block as last resort
                     used_families=week_fam_blocked,
                     used_roots=root_blocked,
+                )
+            if activity is None and not strict:
+                # Absolute last resort: allow cross-day title repeats only when the
+                # bank cannot provide any unique title for this day.
+                activity = _pick_activity_that_fits(
+                    activities=pool,
+                    used_indices=idx_set,
+                    remaining_minutes=remaining,
+                    used_keys=day_titles_placed,  # only block same-day, allow cross-week repeat
+                    hard_block_families=set(),
+                    used_families=set(),
+                    used_roots=set(),
                 )
             if activity is None:
                 continue

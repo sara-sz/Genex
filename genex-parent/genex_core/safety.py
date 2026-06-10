@@ -121,6 +121,68 @@ _SAFE_MOVEMENT_CARDS: List[Dict[str, str]] = [
         "make_harder": "Add a fun stop signal: say 'freeze!' and see if your child pauses on the word.",
         "group_play_line": "An older sibling holds the other hand to give extra balance support.",
     },
+    {
+        "title": "Seated Ball Roll",
+        "activity_family": "safe_seated_ball",
+        "instructions": (
+            "Sit on the floor facing your child, both of you with legs out in a V shape. "
+            "Place a soft ball between you. "
+            "Say 'ready… roll!' and gently push the ball toward your child. "
+            "Wait for them to stop it with their hands and push it back. "
+            "Do 4–5 slow back-and-forth rolls, staying seated throughout. "
+            "Use stable support and close adult supervision throughout."
+        ),
+        "materials": "soft ball or rolled-up socks, clear flat floor space",
+        "avoid": (
+            "Avoid standing, throwing, or rolling the ball fast. "
+            "This is a fully seated, slow-paced activity."
+        ),
+        "success_criteria": "Your child stops or redirects the ball while staying seated at least once.",
+        "make_easier": "Sit closer together so the ball travels only a short distance.",
+        "make_harder": "Roll the ball to one side so your child has to reach gently to stop it.",
+        "group_play_line": "With a third person, sit in a triangle and roll to each other in turn.",
+    },
+    {
+        "title": "Couch-Supported Reach",
+        "activity_family": "safe_couch_reach",
+        "instructions": (
+            "Place a small toy or object on the couch cushion at arm's reach from your child "
+            "while they stand or sit on the floor in front of the couch. "
+            "Say 'can you reach it?' and let them lean forward gently to pick it up. "
+            "Place the toy at slightly different spots: left, right, centre. "
+            "Do 4–5 reaches with rest between each one. "
+            "Use stable support and close adult supervision throughout."
+        ),
+        "materials": "low couch or padded surface, 4–5 small favourite toys",
+        "avoid": (
+            "Avoid placing the toy too far — your child should never need to step or lunge. "
+            "No jumping or unsupported balance."
+        ),
+        "success_criteria": "Your child reaches and picks up a toy at least twice without losing balance.",
+        "make_easier": "Place the toy right at the edge of the couch so almost no reach is needed.",
+        "make_harder": "Vary the height slightly — place one toy lower on a cushion on the floor.",
+        "group_play_line": "With another child, one places the toy and the other reaches for it.",
+    },
+    {
+        "title": "Basket Drop-In",
+        "activity_family": "safe_basket_drop",
+        "instructions": (
+            "Place a laundry basket or box on the floor in front of your child. "
+            "Hand them one small soft toy at a time and say 'drop it in!' "
+            "Let them hold it over the basket and release — no throwing. "
+            "Do 4–5 drops, collecting and repeating. Stay close for balance support. "
+            "Use stable support and close adult supervision throughout."
+        ),
+        "materials": "laundry basket or large box, 4–5 small soft toys or balls",
+        "avoid": (
+            "Avoid any throwing or tossing motion. "
+            "Keep the basket right at your child's feet so they only need to release, not aim."
+        ),
+        "success_criteria": "Your child releases a toy into the basket at least twice.",
+        "make_easier": "Hold the basket yourself at waist height so your child barely has to lower their arm.",
+        "make_harder": "Move the basket one small step forward so your child has to lean slightly to drop in.",
+        "group_play_line": "Two children take turns: one holds the basket steady, the other drops in.",
+    },
 ]
 
 
@@ -346,6 +408,9 @@ def apply_safety_constraints_to_activities(
             if a.get("_debug"):
                 a["_debug"]["safety_replaced"] = True
                 a["_debug"]["safety_replace_reason"] = "jump_hop_blocked_high_fall_or_seizure_risk"
+                # Promote to core so Week 1 can use this safe replacement card —
+                # easier/harder originals that were replaced are now safe standalone cards.
+                a["_debug"]["activity_type"] = "core"
             title = a["title"]
             instructions = a["instructions"]
             duration_min = a["duration_min"]

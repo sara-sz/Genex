@@ -1,7 +1,7 @@
 """
 tests/test_regression.py
 -------------------------
-V22 regression test suite (31 cases).
+V22 regression test suite (32 cases).
 
 Run: python3 -m pytest tests/test_regression.py -v
   or: python3 tests/test_regression.py
@@ -44,6 +44,7 @@ Cases:
  29. Validator blocks success-criteria domain mismatch (ball/foot, bead/crayon).
  30. ADHD 48m gets concrete first/then and counting cards (not generic titles).
  31. DS-24m and Dravet pass-9 bucket cards contain no unsafe movement in any field.
+ 32. Maya DS-24m: 10 slots, no duplicates, no unsafe movement, squat-reach at most once.
 """
 
 import re
@@ -2129,6 +2130,76 @@ def test_case31_ds_and_dravet_no_unsafe_in_bucket_cards():
 
 
 # ---------------------------------------------------------------------------
+# Case 32: Maya 24m Down syndrome — safe week, no duplicates after safety replacement
+# ---------------------------------------------------------------------------
+
+def test_case32_maya_ds_safe_week():
+    """Maya, 24m, Down syndrome, 10 min/day.
+    Expected:
+    - 10 weekday activity slots
+    - no jump/hop/stomp/race/climb/obstacle/unsupported balance in any field
+    - no exact duplicate titles in Week 1
+    - 'Supported Squat-and-Reach Game' appears at most once
+    """
+    print("\n─── Case 32: Maya DS-24m — safe Week 1, no title duplicates ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    from collections import Counter
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    UNSAFE_RE = re.compile(
+        r"\b(jump(ing)?|hop(ping)?|stomp(ing)?|race|racing|climb(ing)?|"
+        r"trampoline|obstacle course|sprint|unsupported balance)\b",
+        re.I,
+    )
+
+    state = init_state_from_profile(
+        "Maya", 24, "Down syndrome",
+        "hypotonia, low muscle tone, unstable walking, gross motor delay", 10,
+    )
+    ensure_concern_profile(state)
+    allocate_weekly_slots(state)
+    focus = choose_focus_domains(state)
+
+    for ck in focus:
+        plan = build_v22_plan_for_category(state, ck)
+        state.setdefault("bridge_plans", {})[ck] = plan
+        bank = generate_category_activity_bank(state, ck)
+        state.setdefault("activity_banks", {})[ck] = bank
+
+    state["cycle_week"] = 1
+    build_weekly_schedule(state)
+    days = state["weekly_schedule"]["days"]
+
+    all_titles = []
+    for day in WEEKDAYS:
+        items = days.get(day, {}).get("items", [])
+        for item in items:
+            all_titles.append(item.get("title", ""))
+            for field in ["title", "instructions", "make_harder"]:
+                value = str(item.get(field, "") or "")
+                m = UNSAFE_RE.search(value)
+                assert not m, (
+                    f"Maya DS-24m: unsafe movement '{m.group()}' in {day} "
+                    f"'{item.get('title')}' field '{field}'"
+                )
+
+    total_slots = len(all_titles)
+    assert total_slots == 10, f"Expected 10 weekday slots, got {total_slots}"
+    print(f"  ✓ 10 weekday slots filled")
+
+    dupes = {t: c for t, c in Counter(all_titles).items() if c > 1}
+    assert not dupes, f"Duplicate titles in Week 1: {dupes}"
+    print(f"  ✓ No duplicate titles in Week 1")
+
+    squat_count = all_titles.count("Supported Squat-and-Reach Game")
+    assert squat_count <= 1, (
+        f"'Supported Squat-and-Reach Game' appears {squat_count} times — must be at most once"
+    )
+    print(f"  ✓ 'Supported Squat-and-Reach Game' appears at most once ({squat_count})")
+    print(f"  ✓ No jump/hop/stomp/race/climb in any scheduled card field")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -2165,6 +2236,7 @@ def run_all():
         test_case29_success_domain_mismatch_blocked,
         test_case30_adhd_48m_concrete_cards,
         test_case31_ds_and_dravet_no_unsafe_in_bucket_cards,
+        test_case32_maya_ds_safe_week,
     ]
     passed = 0
     failed = 0
