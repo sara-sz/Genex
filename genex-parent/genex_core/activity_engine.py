@@ -951,6 +951,41 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "group_play_line": "Two children take turns — one names the item, the other picks it up.",
             "what_to_avoid": "Avoid naming all items at once — one clear instruction at a time.",
         },
+        {
+            "title": "Two-Word Choice Game",
+            "theme": "two-word carrier phrase",
+            "materials": "2–3 small familiar objects (cracker, ball, box) on a tray",
+            "instructions": (
+                "Put 2–3 objects on a tray between you and your child. "
+                "Hold one up and say 'want cracker?' then wait. "
+                "If your child reaches or sounds, model the two words: 'want cracker!' "
+                "Give it over immediately. "
+                "Repeat with other objects, modelling 'want ball,' 'open box.' "
+                "Do 4–5 turns."
+            ),
+            "success_criteria": "Your child uses any two-word combination or approximation to request an item.",
+            "make_easier": "Accept one word plus a reach — say the two-word phrase yourself and give the item.",
+            "make_harder": "Wait for a two-word phrase before handing over the item.",
+            "group_play_line": "Two children each request one item — take turns being the one who holds the tray.",
+            "what_to_avoid": "Avoid asking 'say want cracker' — model the phrase and wait.",
+        },
+        {
+            "title": "Paint Choice Words",
+            "theme": "colour choice carrier phrase",
+            "materials": "2–3 small jars of finger paint or paint chips, a piece of paper",
+            "instructions": (
+                "Put 2–3 colour jars in front of your child. "
+                "Model choosing: 'red paint!' and dip a finger. "
+                "Hold the jars slightly back and wait. "
+                "When your child reaches, model: 'blue paint!' and let them choose. "
+                "Do 4–5 colour choices, celebrating each two-word attempt."
+            ),
+            "success_criteria": "Your child uses a colour word plus 'paint' or 'want' in any order.",
+            "make_easier": "Name the colour first and wait for any response before giving access.",
+            "make_harder": "Put the paint jars out of reach — your child must request before painting.",
+            "group_play_line": "Two children take turns choosing a colour and painting one mark each.",
+            "what_to_avoid": "Avoid correcting colour names mid-activity — any two-word attempt is a win.",
+        },
     ],
     "attention": [
         {
@@ -1136,6 +1171,56 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "make_harder": "Give your child two jobs: spoons AND napkins.",
             "group_play_line": "Two children share the table job — one does cups, one does spoons.",
             "what_to_avoid": "Avoid re-doing placements your child has made — any attempt at the right spot counts.",
+        },
+        {
+            "title": "Snack Cup Helper",
+            "theme": "snack prep first/then",
+            "materials": "a small cup, yogurt, granola or cereal, and 2–3 berries",
+            "instructions": (
+                "Say 'we're making a snack — first yogurt, then granola, then berries!' "
+                "Hold up one finger for each step. "
+                "Let your child scoop one spoonful of yogurt, then pour a small amount of granola, "
+                "then place 2–3 berries on top. "
+                "Say each step aloud as they do it. Eat it together when done."
+            ),
+            "success_criteria": "Your child completes all 3 steps with minimal prompting.",
+            "make_easier": "Do the first step yourself, then let your child do steps 2 and 3.",
+            "make_harder": "Say 'what comes next?' before each step and wait for your child to tell you.",
+            "group_play_line": "Two children each make their own cup — one does yogurt, one does granola.",
+            "what_to_avoid": "Avoid rushing — each step is the practice; the eating is the reward.",
+        },
+        {
+            "title": "Laundry Match Job",
+            "theme": "laundry matching task",
+            "materials": "a pile of 6–8 clean socks in 2–3 different colours",
+            "instructions": (
+                "Dump the sock pile on the floor between you. "
+                "Say 'first find two that match, then put them together!' "
+                "Hold up one sock and ask 'find its match!' "
+                "When your child finds it, show them how to press the pair together. "
+                "Do 3–4 pairs."
+            ),
+            "success_criteria": "Your child finds and pairs at least 2 matching socks.",
+            "make_easier": "Use only 4 socks (2 matching pairs) and lay them all face up.",
+            "make_harder": "Mix in a third colour and let your child sort without help.",
+            "group_play_line": "Two children each find one sock from a pair — the first to match wins the round.",
+            "what_to_avoid": "Avoid correcting near-matches mid-task — let your child finish before helping.",
+        },
+        {
+            "title": "Backpack Helper",
+            "theme": "backpack packing task",
+            "materials": "a small backpack, a snack item, a water bottle or small toy",
+            "instructions": (
+                "Before heading out (or as pretend practice), say 'backpack helper — first snack in, then zip up!' "
+                "Hand your child the snack. Say 'snack in the bag!' and wait. "
+                "When they put it in, say 'now zip it!' and guide their hand to the zip if needed. "
+                "Let your child carry the bag. Celebrate: 'bag is ready — let's go!'"
+            ),
+            "success_criteria": "Your child puts the item in the bag and attempts to zip it.",
+            "make_easier": "Open the bag wide and hold it still — your child only needs to drop the item in.",
+            "make_harder": "Add a third step: 'first snack, then water bottle, then zip.'",
+            "group_play_line": "Two children take turns packing and being the 'bag inspector' who checks it's done.",
+            "what_to_avoid": "Avoid zipping for your child — guide their fingers to the zip pull and let them try.",
         },
     ],
     "jump_prep": [
@@ -1390,6 +1475,191 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "what_to_avoid": "Avoid moving to the next object before the full 3-second wait.",
         },
     ],
+    # ── Fine motor / OT (beading bucket) ─────────────────────────────────────
+    "beading": [
+        {
+            "title": "Big Bead Threading",
+            "activity_family": "beading_threading",
+            "theme": "large bead threading",
+            "materials": "6–8 large wooden beads and a thick shoelace or cord with a stiff tip",
+            "instructions": (
+                "Put 6–8 large beads and the lace on a low table. "
+                "Thread one bead yourself and say 'your turn!' "
+                "Hand a bead to your child and hold the lace steady while they push it on. "
+                "Celebrate each bead. Aim for 4–5 beads threaded together."
+            ),
+            "success_criteria": "Your child pushes at least one bead onto the lace with minimal help.",
+            "make_easier": "Use a stiffer rod or pipe cleaner instead of a lace — easier to aim.",
+            "make_harder": "Let your child hold the lace themselves and thread without support.",
+            "group_play_line": "Two children take turns threading one bead each onto the same lace.",
+            "what_to_avoid": "Avoid small beads — use beads at least 3 cm wide for safety.",
+        },
+        {
+            "title": "Sticker Peel and Place",
+            "activity_family": "pincer_grasp",
+            "theme": "sticker peeling task",
+            "materials": "a sheet of round or star stickers and a piece of paper with 5 circles drawn on it",
+            "instructions": (
+                "Draw 5 circles on the paper. "
+                "Peel the first sticker yourself and press it into a circle. "
+                "Hand the sheet to your child and say 'peel one!' "
+                "Help only with the first corner peel if needed. "
+                "Let your child press each sticker into a circle. Celebrate each one."
+            ),
+            "success_criteria": "Your child peels and places at least 2 stickers.",
+            "make_easier": "Pre-peel the sticker halfway — your child just lifts and places.",
+            "make_harder": "Let your child peel the sticker fully and choose which circle to put it in.",
+            "group_play_line": "Two children each have their own paper — see who fills their circles first.",
+            "what_to_avoid": "Avoid helping unless the sticker is truly stuck — the peeling is the work.",
+        },
+        {
+            "title": "Peg-and-Ring Stack",
+            "activity_family": "prewriting_scribble",
+            "theme": "peg and ring stacking",
+            "materials": "a peg board or stacking toy with 4–5 rings, or stacked cups",
+            "instructions": (
+                "Place the base on a stable surface. "
+                "Stack the first ring yourself and say 'you try!' "
+                "Hand each ring to your child one at a time. "
+                "Guide their hand down to the peg if needed. "
+                "Celebrate when the last ring goes on."
+            ),
+            "success_criteria": "Your child places at least 2 rings on the peg.",
+            "make_easier": "Hold the base in your hand at your child's chest height — easier aim.",
+            "make_harder": "Mix up the ring order and let your child figure out the correct sequence.",
+            "group_play_line": "Two children take turns — one places a ring, the other counts them.",
+            "what_to_avoid": "Avoid guiding hand-over-hand past the first ring — wait after each one.",
+        },
+        {
+            "title": "Big Crayon Marks",
+            "activity_family": "prewriting_scribble",
+            "theme": "big crayon mark-making",
+            "materials": "large chunky crayons and white paper",
+            "instructions": (
+                "Tape the paper to a low table so it stays still. "
+                "Make a big slow line yourself: 'look — a long line!' "
+                "Hand your child a chunky crayon and say 'make a big mark!' "
+                "Don't ask for a specific shape — any mark counts. "
+                "Do 4–5 turns each, narrating what you see: 'round and round!'."
+            ),
+            "success_criteria": "Your child makes at least one mark on the paper.",
+            "make_easier": "Help your child grip the crayon with your hand over theirs for the first mark.",
+            "make_harder": "Draw a dotted line and ask your child to trace over it.",
+            "group_play_line": "Two children draw on the same large sheet — one side each.",
+            "what_to_avoid": "Avoid asking your child to draw a specific thing — free marks build grip and confidence.",
+        },
+        {
+            "title": "Spoon Scoop Practice",
+            "activity_family": "fork_spoon_use",
+            "theme": "spoon scooping practice",
+            "materials": "a spoon, a small bowl of cereal or soft food, and a second empty bowl",
+            "instructions": (
+                "Put a small bowl of cereal in front of your child and an empty bowl next to it. "
+                "Say 'scoop and move!' "
+                "Model scooping one spoonful from the full bowl to the empty one. "
+                "Hand the spoon to your child and let them try. "
+                "Aim for 4–5 scoops. Keep the portions small so spills are easy to manage."
+            ),
+            "success_criteria": "Your child scoops and moves at least one spoonful.",
+            "make_easier": "Use a wide shallow spoon and large pieces — easier to catch and balance.",
+            "make_harder": "Add a rule: carry it without spilling. Count any that make it across.",
+            "group_play_line": "Two children take turns scooping — one scoops, the other counts the spoonfuls.",
+            "what_to_avoid": "Avoid reacting strongly to spills — keep the tone light and keep going.",
+        },
+        {
+            "title": "Clothespin Squeeze Helper",
+            "activity_family": "pincer_grasp",
+            "theme": "clothespin squeezing task",
+            "materials": "4–6 wooden or plastic clothespins and a low basket or container edge",
+            "instructions": (
+                "Show your child how to squeeze a clothespin open and clip it to the basket edge. "
+                "Do one yourself: squeeze — clip! "
+                "Hand one to your child and say 'squeeze it!' "
+                "Help only by guiding fingers into the right position on the first try. "
+                "Clip 4–5 clothespins total, then unclip them together."
+            ),
+            "success_criteria": "Your child squeezes a clothespin open at least once.",
+            "make_easier": "Use a wider-grip clothespin or spring-free clip — easier to open.",
+            "make_harder": "Let your child unclip the clothespins too — squeeze open, pull off.",
+            "group_play_line": "Two children take turns — one clips, the other unclips in a loop.",
+            "what_to_avoid": "Avoid tiny spring clothespins — use large easy-grip ones only.",
+        },
+    ],
+    # ── Receptive language / direction ────────────────────────────────────────
+    "receptive_direction": [
+        {
+            "title": "Give Me Game",
+            "activity_family": "receptive_directions_one_step",
+            "theme": "one-step give-me direction",
+            "materials": "4–5 small familiar objects on a tray (cup, spoon, block, toy car, sock)",
+            "instructions": (
+                "Lay 4–5 objects on a tray between you and your child. "
+                "Say 'give me the cup' and hold out your hand. "
+                "Wait 5 seconds. If your child doesn't respond, point gently to the cup and repeat. "
+                "Once they hand it over, say 'thank you!' and put it back. "
+                "Do 4–5 different objects."
+            ),
+            "success_criteria": "Your child picks up and hands over the correct object at least twice.",
+            "make_easier": "Use only 2 objects and point to the correct one while saying its name.",
+            "make_harder": "Name the object without pointing — wait the full 5 seconds before helping.",
+            "group_play_line": "Two children take turns being the 'giver' — one asks, one fetches.",
+            "what_to_avoid": "Avoid pointing before your child has had a moment to look.",
+        },
+        {
+            "title": "Put It In the Box",
+            "activity_family": "receptive_directions_one_step",
+            "theme": "one-step put-it-in direction",
+            "materials": "a small box or basket, 4–5 small toys",
+            "instructions": (
+                "Put the box and 4–5 toys on the floor between you. "
+                "Say 'put the ball in the box' and wait. "
+                "If your child picks up the right toy, nod and wait for them to put it in. "
+                "Celebrate each success with a clap. "
+                "Do 4–5 different objects."
+            ),
+            "success_criteria": "Your child puts the correct object in the box at least twice.",
+            "make_easier": "Use one object only and point to it while saying 'put it in.'",
+            "make_harder": "Say 'put the red block in the box' — adding a colour makes it a two-part direction.",
+            "group_play_line": "Two children take turns: one says the instruction, the other follows it.",
+            "what_to_avoid": "Avoid helping before the 5-second wait — give your child time to process.",
+        },
+        {
+            "title": "Body Part Touch Game",
+            "activity_family": "body_part_identification",
+            "theme": "body part identification",
+            "materials": "no materials needed",
+            "instructions": (
+                "Sit facing your child. "
+                "Say 'touch your nose!' and touch your own nose as a model. "
+                "Wait for your child to touch theirs. "
+                "Try 4–5 body parts: nose, ears, head, belly, toes. "
+                "Use a silly voice or song to keep it fun."
+            ),
+            "success_criteria": "Your child touches the correct body part at least 3 times.",
+            "make_easier": "Name the part AND touch yours — let your child copy.",
+            "make_harder": "Give the direction without touching yourself — just the words.",
+            "group_play_line": "Two children follow together — call a body part and both touch at once.",
+            "what_to_avoid": "Avoid doing it too fast — give your child 3 full seconds to respond.",
+        },
+        {
+            "title": "Cleanup Direction Game",
+            "activity_family": "receptive_directions_one_step",
+            "theme": "one-item cleanup direction",
+            "materials": "3–4 small toys or objects on the floor, a basket or bin",
+            "instructions": (
+                "Scatter 3–4 objects on the floor. "
+                "Say 'put the car in the basket' and point to the basket. "
+                "Wait for your child to pick up the car and put it in. "
+                "Celebrate, then say the next direction. "
+                "Do 3–4 one-item cleanup directions."
+            ),
+            "success_criteria": "Your child follows at least 2 one-step cleanup directions.",
+            "make_easier": "Hold the basket close to the object — less distance to carry it.",
+            "make_harder": "Say the direction, then turn away — let your child follow without your eye cue.",
+            "group_play_line": "Two children each get their own basket — you call one direction and both try.",
+            "what_to_avoid": "Avoid saying 'clean up everything' — one item per direction is the goal.",
+        },
+    ],
 }
 
 
@@ -1418,18 +1688,18 @@ def _v22_fallback_instructions(
     base = {
         "title": _bucket_title(bucket, theme),
         "theme": theme,
-        "materials": "simple household items",
+        "materials": f"items for {theme} (from around the home)",
         "instructions": (
-            f"Choose a short activity using {theme}. "
-            f"Model the small step once: {focus}. "
-            f"Invite your child to try one turn with as much help as needed. "
-            f"Celebrate any attempt and stop after 2-3 turns."
+            f"Set up a quick {theme} activity. "
+            f"Show your child one small step and wait for them to try. "
+            f"Celebrate any attempt and stop after 2–3 turns. "
+            f"Goal: {focus}."
         ),
-        "success_criteria": f"Any calm attempt at: {focus}.",
-        "make_easier": "Use one item, model first, shorten the turn, or accept a smaller response.",
-        "make_harder": "Only if easy and enjoyable: add one small step or reduce support slightly.",
+        "success_criteria": f"Your child tries at least once: {focus}.",
+        "make_easier": "Break it into one single step, stay close, and accept any attempt.",
+        "make_harder": "Add one more step or reduce your help by one level.",
         "group_play_line": (
-            "With another child: one person models, one supports, your child takes one short turn."
+            "With a sibling or friend, take turns — each person tries one step while the other watches."
         ),
         "what_to_avoid": (
             "Avoid pressure, repeated correction, or continuing after frustration or fatigue."
@@ -1698,7 +1968,12 @@ def _bucket_title(bucket: str, theme: str) -> str:
         return "First and Then Game"
     if bucket == "letters":
         return "Letter Hunt Game"
-    return f"{theme.title()} Game"
+    # Avoid doubling suffixes: if theme already ends in game/activity/time/practice, don't append "Game"
+    import re as _re_t
+    _title = theme.title()
+    if _re_t.search(r'\b(game|activity|time|practice|session)\s*$', theme, _re_t.I):
+        return _title
+    return f"{_title} Game"
 
 
 # ---------------------------------------------------------------------------

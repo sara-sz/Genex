@@ -102,7 +102,7 @@ _MOTOR_GAME_PATTERN = re.compile(
     re.I,
 )
 
-# Placeholder/generic wording patterns
+# Placeholder/generic wording patterns — any match in ANY parent-facing field blocks the card
 _PLACEHOLDER_PATTERNS = [
     re.compile(r"set up one simple playful turn", re.I),
     re.compile(r"materials that match the bridge step", re.I),
@@ -110,7 +110,26 @@ _PLACEHOLDER_PATTERNS = [
     re.compile(r"\bTODO\b"),
     re.compile(r"<activity_family>", re.I),
     re.compile(r"\bplaceholder\b", re.I),
+    # Generic fallback template phrases — never show to parents
+    re.compile(r"choose a short activity using", re.I),
+    re.compile(r"\bany calm attempt at\b", re.I),
+    re.compile(r"only if easy and enjoyable:?\s+add one small step", re.I),
+    re.compile(r"with another child: one person models, one supports", re.I),
+    re.compile(r"use one item, model first, shorten the turn", re.I),
 ]
+
+# Generic materials field — exact phrase signals template fallback
+_GENERIC_MATERIALS_PHRASE = re.compile(r"^\s*simple household items\s*$", re.I)
+
+# Title double-suffix bug — "Game Game", "Activity Activity", etc.
+_TITLE_DOUBLE_SUFFIX_PATTERN = re.compile(
+    r"\b(game|activity|time|session)\s+\1\b", re.I
+)
+
+# Completely generic title patterns
+_GENERIC_TITLE_PATTERN = re.compile(
+    r"^home play game$", re.I
+)
 
 # Debug suffix patterns in titles
 _DEBUG_SUFFIX_PATTERN = re.compile(
@@ -160,14 +179,26 @@ def validate_activity(
     if not title or not instructions:
         return False, warnings
 
-    # 2. Placeholder/generic wording
+    # 2. Placeholder/generic wording (checked across ALL parent-facing fields)
     for pat in _PLACEHOLDER_PATTERNS:
         if pat.search(text):
             warnings.append(f"placeholder_wording:{pat.pattern[:40]}")
 
+    # 2b. Generic materials field
+    if _GENERIC_MATERIALS_PHRASE.match(materials):
+        warnings.append("placeholder_wording:generic_materials_simple_household_items")
+
     # 3. Debug suffixes in title
     if _DEBUG_SUFFIX_PATTERN.search(title):
         warnings.append(f"debug_suffix_in_title:{title}")
+
+    # 3b. Title double-suffix bug (e.g. "Bead Game Game", "Activity Activity")
+    if _TITLE_DOUBLE_SUFFIX_PATTERN.search(title):
+        warnings.append(f"title_double_suffix:{title}")
+
+    # 3c. Completely generic titles
+    if _GENERIC_TITLE_PATTERN.match(title):
+        warnings.append(f"title_generic:{title}")
 
     # 4. activity_family mismatch
     fam = str(activity.get("activity_family", "") or "").strip().lower()
@@ -245,6 +276,7 @@ def validate_activity(
         w.startswith(prefix) for prefix in [
             "missing_title", "missing_instructions",
             "placeholder_wording", "debug_suffix_in_title",
+            "title_double_suffix", "title_generic",
             "activity_family_category_mismatch",
             "language_card_contains_motor_game",
             "book_page_family_missing_book_page_mechanics",

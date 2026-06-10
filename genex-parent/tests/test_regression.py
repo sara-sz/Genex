@@ -1642,6 +1642,229 @@ def test_case23_near_duplicate_prevention():
 
 
 # ---------------------------------------------------------------------------
+# Case 24: No generic fallback phrases in any scheduled card's parent-facing fields
+# ---------------------------------------------------------------------------
+
+_GENERIC_FALLBACK_PHRASES = [
+    re.compile(r"choose a short activity using", re.I),
+    re.compile(r"\bany calm attempt at\b", re.I),
+    re.compile(r"only if easy and enjoyable:?\s+add one small step", re.I),
+    re.compile(r"with another child: one person models, one supports", re.I),
+    re.compile(r"use one item, model first, shorten the turn", re.I),
+    re.compile(r"^\s*simple household items\s*$", re.I),
+]
+
+_CARD_PARENT_FIELDS = [
+    "title", "instructions", "materials", "success", "make_easier",
+    "make_harder", "group_play", "avoid",
+]
+
+
+def test_case24_no_generic_phrases_in_scheduled_cards():
+    """No scheduled card should contain generic template fallback phrases."""
+    print("\n─── Case 24: No generic fallback phrases in scheduled cards ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    profiles = [
+        ("speech-36m", {
+            "child": {"name": "K", "chronological_months": 36, "daily_time_min": 10,
+                      "diagnosis": "", "concern": "speech delay"},
+            "dev_age": {}, "delay_estimates": {}, "answers": {},
+        }),
+        ("ADHD-60m", _make_adhd_state()),
+        ("Dravet-40m", _make_dravet_state()),
+        ("Chao-OT-PT", {
+            "child": {"name": "Chao", "chronological_months": 30, "daily_time_min": 10,
+                      "diagnosis": "OT delay, PT delay",
+                      "concern": "speech delay, gross motor delay, fine motor delay"},
+            "dev_age": {}, "delay_estimates": {}, "answers": {},
+        }),
+    ]
+
+    for label, state in profiles:
+        ensure_concern_profile(state)
+        allocate_weekly_slots(state)
+        focus = choose_focus_domains(state)
+        for ck in focus:
+            plan = build_v22_plan_for_category(state, ck)
+            state.setdefault("bridge_plans", {})[ck] = plan
+            bank = generate_category_activity_bank(state, ck)
+            state.setdefault("activity_banks", {})[ck] = bank
+        state["cycle_week"] = 1
+        build_weekly_schedule(state)
+        days = state["weekly_schedule"]["days"]
+
+        for day in WEEKDAYS:
+            for item in days.get(day, {}).get("items", []):
+                for field in _CARD_PARENT_FIELDS:
+                    value = str(item.get(field, "") or "")
+                    if not value:
+                        continue
+                    for pat in _GENERIC_FALLBACK_PHRASES:
+                        assert not pat.search(value), (
+                            f"[{label}] {day} '{item.get('title')}' field '{field}' "
+                            f"contains generic phrase: {pat.pattern[:60]!r}\n"
+                            f"  value: {value[:120]}"
+                        )
+
+        print(f"  ✓ [{label}] all scheduled cards are free of generic fallback phrases")
+
+
+# ---------------------------------------------------------------------------
+# Case 25: No "Game Game" or doubled-suffix titles in any activity bank
+# ---------------------------------------------------------------------------
+
+_DOUBLE_SUFFIX_RE = re.compile(
+    r"\b(game|activity|time|session)\s+\1\b", re.I
+)
+
+
+def test_case25_no_game_game_titles():
+    """No activity title in any bank should have doubled suffixes like 'Game Game'."""
+    print("\n─── Case 25: No 'Game Game' titles in activity banks ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+
+    profiles = [
+        ("speech-36m", {
+            "child": {"name": "K", "chronological_months": 36, "daily_time_min": 10,
+                      "diagnosis": "", "concern": "speech delay"},
+            "dev_age": {}, "delay_estimates": {}, "answers": {},
+        }),
+        ("ADHD-60m", _make_adhd_state()),
+        ("Dravet-40m", _make_dravet_state()),
+    ]
+
+    for label, state in profiles:
+        ensure_concern_profile(state)
+        allocate_weekly_slots(state)
+        focus = choose_focus_domains(state)
+        bad_titles = []
+        for ck in focus:
+            plan = build_v22_plan_for_category(state, ck)
+            state.setdefault("bridge_plans", {})[ck] = plan
+            bank = generate_category_activity_bank(state, ck)
+            state.setdefault("activity_banks", {})[ck] = bank
+            for act in bank.get("activities", []):
+                t = act.get("title", "")
+                if _DOUBLE_SUFFIX_RE.search(t):
+                    bad_titles.append(f"{ck}: {t!r}")
+
+        assert not bad_titles, f"[{label}] Double-suffix titles found: {bad_titles}"
+        print(f"  ✓ [{label}] no doubled-suffix titles in any bank")
+
+
+# ---------------------------------------------------------------------------
+# Case 26: Down syndrome / low-tone profile gets no jump/hop/stomp/race/climb
+# ---------------------------------------------------------------------------
+
+def test_case26_down_syndrome_safety():
+    """A Down syndrome + hypotonia profile must not receive any jump/hop/stomp/race/climb activities."""
+    print("\n─── Case 26: Down syndrome / low-tone safety guardrails ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    from genex_core.safety import build_safety_profile
+
+    state = init_state_from_profile(
+        "Emma", 24, "Down syndrome",
+        "hypotonia, low muscle tone, unstable walking, gross motor delay", 10,
+    )
+    ensure_concern_profile(state)
+
+    # Safety profile must detect high-fall risk
+    sp = build_safety_profile(state["child"])
+    risk = sp["risk_scores"]
+    assert risk.get("falls_balance_gait", 0) >= 0.35, (
+        f"falls_balance_gait should be triggered for Down syndrome profile, got {risk}"
+    )
+    assert risk.get("postural_low_tone_fatigue", 0) >= 0.35, (
+        f"postural_low_tone_fatigue should be triggered for Down syndrome profile, got {risk}"
+    )
+    print("  ✓ Safety profile correctly flags fall/low-tone risk for Down syndrome")
+
+    allocate_weekly_slots(state)
+    focus = choose_focus_domains(state)
+    UNSAFE_MOVEMENT = re.compile(
+        r"\b(jump(ing)?|hop(ping)?|frog jump|stomp(ing)?|race|racing|climb(ing)?|"
+        r"trampoline|obstacle course|unsupported balance|sprint)\b",
+        re.I,
+    )
+    for ck in focus:
+        plan = build_v22_plan_for_category(state, ck)
+        state.setdefault("bridge_plans", {})[ck] = plan
+        bank = generate_category_activity_bank(state, ck)
+        state.setdefault("activity_banks", {})[ck] = bank
+        for act in bank.get("activities", []):
+            text = f"{act.get('title','')} {act.get('instructions','')}"
+            m = UNSAFE_MOVEMENT.search(text)
+            assert not m, (
+                f"Down syndrome profile: unsafe movement '{m.group()}' found in "
+                f"[{ck}] '{act.get('title')}'"
+            )
+
+    print("  ✓ Down syndrome profile: no jump/hop/stomp/race/climb in any bank activity")
+
+
+# ---------------------------------------------------------------------------
+# Case 27: OT/PT/speech explicit term routing
+# ---------------------------------------------------------------------------
+
+def test_case27_ot_pt_speech_routing():
+    """Explicit OT delay, PT delay, speech delay terms must route to correct domains."""
+    print("\n─── Case 27: OT/PT/speech explicit term routing ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.safety import build_safety_profile
+    from genex_core.config import SUBDOMAIN_KEYWORD_MAP
+
+    # --- PT / gross motor → movement_and_physical ---
+    for concern_text, label in [
+        ("PT delay, gross motor delay", "PT delay"),
+        ("physical therapy, not jumping, wobbly run", "physical therapy keywords"),
+        ("gross motor delay, unstable walking", "gross motor delay"),
+    ]:
+        state = init_state_from_profile("test", 30, "", concern_text, 10)
+        ensure_concern_profile(state)
+        sp = build_safety_profile(state["child"])
+        assert sp["risk_scores"].get("falls_balance_gait", 0) >= 0.35, (
+            f"[{label}] PT/gross-motor concern should trigger falls_balance_gait risk: "
+            f"got {sp['risk_scores'].get('falls_balance_gait', 0)}"
+        )
+        print(f"  ✓ [{label}] → falls_balance_gait triggered")
+
+    # --- OT / fine motor → movement_and_physical (fine motor subdomains) ---
+    # The concern router should map OT/fine motor concerns to fine_motor subdomains
+    fine_motor_kw = SUBDOMAIN_KEYWORD_MAP.get("fine_motor_hand_use", [])
+    ot_terms = ["occupational therapy", "ot delay", "fine motor delay", "grip difficulty"]
+    for term in ot_terms:
+        found = any(
+            re.search(pat, term, re.I) for pat in fine_motor_kw
+        )
+        assert found, (
+            f"OT term '{term}' not found in fine_motor_hand_use SUBDOMAIN_KEYWORD_MAP. "
+            f"Map has: {fine_motor_kw[:5]}"
+        )
+    print("  ✓ OT/fine-motor terms present in fine_motor_hand_use keyword map")
+
+    # --- speech delay → language_and_communication ---
+    state = init_state_from_profile("test", 30, "", "speech delay, OT delay, PT delay", 10)
+    ensure_concern_profile(state)
+    allocate_weekly_slots(state)
+    focus = choose_focus_domains(state)
+    assert "language_and_communication" in focus, (
+        f"'speech delay, OT delay, PT delay' should include language domain; got {focus}"
+    )
+    assert "movement_and_physical" in focus, (
+        f"'speech delay, OT delay, PT delay' should include movement domain; got {focus}"
+    )
+    assert "social_and_emotional" not in focus, (
+        f"social should NOT be selected for speech+OT+PT profile; got {focus}"
+    )
+    print(f"  ✓ speech+OT+PT concern → focus={focus} (language + movement, no social)")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -1670,6 +1893,10 @@ def run_all():
         test_case21_card_schema_completeness,
         test_case22_ot_pt_routing,
         test_case23_near_duplicate_prevention,
+        test_case24_no_generic_phrases_in_scheduled_cards,
+        test_case25_no_game_game_titles,
+        test_case26_down_syndrome_safety,
+        test_case27_ot_pt_speech_routing,
     ]
     passed = 0
     failed = 0
