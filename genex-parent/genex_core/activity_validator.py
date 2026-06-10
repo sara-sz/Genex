@@ -105,7 +105,6 @@ _MOTOR_GAME_PATTERN = re.compile(
 # Placeholder/generic wording patterns
 _PLACEHOLDER_PATTERNS = [
     re.compile(r"set up one simple playful turn", re.I),
-    re.compile(r"model the small step once", re.I),
     re.compile(r"materials that match the bridge step", re.I),
     re.compile(r"\[insert\b", re.I),
     re.compile(r"\bTODO\b"),

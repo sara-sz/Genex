@@ -1380,6 +1380,268 @@ def test_case19_adhd_age_appropriate():
 
 
 # ---------------------------------------------------------------------------
+# Case 20: Exact slot counts — 10 slots (Dravet 10min), 10 slots (ADHD 10min),
+#           15 slots (speech delay 15min)
+# ---------------------------------------------------------------------------
+
+def test_case20_exact_slot_counts():
+    """
+    Slot count validation:
+    - Dravet 10 min/day → 10 weekday activity slots (5 days × 2)
+    - ADHD 10 min/day  → 10 weekday activity slots (5 days × 2)
+    - Speech 15 min/day → 15 weekday activity slots (5 days × 3)
+    """
+    print("\n─── Case 20: Exact slot counts (Dravet/ADHD/Speech) ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    def _count_slots(state):
+        allocate_weekly_slots(state)
+        focus = choose_focus_domains(state)
+        for ck in focus:
+            plan = build_v22_plan_for_category(state, ck)
+            state.setdefault("bridge_plans", {})[ck] = plan
+            bank = generate_category_activity_bank(state, ck)
+            state.setdefault("activity_banks", {})[ck] = bank
+        state["cycle_week"] = 1
+        build_weekly_schedule(state)
+        days = state["weekly_schedule"]["days"]
+        slots = sum(len(days.get(d, {}).get("items", [])) for d in WEEKDAYS)
+        mins  = sum(days.get(d, {}).get("total_minutes", 0) for d in WEEKDAYS)
+        return slots, mins
+
+    # Dravet 10 min/day → 10 slots
+    dravet_state = _make_dravet_state()
+    slots, mins = _count_slots(dravet_state)
+    assert slots == 10, f"Dravet 10min: expected 10 weekday slots, got {slots} ({mins} min)"
+    assert mins == 50, f"Dravet 10min: expected 50 weekday min, got {mins}"
+    print(f"  ✓ Dravet 10min/day: {slots} slots, {mins}/50 min")
+
+    # ADHD 10 min/day → 10 slots
+    adhd_state = _make_adhd_state()
+    slots, mins = _count_slots(adhd_state)
+    assert slots == 10, f"ADHD 10min: expected 10 weekday slots, got {slots} ({mins} min)"
+    assert mins == 50, f"ADHD 10min: expected 50 weekday min, got {mins}"
+    print(f"  ✓ ADHD 10min/day: {slots} slots, {mins}/50 min")
+
+    # Speech delay 15 min/day → 15 slots (5 days × 3 activities)
+    speech_15_state = {
+        "child": {
+            "name": "Kelly",
+            "chronological_months": 36,
+            "daily_time_min": 15,
+            "diagnosis": "",
+            "concern": "speech delay, not talking much",
+        },
+        "dev_age": {},
+        "delay_estimates": {},
+        "answers": {},
+    }
+    ensure_concern_profile(speech_15_state)
+    slots, mins = _count_slots(speech_15_state)
+    assert slots == 15, f"Speech 15min: expected 15 weekday slots, got {slots} ({mins} min)"
+    assert mins == 75, f"Speech 15min: expected 75 weekday min, got {mins}"
+    print(f"  ✓ Speech delay 15min/day: {slots} slots, {mins}/75 min")
+
+
+# ---------------------------------------------------------------------------
+# Case 21: Card schema completeness — every slot has make_easier/make_harder
+# ---------------------------------------------------------------------------
+
+def test_case21_card_schema_completeness():
+    """
+    Every scheduled activity slot must have non-empty make_easier and make_harder.
+    These must be populated from the activity's easier/harder or make_easier/make_harder fields.
+    """
+    print("\n─── Case 21: Card schema completeness ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    for label, state in [
+        ("speech-delay-36m", {
+            "child": {"name": "T", "chronological_months": 36, "daily_time_min": 10,
+                      "diagnosis": "", "concern": "speech delay, not talking much"},
+            "dev_age": {}, "delay_estimates": {}, "answers": {},
+        }),
+        ("ADHD-60m", _make_adhd_state()),
+        ("Dravet-40m", _make_dravet_state()),
+    ]:
+        ensure_concern_profile(state)
+        allocate_weekly_slots(state)
+        focus = choose_focus_domains(state)
+        for ck in focus:
+            plan = build_v22_plan_for_category(state, ck)
+            state.setdefault("bridge_plans", {})[ck] = plan
+            bank = generate_category_activity_bank(state, ck)
+            state.setdefault("activity_banks", {})[ck] = bank
+        state["cycle_week"] = 1
+        build_weekly_schedule(state)
+        days = state["weekly_schedule"]["days"]
+        missing_easier = []
+        missing_harder = []
+        for d in WEEKDAYS:
+            for item in days.get(d, {}).get("items", []):
+                if not item.get("make_easier"):
+                    missing_easier.append(item.get("title", "?"))
+                if not item.get("make_harder"):
+                    missing_harder.append(item.get("title", "?"))
+        assert not missing_easier, f"[{label}] Missing make_easier: {missing_easier}"
+        assert not missing_harder, f"[{label}] Missing make_harder: {missing_harder}"
+        print(f"  ✓ [{label}] all scheduled cards have make_easier and make_harder")
+
+
+# ---------------------------------------------------------------------------
+# Case 22: OT/PT routing — Chao profile
+# ---------------------------------------------------------------------------
+
+def test_case22_ot_pt_routing():
+    """
+    Chao: speech delay + OT delay + PT delay → should route to language + movement
+    (NOT social, since social is explicitly stated as good).
+    """
+    print("\n─── Case 22: OT/PT routing for Chao profile ───")
+
+    chao_state = {
+        "child": {
+            "name": "Chao",
+            "chronological_months": 48,
+            "daily_time_min": 10,
+            "diagnosis": "",
+            "concern": (
+                "speech delay, OT delay, PT delay, not yet jumping, wobbly run, "
+                "social is good"
+            ),
+        },
+        "dev_age": {},
+        "delay_estimates": {},
+        "answers": {},
+    }
+    ensure_concern_profile(chao_state)
+    from genex_core.interview_engine import choose_focus_domains
+    focus = choose_focus_domains(chao_state)
+    print(f"  Focus domains: {focus}")
+
+    assert "language_and_communication" in focus, (
+        f"Expected language in focus, got {focus}"
+    )
+    # Should route to movement (PT/gross motor) OR movement (OT/fine motor) — both map to movement_and_physical
+    assert "movement_and_physical" in focus, (
+        f"Expected movement_and_physical in focus (OT/PT keywords), got {focus}"
+    )
+    # Social is stated as good — should NOT be a focus domain
+    assert "social_and_emotional" not in focus, (
+        f"social_and_emotional should not be selected when parent says 'social is good', got {focus}"
+    )
+    print(f"  ✓ language + movement selected, social suppressed")
+
+    # Slot count check
+    from genex_core.support_tiers import build_v22_plan_for_category
+    allocate_weekly_slots(chao_state)
+    for ck in focus:
+        plan = build_v22_plan_for_category(chao_state, ck)
+        chao_state.setdefault("bridge_plans", {})[ck] = plan
+        bank = generate_category_activity_bank(chao_state, ck)
+        chao_state.setdefault("activity_banks", {})[ck] = bank
+    chao_state["cycle_week"] = 1
+    build_weekly_schedule(chao_state)
+    days = chao_state["weekly_schedule"]["days"]
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    slots = sum(len(days.get(d, {}).get("items", [])) for d in WEEKDAYS)
+    mins = sum(days.get(d, {}).get("total_minutes", 0) for d in WEEKDAYS)
+    assert slots == 10, f"Chao 10min: expected 10 slots, got {slots}"
+    assert mins == 50, f"Chao 10min: expected 50 min, got {mins}"
+    print(f"  ✓ Chao 10min/day: {slots} slots, {mins}/50 min")
+
+    # No exact title repeats within the week
+    all_titles = [
+        item.get("title", "")
+        for d in WEEKDAYS
+        for item in days.get(d, {}).get("items", [])
+    ]
+    from collections import Counter
+    dup = {t: c for t, c in Counter(all_titles).items() if c > 1}
+    assert not dup, f"Duplicate titles in Chao week 1: {dup}"
+    print(f"  ✓ No duplicate titles in Chao Week 1")
+
+
+# ---------------------------------------------------------------------------
+# Case 23: Near-duplicate prevention — no same activity_family twice per week
+# ---------------------------------------------------------------------------
+
+def test_case23_near_duplicate_prevention():
+    """
+    No two scheduled activities in the same category should share the same
+    activity_family in Week 1 (prevents "Undress the Teddy" + "Pull It Off!").
+    Also: no same normalized title root across the whole week.
+    """
+    print("\n─── Case 23: Near-duplicate prevention (family + root dedup) ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    from collections import Counter
+    import re
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    def _norm_root(t):
+        t = t.lower()
+        t = re.sub(r"[^a-z0-9\s]", " ", t)
+        t = re.sub(
+            r"\b(supported|slow|quick|simple|easy|gentle|basic|little|tiny|short|fun|"
+            r"my|your|our|a|the|an)\b", "", t)
+        t = re.sub(
+            r"\b(game|activity|practice|challenge|time|session|version|exercise)\b", "", t)
+        return re.sub(r"\s+", " ", t).strip()
+
+    for label, state in [
+        ("Dravet-40m", _make_dravet_state()),
+        ("ADHD-60m", _make_adhd_state()),
+        ("speech-36m", {
+            "child": {"name": "K", "chronological_months": 36, "daily_time_min": 10,
+                      "diagnosis": "", "concern": "speech delay"},
+            "dev_age": {}, "delay_estimates": {}, "answers": {},
+        }),
+    ]:
+        ensure_concern_profile(state)
+        allocate_weekly_slots(state)
+        focus = choose_focus_domains(state)
+        for ck in focus:
+            plan = build_v22_plan_for_category(state, ck)
+            state.setdefault("bridge_plans", {})[ck] = plan
+            bank = generate_category_activity_bank(state, ck)
+            state.setdefault("activity_banks", {})[ck] = bank
+        state["cycle_week"] = 1
+        build_weekly_schedule(state)
+        days = state["weekly_schedule"]["days"]
+
+        # No exact title repeats
+        all_titles = [
+            item.get("title", "")
+            for d in WEEKDAYS
+            for item in days.get(d, {}).get("items", [])
+        ]
+        dup = {t: c for t, c in Counter(all_titles).items() if c > 1}
+        assert not dup, f"[{label}] Duplicate titles in Week 1: {dup}"
+
+        # No same normalized root repeats
+        all_roots = [_norm_root(t) for t in all_titles if t]
+        dup_roots = {r: c for r, c in Counter(all_roots).items() if c > 1}
+        assert not dup_roots, f"[{label}] Duplicate title roots in Week 1: {dup_roots}"
+
+        # Per day: no same activity_family used twice on the same day (same-day hard rule).
+        # Week-level family dedup is aspirational (soft preference when alternatives exist)
+        # so we only assert the per-day version here.
+        for d in WEEKDAYS:
+            day_items = days.get(d, {}).get("items", [])
+            day_fams = [i.get("activity_family", "") for i in day_items if i.get("activity_family")]
+            dup_day_fams = {f: c for f, c in Counter(day_fams).items() if c > 1}
+            assert not dup_day_fams, (
+                f"[{label}] {d}: same activity_family on same day: {dup_day_fams}"
+            )
+        print(f"  ✓ [{label}] no duplicate titles, roots, or same-day families in Week 1")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -1404,6 +1666,10 @@ def run_all():
         test_case17_near_duplicate_detection,
         test_case18_dravet_stomp_squat_blocked,
         test_case19_adhd_age_appropriate,
+        test_case20_exact_slot_counts,
+        test_case21_card_schema_completeness,
+        test_case22_ot_pt_routing,
+        test_case23_near_duplicate_prevention,
     ]
     passed = 0
     failed = 0

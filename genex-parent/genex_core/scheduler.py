@@ -139,16 +139,29 @@ def _pick_activity_that_fits(
     used_indices: set,
     remaining_minutes: int,
     used_keys: Optional[set] = None,
+    used_families: Optional[set] = None,
+    used_roots: Optional[set] = None,
+    hard_block_families: Optional[set] = None,
 ) -> Optional[Dict[str, Any]]:
     """Return the shortest activity that fits in remaining_minutes.
 
-    used_indices — set of list positions already committed (mutated in-place).
-    used_keys    — set of lowercase titles to pre-filter (NOT mutated here;
-                   the caller is responsible for adding the picked title after
-                   a successful pick so it can combine week-level and same-day sets).
+    used_indices        — set of list positions already committed (mutated in-place).
+    used_keys           — set of lowercase titles to pre-filter (hard block).
+    hard_block_families — set of activity_family strings that must not appear today
+                          (hard block — same-day dedup; never relaxed).
+    used_families       — set of activity_family strings already used this week
+                          (soft preference — week-level dedup; falls back if pool empty).
+    used_roots          — set of normalized title roots already used this week
+                          (soft preference — prevents near-duplicate titles).
     """
     if used_keys is None:
         used_keys = set()
+    if hard_block_families is None:
+        hard_block_families = set()
+    if used_families is None:
+        used_families = set()
+    if used_roots is None:
+        used_roots = set()
     candidates = []
     for idx, activity in enumerate(activities):
         if idx in used_indices:
@@ -156,19 +169,42 @@ def _pick_activity_that_fits(
         title_key = activity.get("title", "").strip().lower()
         if title_key in used_keys:
             continue
+        # Hard block: never place same activity_family twice on the same day
+        if hard_block_families and activity.get("activity_family") in hard_block_families:
+            continue
         if activity.get("is_extended_activity", False):
             continue
         if is_context_dependent_bonus_activity(activity):
             continue
         duration = int(activity.get("duration_min", activity.get("duration_minutes", 5) or 5))
-        if duration <= remaining_minutes:
-            candidates.append((duration, idx, activity))
+        if duration > remaining_minutes:
+            continue
+        candidates.append((duration, idx, activity))
 
     if not candidates:
         return None
 
-    candidates = sorted(candidates, key=lambda x: x[0])
-    duration, idx, activity = candidates[0]
+    # Prefer candidates whose family and normalized root are not yet used this week.
+    # Fall back to any fitting candidate only if all are "used" (bank exhausted).
+    def _candidate_root(a):
+        import re as _r
+        t = a.get("title", "").lower()
+        t = _r.sub(r"[^a-z0-9\s]", " ", t)
+        t = _r.sub(
+            r"\b(supported|slow|quick|simple|easy|gentle|basic|little|tiny|short|fun|"
+            r"my|your|our|a|the|an)\b", "", t)
+        t = _r.sub(
+            r"\b(game|activity|practice|challenge|time|session|version|exercise)\b", "", t)
+        return _r.sub(r"\s+", " ", t).strip()
+
+    preferred = [
+        (d, i, a) for d, i, a in candidates
+        if (not a.get("activity_family") or a.get("activity_family") not in used_families)
+        and _candidate_root(a) not in used_roots
+    ]
+    pool = preferred if preferred else candidates
+    pool = sorted(pool, key=lambda x: x[0])
+    duration, idx, activity = pool[0]
     used_indices.add(idx)
     return activity
 
@@ -564,7 +600,31 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
     # Week-level title dedup per category — prevents the same title appearing on
     # multiple days within the same category (belt-and-suspenders on top of index dedup).
     used_activity_keys: Dict[str, set] = {k: set() for k in target_minutes_by_category.keys()}
+    # Week-level normalized-root dedup per category — prevents near-duplicates
+    # ("Squat and Reach" / "Supported Squat-and-Reach Game") from both appearing.
+    used_activity_roots: Dict[str, set] = {k: set() for k in target_minutes_by_category.keys()}
+    # Week-level activity_family dedup — at most one card per activity_family per week
+    # per category (prevents "Undress the Teddy" + "Pull It Off!" both appearing).
+    used_activity_families: Dict[str, set] = {k: set() for k in target_minutes_by_category.keys()}
     day_names = list(days.keys())
+
+    import re as _sched_re
+
+    def _sched_norm_root(t: str) -> str:
+        t = t.lower()
+        t = _sched_re.sub(r"[^a-z0-9\s]", " ", t)
+        t = _sched_re.sub(
+            r"\b(supported|slow|quick|simple|easy|gentle|basic|little|tiny|short|fun|"
+            r"my|your|our|a|the|an)\b",
+            "",
+            t,
+        )
+        t = _sched_re.sub(
+            r"\b(game|activity|practice|challenge|time|session|version|exercise)\b",
+            "",
+            t,
+        )
+        return _sched_re.sub(r"\s+", " ", t).strip()
 
     progress_made = True
     while progress_made:
@@ -609,6 +669,12 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                     item.get("title", "").strip().lower()
                     for item in days[day_name]["items"]
                 }
+                # Also block same-day family duplicates across categories.
+                day_families_placed = {
+                    item.get("activity_family", "")
+                    for item in days[day_name]["items"]
+                    if item.get("activity_family")
+                }
                 combined_blocked = used_activity_keys[category_key] | day_titles_placed
 
                 activity = _pick_activity_that_fits(
@@ -616,13 +682,22 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                     used_indices=used_activity_indices[category_key],
                     remaining_minutes=remaining_day_minutes,
                     used_keys=combined_blocked,
+                    hard_block_families=day_families_placed,
+                    used_families=used_activity_families[category_key],
+                    used_roots=used_activity_roots[category_key],
                 )
 
                 if activity is None:
                     continue
 
-                # Update week-level title tracker (caller responsibility — not mutated inside picker).
-                used_activity_keys[category_key].add(activity.get("title", "").strip().lower())
+                # Update week-level trackers.
+                _atitle = activity.get("title", "").strip().lower()
+                _afam = activity.get("activity_family", "")
+                _aroot = _sched_norm_root(_atitle)
+                used_activity_keys[category_key].add(_atitle)
+                if _afam:
+                    used_activity_families[category_key].add(_afam)
+                used_activity_roots[category_key].add(_aroot)
 
                 duration = int(activity.get("duration_min", activity.get("duration_minutes", 5) or 5))
                 slot = {
@@ -635,14 +710,17 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                     "level": activity.get("level", "current_or_next"),
                     "goal": activity.get("goal", get_support_tier(state, category_key)),
                     # V22 extras for feedback engine
+                    # Note: activity_engine stores these as "easier"/"harder"; safety-replaced
+                    # cards use "make_easier"/"make_harder".  Normalise here so the app
+                    # always reads consistent keys.
                     "why": activity.get("why", ""),
                     "success": activity.get("success", ""),
-                    "make_easier": activity.get("make_easier", ""),
-                    "make_harder": activity.get("make_harder", ""),
+                    "make_easier": activity.get("make_easier") or activity.get("easier", ""),
+                    "make_harder": activity.get("make_harder") or activity.get("harder", ""),
                     "avoid": activity.get("avoid", ""),
                     "group_play": activity.get("group_play", ""),
                     "feedback_options": activity.get("feedback_options", {}),
-                    "activity_family": activity.get("activity_family", ""),
+                    "activity_family": _afam,
                     "bridge_step": activity.get("bridge_step", ""),
                     "cycle_week": cycle_week,
                     # Store source for Week-2 repeat-adapt
@@ -656,7 +734,7 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
 
     # Fill-up pass: top up any weekday that is still below daily_time_min.
     # Two explicit passes per day:
-    #   Pass 1 (strict)  — respect week-level title uniqueness per category.
+    #   Pass 1 (strict)  — respect week-level title/family/root uniqueness per category.
     #   Pass 2 (relaxed) — allow cross-day repeats; only block same-day duplicates.
     #                      Reset used_indices so the picker can revisit all cards.
     # This guarantees no silent rest days when the bank has enough cards to fill the day.
@@ -668,6 +746,11 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
         day_titles_placed = {
             item.get("title", "").strip().lower()
             for item in days[day_name]["items"]
+        }
+        day_families_placed = {
+            item.get("activity_family", "")
+            for item in days[day_name]["items"]
+            if item.get("activity_family")
         }
         for ck in list(target_minutes_by_category.keys()):
             bank = state["activity_banks"].get(ck, {})
@@ -683,18 +766,44 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
             if strict:
                 blocked = used_activity_keys[ck] | day_titles_placed
                 idx_set = used_activity_indices[ck]
+                week_fam_blocked = used_activity_families[ck]
+                root_blocked = used_activity_roots[ck]
             else:
                 blocked = day_titles_placed   # cross-day repeats allowed
                 idx_set = set()               # revisit any card in the bank
+                week_fam_blocked = set()
+                root_blocked = set()
             activity = _pick_activity_that_fits(
                 activities=pool,
                 used_indices=idx_set,
                 remaining_minutes=remaining,
                 used_keys=blocked,
+                hard_block_families=day_families_placed,   # hard: never same family today
+                used_families=week_fam_blocked,            # soft: prefer variety across week
+                used_roots=root_blocked,
             )
+            if activity is None and not strict:
+                # Last-resort relaxation: allow same-day family repeat rather than
+                # repeating a title from another day.  Bank is genuinely exhausted of
+                # cross-family options for this day.
+                activity = _pick_activity_that_fits(
+                    activities=pool,
+                    used_indices=idx_set,
+                    remaining_minutes=remaining,
+                    used_keys=blocked,
+                    hard_block_families=set(),   # lift family block as last resort
+                    used_families=week_fam_blocked,
+                    used_roots=root_blocked,
+                )
             if activity is None:
                 continue
-            used_activity_keys[ck].add(activity.get("title", "").strip().lower())
+            _ftitle = activity.get("title", "").strip().lower()
+            _ffam = activity.get("activity_family", "")
+            _froot = _sched_norm_root(_ftitle)
+            used_activity_keys[ck].add(_ftitle)
+            if _ffam:
+                used_activity_families[ck].add(_ffam)
+            used_activity_roots[ck].add(_froot)
             duration = int(activity.get("duration_min", activity.get("duration_minutes", 5) or 5))
             slot = {
                 "category_key": ck,
@@ -707,12 +816,12 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                 "goal": activity.get("goal", get_support_tier(state, ck)),
                 "why": activity.get("why", ""),
                 "success": activity.get("success", ""),
-                "make_easier": activity.get("make_easier", ""),
-                "make_harder": activity.get("make_harder", ""),
+                "make_easier": activity.get("make_easier") or activity.get("easier", ""),
+                "make_harder": activity.get("make_harder") or activity.get("harder", ""),
                 "avoid": activity.get("avoid", ""),
                 "group_play": activity.get("group_play", ""),
                 "feedback_options": activity.get("feedback_options", {}),
-                "activity_family": activity.get("activity_family", ""),
+                "activity_family": _ffam,
                 "bridge_step": activity.get("bridge_step", ""),
                 "cycle_week": cycle_week,
                 "_source_activity": activity,

@@ -420,6 +420,11 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"difficulty with stairs",
         r"cerebral palsy",
         r"\bcp\b",
+        r"physical therapy",     # explicit OT/PT routing
+        r"\bpt delay\b",
+        r"pt delay",
+        r"\bphysio\b",
+        r"gross motor delay",
     ],
     "postural_control_and_transitions": [
         r"not sitting",
@@ -434,6 +439,7 @@ SUBDOMAIN_KEYWORD_MAP = {
     ],
     "fine_motor_hand_use": [
         r"fine motor",
+        r"fine motor delay",
         r"grasp",
         r"beads?",
         r"string",
@@ -441,7 +447,15 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"crayon",
         r"pencil",
         r"hand use",
+        r"hand skills",
         r"manipulation",
+        r"occupational therapy",
+        r"\bot delay\b",
+        r"ot delay",
+        r"scissor",
+        r"cutting",
+        r"grip difficulty",
+        r"handwriting",
     ],
     "self_help_motor_skills": [
         r"self-care",
@@ -543,6 +557,18 @@ POSITIVE_ROUTING_HINTS = [
     "bright child",
     "smart",
     "great understanding",
+    # Social strength hints — suppress social/emotional domain over-routing
+    "social is good",
+    "social is strong",
+    "social skills are good",
+    "social skills are strong",
+    "good at social",
+    "good socially",
+    "socially strong",
+    "social is okay",
+    "social seems fine",
+    "no social concerns",
+    "social is not a concern",
 ]
 
 # Weight applied to domain scores when a positive hint is present for that domain

@@ -900,6 +900,57 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "group_play_line": "Two children take turns doing an action while the other names it.",
             "what_to_avoid": "Avoid performing actions too quickly — slow, big movements are easier to name.",
         },
+        {
+            "title": "Song Fill-In Game",
+            "theme": "song pause fill-in",
+            "materials": "a simple song your child knows (e.g. Twinkle Twinkle, Old MacDonald)",
+            "instructions": (
+                "Start a familiar song together. "
+                "Slow down and stop just before the last word of a line. "
+                "Look at your child and wait 3 seconds. "
+                "Accept any sound, word, or just a look — then finish the word together. "
+                "Do 4-5 pauses across the song."
+            ),
+            "success_criteria": "Your child fills in, attempts, or reacts to at least one pause.",
+            "make_easier": "Pause at the very last sound of a word (e.g. 'twin-kle twin-kle little…') and wait.",
+            "make_harder": "Pause mid-song without slowing down — see if your child notices and fills in.",
+            "group_play_line": "Two children take turns: one starts the line, the other fills in the last word.",
+            "what_to_avoid": "Avoid filling in immediately — the 3-second wait is the key.",
+        },
+        {
+            "title": "More Please Routine",
+            "theme": "two-word carrier phrase",
+            "materials": "a favourite snack, toy, or activity in small amounts",
+            "instructions": (
+                "Give your child a very small piece of snack or a brief turn with a toy. "
+                "When it runs out, wait silently and look expectant. "
+                "If your child reaches, points, or makes a sound, say 'more!' and model it. "
+                "Wait for any attempt — a sound, approximation, or gesture — then give more. "
+                "Do 4-5 turns. Try pairing a gesture: hold up one finger for 'more.'"
+            ),
+            "success_criteria": "Your child communicates 'more' using any word, sound, sign, or gesture.",
+            "make_easier": "Hold the item in your hand and wait for any reach — give it immediately.",
+            "make_harder": "Wait for 'more' plus a word: 'more cracker', modelling the two words together.",
+            "group_play_line": "Two children take turns asking for more during a shared snack or game.",
+            "what_to_avoid": "Avoid giving more before any communication attempt — the wait is what builds the habit.",
+        },
+        {
+            "title": "Cleanup Request Game",
+            "theme": "cleanup direction game",
+            "materials": "5-8 small toys on the floor, a basket",
+            "instructions": (
+                "Scatter toys on the floor. "
+                "Say '[item] in the basket!' and wait for your child to pick it up and drop it in. "
+                "After each success, name the next item. "
+                "Do 4-5 cleanup requests. "
+                "Keep the instructions simple: one item at a time."
+            ),
+            "success_criteria": "Your child picks up and places at least 2 named items into the basket.",
+            "make_easier": "Point to the item as you name it and hold the basket close.",
+            "make_harder": "Name 2 items in one instruction: 'ball and cup in the basket!'",
+            "group_play_line": "Two children take turns — one names the item, the other picks it up.",
+            "what_to_avoid": "Avoid naming all items at once — one clear instruction at a time.",
+        },
     ],
     "attention": [
         {
@@ -1035,6 +1086,56 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "make_harder": "Ask your child to count the remaining pieces before each turn.",
             "group_play_line": "Two children take turns — each eats one piece and counts the ones left.",
             "what_to_avoid": "Avoid adding more snack mid-task — the clear empty plate is the finish line.",
+        },
+        {
+            "title": "Helper Mission Card",
+            "theme": "helper mission task",
+            "materials": "a small index card with one simple job drawn or written on it",
+            "instructions": (
+                "Before a routine (snack, getting ready, tidying up), write or draw one simple job on a card. "
+                "Hand the card to your child and say 'this is your mission!' "
+                "Read it together: 'put 3 books on the shelf.' "
+                "Let your child do the task independently, then report back: 'mission done!' "
+                "Celebrate the finish."
+            ),
+            "success_criteria": "Your child completes the one-step mission and reports back.",
+            "make_easier": "Stay nearby and narrate each step quietly as your child does it.",
+            "make_harder": "Let your child pick the mission from a small set of 3 card choices.",
+            "group_play_line": "With a sibling, each gets their own mission card to complete at the same time.",
+            "what_to_avoid": "Avoid complicated missions — one clear job per card.",
+        },
+        {
+            "title": "Simple Checklist Game",
+            "theme": "checklist task",
+            "materials": "paper and a marker, 3 short tasks written as a list",
+            "instructions": (
+                "Before a routine (getting ready, cleaning up, snack prep), "
+                "write 3 simple steps on paper: 1. shoes, 2. bag, 3. jacket. "
+                "Point to step 1 and say 'let's check it off!' "
+                "When your child does each step, let them make a big tick or cross it off. "
+                "Celebrate when all 3 are ticked."
+            ),
+            "success_criteria": "Your child completes all 3 steps and ticks off each one.",
+            "make_easier": "Use only 2 steps and do the first one together.",
+            "make_harder": "Let your child draw their own checklist for the next routine.",
+            "group_play_line": "Two children each have their own checklist for the same routine.",
+            "what_to_avoid": "Avoid more than 3 steps — a short, clear list builds the habit of finishing.",
+        },
+        {
+            "title": "Table Job Practice",
+            "theme": "table-setting job",
+            "materials": "plastic cups, napkins, and spoons — one set per person at the table",
+            "instructions": (
+                "Before a meal or snack, tell your child their job: 'you're in charge of spoons today.' "
+                "Show them where each spoon goes. "
+                "Step back and let them place each spoon — one per seat. "
+                "When they're done, say 'job done!' and sit down together."
+            ),
+            "success_criteria": "Your child places spoons (or cups or napkins) at each seat with minimal prompting.",
+            "make_easier": "Do the first seat together hand-over-hand, then let them do the rest alone.",
+            "make_harder": "Give your child two jobs: spoons AND napkins.",
+            "group_play_line": "Two children share the table job — one does cups, one does spoons.",
+            "what_to_avoid": "Avoid re-doing placements your child has made — any attempt at the right spot counts.",
         },
     ],
     "jump_prep": [
@@ -1586,6 +1687,8 @@ def _bucket_title(bucket: str, theme: str) -> str:
         if "cleanup" in t:     return "Cleanup Helper"
         return "Helper's Job"
     if bucket == "action_label":
+        if "family" in t:  return "Family Action Naming"
+        if "puppet" in t:  return "Puppet Action Words"
         return "What Are They Doing?"
     if bucket == "function_question":
         return "What's It For? Game"
@@ -1792,15 +1895,39 @@ def generate_category_activity_bank(
     # replaced with safe alternatives for high-fall, mobility, and seizure profiles.
     valid_activities = apply_safety_constraints_to_activities(state, category_key, valid_activities)
 
-    # Deduplicate by title: multiple bridges drawing from the same small card pool
-    # can produce identical titles at different variant indices.  Keep only the first
-    # occurrence — later occurrences are functionally identical cards.
+    # Deduplicate by title AND by normalized title root.
+    # "Squat and Reach" and "Supported Squat-and-Reach Game" share the same root
+    # and should not both appear in the same bank.
+    import re as _re
+
+    def _norm_title_root(t: str) -> str:
+        """Strip common adjective prefixes and game/activity suffixes, return core words."""
+        t = t.lower()
+        t = _re.sub(r"[^a-z0-9\s]", " ", t)
+        # Remove common filler prefixes
+        t = _re.sub(
+            r"\b(supported|slow|quick|simple|easy|gentle|basic|little|tiny|short|fun|new|"
+            r"my|your|our|a|the|an)\b",
+            "",
+            t,
+        )
+        # Remove common filler suffixes
+        t = _re.sub(
+            r"\b(game|activity|practice|challenge|time|session|version|exercise)\b",
+            "",
+            t,
+        )
+        return _re.sub(r"\s+", " ", t).strip()
+
     _seen_titles: set = set()
+    _seen_roots: set = set()
     _deduped: List[Dict[str, Any]] = []
     for _a in valid_activities:
         _t = _a.get("title", "").strip().lower()
-        if _t not in _seen_titles:
+        _root = _norm_title_root(_t)
+        if _t not in _seen_titles and _root not in _seen_roots:
             _seen_titles.add(_t)
+            _seen_roots.add(_root)
             _deduped.append(_a)
     valid_activities = _deduped
 

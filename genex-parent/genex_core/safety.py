@@ -20,6 +20,7 @@ from genex_core.config import SAFETY_KEYWORD_MAP, SAFETY_CONSTRAINT_TEMPLATES
 _SAFE_MOVEMENT_CARDS: List[Dict[str, str]] = [
     {
         "title": "Supported Squat-and-Reach Game",
+        "activity_family": "safe_squat_reach",
         "instructions": (
             "With your child standing near a wall or holding your hands for support, "
             "place a favourite toy on the floor in front of them. "
@@ -39,6 +40,7 @@ _SAFE_MOVEMENT_CARDS: List[Dict[str, str]] = [
     },
     {
         "title": "Sticker Tap While Seated",
+        "activity_family": "safe_seated_tap",
         "instructions": (
             "Sit your child on a stable chair or cushion on the floor. "
             "Place 4–5 round stickers on a low surface in front of them at arm's reach. "
@@ -59,6 +61,7 @@ _SAFE_MOVEMENT_CARDS: List[Dict[str, str]] = [
     },
     {
         "title": "Slow Stand-and-Sit Practice",
+        "activity_family": "safe_stand_sit",
         "instructions": (
             "Place a low sturdy chair or the couch in front of your child. "
             "Hold their hands or forearms for support. "
@@ -79,6 +82,7 @@ _SAFE_MOVEMENT_CARDS: List[Dict[str, str]] = [
     },
     {
         "title": "Seated Animal Arms Game",
+        "activity_family": "safe_seated_arms",
         "instructions": (
             "Sit together on the floor or on low chairs facing each other. "
             "Say an animal name and show what its arms do: "
@@ -99,6 +103,7 @@ _SAFE_MOVEMENT_CARDS: List[Dict[str, str]] = [
     },
     {
         "title": "Supported Step-and-Stop Game",
+        "activity_family": "safe_step_stop",
         "instructions": (
             "Hold your child's hand firmly on flat, clear floor. "
             "Take one step forward together, then stop and stand still for 3 seconds. "
@@ -333,6 +338,10 @@ def apply_safety_constraints_to_activities(
             a["make_easier"] = card.get("make_easier", a.get("make_easier", ""))
             a["make_harder"] = card.get("make_harder", a.get("make_harder", ""))
             a["group_play"] = card.get("group_play_line", a.get("group_play", ""))
+            # Assign a unique activity_family per safe card so the scheduler's
+            # family-dedup tracker sees each replacement as a distinct type.
+            if card.get("activity_family"):
+                a["activity_family"] = card["activity_family"]
             a["duration_min"] = min(duration_min, 7)
             if a.get("_debug"):
                 a["_debug"]["safety_replaced"] = True
