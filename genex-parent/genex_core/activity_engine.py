@@ -1660,6 +1660,228 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "what_to_avoid": "Avoid saying 'clean up everything' — one item per direction is the goal.",
         },
     ],
+    # ── Ball / catch / gross motor ────────────────────────────────────────────
+    "catch_ball": [
+        {
+            "title": "Soft Ball Fun",
+            "activity_family": "catch_ball",
+            "theme": "soft ball game",
+            "materials": "soft ball or rolled-up socks",
+            "instructions": (
+                "Sit on the floor facing your child, close enough that a slow roll reaches easily. "
+                "Say 'my turn' and roll the ball toward them. "
+                "Wait — they can roll it back, push it, or just touch it. "
+                "Say 'your turn!' and wait. Aim for 4–6 back-and-forth rolls."
+            ),
+            "success_criteria": "Your child rolls or pushes the ball back at least once.",
+            "make_easier": "Sit closer and roll directly into their hands.",
+            "make_harder": "Add a name rule: say each other's name before rolling.",
+            "group_play_line": "With a third person, sit in a triangle and take turns rolling.",
+            "what_to_avoid": "Avoid hard balls, long distances, or pressure to catch.",
+        },
+        {
+            "title": "Roll the Ball Game",
+            "activity_family": "catch_ball",
+            "theme": "rolling game",
+            "materials": "soft ball or rolled-up socks, clear floor space",
+            "instructions": (
+                "Sit across from your child with your legs apart forming a 'goal.' "
+                "Roll the ball back and forth, keeping rolls slow and aimed right at them. "
+                "Count each successful exchange: 'one… two… three!' "
+                "See how many you can get in a row."
+            ),
+            "success_criteria": "Your child rolls or redirects the ball back at least twice in a row.",
+            "make_easier": "Roll against a wall so the ball comes back without your child needing to aim.",
+            "make_harder": "Move slightly farther apart and keep counting the streak.",
+            "group_play_line": "A sibling sits in a triangle — each person rolls to a different person.",
+            "what_to_avoid": "Avoid bouncing or throwing — rolling keeps control easy for everyone.",
+        },
+        {
+            "title": "Basket Target Toss",
+            "activity_family": "catch_ball",
+            "theme": "basket target toss",
+            "materials": "soft ball or beanbag, laundry basket or large bowl",
+            "instructions": (
+                "Place a laundry basket or large bowl on the floor about 1–2 steps away. "
+                "Model tossing the ball underhand into the basket. "
+                "Hand the ball to your child and say 'your turn — in the basket!' "
+                "Move the basket closer if needed. Do 5–6 turns."
+            ),
+            "success_criteria": "Your child releases the ball in the direction of the basket at least once.",
+            "make_easier": "Hold the basket directly in front of your child — just a drop-in.",
+            "make_harder": "Move the basket one step farther and let your child aim on their own.",
+            "group_play_line": "Two children take turns tossing — each gets their own basket.",
+            "what_to_avoid": "Avoid hard balls or keeping score — the toss is the practice.",
+        },
+    ],
+    # ── Time words / first-then ───────────────────────────────────────────────
+    "time_words": [
+        {
+            "title": "First Crackers, Then Berries",
+            "activity_family": "time_words_routine",
+            "theme": "first/then snack routine",
+            "materials": "a small plate, 2 crackers, 2–3 berries",
+            "instructions": (
+                "Make a tiny snack plate together. "
+                "Say 'first crackers, then berries' and hold up one finger for each step. "
+                "Let your child put 2 crackers on the plate, then 2–3 berries. "
+                "Point to each step as you say it. When both steps are done, say 'finished!'"
+            ),
+            "success_criteria": "Your child places both the crackers and the berries in the right order.",
+            "make_easier": "Do the first step yourself and let your child add only the berries.",
+            "make_harder": "Ask 'what comes next?' before each step and wait for your child to tell you.",
+            "group_play_line": "Two children share the job — one does crackers, one does berries.",
+            "what_to_avoid": "Avoid giving both foods at once — the sequence is the whole point.",
+        },
+        {
+            "title": "Table-Setting Steps",
+            "activity_family": "time_words_routine",
+            "theme": "table-setting first/then sequence",
+            "materials": "plastic plate, spoon, and napkin — one set per place",
+            "instructions": (
+                "Before a meal or snack, say 'first plate, then spoon, then napkin!' "
+                "Hold up a finger for each step. "
+                "Hand your child the plate and say 'first — plate!' "
+                "Once placed, hand the spoon: 'then — spoon!' Then the napkin. "
+                "Celebrate: 'all done — table is ready!'"
+            ),
+            "success_criteria": "Your child places all three items in order with minimal prompting.",
+            "make_easier": "Do only two steps: first plate, then spoon.",
+            "make_harder": "Say the whole sequence once at the start, then let your child do it from memory.",
+            "group_play_line": "Two children share the job — one does plates and napkins, one does spoons.",
+            "what_to_avoid": "Avoid glass or sharp items — plastic only for this activity.",
+        },
+        {
+            "title": "Backpack Ready Steps",
+            "activity_family": "time_words_routine",
+            "theme": "backpack packing first/then",
+            "materials": "small backpack, a snack item, a water bottle or small toy",
+            "instructions": (
+                "Say 'backpack time — first snack, then water bottle, then zip!' "
+                "Hold up a finger for each step. "
+                "Hand your child the snack: 'first — snack in!' "
+                "Then the bottle: 'then — bottle in!' "
+                "Then guide them to the zip: 'now zip it!' "
+                "Celebrate: 'bag is ready — let's go!'"
+            ),
+            "success_criteria": "Your child puts both items in the bag and attempts to zip it.",
+            "make_easier": "Open the bag wide and have your child drop in just one item.",
+            "make_harder": "Say the steps once, then let your child do all three without reminders.",
+            "group_play_line": "A sibling does their own bag at the same time — who finishes first?",
+            "what_to_avoid": "Avoid doing the zip for your child — guide their hand to the zip pull.",
+        },
+    ],
+    # ── Counting ──────────────────────────────────────────────────────────────
+    "counting": [
+        {
+            "title": "Count the Snacks",
+            "activity_family": "counting_one_to_one",
+            "theme": "snack counting",
+            "materials": "3 crackers or berries on a plate and a small cup",
+            "instructions": (
+                "Put 3 crackers or berries on a plate. "
+                "Touch each one and count slowly together: 'one… two… three.' "
+                "Let your child move each piece into the cup as you count. "
+                "When the plate is empty, say 'three! all done!'"
+            ),
+            "success_criteria": "Your child moves each piece into the cup while you count to three.",
+            "make_easier": "Count just 2 pieces and hold the cup close.",
+            "make_harder": "Let your child touch each piece and say the number themselves.",
+            "group_play_line": "Two children take turns — one touches, the other counts.",
+            "what_to_avoid": "Avoid counting faster than your child can move — one piece per number.",
+        },
+        {
+            "title": "Block Tower Count",
+            "activity_family": "counting_one_to_one",
+            "theme": "block stacking and counting",
+            "materials": "3 blocks or stacking cups",
+            "instructions": (
+                "Put 3 blocks on the floor. "
+                "Pick up the first one, say 'one' and stack it. "
+                "Hand your child the next block: 'two!' "
+                "Then the last: 'three!' "
+                "When the tower is done, count them together pointing to each."
+            ),
+            "success_criteria": "Your child stacks at least 2 blocks while counting along.",
+            "make_easier": "Stack the first block yourself and let your child add just one more.",
+            "make_harder": "Put out 5 blocks and count up to 5 together.",
+            "group_play_line": "Two children take turns — one stacks while the other counts.",
+            "what_to_avoid": "Avoid correcting the count mid-tower — finish building, then recount together.",
+        },
+        {
+            "title": "Count and Drop",
+            "activity_family": "counting_one_to_one",
+            "theme": "counting objects into a container",
+            "materials": "5 small objects (blocks, coins, or buttons) and a jar or cup",
+            "instructions": (
+                "Hold up each object one at a time. "
+                "Say its number and drop it into the cup: 'one — plop! two — plop!' "
+                "Let your child drop each object in after you count it. "
+                "When all five are in, count them together by tapping the outside of the cup."
+            ),
+            "success_criteria": "Your child drops at least 3 objects into the cup while counting.",
+            "make_easier": "Use only 3 objects and count together for each one.",
+            "make_harder": "Count to 5 and then ask 'how many are in the cup?' Wait for the answer.",
+            "group_play_line": "Two children take turns dropping — one drops, the other counts.",
+            "what_to_avoid": "Avoid using small objects that could be a choking hazard for younger children.",
+        },
+    ],
+    # ── Matching / sorting ────────────────────────────────────────────────────
+    "matching": [
+        {
+            "title": "Sock Match Game",
+            "activity_family": "matching_sorting",
+            "theme": "sock matching",
+            "materials": "4–6 clean socks in 2–3 colours or patterns",
+            "instructions": (
+                "Dump 4–6 socks on the floor. "
+                "Pick up one and say 'I need the match — can you find it?' "
+                "Wait for your child to pick up a sock. "
+                "Help them press the pair together: 'match!' "
+                "Aim for 2–3 pairs."
+            ),
+            "success_criteria": "Your child finds and brings over at least one matching sock.",
+            "make_easier": "Lay out only 4 socks (2 obvious pairs) and point to the one that matches.",
+            "make_harder": "Add a third pattern and let your child sort all three colours into their own pile.",
+            "group_play_line": "Two children each hold one sock — call 'match!' and see if they're the same.",
+            "what_to_avoid": "Avoid rushing — let your child look at both socks before deciding.",
+        },
+        {
+            "title": "Color Sort Game",
+            "activity_family": "color_shape_sorting",
+            "theme": "colour sorting",
+            "materials": "6–8 small objects in 2 colours (red and blue blocks, or coloured cups)",
+            "instructions": (
+                "Put two bowls or spots on the floor — one for each colour. "
+                "Say 'red ones here, blue ones here!' and sort the first one yourself. "
+                "Hand each object to your child and wait. "
+                "If needed, point to the correct bowl. Do all 6–8 objects."
+            ),
+            "success_criteria": "Your child puts at least 3 objects in the correct colour bowl.",
+            "make_easier": "Use just 4 objects (2 each) and keep the bowls very close together.",
+            "make_harder": "Mix in a third colour and see if your child can make a third group.",
+            "group_play_line": "Two children each sort their own half — see who finishes first.",
+            "what_to_avoid": "Avoid correcting mid-sort — let your child finish each attempt.",
+        },
+        {
+            "title": "Same or Different?",
+            "activity_family": "matching_sorting",
+            "theme": "same/different match",
+            "materials": "pairs of matching household objects (2 spoons, 2 cups, 2 blocks of same colour)",
+            "instructions": (
+                "Put 4 objects on the floor — 2 matching pairs mixed together. "
+                "Hold up one and say 'find the same!' "
+                "Wait for your child to pick one up. "
+                "Say 'same!' or 'different!' depending on the match. "
+                "Do 4–5 rounds."
+            ),
+            "success_criteria": "Your child correctly matches at least 2 pairs.",
+            "make_easier": "Make the pairs very obvious (same colour, same shape) and do the first one together.",
+            "make_harder": "Add a pair that is nearly the same (same colour, different size) to make it trickier.",
+            "group_play_line": "Two children each hold one item — call 'same!' if they match, 'different!' if not.",
+            "what_to_avoid": "Avoid correcting wrong picks before your child has finished looking — wait for the full attempt.",
+        },
+    ],
 }
 
 

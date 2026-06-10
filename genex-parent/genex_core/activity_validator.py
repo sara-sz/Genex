@@ -116,6 +116,20 @@ _PLACEHOLDER_PATTERNS = [
     re.compile(r"only if easy and enjoyable:?\s+add one small step", re.I),
     re.compile(r"with another child: one person models, one supports", re.I),
     re.compile(r"use one item, model first, shorten the turn", re.I),
+    # Pass-8 rewrite phrases that are still too generic
+    re.compile(r"set up a quick\b", re.I),
+    re.compile(r"show your child one small step", re.I),
+    re.compile(r"\bgoal:\s", re.I),
+    re.compile(r"items for .{1,40} from around the home", re.I),
+    re.compile(r"your child tries at least once:", re.I),
+    re.compile(r"break it into one single step", re.I),
+    re.compile(r"add one more step or reduce your help", re.I),
+    re.compile(r"with a sibling or friend, take turns.{0,30}each person tries one step", re.I),
+    re.compile(r"celebrate any attempt and stop after 2", re.I),
+    # Bucket-theme titles that leaked into instructions/success
+    re.compile(r"\broutine activity\b", re.I),
+    re.compile(r"snack counting activity", re.I),
+    re.compile(r"action picture activity", re.I),
 ]
 
 # Generic materials field — exact phrase signals template fallback
@@ -271,6 +285,21 @@ def validate_activity(
         if re.search(r'\b(give me|put it in)\b', instructions_lower):
             warnings.append("title_instruction_action_mismatch")
 
+    # 11. Success criteria domain mismatch
+    success_text = str(activity.get("success_criteria", "") or activity.get("success", "") or "").lower()
+    if success_text:
+        # Ball activity should not have foot/balance success criteria
+        if re.search(r'\b(ball|rolling|toss|throw|catch)\b', text):
+            if re.search(r'\b(lifts? one foot|stand on one|balances? on)\b', success_text):
+                warnings.append("success_domain_mismatch:ball_activity_has_foot_balance_success")
+        # Bead/threading activity should not have crayon/drawing success criteria
+        if re.search(r'\b(bead|thread|peg|lace)\b', text):
+            if re.search(r'\b(crayon|drawing|marks? on paper)\b', success_text):
+                warnings.append("success_domain_mismatch:bead_activity_has_drawing_success")
+        # Generic "tries at least once" or "any calm attempt" are always blocked
+        if re.search(r"your child tries at least once:", success_text):
+            warnings.append("placeholder_wording:generic_success_criteria")
+
     # Determine is_valid: block on critical warnings
     critical = {w for w in warnings if any(
         w.startswith(prefix) for prefix in [
@@ -283,6 +312,7 @@ def validate_activity(
             "fork_spoon_family_missing_utensil_mechanics",
             "dressing_family_missing_clothing",
             "unsafe_harder_version",
+            "success_domain_mismatch",
         ]
     )}
 

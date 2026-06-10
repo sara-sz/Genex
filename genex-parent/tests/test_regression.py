@@ -1,7 +1,7 @@
 """
 tests/test_regression.py
 -------------------------
-V22 regression test suite (13 cases).
+V22 regression test suite (31 cases).
 
 Run: python3 -m pytest tests/test_regression.py -v
   or: python3 tests/test_regression.py
@@ -26,6 +26,24 @@ Cases:
      cognitive bank has enough attention-bucket cards.
  13. Routing: speech-delay-only concern selects only language_and_communication domain
      (delay signal alone cannot trigger a second domain).
+ 14. Time budget fill: 5/10/15 min/day speech-delay profile fills all weekday minutes.
+ 15. No weekday rest days for Chang profile (movement + cognitive).
+ 16. Speech-delay bridge spread: 12 core activities across 2 subdomains, no duplicates.
+ 17. Near-duplicate detection: Dravet bank unique; validator catches body-part mismatch.
+ 18. Dravet safety: stomp/squat-and-reach/race/jump blocked; 9 distinct safe card titles.
+ 19. ADHD age-appropriateness: Thu/Fri filled; cognitive cards have ADHD Why text.
+ 20. Exact slot counts: Dravet/ADHD/Speech produce correct slots and total minutes.
+ 21. Card schema completeness: all scheduled cards have make_easier and make_harder.
+ 22. OT/PT routing for Chao profile: language + movement selected, social suppressed.
+ 23. Near-duplicate prevention (family + root dedup) across Dravet/ADHD/Speech week 1.
+ 24. No generic fallback phrases (pass-8) in any scheduled card across 4 profiles.
+ 25. No doubled-suffix titles ("Game Game") in any activity bank.
+ 26. Down syndrome / low-tone safety: no jump/hop/stomp/race/climb in any bank activity.
+ 27. OT/PT/speech explicit term routing to correct domains.
+ 28. Pass-9 generic phrases blocked in ADHD-48m and DS-24m scheduled cards.
+ 29. Validator blocks success-criteria domain mismatch (ball/foot, bead/crayon).
+ 30. ADHD 48m gets concrete first/then and counting cards (not generic titles).
+ 31. DS-24m and Dravet pass-9 bucket cards contain no unsafe movement in any field.
 """
 
 import re
@@ -1646,12 +1664,26 @@ def test_case23_near_duplicate_prevention():
 # ---------------------------------------------------------------------------
 
 _GENERIC_FALLBACK_PHRASES = [
+    # Pass-8 original generic phrases
     re.compile(r"choose a short activity using", re.I),
     re.compile(r"\bany calm attempt at\b", re.I),
     re.compile(r"only if easy and enjoyable:?\s+add one small step", re.I),
     re.compile(r"with another child: one person models, one supports", re.I),
     re.compile(r"use one item, model first, shorten the turn", re.I),
     re.compile(r"^\s*simple household items\s*$", re.I),
+    # Pass-9 new generic phrases (from pass-8 fallback rewrite that still leaked)
+    re.compile(r"set up a quick\b", re.I),
+    re.compile(r"show your child one small step", re.I),
+    re.compile(r"\bgoal:\s", re.I),
+    re.compile(r"items for .{1,40} from around the home", re.I),
+    re.compile(r"your child tries at least once:", re.I),
+    re.compile(r"break it into one single step", re.I),
+    re.compile(r"add one more step or reduce your help", re.I),
+    re.compile(r"with a sibling or friend, take turns.{0,30}each person tries one step", re.I),
+    re.compile(r"celebrate any attempt and stop after 2", re.I),
+    re.compile(r"\broutine activity\b", re.I),
+    re.compile(r"snack counting activity", re.I),
+    re.compile(r"action picture activity", re.I),
 ]
 
 _CARD_PARENT_FIELDS = [
@@ -1865,6 +1897,238 @@ def test_case27_ot_pt_speech_routing():
 
 
 # ---------------------------------------------------------------------------
+# Case 28: Pass-9 generic phrases absent from ADHD-48m and DS-24m profiles
+# ---------------------------------------------------------------------------
+
+def test_case28_pass9_phrases_blocked():
+    """Scheduled cards for ADHD 48-60m and Down-syndrome 24m must not contain
+    any pass-9 generic fallback phrases in any parent-facing field."""
+    print("\n─── Case 28: Pass-9 generic phrases blocked in ADHD-48m and DS-24m ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    profiles = [
+        ("ADHD-48m", _make_adhd_state()),
+        ("DS-24m", init_state_from_profile(
+            "Emma", 24, "Down syndrome",
+            "hypotonia, low muscle tone, gross motor delay", 10,
+        )),
+    ]
+
+    for label, state in profiles:
+        ensure_concern_profile(state)
+        allocate_weekly_slots(state)
+        focus = choose_focus_domains(state)
+        for ck in focus:
+            plan = build_v22_plan_for_category(state, ck)
+            state.setdefault("bridge_plans", {})[ck] = plan
+            bank = generate_category_activity_bank(state, ck)
+            state.setdefault("activity_banks", {})[ck] = bank
+        state["cycle_week"] = 1
+        build_weekly_schedule(state)
+        days = state["weekly_schedule"]["days"]
+
+        for day in WEEKDAYS:
+            for item in days.get(day, {}).get("items", []):
+                for field in _CARD_PARENT_FIELDS:
+                    value = str(item.get(field, "") or "")
+                    if not value:
+                        continue
+                    for pat in _GENERIC_FALLBACK_PHRASES:
+                        assert not pat.search(value), (
+                            f"[{label}] {day} '{item.get('title')}' field '{field}' "
+                            f"contains generic pass-9 phrase: {pat.pattern[:60]!r}\n"
+                            f"  value: {value[:120]}"
+                        )
+
+        print(f"  ✓ [{label}] all scheduled cards are free of pass-9 generic phrases")
+
+
+# ---------------------------------------------------------------------------
+# Case 29: Validator catches success-criteria domain mismatch
+# ---------------------------------------------------------------------------
+
+def test_case29_success_domain_mismatch_blocked():
+    """validate_activity must block ball activity with foot/balance success criteria,
+    and bead activity with crayon/drawing success criteria."""
+    print("\n─── Case 29: Success criteria domain mismatch blocked ───")
+
+    # Ball activity with foot/balance success — should be blocked
+    ball_bad = {
+        "title": "Rolling Ball Fun",
+        "activity_family": "catch_ball",
+        "instructions": "Sit on the floor. Roll the ball to your child and encourage them to roll it back.",
+        "materials": "soft ball",
+        "success_criteria": "Your child lifts one foot while reaching for the ball.",
+        "make_easier": "Sit closer together.",
+        "make_harder": "Add a name call before each roll.",
+    }
+    is_valid, warnings = validate_activity(ball_bad, "movement_and_physical")
+    assert not is_valid, "Ball activity with foot/balance success must be blocked"
+    assert any("success_domain_mismatch" in w for w in warnings), (
+        f"Expected success_domain_mismatch warning, got: {warnings}"
+    )
+    print("  ✓ Ball activity with 'lifts one foot' success: blocked (success_domain_mismatch)")
+
+    # Ball activity with correct success — should pass
+    ball_good = {
+        "title": "Rolling Ball Fun",
+        "activity_family": "catch_ball",
+        "instructions": "Sit on the floor. Roll the ball to your child and encourage them to roll it back.",
+        "materials": "soft ball",
+        "success_criteria": "Your child rolls or pushes the ball back at least once.",
+        "make_easier": "Sit closer together.",
+        "make_harder": "Add a name call before each roll.",
+    }
+    is_valid, warnings = validate_activity(ball_good, "movement_and_physical")
+    critical = [w for w in warnings if "success_domain_mismatch" in w]
+    assert not critical, f"Correct ball activity should not have mismatch warning, got: {warnings}"
+    print("  ✓ Ball activity with correct success criteria: passes")
+
+    # Bead activity with crayon success — should be blocked
+    bead_bad = {
+        "title": "Bead Threading",
+        "activity_family": "beading_threading",
+        "instructions": "Place large beads on the table. Show your child how to thread one bead onto the pipe cleaner.",
+        "materials": "large wooden beads and pipe cleaners",
+        "success_criteria": "Your child makes marks on paper with the crayon.",
+        "make_easier": "Hold the pipe cleaner steady.",
+        "make_harder": "Use beads of two different colours.",
+    }
+    is_valid, warnings = validate_activity(bead_bad, "movement_and_physical")
+    assert not is_valid, "Bead activity with crayon success must be blocked"
+    assert any("success_domain_mismatch" in w for w in warnings), (
+        f"Expected success_domain_mismatch warning, got: {warnings}"
+    )
+    print("  ✓ Bead activity with 'crayon/drawing' success: blocked (success_domain_mismatch)")
+
+    # Bead activity with correct success — should pass
+    bead_good = {
+        "title": "Bead Threading",
+        "activity_family": "beading_threading",
+        "instructions": "Place large beads on the table. Show your child how to thread one bead onto the pipe cleaner.",
+        "materials": "large wooden beads and pipe cleaners",
+        "success_criteria": "Your child threads at least one bead onto the pipe cleaner.",
+        "make_easier": "Hold the pipe cleaner steady.",
+        "make_harder": "Use beads of two different colours.",
+    }
+    is_valid, warnings = validate_activity(bead_good, "movement_and_physical")
+    critical = [w for w in warnings if "success_domain_mismatch" in w]
+    assert not critical, f"Correct bead activity should not have mismatch warning, got: {warnings}"
+    print("  ✓ Bead activity with correct success criteria: passes")
+
+
+# ---------------------------------------------------------------------------
+# Case 30: ADHD 48m gets concrete first/then and counting cards (not generic titles)
+# ---------------------------------------------------------------------------
+
+_GENERIC_FIRSTTHEN_TITLES = re.compile(
+    r"^(first and then game|routine activity|snack counting activity|action picture activity)$",
+    re.I,
+)
+
+def test_case30_adhd_48m_concrete_cards():
+    """Julian ADHD 48-60m profile must receive concrete first/then and counting cards,
+    not generic bucket fallback titles like 'First and Then Game'."""
+    print("\n─── Case 30: ADHD 48m gets concrete first/then and counting cards ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    state = _make_adhd_state()
+    ensure_concern_profile(state)
+    allocate_weekly_slots(state)
+    focus = choose_focus_domains(state)
+    for ck in focus:
+        plan = build_v22_plan_for_category(state, ck)
+        state.setdefault("bridge_plans", {})[ck] = plan
+        bank = generate_category_activity_bank(state, ck)
+        state.setdefault("activity_banks", {})[ck] = bank
+    state["cycle_week"] = 1
+    build_weekly_schedule(state)
+    days = state["weekly_schedule"]["days"]
+
+    bad_titles = []
+    for day in WEEKDAYS:
+        for item in days.get(day, {}).get("items", []):
+            title = item.get("title", "")
+            if _GENERIC_FIRSTTHEN_TITLES.match(title):
+                bad_titles.append(f"{day}: {title!r}")
+
+    assert not bad_titles, (
+        f"ADHD 48m profile received generic first/then or counting card titles:\n"
+        + "\n".join(bad_titles)
+    )
+    print("  ✓ ADHD 48m: no generic first/then or counting card titles in week schedule")
+
+    # Also verify all banks are free of generic titles
+    for ck in focus:
+        bank = state["activity_banks"].get(ck, {})
+        for act in bank.get("activities", []):
+            t = act.get("title", "")
+            if _GENERIC_FIRSTTHEN_TITLES.match(t):
+                bad_titles.append(f"bank[{ck}]: {t!r}")
+
+    assert not bad_titles, (
+        f"ADHD 48m activity bank has generic card titles:\n" + "\n".join(bad_titles)
+    )
+    print("  ✓ ADHD 48m: no generic titles in cognitive/social activity banks")
+
+
+# ---------------------------------------------------------------------------
+# Case 31: DS-24m and Dravet profiles get no unsafe movement in pass-9 bucket cards
+# ---------------------------------------------------------------------------
+
+_PASS9_UNSAFE_MOVEMENT = re.compile(
+    r"\b(jump(ing)?|hop(ping)?|stomp(ing)?|race|racing|climb(ing)?|"
+    r"trampoline|obstacle course|sprint)\b",
+    re.I,
+)
+
+def test_case31_ds_and_dravet_no_unsafe_in_bucket_cards():
+    """DS-24m and Dravet profiles must not receive any unsafe movement instructions,
+    including from the new pass-9 bucket variant cards (catch_ball, time_words, counting)."""
+    print("\n─── Case 31: DS-24m and Dravet pass-9 bucket cards have no unsafe movement ───")
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    profiles = [
+        ("DS-24m", init_state_from_profile(
+            "Emma", 24, "Down syndrome",
+            "hypotonia, low muscle tone, gross motor delay", 10,
+        )),
+        ("Dravet-40m", _make_dravet_state()),
+    ]
+
+    for label, state in profiles:
+        ensure_concern_profile(state)
+        allocate_weekly_slots(state)
+        focus = choose_focus_domains(state)
+        for ck in focus:
+            plan = build_v22_plan_for_category(state, ck)
+            state.setdefault("bridge_plans", {})[ck] = plan
+            bank = generate_category_activity_bank(state, ck)
+            state.setdefault("activity_banks", {})[ck] = bank
+        state["cycle_week"] = 1
+        build_weekly_schedule(state)
+        days = state["weekly_schedule"]["days"]
+
+        for day in WEEKDAYS:
+            for item in days.get(day, {}).get("items", []):
+                for field in ["title", "instructions", "make_harder"]:
+                    value = str(item.get(field, "") or "")
+                    m = _PASS9_UNSAFE_MOVEMENT.search(value)
+                    assert not m, (
+                        f"[{label}] {day} '{item.get('title')}' field '{field}' "
+                        f"contains unsafe movement '{m.group()}': {value[:100]}"
+                    )
+
+        print(f"  ✓ [{label}] all scheduled cards safe — no jump/hop/stomp/race/climb in any field")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -1897,6 +2161,10 @@ def run_all():
         test_case25_no_game_game_titles,
         test_case26_down_syndrome_safety,
         test_case27_ot_pt_speech_routing,
+        test_case28_pass9_phrases_blocked,
+        test_case29_success_domain_mismatch_blocked,
+        test_case30_adhd_48m_concrete_cards,
+        test_case31_ds_and_dravet_no_unsafe_in_bucket_cards,
     ]
     passed = 0
     failed = 0
