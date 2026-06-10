@@ -387,30 +387,62 @@ def choose_focus_domains(
     """Choose up to max_domains focus domains for onboarding.
 
     Rules:
-    - If parent explicitly mentions two domains, select both.
-    - If parent says cognition is a strength, do not select cognitive unless
-      there is a direct cognitive concern that overrides.
-    - Daily time controls activity slots, not domain selection.
+    1. If parent explicitly mentions 2+ distinct concern domains (concern_signal >= 0.10
+       in 2+ domains), select the top 2 by concern_signal — explicit parent concerns
+       always override weak delay-only signals.  Store any further concerns as
+       state["noted_concerns"] for later reference.
+    2. If only one domain has an explicit concern signal, add a second domain only if
+       it has a meaningful triage_score AND concern_signal (the old guard against
+       delay-signal-only inflation, e.g. speech-only concern accidentally picking up
+       social_and_emotional via delay estimates).
+    3. Cognitive strength suppression is respected in all paths.
+    4. Daily time controls activity slot count, not domain selection.
     """
     ranked = rank_focus_domains(state)
     if not ranked:
         return list(DOMAIN_CONFIG.keys())[:max_domains]
 
-    # Select the top-scoring domain unconditionally
+    # Domains where the parent explicitly mentioned a concern (keyword match ≥ 0.10).
+    # These are ordered by concern_signal desc so the strongest explicit concern comes first.
+    explicit = sorted(
+        [r for r in ranked if r["concern_signal"] >= 0.10],
+        key=lambda r: (r["concern_signal"], r["triage_score"]),
+        reverse=True,
+    )
+
+    if len(explicit) >= 2:
+        # Parent mentioned 2+ distinct concern domains — honour both top concerns.
+        # This is the primary path for "speech delay + PT delay", "ADHD + social", etc.
+        selected = [r["category_key"] for r in explicit[:max_domains]]
+
+        # Store any further explicit concerns as noted_concerns (not yet addressed).
+        if len(explicit) > max_domains:
+            state["noted_concerns"] = [
+                {"domain": r["category_key"], "concern_signal": r["concern_signal"]}
+                for r in explicit[max_domains:]
+            ]
+        else:
+            state.pop("noted_concerns", None)
+
+        return selected
+
+    # Single explicit concern (or no explicit concern at all):
+    # Select the top-scoring domain unconditionally.
     selected = [ranked[0]["category_key"]]
 
-    # Add second domain only if it has BOTH a meaningful triage score AND
+    # Add a second domain only if it has BOTH a meaningful triage score AND
     # an explicit concern signal (domain_weight from parent text ≥ 0.10).
-    # Without the concern_signal guard a developmental delay in an unmentioned
-    # domain (e.g. social_and_emotional for a speech-only concern) can
-    # push triage_score above the threshold via delay_signal alone —
-    # which would incorrectly add social/emotional questions for a parent
-    # who only mentioned speech delay.
+    # Without this guard a developmental delay in an unmentioned domain
+    # (e.g. social_and_emotional for a speech-only concern) can push
+    # triage_score above the threshold via delay_signal alone — which would
+    # incorrectly add social/emotional questions for a parent who only mentioned
+    # speech delay.
     if len(ranked) > 1 and max_domains >= 2:
         second = ranked[1]
         if second["triage_score"] >= 0.15 and second["concern_signal"] >= 0.10:
             selected.append(second["category_key"])
 
+    state.pop("noted_concerns", None)
     return selected
 
 
