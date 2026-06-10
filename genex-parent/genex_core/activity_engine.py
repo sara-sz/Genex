@@ -2311,6 +2311,48 @@ def _v22_uniquify_titles(activities: List[Dict[str, Any]]) -> List[Dict[str, Any
 # generate_category_activity_bank  (V22)
 # ---------------------------------------------------------------------------
 
+_ADHD_OLDER_PREFERRED = re.compile(
+    r"\b(helper|mission|checklist|first.*then|table.?set|snack prep|snack.*cup|"
+    r"backpack|cleanup|clean.up|build|copy.*challenge|wait.*turn|turn.*wait|"
+    r"block.*tower|count.*snack|snack.*count|sort|match|puzzle|story|draw|"
+    r"name.*game|question|answer|idea)\b",
+    re.I,
+)
+
+_ADHD_TODDLER_FEELING = re.compile(
+    r"\b(peekaboo|peek.a.boo|name and wave|rolling ball|roll.*ball|"
+    r"family photo names|paint choice|snack choice|copycat)\b",
+    re.I,
+)
+
+
+def _apply_age_preference(
+    activities: List[Dict[str, Any]],
+    state: Dict[str, Any],
+    category_key: str,
+) -> List[Dict[str, Any]]:
+    """For ADHD children 48+ months: float age-respectful cards to the front,
+    soft-deprioritize toddler-feeling cards to the back.  Nothing is removed."""
+    chrono = int((state.get("child") or {}).get("chronological_months", 0) or 0)
+    diagnosis = str((state.get("child") or {}).get("diagnosis", "") or "").lower()
+    if chrono < 48 or "adhd" not in diagnosis:
+        return activities
+
+    preferred, neutral, toddler = [], [], []
+    for act in activities:
+        title = act.get("title", "")
+        instructions = act.get("instructions", "")
+        combined = f"{title} {instructions}"
+        if _ADHD_TODDLER_FEELING.search(combined):
+            toddler.append(act)
+        elif _ADHD_OLDER_PREFERRED.search(combined):
+            preferred.append(act)
+        else:
+            neutral.append(act)
+
+    return preferred + neutral + toddler
+
+
 def generate_category_activity_bank(
     state: Dict[str, Any],
     category_key: str,
@@ -2427,6 +2469,10 @@ def generate_category_activity_bank(
             _seen_roots.add(_root)
             _deduped.append(_a)
     valid_activities = _deduped
+
+    # Light age-respectful preference for ADHD 48–60m children:
+    # prefer helper/checklist/routine/build cards, soft-deprioritize toddler-feeling ones.
+    valid_activities = _apply_age_preference(valid_activities, state, category_key)
 
     warnings = list({w for a in raw_activities for w in a.get("validation_warnings", [])})
 

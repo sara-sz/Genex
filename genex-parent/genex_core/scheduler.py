@@ -714,11 +714,13 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                     # cards use "make_easier"/"make_harder".  Normalise here so the app
                     # always reads consistent keys.
                     "why": activity.get("why", ""),
-                    "success": activity.get("success", ""),
+                    # Normalise success: cards use either 'success_criteria' or 'success'
+                    "success": activity.get("success_criteria") or activity.get("success", ""),
                     "make_easier": activity.get("make_easier") or activity.get("easier", ""),
                     "make_harder": activity.get("make_harder") or activity.get("harder", ""),
-                    "avoid": activity.get("avoid", ""),
-                    "group_play": activity.get("group_play", ""),
+                    # Normalise avoid/group_play: cards use what_to_avoid / group_play_line
+                    "avoid": activity.get("what_to_avoid") or activity.get("avoid", ""),
+                    "group_play": activity.get("group_play_line") or activity.get("group_play", ""),
                     "feedback_options": activity.get("feedback_options", {}),
                     "activity_family": _afam,
                     "bridge_step": activity.get("bridge_step", ""),
@@ -815,11 +817,13 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                 "level": activity.get("level", "current_or_next"),
                 "goal": activity.get("goal", get_support_tier(state, ck)),
                 "why": activity.get("why", ""),
-                "success": activity.get("success", ""),
+                # Normalise success: cards use either 'success_criteria' or 'success'
+                "success": activity.get("success_criteria") or activity.get("success", ""),
                 "make_easier": activity.get("make_easier") or activity.get("easier", ""),
                 "make_harder": activity.get("make_harder") or activity.get("harder", ""),
-                "avoid": activity.get("avoid", ""),
-                "group_play": activity.get("group_play", ""),
+                # Normalise avoid/group_play: cards use what_to_avoid / group_play_line
+                "avoid": activity.get("what_to_avoid") or activity.get("avoid", ""),
+                "group_play": activity.get("group_play_line") or activity.get("group_play", ""),
                 "feedback_options": activity.get("feedback_options", {}),
                 "activity_family": _ffam,
                 "bridge_step": activity.get("bridge_step", ""),
