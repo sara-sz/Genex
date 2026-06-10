@@ -72,6 +72,7 @@ from genex_core.support_tiers import (
 )
 from genex_core.activity_engine import generate_category_activity_bank
 from genex_core.scheduler import allocate_weekly_slots, build_weekly_schedule
+from genex_core.final_plan_gate import validate_and_repair_final_plan
 from genex_core.summaries import build_domain_results, build_doctor_visit_prep
 from genex_core.interview_engine import (
     get_followup_schema,
@@ -846,6 +847,20 @@ def screen_interview():
         state["cycle_week"] = 1
         allocate_weekly_slots(state)
         build_weekly_schedule(state)
+
+        # Final plan gate — deterministic validator + sanitizer
+        _gate_domains = list(state.get("activity_banks", {}).keys())
+        _repaired, _gate_report = validate_and_repair_final_plan(
+            profile=state.get("child", {}),
+            selected_domains=_gate_domains,
+            question_domains=_gate_domains,
+            weekly_plan=state.get("weekly_schedule", {}),
+            candidate_bank=state.get("activity_banks", {}),
+        )
+        state["weekly_schedule"] = _repaired
+        if _ADMIN_DEBUG:
+            state["_gate_report"] = _gate_report
+
         st.session_state["genex_state"]  = state
         st.session_state.pop("parent_plan", None)
         st.session_state["plan_just_built"] = True

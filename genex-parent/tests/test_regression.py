@@ -1,7 +1,7 @@
 """
 tests/test_regression.py
 -------------------------
-V22 regression test suite (32 cases).
+V22 regression test suite (39 cases).
 
 Run: python3 -m pytest tests/test_regression.py -v
   or: python3 tests/test_regression.py
@@ -45,6 +45,13 @@ Cases:
  30. ADHD 48m gets concrete first/then and counting cards (not generic titles).
  31. DS-24m and Dravet pass-9 bucket cards contain no unsafe movement in any field.
  32. Maya DS-24m: 10 slots, no duplicates, no unsafe movement, squat-reach at most once.
+ 33. Multi-concern routing: speech+OT+PT → 2 domains, both in questions and weekly plan.
+ 34. Gate A: Maya 24m DS, PT/gross motor concern, 15min/day — 15 slots, no unsafe, no dupes, gate passed.
+ 35. Gate B: Maya 24m DS, speech delay only, 10min/day — language-focused, no unsafe, gate passed.
+ 36. Gate C: 48m, speech+OT+PT, 10min/day — 2 domains, both covered, not language-only.
+ 37. Gate D: ADHD 60m, 10min/day — no generic phrases, concrete ADHD cards, gate passed.
+ 38. Gate E: Dravet 40m, 10+15 min/day — no unsafe, no dupes, seated movement, gate passed.
+ 39. Gate F: Terry 50m, speech concern, all-yes milestones — useful plan, no broken/generic cards.
 """
 
 import re
@@ -2200,6 +2207,592 @@ def test_case32_maya_ds_safe_week():
 
 
 # ---------------------------------------------------------------------------
+# Case 33: Multi-concern routing — speech + OT + PT → 2 domains, both in plan
+# ---------------------------------------------------------------------------
+
+def test_case33_multi_concern_routing():
+    """Age 48m, concern: speech delay, OT delay, PT delay, 10 min/day.
+
+    Expected:
+    - focus domains include language_and_communication AND movement_and_physical
+    - max 2 focus domains selected
+    - milestone questions built for both selected domains
+    - weekly plan has activities from both domains (not language-only)
+    - speech-only concern does NOT accidentally pull a second domain (guard still works)
+    """
+    print("\n─── Case 33: Multi-concern routing — speech + OT/PT → 2 domains ───")
+    from genex_core.interview_engine import (
+        choose_focus_domains, rank_focus_domains, build_domain_questions,
+    )
+    from genex_core.support_tiers import build_v22_plan_for_category
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+    # ── Primary case: speech + OT + PT → language + movement ─────────────────
+    state = init_state_from_profile("Alex", 48, "", "speech delay, OT delay, PT delay", 10)
+    ensure_concern_profile(state)
+    focus = choose_focus_domains(state)
+
+    assert len(focus) <= 2, f"Must select at most 2 focus domains, got {len(focus)}: {focus}"
+    assert len(focus) == 2, (
+        f"speech + OT + PT should produce 2 focus domains, got {len(focus)}: {focus}"
+    )
+    assert "language_and_communication" in focus, (
+        f"language_and_communication must be in focus for speech delay; got {focus}"
+    )
+    assert "movement_and_physical" in focus, (
+        f"movement_and_physical must be in focus for OT/PT delay; got {focus}"
+    )
+    print(f"  ✓ focus = {focus} (language + movement, max 2)")
+
+    # ── Milestone questions built for both domains ────────────────────────────
+    for ck in focus:
+        qs = build_domain_questions(state, ck, max_questions_total=5)
+        assert len(qs) >= 1, f"Expected at least 1 question for {ck}, got {len(qs)}"
+    print(f"  ✓ milestone questions available for both domains")
+
+    # ── Weekly plan covers both domains ──────────────────────────────────────
+    allocate_weekly_slots(state)
+    for ck in focus:
+        plan = build_v22_plan_for_category(state, ck)
+        state.setdefault("bridge_plans", {})[ck] = plan
+        bank = generate_category_activity_bank(state, ck)
+        state.setdefault("activity_banks", {})[ck] = bank
+    state["cycle_week"] = 1
+    build_weekly_schedule(state)
+    days = state["weekly_schedule"]["days"]
+
+    all_cats = [
+        item.get("category_key")
+        for day in WEEKDAYS
+        for item in days.get(day, {}).get("items", [])
+    ]
+    lang_count = all_cats.count("language_and_communication")
+    move_count = all_cats.count("movement_and_physical")
+    total = len(all_cats)
+
+    assert total == 10, f"Expected 10 weekday slots, got {total}"
+    assert lang_count >= 1, f"Plan must include language activities; got {lang_count}"
+    assert move_count >= 1, f"Plan must include movement activities; got {move_count}"
+    print(f"  ✓ 10 slots, language={lang_count}, movement={move_count} — both covered")
+
+    # ── Guard: speech-only concern must NOT pull a second domain ─────────────
+    state2 = init_state_from_profile("K", 36, "", "speech delay, not talking much", 5)
+    ensure_concern_profile(state2)
+    focus2 = choose_focus_domains(state2)
+    assert focus2 == ["language_and_communication"], (
+        f"Speech-only concern must produce only language domain; got {focus2}"
+    )
+    print(f"  ✓ speech-only guard: {focus2} (single domain, no inflation)")
+
+    # ── Extra: ADHD + social → cognitive + social_and_emotional ─────────────
+    state3 = init_state_from_profile("J", 60, "ADHD",
+        "trouble focusing, trouble with other kids", 10)
+    ensure_concern_profile(state3)
+    focus3 = choose_focus_domains(state3)
+    assert len(focus3) == 2, f"ADHD + social should give 2 domains; got {focus3}"
+    assert "social_and_emotional" in focus3, f"social_and_emotional missing from {focus3}"
+    assert "cognitive" in focus3, f"cognitive missing from {focus3}"
+    print(f"  ✓ ADHD + social → {focus3}")
+
+    # ── Extra: 3+ domains → max 2 selected, remainder noted ─────────────────
+    state4 = init_state_from_profile("M", 48, "",
+        "speech delay, PT delay, trouble with other kids, attention problems", 10)
+    ensure_concern_profile(state4)
+    focus4 = choose_focus_domains(state4)
+    assert len(focus4) <= 2, f"Must cap at 2 focus domains; got {len(focus4)}: {focus4}"
+    print(f"  ✓ 4-concern input capped at {len(focus4)} focus domains: {focus4}")
+
+
+# ---------------------------------------------------------------------------
+# Gate helper — builds a full pipeline state + runs the final plan gate
+# ---------------------------------------------------------------------------
+
+def _build_and_gate(state, daily_time_min=None):
+    """
+    Given a pre-configured state, run the full scheduling pipeline and the
+    final plan gate.  Returns (repaired_plan, gate_report, days, all_titles).
+    """
+    from genex_core.interview_engine import choose_focus_domains
+    from genex_core.support_tiers import build_v22_plan_for_category
+    from genex_core.final_plan_gate import validate_and_repair_final_plan
+
+    if daily_time_min is not None:
+        state["child"]["daily_time_min"] = daily_time_min
+
+    ensure_concern_profile(state)
+    focus = choose_focus_domains(state)
+    allocate_weekly_slots(state)
+    for ck in focus:
+        plan = build_v22_plan_for_category(state, ck)
+        state.setdefault("bridge_plans", {})[ck] = plan
+        bank = generate_category_activity_bank(state, ck)
+        state.setdefault("activity_banks", {})[ck] = bank
+    state["cycle_week"] = 1
+    build_weekly_schedule(state)
+
+    gate_domains = list(state.get("activity_banks", {}).keys())
+    repaired, gate_report = validate_and_repair_final_plan(
+        profile=state.get("child", {}),
+        selected_domains=gate_domains,
+        question_domains=gate_domains,
+        weekly_plan=state.get("weekly_schedule", {}),
+        candidate_bank=state.get("activity_banks", {}),
+    )
+    state["weekly_schedule"] = repaired
+    days = repaired.get("days", {})
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    all_titles = [
+        item.get("title", "")
+        for day in WEEKDAYS
+        for item in days.get(day, {}).get("items", [])
+    ]
+    return repaired, gate_report, days, all_titles
+
+
+_GATE_UNSAFE_RE = re.compile(
+    r"\b(jump(ing)?|hop(ping)?|stomp(ing)?|race|racing|climb(ing)?|"
+    r"trampoline|obstacle.course|balance.beam|one.leg.balance|"
+    r"unsupported.balance|slippery.surface|hard.ball|fast.run(ning)?|sprint)\b",
+    re.I,
+)
+
+_GATE_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+_GATE_GENERIC_PHRASES = [
+    "set up a quick",
+    "show your child one small step",
+    "goal:",
+    "items for",
+    "your child tries at least once:",
+    "break it into one single step",
+    "add one more step or reduce your help",
+    "with a sibling or friend, take turns",
+    "celebrate any attempt and stop after 2",
+    "choose a short activity using",
+    "any calm attempt at",
+    "use one item, model first",
+    "only if easy and enjoyable",
+    "simple household items",
+    "routine activity",
+    "snack counting activity",
+    "action picture activity",
+]
+
+
+# ---------------------------------------------------------------------------
+# Case 34 (Gate A): Maya 24m Down syndrome — PT/gross motor concern, 15 min/day
+# ---------------------------------------------------------------------------
+
+def test_case34_gate_a_maya_ds_pt():
+    """
+    Maya, 24 months, Down syndrome, PT/gross motor concern, 15 min/day.
+
+    Gate must ensure:
+    - 15 weekday slots filled (5 days × 3 activities)
+    - No unsafe movement (high-fall profile)
+    - No duplicate titles across the week
+    - 'Supported Squat-and-Reach Game' appears at most once
+    - gate_passed = True after repair
+    """
+    print("\n─── Case 34 (Gate A): Maya 24m DS, PT concern, 15min/day ───")
+
+    state = init_state_from_profile(
+        "your child", 24, "Down syndrome",
+        "gross motor delay, low muscle tone, needs PT support", 15,
+    )
+    repaired, gate_report, days, all_titles = _build_and_gate(state)
+
+    total = len(all_titles)
+    assert total == 15, f"Expected 15 weekday slots, got {total}: {all_titles}"
+    print(f"  ✓ 15 weekday slots filled")
+
+    from collections import Counter
+    dupes = {t: c for t, c in Counter(all_titles).items() if c > 1}
+    assert not dupes, f"Duplicate titles after gate: {dupes}"
+    print(f"  ✓ No duplicate titles")
+
+    for day in _GATE_WEEKDAYS:
+        for item in days.get(day, {}).get("items", []):
+            for field in ["title", "instructions", "make_harder"]:
+                val = str(item.get(field, "") or "")
+                m = _GATE_UNSAFE_RE.search(val)
+                assert not m, (
+                    f"Gate A: unsafe phrase '{m.group()}' in {day} "
+                    f"'{item.get('title')}' field '{field}'"
+                )
+    print(f"  ✓ No unsafe movement phrases")
+
+    squat = all_titles.count("Supported Squat-and-Reach Game")
+    assert squat <= 1, f"'Supported Squat-and-Reach Game' appears {squat} times (max 1)"
+    print(f"  ✓ Squat-and-Reach at most once ({squat})")
+
+    assert gate_report["gate_passed"], (
+        f"Gate did not pass after repair. "
+        f"Pass-2 violations: {gate_report['violations_pass2']}"
+    )
+    print(f"  ✓ gate_passed=True  (repairs={len(gate_report['repairs'])}, "
+          f"unrepaired={len(gate_report['unrepaired'])})")
+
+    print(f"  Titles: {all_titles}")
+
+
+# ---------------------------------------------------------------------------
+# Case 35 (Gate B): Maya 24m Down syndrome — speech delay only, 10 min/day
+# ---------------------------------------------------------------------------
+
+def test_case35_gate_b_maya_ds_speech():
+    """
+    Maya, 24 months, Down syndrome, speech delay only, 10 min/day.
+
+    Gate must ensure:
+    - Plan is language-focused (language_and_communication ≥ 6 of 10 slots)
+    - No unsafe movement (safety rules still active for DS profile)
+    - No duplicate titles
+    - gate_passed = True after repair
+    """
+    print("\n─── Case 35 (Gate B): Maya 24m DS, speech delay only, 10min/day ───")
+
+    state = init_state_from_profile(
+        "your child", 24, "Down syndrome",
+        "speech delay, not saying many words, language behind", 10,
+    )
+    repaired, gate_report, days, all_titles = _build_and_gate(state)
+
+    total = len(all_titles)
+    assert total == 10, f"Expected 10 weekday slots, got {total}"
+    print(f"  ✓ 10 weekday slots filled")
+
+    all_cats = [
+        item.get("category_key", "")
+        for day in _GATE_WEEKDAYS
+        for item in days.get(day, {}).get("items", [])
+    ]
+    lang_count = all_cats.count("language_and_communication")
+    assert lang_count >= 6, (
+        f"Language-focused plan expected ≥6 language slots, got {lang_count} "
+        f"(categories: {all_cats})"
+    )
+    print(f"  ✓ Language-focused: {lang_count}/10 slots are language")
+
+    for day in _GATE_WEEKDAYS:
+        for item in days.get(day, {}).get("items", []):
+            for field in ["title", "instructions", "make_harder"]:
+                val = str(item.get(field, "") or "")
+                m = _GATE_UNSAFE_RE.search(val)
+                assert not m, (
+                    f"Gate B: unsafe phrase '{m.group()}' in {day} "
+                    f"'{item.get('title')}' field '{field}'"
+                )
+    print(f"  ✓ No unsafe movement phrases")
+
+    from collections import Counter
+    dupes = {t: c for t, c in Counter(all_titles).items() if c > 1}
+    assert not dupes, f"Duplicate titles after gate: {dupes}"
+    print(f"  ✓ No duplicate titles")
+
+    assert gate_report["gate_passed"], (
+        f"Gate did not pass. Pass-2 violations: {gate_report['violations_pass2']}"
+    )
+    print(f"  ✓ gate_passed=True")
+    print(f"  Titles: {all_titles}")
+
+
+# ---------------------------------------------------------------------------
+# Case 36 (Gate C): 48m child — speech+OT+PT concern, 10 min/day
+# ---------------------------------------------------------------------------
+
+def test_case36_gate_c_multi_concern_48m():
+    """
+    Child, 48 months, no diagnosis, speech+OT+PT concern, 10 min/day.
+
+    Gate must ensure:
+    - Exactly 2 focus domains selected
+    - Both domains present in the 10-slot week (not language-only)
+    - No duplicate titles
+    - gate_passed = True
+    """
+    print("\n─── Case 36 (Gate C): 48m, speech+OT+PT → 2 domains, 10min/day ───")
+
+    from genex_core.interview_engine import choose_focus_domains
+
+    state = init_state_from_profile(
+        "your child", 48, "",
+        "speech delay, OT delay, PT delay", 10,
+    )
+    ensure_concern_profile(state)
+    focus = choose_focus_domains(state)
+
+    assert len(focus) <= 2, f"Must cap at 2 domains; got {focus}"
+    assert len(focus) == 2, f"speech+OT+PT must yield 2 domains; got {focus}"
+    assert "language_and_communication" in focus, f"language missing from {focus}"
+    assert "movement_and_physical" in focus, f"movement missing from {focus}"
+    print(f"  ✓ focus = {focus}")
+
+    repaired, gate_report, days, all_titles = _build_and_gate(state)
+
+    total = len(all_titles)
+    assert total == 10, f"Expected 10 slots, got {total}"
+    print(f"  ✓ 10 weekday slots filled")
+
+    all_cats = [
+        item.get("category_key", "")
+        for day in _GATE_WEEKDAYS
+        for item in days.get(day, {}).get("items", [])
+    ]
+    lang_count = all_cats.count("language_and_communication")
+    move_count = all_cats.count("movement_and_physical")
+    assert lang_count >= 2, f"Expected ≥2 language slots, got {lang_count}"
+    assert move_count >= 2, f"Expected ≥2 movement slots, got {move_count}"
+    print(f"  ✓ Both domains covered: language={lang_count}, movement={move_count}")
+
+    from collections import Counter
+    dupes = {t: c for t, c in Counter(all_titles).items() if c > 1}
+    assert not dupes, f"Duplicate titles after gate: {dupes}"
+    print(f"  ✓ No duplicate titles")
+
+    assert gate_report["gate_passed"], (
+        f"Gate did not pass. Pass-2 violations: {gate_report['violations_pass2']}"
+    )
+    print(f"  ✓ gate_passed=True  (language={lang_count}, movement={move_count})")
+    print(f"  Titles: {all_titles}")
+
+
+# ---------------------------------------------------------------------------
+# Case 37 (Gate D): ADHD 60m — no generic, no toddler-dominating, concrete tasks
+# ---------------------------------------------------------------------------
+
+def test_case37_gate_d_adhd_60m():
+    """
+    ADHD child, 60 months, 10 min/day.
+
+    Gate must ensure:
+    - No generic template phrases in any scheduled card field
+    - Concrete task-completion / attention / routine keywords present
+    - No duplicate titles
+    - gate_passed = True
+    """
+    print("\n─── Case 37 (Gate D): ADHD 60m, 10min/day ───")
+
+    state = _make_adhd_state()
+    repaired, gate_report, days, all_titles = _build_and_gate(state)
+
+    total = len(all_titles)
+    assert total == 10, f"Expected 10 slots, got {total}"
+    print(f"  ✓ 10 weekday slots filled")
+
+    from collections import Counter
+    dupes = {t: c for t, c in Counter(all_titles).items() if c > 1}
+    assert not dupes, f"Duplicate titles after gate: {dupes}"
+    print(f"  ✓ No duplicate titles")
+
+    generic_hits = []
+    for day in _GATE_WEEKDAYS:
+        for item in days.get(day, {}).get("items", []):
+            for phrase in _GATE_GENERIC_PHRASES:
+                combined = " ".join(
+                    str(item.get(f, "") or "")
+                    for f in ["title", "instructions", "materials", "success",
+                               "make_easier", "make_harder", "avoid", "why"]
+                ).lower()
+                if phrase.lower() in combined:
+                    generic_hits.append(
+                        f"'{item.get('title')}' contains generic phrase: '{phrase}'"
+                    )
+    assert not generic_hits, "Generic phrases in ADHD 60m plan:\n" + "\n".join(generic_hits)
+    print(f"  ✓ No generic template phrases")
+
+    adhd_kws = ["task", "finish", "complet", "attention", "focus", "routine",
+                "predict", "start", "timer", "wait", "first", "then", "step",
+                "clean", "checklist", "mission", "count", "sort", "match"]
+    cognitive_items = [
+        item for day in _GATE_WEEKDAYS
+        for item in days.get(day, {}).get("items", [])
+        if item.get("category_key") == "cognitive"
+    ]
+    matches = [
+        item for item in cognitive_items
+        if any(kw in (
+            item.get("title", "") + " " +
+            item.get("instructions", "") + " " +
+            item.get("why", "")
+        ).lower() for kw in adhd_kws)
+    ]
+    assert len(matches) >= 2, (
+        f"Expected ≥2 ADHD-concrete cognitive cards, got {len(matches)}: "
+        f"{[i['title'] for i in cognitive_items]}"
+    )
+    print(f"  ✓ {len(matches)} concrete ADHD-appropriate cognitive cards")
+
+    assert gate_report["gate_passed"], (
+        f"Gate did not pass. Pass-2 violations: {gate_report['violations_pass2']}"
+    )
+    print(f"  ✓ gate_passed=True")
+    print(f"  Titles: {all_titles}")
+
+
+# ---------------------------------------------------------------------------
+# Case 38 (Gate E): Dravet 40m — no unsafe, no dupes, safe seated movement
+# ---------------------------------------------------------------------------
+
+def test_case38_gate_e_dravet_40m():
+    """
+    Dravet syndrome child, 40 months, 10 min/day AND 15 min/day.
+
+    Gate must ensure:
+    - No unsafe movement phrases (jump/hop/stomp/race/climb etc.)
+    - No duplicate titles
+    - At least 1 movement card is seated or supported
+    - gate_passed = True for both time budgets
+    """
+    print("\n─── Case 38 (Gate E): Dravet 40m, 10+15 min/day ───")
+
+    seated_kws = ["seated", "sitting", "seat", "chair", "supported", "lap",
+                  "couch", "floor", "mat", "lying", "side-lying"]
+
+    for daily_min in [10, 15]:
+        state = _make_dravet_state()
+        repaired, gate_report, days, all_titles = _build_and_gate(state, daily_time_min=daily_min)
+
+        expected_slots = daily_min
+        total = len(all_titles)
+        assert total == expected_slots, (
+            f"Dravet {daily_min}min: expected {expected_slots} slots, got {total}"
+        )
+        print(f"  ✓ {daily_min}min/day: {total} slots filled")
+
+        from collections import Counter
+        dupes = {t: c for t, c in Counter(all_titles).items() if c > 1}
+        assert not dupes, (
+            f"Dravet {daily_min}min: duplicate titles after gate: {dupes}"
+        )
+        print(f"  ✓ {daily_min}min/day: No duplicate titles")
+
+        for day in _GATE_WEEKDAYS:
+            for item in days.get(day, {}).get("items", []):
+                for field in ["title", "instructions", "make_harder"]:
+                    val = str(item.get(field, "") or "")
+                    m = _GATE_UNSAFE_RE.search(val)
+                    assert not m, (
+                        f"Gate E ({daily_min}min): unsafe '{m.group()}' in {day} "
+                        f"'{item.get('title')}' field '{field}'"
+                    )
+        print(f"  ✓ {daily_min}min/day: No unsafe movement phrases")
+
+        movement_items = [
+            item for day in _GATE_WEEKDAYS
+            for item in days.get(day, {}).get("items", [])
+            if item.get("category_key") == "movement_and_physical"
+        ]
+        seated_count = sum(
+            1 for item in movement_items
+            if any(kw in (
+                item.get("title", "") + " " + item.get("instructions", "")
+            ).lower() for kw in seated_kws)
+        )
+        assert seated_count >= 1, (
+            f"Dravet {daily_min}min: expected ≥1 seated/supported movement card, "
+            f"got {seated_count}. Titles: {[i['title'] for i in movement_items]}"
+        )
+        print(f"  ✓ {daily_min}min/day: {seated_count} seated/supported movement cards")
+
+        assert gate_report["gate_passed"], (
+            f"Gate E ({daily_min}min): gate not passed. "
+            f"Pass-2 violations: {gate_report['violations_pass2']}"
+        )
+        print(f"  ✓ {daily_min}min/day: gate_passed=True")
+
+    print(f"  Titles (15min run): {all_titles}")
+
+
+# ---------------------------------------------------------------------------
+# Case 39 (Gate F): Terry 50m — speech delay, all milestones answered "yes"
+# ---------------------------------------------------------------------------
+
+def test_case39_gate_f_terry_all_yes():
+    """
+    Terry, 50 months, speech delay concern, all milestone answers 'yes', 10 min/day.
+
+    Even when milestones are all 'yes', the plan must:
+    - Still produce a useful concern-support language plan (>= 1 slot)
+    - Have no empty/broken cards (title, instructions, success all non-empty)
+    - Have no generic template phrases
+    - gate_passed = True
+    """
+    print("\n─── Case 39 (Gate F): Terry 50m, speech concern, all-yes milestones ───")
+
+    from genex_core.interview_engine import choose_focus_domains, build_domain_questions
+
+    state = init_state_from_profile(
+        "your child", 50, "None",
+        "speech delay, worried about talking and vocabulary", 10,
+    )
+    ensure_concern_profile(state)
+
+    # Simulate all milestone answers as 'yes' for language domain
+    qs = build_domain_questions(state, "language_and_communication", max_questions_total=20)
+    for q in qs:
+        state.setdefault("qna", {}).setdefault("language_and_communication", []).append({
+            **q,
+            "norm_answer": "yes",
+            "scoring_norm_answer": "yes",
+        })
+
+    repaired, gate_report, days, all_titles = _build_and_gate(state)
+
+    total = len(all_titles)
+    assert total >= 1, f"Terry all-yes: expected ≥1 activity slot, got {total}"
+    print(f"  ✓ {total} weekday slots filled (concern-support plan)")
+
+    broken = []
+    for day in _GATE_WEEKDAYS:
+        for item in days.get(day, {}).get("items", []):
+            empty_fields = [
+                f for f in ["title", "instructions", "success"]
+                if not str(item.get(f, "") or "").strip()
+            ]
+            if empty_fields:
+                broken.append(
+                    f"{day} '{item.get('title', '(no title)')}': "
+                    f"empty fields {empty_fields}"
+                )
+    assert not broken, "Broken/empty cards found:\n" + "\n".join(broken)
+    print(f"  ✓ No broken/empty cards")
+
+    generic_hits = []
+    for day in _GATE_WEEKDAYS:
+        for item in days.get(day, {}).get("items", []):
+            combined = " ".join(
+                str(item.get(f, "") or "")
+                for f in ["title", "instructions", "materials", "success",
+                           "make_easier", "make_harder", "avoid", "why"]
+            ).lower()
+            for phrase in _GATE_GENERIC_PHRASES:
+                if phrase.lower() in combined:
+                    generic_hits.append(
+                        f"'{item.get('title')}' has generic phrase '{phrase}'"
+                    )
+    assert not generic_hits, "Generic phrases found:\n" + "\n".join(generic_hits)
+    print(f"  ✓ No generic template phrases")
+
+    lang_count = sum(
+        1 for day in _GATE_WEEKDAYS
+        for item in days.get(day, {}).get("items", [])
+        if item.get("category_key") == "language_and_communication"
+    )
+    assert lang_count >= 1, (
+        f"Terry all-yes: expected ≥1 language card, got {lang_count}"
+    )
+    print(f"  ✓ {lang_count} language cards present in concern-support plan")
+
+    assert gate_report["gate_passed"], (
+        f"Gate F: gate not passed. "
+        f"Pass-2 violations: {gate_report['violations_pass2']}"
+    )
+    print(f"  ✓ gate_passed=True")
+    print(f"  Titles: {all_titles}")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -2237,6 +2830,13 @@ def run_all():
         test_case30_adhd_48m_concrete_cards,
         test_case31_ds_and_dravet_no_unsafe_in_bucket_cards,
         test_case32_maya_ds_safe_week,
+        test_case33_multi_concern_routing,
+        test_case34_gate_a_maya_ds_pt,
+        test_case35_gate_b_maya_ds_speech,
+        test_case36_gate_c_multi_concern_48m,
+        test_case37_gate_d_adhd_60m,
+        test_case38_gate_e_dravet_40m,
+        test_case39_gate_f_terry_all_yes,
     ]
     passed = 0
     failed = 0
