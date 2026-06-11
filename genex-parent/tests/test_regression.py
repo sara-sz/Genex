@@ -1,7 +1,7 @@
 """
 tests/test_regression.py
 -------------------------
-V22 regression test suite (39 cases).
+V22 regression test suite (40 cases).
 
 Run: python3 -m pytest tests/test_regression.py -v
   or: python3 tests/test_regression.py
@@ -52,6 +52,7 @@ Cases:
  37. Gate D: ADHD 60m, 10min/day — no generic phrases, concrete ADHD cards, gate passed.
  38. Gate E: Dravet 40m, 10+15 min/day — no unsafe, no dupes, seated movement, gate passed.
  39. Gate F: Terry 50m, speech concern, all-yes milestones — useful plan, no broken/generic cards.
+ 40. ADHD 60m, 15min/day — exactly 2 cards/day, '5–15 min' label, no same-day near-duplicates.
 """
 
 import re
@@ -1098,17 +1099,27 @@ def test_case13_speech_delay_only():
 # ---------------------------------------------------------------------------
 
 def test_case14_time_budget_fill():
-    """Every weekday must be filled to the parent's daily_time_min."""
+    """Weekday schedule fills the correct number of cards per day.
+
+    Card count rules (beta):
+      5 min/day  → 1 card/day  (1 × 5 min × 5 days = 25 total)
+      10 min/day → 2 cards/day (2 × 5 min × 5 days = 50 total)
+      15 min/day → 2 cards/day (2 × 5 min × 5 days = 50 total — capped, not 3)
+
+    Each card shows '5–15 min' so parents know activities flex up to 15 min;
+    the scheduler uses 5-min units internally.
+    """
     print("\n─── Case 14: Time budget fill (5 / 10 / 15 min/day) ───")
     WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    from genex_core.scheduler import _max_cards_per_day
 
     profiles = [
-        # (label, age, diag, concern, daily_min, expected_total)
-        ("speech-delay 5min",  36, "none", "speech delay, not talking much", 5,  25),
-        ("speech-delay 10min", 36, "none", "speech delay, not talking much", 10, 50),
-        ("speech-delay 15min", 36, "none", "speech delay, not talking much", 15, 75),
+        # (label, age, diag, concern, daily_min)
+        ("speech-delay 5min",  36, "none", "speech delay, not talking much", 5),
+        ("speech-delay 10min", 36, "none", "speech delay, not talking much", 10),
+        ("speech-delay 15min", 36, "none", "speech delay, not talking much", 15),
     ]
-    for label, age, diag, concern, daily, expected_total in profiles:
+    for label, age, diag, concern, daily in profiles:
         state = init_state_from_profile("your child", age, diag, concern, daily)
         ensure_concern_profile(state)
         from genex_core.interview_engine import choose_focus_domains
@@ -1124,18 +1135,23 @@ def test_case14_time_budget_fill():
         build_weekly_schedule(state)
         days = state["weekly_schedule"]["days"]
 
-        # No weekday rest days
+        expected_cards = _max_cards_per_day(daily)
+        # Every weekday must have exactly the right number of cards
         for d in WEEKDAYS:
-            mins = days.get(d, {}).get("total_minutes", 0)
-            assert mins >= daily, (
-                f"[{label}] {d} under-filled: {mins} min < {daily} min/day"
+            items = days.get(d, {}).get("items", [])
+            assert len(items) >= 1, (
+                f"[{label}] {d} has no activities"
+            )
+            assert len(items) <= expected_cards, (
+                f"[{label}] {d} has {len(items)} cards, max allowed is {expected_cards}"
             )
 
-        total = sum(days.get(d, {}).get("total_minutes", 0) for d in WEEKDAYS)
-        assert total == expected_total, (
-            f"[{label}] Total weekday minutes = {total}, expected {expected_total}"
+        total_cards = sum(len(days.get(d, {}).get("items", [])) for d in WEEKDAYS)
+        expected_total_cards = expected_cards * 5
+        assert total_cards == expected_total_cards, (
+            f"[{label}] Total weekday cards = {total_cards}, expected {expected_total_cards}"
         )
-        print(f"  ✓ [{label}] {total}/{expected_total} weekday minutes — all days filled")
+        print(f"  ✓ [{label}] {total_cards} cards ({expected_cards}/day × 5 days)")
 
 
 # ---------------------------------------------------------------------------
@@ -1451,7 +1467,8 @@ def test_case20_exact_slot_counts():
     assert mins == 50, f"ADHD 10min: expected 50 weekday min, got {mins}"
     print(f"  ✓ ADHD 10min/day: {slots} slots, {mins}/50 min")
 
-    # Speech delay 15 min/day → 15 slots (5 days × 3 activities)
+    # Speech delay 15 min/day → 10 slots (5 days × 2 cards — capped at 2/day for 10–29 min)
+    # Cards show "5–15 min" so parent can flex the duration; scheduler uses 5-min units.
     speech_15_state = {
         "child": {
             "name": "Kelly",
@@ -1466,9 +1483,9 @@ def test_case20_exact_slot_counts():
     }
     ensure_concern_profile(speech_15_state)
     slots, mins = _count_slots(speech_15_state)
-    assert slots == 15, f"Speech 15min: expected 15 weekday slots, got {slots} ({mins} min)"
-    assert mins == 75, f"Speech 15min: expected 75 weekday min, got {mins}"
-    print(f"  ✓ Speech delay 15min/day: {slots} slots, {mins}/75 min")
+    assert slots == 10, f"Speech 15min: expected 10 weekday slots (2/day cap), got {slots} ({mins} min)"
+    assert mins == 50, f"Speech 15min: expected 50 weekday min, got {mins}"
+    print(f"  ✓ Speech delay 15min/day: {slots} slots (2/day cap), {mins}/50 min")
 
 
 # ---------------------------------------------------------------------------
@@ -2388,7 +2405,7 @@ def test_case34_gate_a_maya_ds_pt():
     Maya, 24 months, Down syndrome, PT/gross motor concern, 15 min/day.
 
     Gate must ensure:
-    - 15 weekday slots filled (5 days × 3 activities)
+    - 10 weekday slots filled (5 days × 2 activities — capped at 2/day for 10–29 min)
     - No unsafe movement (high-fall profile)
     - No duplicate titles across the week
     - 'Supported Squat-and-Reach Game' appears at most once
@@ -2403,8 +2420,8 @@ def test_case34_gate_a_maya_ds_pt():
     repaired, gate_report, days, all_titles = _build_and_gate(state)
 
     total = len(all_titles)
-    assert total == 15, f"Expected 15 weekday slots, got {total}: {all_titles}"
-    print(f"  ✓ 15 weekday slots filled")
+    assert total == 10, f"Expected 10 weekday slots (2/day cap), got {total}: {all_titles}"
+    print(f"  ✓ 10 weekday slots filled (2/day cap)")
 
     from collections import Counter
     dupes = {t: c for t, c in Counter(all_titles).items() if c > 1}
@@ -2653,12 +2670,13 @@ def test_case38_gate_e_dravet_40m():
         state = _make_dravet_state()
         repaired, gate_report, days, all_titles = _build_and_gate(state, daily_time_min=daily_min)
 
-        expected_slots = daily_min
+        # Both 10 and 15 min/day → 2 cards/day × 5 days = 10 slots (2/day cap for 10–29 min)
+        expected_slots = 10
         total = len(all_titles)
         assert total == expected_slots, (
-            f"Dravet {daily_min}min: expected {expected_slots} slots, got {total}"
+            f"Dravet {daily_min}min: expected {expected_slots} slots (2/day cap), got {total}"
         )
-        print(f"  ✓ {daily_min}min/day: {total} slots filled")
+        print(f"  ✓ {daily_min}min/day: {total} slots filled (2/day cap)")
 
         from collections import Counter
         dupes = {t: c for t, c in Counter(all_titles).items() if c > 1}
@@ -2796,6 +2814,107 @@ def test_case39_gate_f_terry_all_yes():
 # Runner
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Case 40: ADHD 60m, 15 min/day — card cap, duration label, no same-day dupes
+# ---------------------------------------------------------------------------
+
+def test_case40_adhd_15min_card_cap():
+    """
+    ADHD child, 60 months, 15 min/day.
+
+    Expected:
+    - Exactly 2 cards per weekday (10–29 min/day → cap = 2)
+    - Every card has duration_label = '5–15 min'
+    - No exact duplicate titles within the same day
+    - No near-duplicate (table-setting pair or similar) within the same day
+    - No generic template phrases
+    - gate_passed = True
+    """
+    print("\n─── Case 40: ADHD 60m, 15min/day — card cap + near-dupe protection ───")
+    from collections import Counter
+    from genex_core.scheduler import _max_cards_per_day
+
+    state = _make_adhd_state()
+    state["child"]["daily_time_min"] = 15
+    repaired, gate_report, days, all_titles = _build_and_gate(state)
+
+    expected_cards_per_day = _max_cards_per_day(15)
+    assert expected_cards_per_day == 2, f"Expected cap=2 for 15min/day, got {expected_cards_per_day}"
+
+    for day in _GATE_WEEKDAYS:
+        items = days.get(day, {}).get("items", [])
+        assert len(items) == expected_cards_per_day, (
+            f"{day}: expected {expected_cards_per_day} cards, got {len(items)}: "
+            f"{[i.get('title') for i in items]}"
+        )
+    print(f"  ✓ Exactly 2 cards per weekday")
+
+    # duration_label must be '5–15 min' on every card
+    for day in _GATE_WEEKDAYS:
+        for item in days.get(day, {}).get("items", []):
+            label = item.get("duration_label", "")
+            assert label == "5–15 min", (
+                f"{day} '{item.get('title')}': expected duration_label='5–15 min', got '{label}'"
+            )
+    print(f"  ✓ All cards carry duration_label='5–15 min'")
+
+    # No duplicate titles within the same day
+    for day in _GATE_WEEKDAYS:
+        titles = [i.get("title", "").lower() for i in days.get(day, {}).get("items", [])]
+        dupes = [t for t, c in Counter(titles).items() if c > 1]
+        assert not dupes, f"{day}: same-day duplicate titles: {dupes}"
+    print(f"  ✓ No same-day duplicate titles")
+
+    # No near-duplicate pair in the same day (table-setting check)
+    import re as _re40
+    def _short_root(t):
+        t = t.lower()
+        t = _re40.sub(r"[^a-z0-9\s]", " ", t)
+        t = _re40.sub(
+            r"\b(supported|slow|quick|simple|easy|gentle|basic|fun|my|your|a|the|an|"
+            r"job|task|steps|helper|mission|prep|game|activity|practice|challenge|"
+            r"time|session|version|exercise)\b", "", t)
+        return _re40.sub(r"\s+", " ", t).strip()
+
+    for day in _GATE_WEEKDAYS:
+        items = days.get(day, {}).get("items", [])
+        roots = [_short_root(i.get("title", "")) for i in items]
+        seen = set()
+        for r in roots:
+            if r and r in seen:
+                titles = [i.get("title") for i in items]
+                assert False, f"{day}: near-duplicate root '{r}' in same-day titles: {titles}"
+            seen.add(r)
+    print(f"  ✓ No same-day near-duplicate activity roots")
+
+    # No generic template phrases
+    for day in _GATE_WEEKDAYS:
+        for item in days.get(day, {}).get("items", []):
+            combined = " ".join(
+                str(item.get(f, "") or "")
+                for f in ["title", "instructions", "materials", "success",
+                           "make_easier", "make_harder", "avoid", "why"]
+            ).lower()
+            for phrase in _GATE_GENERIC_PHRASES:
+                assert phrase.lower() not in combined, (
+                    f"'{item.get('title')}' contains generic phrase '{phrase}'"
+                )
+    print(f"  ✓ No generic template phrases")
+
+    assert gate_report["gate_passed"], (
+        f"Gate not passed. Pass-2 violations: {gate_report['violations_pass2']}"
+    )
+    print(f"  ✓ gate_passed=True")
+
+    by_day = {d: [i.get("title") for i in days.get(d, {}).get("items", [])] for d in _GATE_WEEKDAYS}
+    for d, titles in by_day.items():
+        print(f"  {d}: {titles}")
+
+
+# ---------------------------------------------------------------------------
+# Runner
+# ---------------------------------------------------------------------------
+
 def run_all():
     cases = [
         test_case1_language_delay_bridge_plan,
@@ -2837,6 +2956,7 @@ def run_all():
         test_case37_gate_d_adhd_60m,
         test_case38_gate_e_dravet_40m,
         test_case39_gate_f_terry_all_yes,
+        test_case40_adhd_15min_card_cap,
     ]
     passed = 0
     failed = 0

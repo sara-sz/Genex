@@ -134,6 +134,21 @@ def allocate_weekly_slots(state: Dict[str, Any]) -> Dict[str, Any]:
 # Activity picking helpers (shared across weeks)
 # ---------------------------------------------------------------------------
 
+def _max_cards_per_day(daily_time_min: int) -> int:
+    """Maximum activity cards to schedule per weekday.
+
+    5 min/day  → 1 card  (one focused activity)
+    10–29 min  → 2 cards (two activities; each shown as '5–15 min')
+    30+ min    → 3 cards (three activities maximum; beta cap)
+    """
+    if daily_time_min < 10:
+        return 1
+    elif daily_time_min < 30:
+        return 2
+    else:
+        return 3
+
+
 def _pick_activity_that_fits(
     activities: List[Dict[str, Any]],
     used_indices: set,
@@ -142,6 +157,7 @@ def _pick_activity_that_fits(
     used_families: Optional[set] = None,
     used_roots: Optional[set] = None,
     hard_block_families: Optional[set] = None,
+    hard_block_roots: Optional[set] = None,
 ) -> Optional[Dict[str, Any]]:
     """Return the shortest activity that fits in remaining_minutes.
 
@@ -149,6 +165,8 @@ def _pick_activity_that_fits(
     used_keys           — set of lowercase titles to pre-filter (hard block).
     hard_block_families — set of activity_family strings that must not appear today
                           (hard block — same-day dedup; never relaxed).
+    hard_block_roots    — set of normalized title roots that must not appear today
+                          (hard block — catches near-duplicates like table-setting pairs).
     used_families       — set of activity_family strings already used this week
                           (soft preference — week-level dedup; falls back if pool empty).
     used_roots          — set of normalized title roots already used this week
@@ -158,6 +176,8 @@ def _pick_activity_that_fits(
         used_keys = set()
     if hard_block_families is None:
         hard_block_families = set()
+    if hard_block_roots is None:
+        hard_block_roots = set()
     if used_families is None:
         used_families = set()
     if used_roots is None:
@@ -172,6 +192,20 @@ def _pick_activity_that_fits(
         # Hard block: never place same activity_family twice on the same day
         if hard_block_families and activity.get("activity_family") in hard_block_families:
             continue
+        # Hard block: never place a near-duplicate root on the same day
+        if hard_block_roots:
+            import re as _hr
+            _rt = title_key
+            _rt = _hr.sub(r"[^a-z0-9\s]", " ", _rt)
+            _rt = _hr.sub(
+                r"\b(supported|slow|quick|simple|easy|gentle|basic|little|tiny|short|fun|"
+                r"my|your|our|a|the|an|job|task|steps|helper|mission|prep|"
+                r"game|activity|practice|challenge|time|session|version|exercise)\b",
+                "", _rt,
+            )
+            _rt = _hr.sub(r"\s+", " ", _rt).strip()
+            if _rt and _rt in hard_block_roots:
+                continue
         if activity.get("is_extended_activity", False):
             continue
         if is_context_dependent_bonus_activity(activity):
@@ -615,7 +649,7 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
         t = _sched_re.sub(r"[^a-z0-9\s]", " ", t)
         t = _sched_re.sub(
             r"\b(supported|slow|quick|simple|easy|gentle|basic|little|tiny|short|fun|"
-            r"my|your|our|a|the|an)\b",
+            r"my|your|our|a|the|an|job|task|steps|helper|mission|prep)\b",
             "",
             t,
         )
@@ -625,6 +659,8 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
             t,
         )
         return _sched_re.sub(r"\s+", " ", t).strip()
+
+    max_cards_per_day = _max_cards_per_day(daily_time_min)
 
     progress_made = True
     while progress_made:
@@ -639,6 +675,9 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
         for day_name in day_names:
             remaining_day_minutes = daily_time_min - days[day_name]["total_minutes"]
             if remaining_day_minutes <= 0:
+                continue
+            # Hard cap: never exceed max_cards_per_day per weekday
+            if len(days[day_name]["items"]) >= max_cards_per_day:
                 continue
 
             for category_key in categories_in_priority_order:
@@ -675,6 +714,11 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                     for item in days[day_name]["items"]
                     if item.get("activity_family")
                 }
+                # Hard-block near-duplicate roots already placed today.
+                day_roots_placed = {
+                    _sched_norm_root(item.get("title", ""))
+                    for item in days[day_name]["items"]
+                } - {""}
                 combined_blocked = used_activity_keys[category_key] | day_titles_placed
 
                 activity = _pick_activity_that_fits(
@@ -683,6 +727,7 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                     remaining_minutes=remaining_day_minutes,
                     used_keys=combined_blocked,
                     hard_block_families=day_families_placed,
+                    hard_block_roots=day_roots_placed,
                     used_families=used_activity_families[category_key],
                     used_roots=used_activity_roots[category_key],
                 )
@@ -706,6 +751,7 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                     "title": activity.get("title"),
                     "instructions": activity.get("instructions"),
                     "duration_min": duration,
+                    "duration_label": "5–15 min",
                     "materials": activity.get("materials", "common household items"),
                     "level": activity.get("level", "current_or_next"),
                     "goal": activity.get("goal", get_support_tier(state, category_key)),
@@ -742,6 +788,9 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
     # This guarantees no silent rest days when the bank has enough cards to fill the day.
     def _do_fill_slot(day_name: str, strict: bool) -> bool:
         """Try to place one activity on day_name.  Returns True if placed."""
+        # Hard cap: never exceed max_cards_per_day per weekday
+        if len(days[day_name]["items"]) >= max_cards_per_day:
+            return False
         remaining = daily_time_min - days[day_name]["total_minutes"]
         if remaining <= 0:
             return False
@@ -754,6 +803,10 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
             for item in days[day_name]["items"]
             if item.get("activity_family")
         }
+        day_roots_placed = {
+            _sched_norm_root(item.get("title", ""))
+            for item in days[day_name]["items"]
+        } - {""}
         for ck in list(target_minutes_by_category.keys()):
             bank = state["activity_banks"].get(ck, {})
             if cycle_week == 1:
@@ -784,6 +837,7 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                 remaining_minutes=remaining,
                 used_keys=blocked,
                 hard_block_families=day_families_placed,   # hard: never same family today
+                hard_block_roots=day_roots_placed,         # hard: never near-duplicate root today
                 used_families=week_fam_blocked,            # soft: prefer variety across week
                 used_roots=root_blocked,
             )
@@ -827,6 +881,7 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                 "title": activity.get("title"),
                 "instructions": activity.get("instructions"),
                 "duration_min": duration,
+                "duration_label": "5–15 min",
                 "materials": activity.get("materials", "common household items"),
                 "level": activity.get("level", "current_or_next"),
                 "goal": activity.get("goal", get_support_tier(state, ck)),

@@ -1056,7 +1056,7 @@ def _render_activity_detail(item: dict, child_name: str, key_prefix: str = ""):
 
     st.markdown(
         f"<p style='font-size:0.88rem;color:#6B7280;margin:0 0 0.6rem'>"
-        f"{icon} {cat_label} &nbsp;·&nbsp; ⏱ {item.get('duration_min', item.get('duration_minutes', 5))} min</p>",
+        f"{icon} {cat_label} &nbsp;·&nbsp; ⏱ {item.get('duration_label') or str(item.get('duration_min', item.get('duration_minutes', 5))) + ' min'}</p>",
         unsafe_allow_html=True,
     )
 
@@ -1221,7 +1221,7 @@ def screen_weekly_plan():
                 col_exp, col_del = st.columns([11, 1])
                 with col_exp:
                     with st.expander(
-                        f"{icon} **{item.get('title', '')}** — {item.get('duration_min', 5)} min",
+                        f"{icon} **{item.get('title', '')}** — {item.get('duration_label') or str(item.get('duration_min', 5)) + ' min'}",
                         expanded=False,
                     ):
                         _render_activity_detail(item, child_name, key_prefix=f"{day}_{idx}")
@@ -1275,7 +1275,7 @@ def _build_plan_text_from(plan: dict, child_name: str) -> str:
         else:
             for item in items:
                 lines.append(f"\n  {item.get('title','')}")
-                lines.append(f"  Duration: {item.get('duration_min',5)} min")
+                lines.append(f"  Duration: {item.get('duration_label') or str(item.get('duration_min', 5)) + ' min'}")
                 lines.append(f"  Materials: {item.get('materials','')}")
                 lines.append(f"  {item.get('instructions','')}")
     return "\n".join(lines)

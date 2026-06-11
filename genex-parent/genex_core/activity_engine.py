@@ -1158,6 +1158,7 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
         },
         {
             "title": "Table Job Practice",
+            "activity_family": "table_helper_task",
             "theme": "table-setting job",
             "materials": "plastic cups, napkins, and spoons — one set per person at the table",
             "instructions": (
@@ -1221,6 +1222,76 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
             "make_harder": "Add a third step: 'first snack, then water bottle, then zip.'",
             "group_play_line": "Two children take turns packing and being the 'bag inspector' who checks it's done.",
             "what_to_avoid": "Avoid zipping for your child — guide their fingers to the zip pull and let them try.",
+        },
+        {
+            "title": "Timer Cleanup Mission",
+            "activity_family": "timer_task_completion",
+            "theme": "timer-based cleanup task",
+            "materials": "phone or kitchen timer, a basket, 6–8 small toys or objects on the floor",
+            "instructions": (
+                "Set a timer for 2 minutes and say 'your mission: get everything in the basket before the beep.' "
+                "Point to the basket and start the timer. "
+                "Stand back — let your child run the mission. "
+                "If they slow down, say 'timer is still going — you've got this!' "
+                "Celebrate when the basket is full, whether or not the timer ran out."
+            ),
+            "success_criteria": "Your child puts at least 4 objects in the basket before the timer ends.",
+            "make_easier": "Reduce to 4 objects and set the timer for 3 minutes.",
+            "make_harder": "Let your child set the timer themselves and try to beat their own record next round.",
+            "group_play_line": "Two children race — each has their own basket and a pile to clean up.",
+            "what_to_avoid": "Avoid adding objects mid-task — a clear, fixed goal helps children with ADHD stay on target.",
+            "why": (
+                "Timed tasks give children with ADHD a concrete finish line. "
+                "Short timers reduce the feeling of endless work and make task completion feel achievable."
+            ),
+        },
+        {
+            "title": "Build-and-Copy Challenge",
+            "activity_family": "copy_build_task",
+            "theme": "copying a simple block model",
+            "materials": "6–8 blocks or Duplos, a flat surface",
+            "instructions": (
+                "Build a simple model in front of your child: a tower of 3, a row of 4, or an L-shape. "
+                "Say 'your turn — build one just like mine.' "
+                "Put your model slightly to the side so your child has to look up and copy, not touch yours. "
+                "Let them work independently. "
+                "When they're done, hold them side by side: 'you did it — they match!'"
+            ),
+            "success_criteria": "Your child builds a model that matches the basic shape or count.",
+            "make_easier": "Build just a 2-block tower and let your child add the third block on top of yours first.",
+            "make_harder": "Cover your model after 5 seconds and ask your child to build it from memory.",
+            "group_play_line": "Two children take turns: one builds a model, the other copies it.",
+            "what_to_avoid": "Avoid correcting as they build — let them compare only at the end.",
+            "why": (
+                "Copying a model requires sustained visual attention, planning, and follow-through — "
+                "all key targets for children with ADHD or attention delays."
+            ),
+        },
+        {
+            "title": "Finish-the-Page Mission",
+            "activity_family": "task_completion_coloring",
+            "theme": "coloring page completion task",
+            "materials": "one simple coloring page (cars, animals, dinosaurs, trucks, or space), crayons or markers",
+            "instructions": (
+                "Let your child choose a coloring page they like. "
+                "Say 'your mission is to finish this page before we stop.' "
+                "Pick a small section if the full page is large: 'just finish this one car.' "
+                "Start together for the first 30 seconds, then step back and let your child continue. "
+                "Use a simple finish line: 'when the car is colored, we are done.' "
+                "Celebrate finishing — even if it is messy."
+            ),
+            "success_criteria": "Your child keeps going long enough to finish one small section or simple page.",
+            "make_easier": "Choose just one part to color — one wheel, one animal, or one flower.",
+            "make_harder": "Ask your child to choose three colors before starting, then use all three.",
+            "group_play_line": "Two children each choose their own page — both work until done at the same time.",
+            "what_to_avoid": (
+                "Avoid correcting messy coloring or commenting on staying inside the lines. "
+                "The goal is finishing, not perfection."
+            ),
+            "why": (
+                "Finishing a chosen, interest-driven task builds the persistence and task-completion habits "
+                "that children with ADHD practice most from short, clear, rewarding activities."
+            ),
         },
     ],
     "jump_prep": [
@@ -1735,7 +1806,7 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
         },
         {
             "title": "Table-Setting Steps",
-            "activity_family": "time_words_routine",
+            "activity_family": "table_helper_task",
             "theme": "table-setting first/then sequence",
             "materials": "plastic plate, spoon, and napkin — one set per place",
             "instructions": (
