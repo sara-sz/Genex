@@ -1,0 +1,22 @@
+# cloudbuild.api.yaml — Cloud Build config for the Genex FastAPI service.
+# Used by scripts/deploy_api_staging.sh via:
+#   gcloud builds submit --config=cloudbuild.api.yaml --substitutions=_IMAGE=...
+#
+# Builds Dockerfile.api (not the Streamlit Dockerfile).
+# Pushes the resulting image to Artifact Registry.
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'Dockerfile.api'
+      - '-t'
+      - '$_IMAGE'
+      - '.'
+
+images:
+  - '$_IMAGE'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

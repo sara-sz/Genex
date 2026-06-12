@@ -1,0 +1,28 @@
+# Genex API — FastAPI service dependencies
+# Install with: pip install -r requirements.api.txt
+#
+# This is separate from requirements.txt (Streamlit service).
+# The API container uses this file only.
+#
+# The genex_core package is imported directly from the same repo root,
+# so all genex_core dependencies (openai, google-cloud-storage, etc.)
+# must also be present. Include requirements.txt in the API image build,
+# or merge as needed for the Dockerfile.api multi-stage build.
+
+# ── Web framework ──────────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.7.0
+
+# ── Firebase token verification ────────────────────────────────────────────
+firebase-admin>=6.2.0
+
+# ── GCS session persistence ────────────────────────────────────────────────
+google-cloud-storage>=2.10.0
+
+# ── genex_core transitive deps (subset required by the brain pipeline) ─────
+openai>=1.30.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+python-dotenv>=1.0.0
+requests>=2.31.0

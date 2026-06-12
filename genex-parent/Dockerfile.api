@@ -1,0 +1,43 @@
+# Dockerfile.api — Genex FastAPI service (genex-api-staging / genex-api-prod)
+#
+# Separate from Dockerfile (Streamlit service). Do NOT merge these.
+# Built with: docker build -f Dockerfile.api -t genex-api-staging .
+#
+# Entrypoint: uvicorn api.main:app --host 0.0.0.0 --port 8080
+# The $PORT env var is set by Cloud Run; we default to 8080.
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# ── System deps ────────────────────────────────────────────────────────────
+# libgomp1 is required by some pandas/numpy wheels on slim images.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Python deps: API layer first ──────────────────────────────────────────
+# Install requirements.api.txt (fastapi, uvicorn, firebase-admin, etc.)
+COPY requirements.api.txt .
+RUN pip install --no-cache-dir -r requirements.api.txt
+
+# ── Python deps: genex_core transitive deps ───────────────────────────────
+# genex_core uses openai, pandas, openpyxl, python-dotenv, requests.
+# These overlap with requirements.api.txt — pip deduplicates.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Application code ───────────────────────────────────────────────────────
+# Copy entire repo root so genex_core (local package) is importable.
+# .dockerignore keeps the image lean.
+COPY . .
+
+# ── Runtime config ─────────────────────────────────────────────────────────
+# PORT is set by Cloud Run at runtime; fallback 8080 for local docker run.
+# All sensitive env vars (GCS_BUCKET, OPENAI_API_KEY, etc.) are injected
+# by Cloud Run at deploy time — never baked into the image.
+ENV PORT=8080
+
+EXPOSE 8080
+
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
