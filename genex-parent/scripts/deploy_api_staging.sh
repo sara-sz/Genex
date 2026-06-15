@@ -39,10 +39,10 @@ FIREBASE_PROJECT_ID="genex-mvp-2026"
 ACTIVITY_MODEL="${ACTIVITY_MODEL:-gpt-4o-mini}"
 
 # ALLOWED_ORIGINS: comma-separated list of permitted CORS origins.
-# Add Lovable preview URL here once known. Do NOT use * in production.
-# ⚠️  TEMPORARY: localhost origins for local Lovable dev only.
-#     Update this before connecting the real Lovable staging domain.
-ALLOWED_ORIGINS="http://localhost:3000,http://localhost:5173"
+# Default includes Lovable editor (https://lovable.dev) and local dev servers.
+# Do NOT use * in production.
+# Override with: ALLOWED_ORIGINS="..." bash scripts/deploy_api_staging.sh
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,https://lovable.dev}"
 
 ALLOWED_EMAILS="soltanizadehsara@protonmail.com,soltanizadehsara@gmail.com"
 
@@ -133,8 +133,7 @@ echo "       all other routes     → require Authorization: Bearer <Firebase ID
 echo "       allowlist enforced   → 403 if email not in ALLOWED_EMAILS"
 echo "       session ownership    → 403 if session belongs to different uid"
 echo ""
-echo "  ⚠️  CORS allows only: ${ALLOWED_ORIGINS}"
-echo "     Add Lovable preview URL before connecting frontend."
+echo "  ℹ️  CORS allows: ${ALLOWED_ORIGINS}"
 echo "══════════════════════════════════════════════════════════════"
 echo ""
 echo "Next: get a Firebase token and run the deployed smoke test:"
