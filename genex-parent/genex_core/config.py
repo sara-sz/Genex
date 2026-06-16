@@ -321,7 +321,7 @@ SUBDOMAIN_KEYWORD_MAP = {
     "early_vocalization_and_babbling": [
         r"limited babbling",
         r"\bbabbl",
-        r"\bcoo",
+        r"\bcoo(s|ing|ed)?\b",
         r"vocal",
         r"raspberr",
         r"squeal",
@@ -345,6 +345,9 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"good eye contact",
     ],
     "peer_interaction_and_social_rules": [
+        # Common parent phrasings for social concerns (single combined pattern so
+        # the weight does not inflate and evict the primary concern under the 2-domain cap).
+        r"social (interaction|difficult\w*|problem\w*|skills?|communication)",
         r"\bpeer",
         r"friends?",
         r"play with children",
@@ -368,6 +371,9 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"imaginative play",
     ],
     "emotional_regulation": [
+        # Sensory concerns map to the closest supported domain (Social/Emotional
+        # regulation) until a dedicated sensory domain exists.
+        r"sensory",
         r"tantrum",
         r"meltdown",
         r"big emotional reactions",
@@ -425,6 +431,11 @@ SUBDOMAIN_KEYWORD_MAP = {
         r"pt delay",
         r"\bphysio\b",
         r"gross motor delay",
+        # Bare / typo'd parent phrasings that previously matched nothing.
+        r"gross motor",
+        r"grow(th)? motor",
+        r"physical delay",
+        r"\bcoordination\b",
     ],
     "postural_control_and_transitions": [
         r"not sitting",

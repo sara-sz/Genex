@@ -2915,6 +2915,56 @@ def test_case40_adhd_15min_card_cap():
 # Runner
 # ---------------------------------------------------------------------------
 
+def test_case41_explicit_concern_domain_routing():
+    """Explicit concern-domain routing — synthetic beta QA cases A–D.
+
+    Product rule: if a parent explicitly names a concern domain, that domain must
+    be represented (subject to the 2-domain cap), even when the phrasing is bare
+    or typo'd ("gross motor" without "delay", "social interaction", "sensory").
+
+    Regression guard for the keyword gaps that previously routed these to
+    Language-only:
+      A. 30mo autism + speech + social interaction + sensory → Language + Social
+      B. 54mo speech + gross motor + fine motor             → Language + Movement
+      C. 48mo speech + gross motor (bare)                   → Language + Movement
+      D. 36mo speech-only                                   → Language only
+    """
+    print("\n─── Case 41: Explicit concern-domain routing (A–D) ───")
+    from genex_core.interview_engine import choose_focus_domains
+
+    LANG = "language_and_communication"
+    SOCIAL = "social_and_emotional"
+    MOVE = "movement_and_physical"
+
+    cases = [
+        ("A 30mo autism", "Autism spectrum",
+         "speech delay, social interaction difficulty, sensory problem", 30,
+         {LANG, SOCIAL}),
+        ("B 54mo speech+gross+fine", "",
+         "speech delay, gross motor delay, fine motor delay", 54, {LANG, MOVE}),
+        ("C 48mo speech+gross (bare)", "",
+         "speech delay, gross motor", 48, {LANG, MOVE}),
+        ("D 36mo speech-only", "", "speech delay", 36, {LANG}),
+    ]
+
+    for label, dx, concern, age, expected in cases:
+        state = init_state_from_profile("your child", age, dx, concern, 20)
+        ensure_concern_profile(state)
+        focus = set(choose_focus_domains(state))
+        assert expected.issubset(focus), (
+            f"[{label}] expected {sorted(expected)} represented, got {sorted(focus)}"
+        )
+        assert len(focus) <= 2, f"[{label}] focus must cap at 2 domains, got {sorted(focus)}"
+        print(f"  ✓ {label}: {sorted(focus)}")
+
+    # False-positive guard: 'coordination' must route to movement, not language.
+    state = init_state_from_profile("c", 40, "", "coordination", 20)
+    ensure_concern_profile(state)
+    focus = choose_focus_domains(state)
+    assert focus == [MOVE], f"'coordination' should route to movement only, got {focus}"
+    print(f"  ✓ 'coordination' → {focus} (no language false positive)")
+
+
 def run_all():
     cases = [
         test_case1_language_delay_bridge_plan,
@@ -2957,6 +3007,7 @@ def run_all():
         test_case38_gate_e_dravet_40m,
         test_case39_gate_f_terry_all_yes,
         test_case40_adhd_15min_card_cap,
+        test_case41_explicit_concern_domain_routing,
     ]
     passed = 0
     failed = 0
