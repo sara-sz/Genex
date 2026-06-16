@@ -31,7 +31,7 @@ from api.adapters import (
     normalize_diagnosis_for_brain,
     sanitize_concern,
 )
-from api.auth import AuthUser, require_auth
+from api.auth import AuthUser, require_auth, verify_beta_code
 from api.pipeline import (
     get_current_question,
     get_expected_question_id,
@@ -157,8 +157,18 @@ async def session_start(
       - The brain receives name="your child" — never the actual child name.
       - GCS session document contains no child name.
 
+    Beta access:
+      When REQUIRE_BETA_CODE is enabled, body.beta_access_code must match the
+      configured BETA_ACCESS_CODE (case-insensitive, space-trimmed) or this
+      returns 403. The code is never stored; the session records only a
+      beta_authorized flag. Subsequent endpoints do not re-check the code —
+      they rely on the Firebase token and session ownership.
+
     Saves session to GCS before returning. Raises 500 if the save fails.
     """
+    # Beta gate — reject before doing any pipeline work.
+    verify_beta_code(body.beta_access_code)
+
     diagnosis_for_brain = normalize_diagnosis_for_brain(body.diagnosis_or_condition)
     sanitized_concern_text = sanitize_concern(body.parent_concern, body.child_name)
 
@@ -182,6 +192,7 @@ async def session_start(
         brain_state=brain_state,
         interview=interview,
         timezone=body.timezone,
+        beta_authorized=True,  # passed the beta gate above; code itself is never stored
     )
 
     try:

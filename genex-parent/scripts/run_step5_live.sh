@@ -29,13 +29,15 @@ echo ""
 # Env vars (override any already set in shell)
 export LOCAL_SESSION_FALLBACK="${LOCAL_SESSION_FALLBACK:-1}"
 export GCS_BUCKET="${GCS_BUCKET:-}"
-export ALLOWED_EMAILS="${ALLOWED_EMAILS:-soltanizadehsara@protonmail.com}"
+export REQUIRE_BETA_CODE="${REQUIRE_BETA_CODE:-true}"
+export BETA_ACCESS_CODE="${BETA_ACCESS_CODE:-genex}"
 export FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-genex-smoke-test}"
 export ADMIN_DEBUG="${ADMIN_DEBUG:-1}"
 
 echo "  LOCAL_SESSION_FALLBACK = $LOCAL_SESSION_FALLBACK"
 echo "  GCS_BUCKET             = ${GCS_BUCKET:-(empty — local fallback)}"
-echo "  ALLOWED_EMAILS         = $ALLOWED_EMAILS"
+echo "  REQUIRE_BETA_CODE      = $REQUIRE_BETA_CODE"
+echo "  BETA_ACCESS_CODE       = $BETA_ACCESS_CODE"
 echo "  ADMIN_DEBUG            = $ADMIN_DEBUG"
 echo ""
 

@@ -44,7 +44,11 @@ ACTIVITY_MODEL="${ACTIVITY_MODEL:-gpt-4o-mini}"
 # Override with: ALLOWED_ORIGINS="..." bash scripts/deploy_api_staging.sh
 ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,https://lovable.dev}"
 
-ALLOWED_EMAILS="soltanizadehsara@protonmail.com,soltanizadehsara@gmail.com"
+# Beta access: any signed-in Firebase user may start a session by entering the
+# shared beta access code (case-insensitive, space-trimmed). Replaces the old
+# ALLOWED_EMAILS allowlist. The code is never stored in GCS.
+BETA_ACCESS_CODE="${BETA_ACCESS_CODE:-genex}"
+REQUIRE_BETA_CODE="${REQUIRE_BETA_CODE:-true}"
 
 # ── Safety check: confirm gcloud project ─────────────────────────────────────
 echo "══════════════════════════════════════════════════════════════"
@@ -100,7 +104,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --memory=1Gi \
     --cpu=1 \
     --timeout=300 \
-    --set-env-vars="^|^GCS_BUCKET=${GCS_BUCKET}|FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}|ALLOWED_EMAILS=${ALLOWED_EMAILS}|LOCAL_SESSION_FALLBACK=0|ADMIN_DEBUG=0|ALLOWED_ORIGINS=${ALLOWED_ORIGINS}|ACTIVITY_MODEL=${ACTIVITY_MODEL}" \
+    --set-env-vars="^|^GCS_BUCKET=${GCS_BUCKET}|FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}|BETA_ACCESS_CODE=${BETA_ACCESS_CODE}|REQUIRE_BETA_CODE=${REQUIRE_BETA_CODE}|LOCAL_SESSION_FALLBACK=0|ADMIN_DEBUG=0|ALLOWED_ORIGINS=${ALLOWED_ORIGINS}|ACTIVITY_MODEL=${ACTIVITY_MODEL}" \
     --set-secrets="OPENAI_API_KEY=OPENAI_API_KEY:latest" \
     --port=8080
 
@@ -118,7 +122,8 @@ echo ""
 echo "  Env vars set (non-secret):"
 echo "    GCS_BUCKET             = ${GCS_BUCKET}"
 echo "    FIREBASE_PROJECT_ID    = ${FIREBASE_PROJECT_ID}"
-echo "    ALLOWED_EMAILS         = ${ALLOWED_EMAILS}"
+echo "    BETA_ACCESS_CODE       = ${BETA_ACCESS_CODE}"
+echo "    REQUIRE_BETA_CODE      = ${REQUIRE_BETA_CODE}"
 echo "    LOCAL_SESSION_FALLBACK = 0"
 echo "    ADMIN_DEBUG            = 0"
 echo "    ALLOWED_ORIGINS        = ${ALLOWED_ORIGINS}"
@@ -130,7 +135,7 @@ echo "  ✅ Service is --allow-unauthenticated (Cloud Run IAM layer is open)."
 echo "     Auth is enforced by FastAPI, not Cloud Run IAM:"
 echo "       /health              → public (no token required)"
 echo "       all other routes     → require Authorization: Bearer <Firebase ID token>"
-echo "       allowlist enforced   → 403 if email not in ALLOWED_EMAILS"
+echo "       beta code enforced   → 403 on /session/start if code is wrong/missing"
 echo "       session ownership    → 403 if session belongs to different uid"
 echo ""
 echo "  ℹ️  CORS allows: ${ALLOWED_ORIGINS}"

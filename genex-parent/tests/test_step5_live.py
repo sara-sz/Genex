@@ -16,13 +16,13 @@ Run on Sara's Mac:
 Or manually:
 
     LOCAL_SESSION_FALLBACK=1 GCS_BUCKET="" ADMIN_DEBUG=1 \\
-      ALLOWED_EMAILS=soltanizadehsara@protonmail.com \\
+      REQUIRE_BETA_CODE=true BETA_ACCESS_CODE=genex \\
       python3 tests/test_step5_live.py
 
 Checks:
   1.  GET /health → 200
   2.  Protected route without token → 401
-  3.  Protected route with non-allowlisted email → 403
+  3.  Valid token, missing/wrong beta code on /session/start → 403
   4.  Full flow: start → answer (loop) → plan → feedback → report × 4 → GET session
   5a. GCS/local session doc: no child_name field
   5b. GET /session: brain_state absent, plan_internal absent, _debug absent
@@ -44,7 +44,8 @@ sys.path.insert(0, ROOT)
 # ── Env vars — must be set BEFORE any api.* imports ───────────────────────────
 os.environ.setdefault("LOCAL_SESSION_FALLBACK", "1")
 os.environ.setdefault("GCS_BUCKET", "")
-os.environ.setdefault("ALLOWED_EMAILS", "soltanizadehsara@protonmail.com")
+os.environ.setdefault("REQUIRE_BETA_CODE", "true")
+os.environ.setdefault("BETA_ACCESS_CODE", "genex")
 os.environ.setdefault("FIREBASE_PROJECT_ID", "genex-smoke-test")
 os.environ.setdefault("ADMIN_DEBUG", "1")
 
@@ -161,39 +162,42 @@ check("2. no token → 401", r2.status_code == 401, f"status={r2.status_code}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Check 3 — Valid token, non-allowlisted email → 403
+# Check 3 — Valid token, missing/wrong beta code on /session/start → 403
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n── Check 3: Non-allowlisted email → 403 ──────────────────────────────")
+print("\n── Check 3: Missing/wrong beta code → 403 ────────────────────────────")
 
-# Temporarily set verify_id_token to return a non-allowlisted email.
-# Because firebase_admin is a synthetic mock (injected into sys.modules),
-# we set the attribute directly — no `patch()` context manager needed.
-_original_verify = _fb_mock.auth.verify_id_token
-_fb_mock.auth.verify_id_token = MagicMock(return_value={
-    "uid": "uid-outsider",
-    "email": "outsider@notallowed.com",
-})
-# Remove override so real require_auth runs (with our mocked verify_id_token)
+# Access is no longer gated by an email allowlist. Any signed-in Firebase user
+# is accepted by require_auth; the beta access code gates /session/start.
+# Remove override so the real require_auth runs (verify_id_token is mocked).
 app.dependency_overrides.pop(require_auth, None)
 raw_client = TestClient(app, raise_server_exceptions=False)
-r3 = raw_client.post(
+_BASE_START = {
+    "child_name": "TestChild", "age_years": 2, "age_months": 0,
+    "age_in_months": 24, "diagnosis_or_condition": "Down syndrome",
+    "parent_concern": "speech delay", "daily_time_minutes": 20,
+}
+
+# 3a. No beta code at all → 403
+r3a = raw_client.post(
     "/api/v1/session/start",
     headers={"Authorization": "Bearer fake-but-verified-token"},
-    json={
-        "child_name": "TestChild", "age_years": 2, "age_months": 0,
-        "age_in_months": 24, "diagnosis_or_condition": "Down syndrome",
-        "parent_concern": "speech delay", "daily_time_minutes": 20,
-    },
+    json=_BASE_START,
 )
-# Restore original mock so subsequent tests are unaffected
-_fb_mock.auth.verify_id_token = _original_verify
+check("3a. valid token, no beta code → 403", r3a.status_code == 403,
+      f"status={r3a.status_code}, body={r3a.text[:200]}")
 
-check("3. non-allowlisted email → 403", r3.status_code == 403,
-      f"status={r3.status_code}, body={r3.text[:200]}")
+# 3b. Wrong beta code → 403
+r3b = raw_client.post(
+    "/api/v1/session/start",
+    headers={"Authorization": "Bearer fake-but-verified-token"},
+    json={**_BASE_START, "beta_access_code": "not-the-code"},
+)
+check("3b. valid token, wrong beta code → 403", r3b.status_code == 403,
+      f"status={r3b.status_code}, body={r3b.text[:200]}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Check 4 — Full allowlisted user flow
+# Check 4 — Full authenticated user flow (beta code accepted at start)
 # ══════════════════════════════════════════════════════════════════════════════
 print("\n── Check 4: Full flow — start → answer → plan → feedback → report → GET")
 
@@ -209,6 +213,7 @@ START_PAYLOAD = {
     "parent_concern":         "She has some speech delay and low muscle tone.",
     "daily_time_minutes":     20,
     "timezone":               "America/Los_Angeles",
+    "beta_access_code":       "genex",
 }
 r_start = client.post("/api/v1/session/start", json=START_PAYLOAD)
 check("4a. /session/start → 200", r_start.status_code == 200,

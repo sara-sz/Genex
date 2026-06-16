@@ -79,6 +79,15 @@ class SessionStartRequest(BaseModel):
         min_length=1,
         max_length=100,
     )
+    beta_access_code: Optional[str] = Field(
+        default=None,
+        description=(
+            "Shared beta access code. Required when the server runs with "
+            "REQUIRE_BETA_CODE enabled. Compared case-insensitively after "
+            "trimming spaces. Never stored."
+        ),
+        max_length=100,
+    )
 
     @model_validator(mode="after")
     def check_age_consistency(self) -> "SessionStartRequest":

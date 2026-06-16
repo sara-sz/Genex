@@ -34,6 +34,8 @@ Session document shape:
     "daily_time_minutes":    int,
     "timezone":              str,    # IANA tz from Lovable, e.g. "America/Los_Angeles"
     "diagnosis_or_condition": str,   # original frontend value, for audit
+    "beta_authorized":       bool,   # True once the beta code was accepted at start
+    "beta_authorized_at":    str | None,  # ISO-8601 timestamp, or None
     "brain_state":           dict,   # raw state dict from genex_core
     "interview":             dict,   # API-layer interview tracking state
     "feedback":              list,
@@ -49,6 +51,7 @@ Session document shape:
   }
 
   child_name is NEVER stored. GCS files are name-blind by design.
+  The beta access code is NEVER stored — only the beta_authorized boolean is.
 """
 
 import json
@@ -171,22 +174,28 @@ def new_session_doc(
     brain_state: Dict[str, Any],
     interview: Dict[str, Any],
     timezone: str = "UTC",
+    beta_authorized: bool = False,
 ) -> Dict[str, Any]:
     """
     Build a new session document. child_name is never a field here.
     diagnosis_or_condition stores the original frontend value for audit.
     timezone is the IANA timezone string from Lovable; used by /plan to anchor
     the planning week to Monday–Sunday in the parent's local timezone.
+    beta_authorized records that the shared beta code was accepted at session
+    start. The code itself is never stored.
     """
+    now_iso = datetime.now(timezone_module.utc).isoformat()
     return {
         "session_id": session_id,
         "owner_uid": owner_uid,
-        "created_at": datetime.now(timezone_module.utc).isoformat(),
+        "created_at": now_iso,
         "status": "questions",
         "age_in_months": age_in_months,
         "daily_time_minutes": daily_time_minutes,
         "timezone": timezone,
         "diagnosis_or_condition": diagnosis_or_condition,
+        "beta_authorized": beta_authorized,
+        "beta_authorized_at": now_iso if beta_authorized else None,
         "brain_state": brain_state,
         "interview": interview,
         "feedback": [],
