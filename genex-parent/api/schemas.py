@@ -136,6 +136,7 @@ class ReportRequest(BaseModel):
 class QuestionResponse(BaseModel):
     question_id: str
     question_text: str
+    helper_text: str = ""   # parent_explanation from milestones table; "" if not available
     domain: str
     domain_label: str
     progress_index: int

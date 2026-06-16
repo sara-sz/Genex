@@ -275,6 +275,7 @@ def get_current_question(interview: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return {
         "question_id": q["question_id"],
         "question_text": q["question_text"],   # already "Can your child ... right now?"
+        "helper_text": q.get("parent_explanation", "") or "",
         "domain": domain,
         "domain_label": DOMAIN_LABELS.get(domain, domain),
         "progress_index": interview["questions_answered_total"],
