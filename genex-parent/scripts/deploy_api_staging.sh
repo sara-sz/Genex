@@ -42,7 +42,7 @@ ACTIVITY_MODEL="${ACTIVITY_MODEL:-gpt-4o-mini}"
 # Default includes Lovable editor (https://lovable.dev) and local dev servers.
 # Do NOT use * in production.
 # Override with: ALLOWED_ORIGINS="..." bash scripts/deploy_api_staging.sh
-ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,https://lovable.dev}"
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,https://lovable.dev,https://dear-journey.lovable.app,https://8fc006ff-8275-4dce-b0ac-2f3c0dd82694.lovableproject.com,https://id-preview--8fc006ff-8275-4dce-b0ac-2f3c0dd82694.lovable.app}"
 
 # Beta access: any signed-in Firebase user may start a session by entering the
 # shared beta access code (case-insensitive, space-trimmed). Replaces the old
