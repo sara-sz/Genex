@@ -103,7 +103,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --max-instances=2 \
     --memory=1Gi \
     --cpu=1 \
-    --timeout=300 \
+    --timeout=600 \
     --set-env-vars="^|^GCS_BUCKET=${GCS_BUCKET}|FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}|BETA_ACCESS_CODE=${BETA_ACCESS_CODE}|REQUIRE_BETA_CODE=${REQUIRE_BETA_CODE}|LOCAL_SESSION_FALLBACK=0|ADMIN_DEBUG=0|ALLOWED_ORIGINS=${ALLOWED_ORIGINS}|ACTIVITY_MODEL=${ACTIVITY_MODEL}" \
     --set-secrets="OPENAI_API_KEY=OPENAI_API_KEY:latest" \
     --port=8080
