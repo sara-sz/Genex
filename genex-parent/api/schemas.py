@@ -14,12 +14,20 @@ from pydantic import BaseModel, Field, model_validator
 EnjoymentLiteral  = Literal["loved_it", "it_was_okay", "not_really"]
 DifficultyLiteral = Literal["too_easy", "just_right", "too_hard"]
 CompletionLiteral = Literal["did_it", "didnt_want_to_try", "wasnt_ready_yet"]
-CareTeamLiteral   = Literal["Doctor", "ST", "OT", "PT"]
+CareTeamLiteral   = Literal["Doctor", "ST", "OT", "PT"]   # legacy single-select (kept)
+
+# Beta 2.0 normalized provider tags for parent note visibility.
+CareTeamTagLiteral = Literal["doctor", "st", "ot_pt"]
+
 ReportTypeLiteral = Literal[
+    # Legacy types — kept for backward compatibility. occupational_therapist and
+    # physical_therapist now use the combined ot_pt note-visibility filtering.
     "doctor",
     "speech_therapist",
     "occupational_therapist",
     "physical_therapist",
+    # Beta 2.0 combined OT/PT report type.
+    "ot_pt",
 ]
 
 
@@ -130,7 +138,15 @@ class FeedbackRequest(BaseModel):
     difficulty: DifficultyLiteral
     completion: CompletionLiteral
     discuss_with_care_team: bool = False
-    care_team_member: Optional[CareTeamLiteral] = None
+    care_team_member: Optional[CareTeamLiteral] = None  # legacy single-select (kept)
+    care_team_tags: Optional[List[CareTeamTagLiteral]] = Field(
+        default=None,
+        description=(
+            "Beta 2.0 provider tags controlling which care-team report this note "
+            "appears in. Allowed values: 'doctor', 'st', 'ot_pt'. Optional — if "
+            "omitted, legacy care_team_member (or doctor-only) visibility is used."
+        ),
+    )
     note: str = Field(default="", max_length=1000)
 
 

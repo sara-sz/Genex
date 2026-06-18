@@ -26,6 +26,8 @@ REPORT_TITLES: Dict[str, str] = {
     "speech_therapist":         "Speech Therapist Report",
     "occupational_therapist":   "Occupational Therapist Report",
     "physical_therapist":       "Physical Therapist Report",
+    # Beta 2.0 combined OT/PT report.
+    "ot_pt":                    "Occupational / Physical Therapy Report",
 }
 
 _REPORT_OPENERS: Dict[str, str] = {
@@ -48,7 +50,130 @@ _REPORT_OPENERS: Dict[str, str] = {
         "It covers movement and physical development practice activities "
         "and parent-reported progress."
     ),
+    "ot_pt": (
+        "This summary was prepared for your child's occupational and/or physical "
+        "therapist. It covers movement, motor, sensory/regulation, and adaptive "
+        "self-help practice activities and parent-reported progress."
+    ),
 }
+
+
+# ── Care-team note routing (Beta 2.0, Step 3B) ──────────────────────────────
+# Single source of truth for report visibility. Mirrored in
+# docs/care_team_report_routing.md and exercised by tests/test_care_team_routing.py.
+
+# Normalized provider tags a parent can attach to a note.
+CARE_TEAM_TAGS = ("doctor", "st", "ot_pt")
+
+# Legacy single-select care_team_member → normalized tag.
+LEGACY_MEMBER_TO_TAG: Dict[str, str] = {
+    "Doctor": "doctor",
+    "ST": "st",
+    "OT": "ot_pt",
+    "PT": "ot_pt",
+}
+
+# Report type → the provider bucket whose notes it shows.
+# Legacy occupational_therapist / physical_therapist both fold into ot_pt for now.
+REPORT_TYPE_TO_PROVIDER: Dict[str, str] = {
+    "doctor": "doctor",
+    "speech_therapist": "st",
+    "occupational_therapist": "ot_pt",
+    "physical_therapist": "ot_pt",
+    "ot_pt": "ot_pt",
+}
+
+
+def compute_note_visibility(record: Dict[str, Any]) -> List[str]:
+    """Return the normalized provider tags a feedback note is visible to.
+
+    Resolution order (backward-compatible):
+      1. explicit care_team_tags (Beta 2.0) — kept if valid;
+      2. else legacy care_team_member mapped via LEGACY_MEMBER_TO_TAG;
+      3. else (flagged note with neither) → ["doctor"] only.
+
+    This is the *parent note visibility* set. It is independent of activity
+    relevance. The doctor report shows every flagged note regardless of this set
+    (see note_visible_in_report).
+    """
+    tags = record.get("care_team_tags")
+    if tags:
+        valid = [t for t in tags if t in CARE_TEAM_TAGS]
+        if valid:
+            # de-dup, preserve order
+            seen: Dict[str, None] = {}
+            for t in valid:
+                seen.setdefault(t, None)
+            return list(seen.keys())
+
+    member = record.get("care_team_member")
+    if member and member in LEGACY_MEMBER_TO_TAG:
+        return [LEGACY_MEMBER_TO_TAG[member]]
+
+    # Untagged flagged note → doctor only (safest comprehensive default).
+    return ["doctor"]
+
+
+def note_visible_in_report(record: Dict[str, Any], report_type: str) -> bool:
+    """Whether a flagged feedback note should appear in the given report type.
+
+    Doctor report sees ALL flagged notes (comprehensive, preserves Beta 1.0).
+    Other reports show a note only if their provider bucket is in the note's
+    computed visibility set.
+    """
+    provider = REPORT_TYPE_TO_PROVIDER.get(report_type, "doctor")
+    if provider == "doctor":
+        return True
+    return provider in compute_note_visibility(record)
+
+
+# ── Activity relevance policy (Beta 2.0, Step 3B) ───────────────────────────
+# Read-time SUGGESTION layer — which provider reports an activity is *relevant*
+# to, based on domain (+ optional subdomain hints). This is distinct from parent
+# note visibility above. Defined as a constant for documentation, future use, and
+# tests. It does NOT change plan/activity generation and is NOT stored on
+# activities. Doctor is always relevant.
+
+# Domain key → default relevant provider buckets (besides doctor, who sees all).
+DOMAIN_RELEVANCE: Dict[str, tuple] = {
+    "language_and_communication": ("st",),
+    "social_and_emotional": ("st", "ot_pt"),   # social communication → st; regulation/sensory → ot_pt
+    "movement_and_physical": ("ot_pt",),
+    "cognitive": ("st", "ot_pt"),               # language-based → st; visual-motor/attention/adaptive → ot_pt
+}
+
+# Subdomain substring hints that sharpen an ambiguous cognitive/social domain.
+_ST_SUBDOMAIN_HINTS = (
+    "language", "communicat", "vocab", "expressive", "receptive", "naming",
+    "joint_attention", "turn", "request", "imitat", "pretend", "concept", "color", "colour",
+)
+_OT_PT_SUBDOMAIN_HINTS = (
+    "motor", "coordination", "motor_planning", "sensory", "regulation", "adaptive",
+    "self_help", "attention", "visual_motor", "sequenc", "transition", "postural", "feeding",
+)
+
+
+def activity_relevance_providers(domain: str, subdomain: str = "") -> List[str]:
+    """Return provider buckets an activity is relevant to (doctor always included).
+
+    Suggestion only — used for documentation/tests and any future read-time report
+    sectioning. Parent note visibility (compute_note_visibility) always overrides
+    relevance for whether a *note* is shown.
+    """
+    providers = {"doctor"}
+    sub = (subdomain or "").lower()
+    if domain in ("cognitive", "social_and_emotional"):
+        # Disambiguate via subdomain hints; fall back to the domain default set.
+        matched = False
+        if any(h in sub for h in _ST_SUBDOMAIN_HINTS):
+            providers.add("st"); matched = True
+        if any(h in sub for h in _OT_PT_SUBDOMAIN_HINTS):
+            providers.add("ot_pt"); matched = True
+        if not matched:
+            providers.update(DOMAIN_RELEVANCE.get(domain, ()))
+    else:
+        providers.update(DOMAIN_RELEVANCE.get(domain, ()))
+    return [p for p in CARE_TEAM_TAGS if p in providers]
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -200,12 +325,17 @@ def generate_report_body(
             labels = [_domain_label(d) for d in s["domains"]]
             lines.append(f"Domains practised: {', '.join(labels)}")
 
-        # Flagged items
-        if s["flagged"]:
+        # Flagged items — filtered by parent note visibility for this report type.
+        # Doctor sees all; speech_therapist sees st-visible; ot_pt (and legacy
+        # occupational_therapist / physical_therapist) see ot_pt-visible notes.
+        visible_flagged = [
+            f for f in s["flagged"] if note_visible_in_report(f, report_type)
+        ]
+        if visible_flagged:
             lines.append("")
-            lines.append(f"Items Flagged for Care Team ({len(s['flagged'])})")
+            lines.append(f"Items Flagged for Care Team ({len(visible_flagged)})")
             lines.append("─" * 30)
-            for f in s["flagged"]:
+            for f in visible_flagged:
                 who  = f.get("care_team_member") or "care team"
                 date = f.get("activity_date") or ""
                 dom  = _domain_label(f.get("domain", ""))

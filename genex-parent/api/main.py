@@ -525,7 +525,9 @@ async def session_feedback(
         "difficulty":            body.difficulty,
         "completion":            body.completion,
         "discuss_with_care_team": body.discuss_with_care_team,
-        "care_team_member":      body.care_team_member,
+        "care_team_member":      body.care_team_member,   # legacy single-select (kept)
+        # Beta 2.0 provider tags for report visibility. None for old clients.
+        "care_team_tags":        body.care_team_tags,
         "note":                  body.note,
         "metadata_found":        metadata_found,
     }
