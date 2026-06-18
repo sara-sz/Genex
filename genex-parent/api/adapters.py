@@ -174,6 +174,43 @@ def _deterministic_activity_id(session_id: str, day: str, slot_index: int, title
     return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
 
 
+# Sentence-boundary splitter for deriving instructions_steps (Beta 2.0, Step 2B).
+# Matches terminal punctuation (+ an optional closing quote) followed by whitespace,
+# ONLY when the next sentence starts like a real sentence (opening quote/bracket then
+# a capital letter or digit). This deliberately does NOT split:
+#   - decimals such as "1.5"      → no whitespace after the dot, so no match
+#   - ranges such as "3-4 pairs"  → no terminal punctuation involved
+#   - lowercase abbreviations like "e.g. cups" → next char is lowercase, so no match
+# It keeps the terminal punctuation/closing quote attached to the preceding sentence.
+_STEP_BOUNDARY = re.compile(
+    r"([.!?]+[\"'’”]?)\s+(?=[\"'‘“(\[]*[A-Z0-9])"
+)
+
+
+def _split_instructions_into_steps(instructions: str) -> List[str]:
+    """Derive a list of short, step-like sentences from an instructions string.
+
+    Pure formatting only — it never rewrites, invents, or calls an LLM. The
+    original `instructions` string is the source of truth and is left untouched
+    by the caller; this returns an additive, derived view.
+
+    Rules:
+      - Empty/whitespace-only input  → [] (empty list).
+      - Splits on sentence boundaries (., !, ?) where it is safe (see _STEP_BOUNDARY).
+      - Strips surrounding whitespace and drops any empty fragments.
+      - If no safe boundary is found, returns the whole instruction as a single
+        step rather than over-splitting.
+    """
+    text = (instructions or "").strip()
+    if not text:
+        return []
+    # Insert a sentinel at each safe boundary (keeping the punctuation), then split.
+    marked = _STEP_BOUNDARY.sub(lambda m: m.group(1) + "\x00", text)
+    steps = [seg.strip() for seg in marked.split("\x00")]
+    steps = [seg for seg in steps if seg]
+    return steps or [text]
+
+
 def _normalize_slot(
     slot: Dict[str, Any],
     session_id: str,
@@ -209,6 +246,10 @@ def _normalize_slot(
     domain = slot.get("category_key", "")
     title = slot.get("title") or ""
 
+    # Compute the instructions string once so the original `instructions` field and
+    # the derived `instructions_steps` array stay perfectly consistent.
+    instructions_text = _get("instructions", "how_to_do_it", "steps")
+
     result: Dict[str, Any] = {
         "id": _deterministic_activity_id(session_id, day, slot_index, title),
         "title": title,
@@ -218,7 +259,10 @@ def _normalize_slot(
         # Content fields — the scheduler already normalised most of these;
         # the extra candidate keys below catch any residual naming variants.
         "why": _get("why", "why_this_works", "extended_reason"),
-        "instructions": _get("instructions", "how_to_do_it", "steps"),
+        "instructions": instructions_text,
+        # Additive (Beta 2.0): bullet-friendly steps derived from `instructions`.
+        # `instructions` above is preserved exactly; this is an extra view only.
+        "instructions_steps": _split_instructions_into_steps(instructions_text),
         "materials": _get("materials", "what_you_need"),
         # scheduler writes "success" (normalised from success_criteria/success);
         # the frontend contract calls this field "success_criteria".
