@@ -37,7 +37,9 @@ from api.pipeline import (
     get_expected_question_id,
     run_plan_pipeline,
     run_record_answer,
+    run_refresh_pipeline,
     run_session_start,
+    translate_feedback_to_activity_feedback,
 )
 from api.planning_period import compute_plan_period
 from api.report_generator import REPORT_TITLES, generate_report_body
@@ -432,6 +434,125 @@ async def session_plan(
         raise HTTPException(
             status_code=500,
             detail=f"Plan generated but failed to save: {exc}",
+        )
+
+    return plan_response
+
+
+# ── Weekly refresh endpoint (Step 5B) — Week-2 repeat-adapt ─────────────────
+
+@app.post(
+    "/api/v1/session/{session_id}/plan/next-week",
+    tags=["session"],
+)
+async def session_plan_next_week(
+    session_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Create the next week's plan (Week 2) from the current Week-1 plan using the
+    brain's repeat-adapt engine. Parent-triggered; no background job.
+
+    Behavior:
+      - Same Firebase auth + session ownership as other session routes.
+      - Requires a current plan to advance from (else 409).
+      - Builds Week 2 via cycle_week=2 repeat-adapt — reuses Week-1 activities with
+        harder/easier/repeat cues from feedback. No new OpenAI calls.
+      - Stores the new plan under a NEW plan_id in doc["plans"]; Week 1 is left
+        untouched. current_plan_id is updated only after the new plan is saved.
+      - Idempotent: if the current plan is already a Week-2 refresh, or a Week-2
+        was already built from the current base plan, the existing plan is
+        returned instead of creating a duplicate.
+
+    Returns the same response shape as POST /plan (Lovable reuses the renderer).
+    plan_period additionally carries cycle_week=2, plan_type="next_week",
+    base_plan_id.
+    """
+    doc = _require_session(auth.uid, session_id)
+
+    plans: Dict[str, Any] = doc.get("plans") or {}
+    base_plan_id = doc.get("current_plan_id")
+    if not base_plan_id or base_plan_id not in plans:
+        raise HTTPException(
+            status_code=409,
+            detail="No current plan to advance from. Generate the first plan first.",
+        )
+
+    base_entry = plans[base_plan_id]
+    base_period = base_entry.get("plan_period") or {}
+
+    # ── Idempotency / duplicate-prevention guards ──────────────────────────
+    # 1. If the current plan is already a Week-2 refresh, return it unchanged
+    #    (Beta 2.0 MVP advances at most one week — no Week 3).
+    if int(base_period.get("cycle_week", 1) or 1) >= 2:
+        return base_entry["plan_response"]
+    # 2. If a Week-2 plan was already built from this base, return that one.
+    for entry in plans.values():
+        if (entry.get("plan_period") or {}).get("base_plan_id") == base_plan_id:
+            return entry["plan_response"]
+
+    # ── Require a complete stored Week-1 brain_state ───────────────────────
+    brain_state = doc.get("brain_state") or {}
+    if not (brain_state.get("weekly_schedule") or {}).get("days"):
+        raise HTTPException(
+            status_code=409,
+            detail="Stored plan state is incomplete; cannot build the next week.",
+        )
+
+    # ── Translate feedback (base plan only) → brain signals, then build Week 2 ──
+    activity_feedback = translate_feedback_to_activity_feedback(
+        doc.get("feedback") or [],
+        base_entry.get("plan_response") or {},
+        base_plan_id,
+    )
+    try:
+        # run_refresh_pipeline works on a deep copy; brain_state is untouched on error.
+        refresh_state = run_refresh_pipeline(brain_state, activity_feedback)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Next-week plan generation failed: {exc}",
+        )
+
+    weekly_schedule = refresh_state.get("weekly_schedule", {})
+
+    # New plan period (new plan_id) + additive Week-2 markers.
+    plan_period = compute_plan_period(doc.get("timezone") or "UTC")
+    plan_period["cycle_week"] = 2
+    plan_period["plan_type"] = "next_week"
+    plan_period["base_plan_id"] = base_plan_id
+
+    plan_response = adapt_weekly_plan(
+        session_id=session_id,
+        age_in_months=doc["age_in_months"],
+        daily_time_minutes=doc["daily_time_minutes"],
+        weekly_schedule=weekly_schedule,
+        plan_period=plan_period,
+    )
+    plan_internal = build_plan_internal(
+        session_id=session_id,
+        brain_state=refresh_state,
+        weekly_schedule=weekly_schedule,
+        plan_period=plan_period,
+        daily_time_minutes=doc["daily_time_minutes"],
+    )
+
+    # Persist only after the new plan is fully built. Week 1 stays as-is in history.
+    new_plan_id = plan_period["plan_id"]
+    doc["brain_state"] = refresh_state
+    doc["current_plan_id"] = new_plan_id
+    doc.setdefault("plans", {})[new_plan_id] = {
+        "plan_period": plan_period,
+        "plan_response": plan_response,
+        "plan_internal": plan_internal,
+    }
+
+    try:
+        store_save(auth.uid, session_id, doc)
+    except SessionSaveError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Next-week plan built but failed to save: {exc}",
         )
 
     return plan_response

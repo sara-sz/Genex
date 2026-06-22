@@ -278,6 +278,13 @@ def _normalize_slot(
     if wm:
         result["weekend_mode"] = wm
 
+    # Pass through Week-2 repeat-adapt cues when present (refresh/next-week plans
+    # only). Absent on first-plan Week-1 cards, so their shape is unchanged.
+    for _rk in ("repeat_guidance", "repeat_mode", "is_repeat"):
+        _rv = slot.get(_rk)
+        if _rv not in (None, ""):
+            result[_rk] = _rv
+
     return result
 
 

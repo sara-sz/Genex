@@ -15,6 +15,7 @@ Do NOT import from app.py or Streamlit.
 Do NOT modify genex_core files.
 """
 
+import copy
 from typing import Any, Dict, List, Optional, Tuple
 
 from genex_core.interview_engine import (
@@ -359,3 +360,105 @@ def run_plan_pipeline(
     brain_state["weekly_schedule"] = repaired
 
     return brain_state, (gate_report if admin_debug else None)
+
+
+# ── Weekly refresh (Step 5B): Week-2 repeat-adapt ───────────────────────────
+# Parent-triggered. Reuses the brain's cycle-week-aware scheduler to repeat Week-1
+# activities with harder/easier/repeat cues derived conservatively from feedback.
+# No new OpenAI calls — repeat-adapt reuses the existing Week-1 activity banks.
+
+def _aggregate_signal(records: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Collapse one activity's API feedback records into a single brain signal dict.
+
+    Conservative precedence (never over-challenge):
+      any too_hard / wasn't ready / didn't want to try  → easier  (reduce demand)
+      else any too_easy with a 'did_it'                 → harder  (add challenge)
+      else                                              → same    (repeat)
+
+    Returns {difficulty, performance, engagement} in the brain's vocabulary, the
+    shape scheduler._v22_repeat_adapt_item consumes.
+    """
+    difficulties = [r.get("difficulty") for r in records]
+    completions = [r.get("completion") for r in records]
+    enjoyments = [r.get("enjoyment") for r in records]
+
+    any_hard = "too_hard" in difficulties
+    any_not_ready = "wasnt_ready_yet" in completions
+    any_refused = "didnt_want_to_try" in completions
+    any_easy = "too_easy" in difficulties
+    any_did = "did_it" in completions
+    any_resisted = ("not_really" in enjoyments) or any_refused
+
+    if any_hard or any_not_ready or any_refused:
+        # Too hard, not ready, or refused → reduce demand / offer more support.
+        difficulty, performance = "too_hard", "couldnt_do_it"
+    elif any_easy and any_did:
+        # Clearly too easy and the child did it → add a stretch next week.
+        difficulty, performance = "too_easy", "done_independently"
+    else:
+        # Mixed / just-right / no clear signal → repeat as-is (no mastery claim).
+        difficulty, performance = "just_right", ""
+
+    engagement = "resisted_it" if any_resisted else ""
+    return {"difficulty": difficulty, "performance": performance, "engagement": engagement}
+
+
+def translate_feedback_to_activity_feedback(
+    feedback_list: List[Dict[str, Any]],
+    base_plan_response: Dict[str, Any],
+    base_plan_id: Optional[str],
+) -> Dict[str, Dict[str, Dict[str, str]]]:
+    """Translate API feedback (doc["feedback"]) → brain activity_feedback.
+
+    Output shape (what scheduler._v22_build_week2_schedule reads):
+        { category_key: { activity_title: {difficulty, performance, engagement} } }
+
+    Titles are recovered from the base (Week-1) plan_response by activity_id, since
+    the feedback record stores activity_id + domain but not the card title. Only
+    feedback for the base plan is used; records that cannot be mapped to a Week-1
+    card title are skipped (domain-level signals are intentionally not invented).
+    """
+    id_to_card: Dict[str, Tuple[str, str]] = {}
+    for day in (base_plan_response or {}).get("week", []):
+        for act in day.get("activities", []):
+            aid = act.get("id")
+            if aid:
+                id_to_card[aid] = (act.get("title", ""), act.get("domain", ""))
+
+    grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    for f in feedback_list or []:
+        # Only consider feedback for the base plan we are advancing from.
+        if base_plan_id and f.get("plan_id") not in (None, base_plan_id):
+            continue
+        title, domain = id_to_card.get(f.get("activity_id"), ("", f.get("domain", "")))
+        if not title or not domain:
+            continue
+        grouped.setdefault((domain, title), []).append(f)
+
+    activity_feedback: Dict[str, Dict[str, Dict[str, str]]] = {}
+    for (domain, title), recs in grouped.items():
+        activity_feedback.setdefault(domain, {})[title] = _aggregate_signal(recs)
+    return activity_feedback
+
+
+def run_refresh_pipeline(
+    brain_state: Dict[str, Any],
+    activity_feedback: Dict[str, Dict[str, Dict[str, str]]],
+) -> Dict[str, Any]:
+    """Build a Week-2 repeat-adapt schedule from the persisted Week-1 brain_state.
+
+    Works on a deep copy so the caller's Week-1 brain_state is never corrupted
+    (the caller persists the returned state only on success). No LLM calls.
+
+    Raises ValueError if there is no Week-1 schedule to repeat.
+    """
+    state = copy.deepcopy(brain_state or {})
+    week1 = state.get("weekly_schedule") or {}
+    if not week1.get("days"):
+        raise ValueError("No Week-1 weekly_schedule available to build the next week.")
+
+    state["week1_schedule"] = week1            # explicit, stable base for the builder
+    state["activity_feedback"] = activity_feedback or {}
+    state["cycle_week"] = 2
+    build_weekly_schedule(state)               # sets state["weekly_schedule"] = Week 2
+    return state
