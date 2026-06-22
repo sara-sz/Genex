@@ -41,7 +41,12 @@ from api.pipeline import (
     run_session_start,
     translate_feedback_to_activity_feedback,
 )
-from api.planning_period import compute_plan_period
+from api.planning_period import (
+    _local_date,
+    compute_next_week_period,
+    compute_plan_period,
+    next_week_available_from,
+)
 from api.report_generator import REPORT_TITLES, generate_report_body
 from api.schemas import (
     AnswerRequest,
@@ -491,6 +496,25 @@ async def session_plan_next_week(
         if (entry.get("plan_period") or {}).get("base_plan_id") == base_plan_id:
             return entry["plan_response"]
 
+    # ── Eligibility guard: Week 2 only becomes available after Week 1 ends ──
+    # Available from the Monday after the base plan's plan_end_date (Week 1's
+    # Sunday). Before that, do not create Week 2 — return a clear 409 (consistent
+    # with the API's other "not in the right state" responses) and no plan.
+    available_from = next_week_available_from(base_period)
+    today_local = _local_date(
+        doc.get("timezone") or "UTC", datetime.now(timezone.utc)
+    ).isoformat()
+    if today_local < available_from:  # ISO date strings compare chronologically
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "next_week_not_ready",
+                "message": "Week 2 will be available after your current week ends.",
+                "available_from": available_from,
+                "current_plan_end_date": base_period.get("plan_end_date", ""),
+            },
+        )
+
     # ── Require a complete stored Week-1 brain_state ───────────────────────
     brain_state = doc.get("brain_state") or {}
     if not (brain_state.get("weekly_schedule") or {}).get("days"):
@@ -516,11 +540,10 @@ async def session_plan_next_week(
 
     weekly_schedule = refresh_state.get("weekly_schedule", {})
 
-    # New plan period (new plan_id) + additive Week-2 markers.
-    plan_period = compute_plan_period(doc.get("timezone") or "UTC")
-    plan_period["cycle_week"] = 2
-    plan_period["plan_type"] = "next_week"
-    plan_period["base_plan_id"] = base_plan_id
+    # New plan period anchored to the Monday after Week 1 ends (full Mon–Sun week,
+    # is_partial_week=False) with additive markers (cycle_week=2, plan_type,
+    # base_plan_id, available_from).
+    plan_period = compute_next_week_period(base_period, doc.get("timezone") or "UTC")
 
     plan_response = adapt_weekly_plan(
         session_id=session_id,

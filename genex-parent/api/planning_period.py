@@ -96,6 +96,54 @@ def compute_plan_period(
     }
 
 
+def next_week_available_from(base_plan_period: Dict[str, Any]) -> str:
+    """Return the date (YYYY-MM-DD) on which the next week becomes available.
+
+    Week 2 starts on the Monday after the base (Week 1) plan ends. The base plan
+    ends on its plan_end_date (the Sunday of Week 1's calendar week). The Monday
+    on/after the day after that Sunday is when Week 2 may be created.
+    """
+    base_end = date.fromisoformat(base_plan_period["plan_end_date"])
+    day_after = base_end + timedelta(days=1)
+    # Snap to the Monday on/after day_after (no-op when day_after is already Monday).
+    week2_start = day_after + timedelta(days=(7 - day_after.weekday()) % 7)
+    return week2_start.isoformat()
+
+
+def compute_next_week_period(
+    base_plan_period: Dict[str, Any],
+    timezone_str: str,
+    now_utc: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Compute the Week-2 plan period anchored to the Monday after Week 1 ends.
+
+    Week 2 is always a full Monday–Sunday week (is_partial_week=False), regardless
+    of whether Week 1 was partial. Carries additive markers (cycle_week=2,
+    plan_type="next_week", base_plan_id, available_from) so Lovable can identify
+    and gate the refresh.
+    """
+    if now_utc is None:
+        now_utc = datetime.now(dt_timezone.utc)
+
+    week2_start = date.fromisoformat(next_week_available_from(base_plan_period))
+    week2_end = week2_start + timedelta(days=6)  # Sunday
+
+    return {
+        "plan_id": str(uuid.uuid4()),
+        "plan_type": "next_week",
+        "timezone": timezone_str,
+        "generated_at": now_utc.isoformat(),
+        "week_start_date": week2_start.isoformat(),
+        "plan_start_date": week2_start.isoformat(),
+        "plan_end_date": week2_end.isoformat(),
+        "days_included": list(WEEK_DAY_NAMES),   # full Mon–Sun
+        "is_partial_week": False,
+        "cycle_week": 2,
+        "base_plan_id": base_plan_period.get("plan_id") or "",
+        "available_from": week2_start.isoformat(),
+    }
+
+
 def activity_date_for_day(week_start_date_str: str, day_name: str) -> str:
     """
     Return the ISO-8601 calendar date for a named weekday within the week
