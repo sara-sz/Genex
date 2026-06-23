@@ -176,8 +176,58 @@ def find_overlay_internal(
 
 
 def is_current_plan(doc: Dict[str, Any], plan_id: Optional[str]) -> bool:
-    """Guard helper for future mutation endpoints: only the current plan is editable.
+    """Guard helper for mutation endpoints: only the current plan is editable.
 
     Returns True iff plan_id is the session's current_plan_id.
     """
     return bool(plan_id) and doc.get("current_plan_id") == plan_id
+
+
+def plan_has_activity(plan_response: Dict[str, Any], activity_id: str) -> bool:
+    """True if activity_id is one of the originally generated cards in plan_response.
+
+    Customization targets the generated activities (by their stable plan_response
+    `id`). Used for the 404 unknown-activity guard.
+    """
+    if not plan_response or not activity_id:
+        return False
+    for day_entry in plan_response.get("week", []):
+        for act in day_entry.get("activities", []):
+            if act.get("id") == activity_id:
+                return True
+    return False
+
+
+def ensure_overlay(doc: Dict[str, Any], plan_id: str) -> Dict[str, Any]:
+    """Return the (mutable) overlay for plan_id, creating an empty one if absent.
+
+    The caller mutates the returned dict and persists the doc. Old sessions without
+    a plan_customizations key get one initialised here.
+    """
+    pc = doc.setdefault("plan_customizations", {})
+    if plan_id not in pc:
+        pc[plan_id] = empty_overlay()
+    return pc[plan_id]
+
+
+def _add_unique(lst: List[str], value: str) -> bool:
+    """Append value to lst if not already present. Returns True if it was added."""
+    if value in lst:
+        return False
+    lst.append(value)
+    return True
+
+
+def overlay_summary(overlay: Optional[Dict[str, Any]], plan_id: Optional[str]) -> Dict[str, Any]:
+    """Small additive summary of a plan's customizations for GET /session."""
+    ov = overlay or {}
+    removed = ov.get("removed_activity_ids") or []
+    saved = ov.get("saved_for_later_activity_ids") or []
+    overrides = ov.get("activity_overrides") or {}
+    added = ov.get("added_activities") or []
+    return {
+        "plan_id": plan_id,
+        "removed_count": len(removed),
+        "saved_for_later_count": len(saved),
+        "has_customizations": bool(removed or saved or overrides or added),
+    }

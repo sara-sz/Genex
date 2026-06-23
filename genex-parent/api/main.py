@@ -33,9 +33,13 @@ from api.adapters import (
 )
 from api.auth import AuthUser, require_auth, verify_beta_code
 from api.customization import (
+    ensure_overlay,
     find_overlay_internal,
     get_overlay,
+    overlay_summary,
+    plan_has_activity,
     resolve_plan_response,
+    _add_unique,
 )
 from api.pipeline import (
     get_current_question,
@@ -656,6 +660,112 @@ async def session_plan_accept(
     }
 
 
+# ── Current-week customization endpoints (Beta 2.1 Step 2C) ─────────────────
+
+def _require_customizable_activity(
+    doc: Dict[str, Any], plan_id: str, activity_id: str
+) -> None:
+    """Shared guard for current-week activity customization.
+
+    Raises:
+      404 plan_not_found       — plan_id not in this session.
+      409 only_current_plan_can_be_customized — plan_id is not the current plan.
+      404 activity_not_found   — activity_id is not a generated card in that plan.
+    """
+    plans: Dict[str, Any] = doc.get("plans") or {}
+    if plan_id not in plans:
+        raise HTTPException(status_code=404, detail="plan_not_found")
+    if plan_id != doc.get("current_plan_id"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "only_current_plan_can_be_customized",
+                "message": "Only the current weekly plan can be customized.",
+            },
+        )
+    plan_response = plans[plan_id].get("plan_response") or {}
+    if not plan_has_activity(plan_response, activity_id):
+        raise HTTPException(status_code=404, detail="activity_not_found")
+
+
+@app.post(
+    "/api/v1/session/{session_id}/plan/{plan_id}/activity/{activity_id}/remove",
+    tags=["session"],
+)
+async def session_activity_remove(
+    session_id: str,
+    plan_id: str,
+    activity_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Hide an activity from the current week. Overlay-only and LLM-free.
+
+    Adds activity_id to the overlay's removed_activity_ids. Never mutates the
+    stored plan_response/plan_internal or the activity bank; existing feedback is
+    untouched. Idempotent (no duplicate ids). Only the current plan is editable.
+    """
+    doc = _require_session(auth.uid, session_id)
+    _require_customizable_activity(doc, plan_id, activity_id)
+
+    overlay = ensure_overlay(doc, plan_id)
+    added = _add_unique(overlay.setdefault("removed_activity_ids", []), activity_id)
+
+    if added:
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to save customization: {exc}")
+
+    return {
+        "session_id": session_id,
+        "plan_id": plan_id,
+        "activity_id": activity_id,
+        "removed": True,
+        "saved_for_later": activity_id in (overlay.get("saved_for_later_activity_ids") or []),
+    }
+
+
+@app.post(
+    "/api/v1/session/{session_id}/plan/{plan_id}/activity/{activity_id}/save-for-later",
+    tags=["session"],
+)
+async def session_activity_save_for_later(
+    session_id: str,
+    plan_id: str,
+    activity_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Save an activity for later ("I like this, but not this week").
+
+    Adds activity_id to saved_for_later_activity_ids AND hides it from the current
+    week via removed_activity_ids. Overlay-only, LLM-free, idempotent (no duplicate
+    ids in either list). Never mutates the generated plan or the activity bank.
+    Only the current plan is editable.
+    """
+    doc = _require_session(auth.uid, session_id)
+    _require_customizable_activity(doc, plan_id, activity_id)
+
+    overlay = ensure_overlay(doc, plan_id)
+    a1 = _add_unique(overlay.setdefault("saved_for_later_activity_ids", []), activity_id)
+    a2 = _add_unique(overlay.setdefault("removed_activity_ids", []), activity_id)
+
+    if a1 or a2:
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to save customization: {exc}")
+
+    return {
+        "session_id": session_id,
+        "plan_id": plan_id,
+        "activity_id": activity_id,
+        "removed": True,
+        "saved_for_later": True,
+    }
+
+
 # ── Feedback helpers ───────────────────────────────────────────────────────
 
 def _find_activity_internal(
@@ -921,6 +1031,10 @@ async def session_get(
         "progress_summary":  progress_summary,
         "feedback_summary":  feedback_summary,
         "plan_acceptance":   plan_acceptance,
+        # Beta 2.1: additive customization counts for the current plan.
+        "plan_customization_summary": overlay_summary(
+            get_overlay(doc, current_plan_id), current_plan_id
+        ),
     }
 
     # Include gate_report in plan_period only when ADMIN_DEBUG=1
