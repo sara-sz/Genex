@@ -122,7 +122,9 @@ def resolve_plan_response(
                 new_acts.append(act)
         day_entry["activities"] = new_acts
 
-    # Append parent-added activities to their day.
+    # Append parent-added activities to their day. Added activities are themselves
+    # customizable: hide them when their id is in removed_activity_ids (remove /
+    # save-for-later), and replace them when they have a swap override.
     added = overlay.get("added_activities") or []
     if added:
         day_index = {d.get("day"): d for d in week}
@@ -130,6 +132,12 @@ def resolve_plan_response(
             card = item.get("activity")
             if not card:
                 continue
+            cid = card.get("id")
+            if cid in removed:
+                continue  # added activity removed / saved for later
+            ov = overrides.get(cid)
+            if ov and ov.get("replacement_activity"):
+                card = ov["replacement_activity"]  # added activity swapped
             day = item.get("day") or ""
             target = day_index.get(day)
             if target is None:
@@ -196,6 +204,57 @@ def plan_has_activity(plan_response: Dict[str, Any], activity_id: str) -> bool:
             if act.get("id") == activity_id:
                 return True
     return False
+
+
+def resolve_customization_target(
+    doc: Dict[str, Any], plan_id: str, activity_id: str
+) -> Optional[str]:
+    """Map a VISIBLE activity id to its canonical overlay key for customization.
+
+    Parent-facing rule: any activity visible in the current resolved plan is
+    actionable (remove / save-for-later / swap). Returns the key to act on, or
+    None if the id is not an actionable current-plan activity (→ 404):
+      - original generated id  → itself
+      - added activity id      → itself
+      - swapped replacement id  → the override's source key (original or added id),
+                                  so acting on the visible replacement maps back to
+                                  the activity that owns the override.
+    """
+    if not activity_id:
+        return None
+    plan_entry = (doc.get("plans") or {}).get(plan_id, {})
+    if plan_has_activity(plan_entry.get("plan_response") or {}, activity_id):
+        return activity_id
+    overlay = get_overlay(doc, plan_id) or {}
+    for item in overlay.get("added_activities") or []:
+        if (item.get("activity") or {}).get("id") == activity_id:
+            return activity_id
+    for key, ov in (overlay.get("activity_overrides") or {}).items():
+        if (ov or {}).get("replacement_activity", {}).get("id") == activity_id:
+            return key
+    return None
+
+
+def plan_day_labels(doc: Dict[str, Any], plan_id: str) -> List[str]:
+    """Day labels present in the current resolved plan (what the parent sees)."""
+    plan_entry = (doc.get("plans") or {}).get(plan_id, {})
+    overlay = get_overlay(doc, plan_id)
+    resolved = resolve_plan_response(plan_entry.get("plan_response") or {}, overlay)
+    return [d.get("day", "") for d in resolved.get("week", []) if d.get("day")]
+
+
+def match_plan_day(requested_day: Optional[str], valid_days: List[str]) -> Optional[str]:
+    """Case-insensitive, trimmed match of requested_day to a canonical plan day
+    label. Returns the canonical label, or None if blank / no match."""
+    if not requested_day:
+        return None
+    norm = requested_day.strip().lower()
+    if not norm:
+        return None
+    for d in valid_days:
+        if (d or "").strip().lower() == norm:
+            return d
+    return None
 
 
 def ensure_overlay(doc: Dict[str, Any], plan_id: str) -> Dict[str, Any]:

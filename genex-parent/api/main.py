@@ -40,8 +40,10 @@ from api.customization import (
     find_bank_activity_by_suggestion_id,
     find_overlay_internal,
     get_overlay,
+    match_plan_day,
     overlay_summary,
-    plan_has_activity,
+    plan_day_labels,
+    resolve_customization_target,
     resolve_plan_response,
     swap_suggestions,
     _add_unique,
@@ -687,12 +689,16 @@ def _require_current_plan(doc: Dict[str, Any], plan_id: str) -> Dict[str, Any]:
 
 def _require_customizable_activity(
     doc: Dict[str, Any], plan_id: str, activity_id: str
-) -> None:
-    """Current-plan guard + 404 activity_not_found if activity_id is not a
-    generated card in that plan."""
-    plan_entry = _require_current_plan(doc, plan_id)
-    if not plan_has_activity(plan_entry.get("plan_response") or {}, activity_id):
+) -> str:
+    """Current-plan guard + map the visible activity_id to its canonical overlay
+    key. Any activity visible in the resolved plan (original, added, or a swapped
+    replacement) is actionable. Returns the canonical key; 404 if not actionable.
+    """
+    _require_current_plan(doc, plan_id)
+    target = resolve_customization_target(doc, plan_id, activity_id)
+    if target is None:
         raise HTTPException(status_code=404, detail="activity_not_found")
+    return target
 
 
 @app.post(
@@ -713,12 +719,12 @@ async def session_activity_remove(
     untouched. Idempotent (no duplicate ids). Only the current plan is editable.
     """
     doc = _require_session(auth.uid, session_id)
-    _require_customizable_activity(doc, plan_id, activity_id)
+    target = _require_customizable_activity(doc, plan_id, activity_id)
 
     overlay = ensure_overlay(doc, plan_id)
-    added = _add_unique(overlay.setdefault("removed_activity_ids", []), activity_id)
+    changed = _add_unique(overlay.setdefault("removed_activity_ids", []), target)
 
-    if added:
+    if changed:
         try:
             store_save(auth.uid, session_id, doc)
         except SessionSaveError as exc:
@@ -729,7 +735,7 @@ async def session_activity_remove(
         "plan_id": plan_id,
         "activity_id": activity_id,
         "removed": True,
-        "saved_for_later": activity_id in (overlay.get("saved_for_later_activity_ids") or []),
+        "saved_for_later": target in (overlay.get("saved_for_later_activity_ids") or []),
     }
 
 
@@ -752,11 +758,11 @@ async def session_activity_save_for_later(
     Only the current plan is editable.
     """
     doc = _require_session(auth.uid, session_id)
-    _require_customizable_activity(doc, plan_id, activity_id)
+    target = _require_customizable_activity(doc, plan_id, activity_id)
 
     overlay = ensure_overlay(doc, plan_id)
-    a1 = _add_unique(overlay.setdefault("saved_for_later_activity_ids", []), activity_id)
-    a2 = _add_unique(overlay.setdefault("removed_activity_ids", []), activity_id)
+    a1 = _add_unique(overlay.setdefault("saved_for_later_activity_ids", []), target)
+    a2 = _add_unique(overlay.setdefault("removed_activity_ids", []), target)
 
     if a1 or a2:
         try:
@@ -815,7 +821,7 @@ async def session_activity_swap(
     suggestion replaces the prior override for that activity.
     """
     doc = _require_session(auth.uid, session_id)
-    _require_customizable_activity(doc, plan_id, activity_id)
+    target = _require_customizable_activity(doc, plan_id, activity_id)
 
     match = find_bank_activity_by_suggestion_id(doc.get("brain_state") or {}, body.suggestion_id)
     if match is None:
@@ -823,17 +829,17 @@ async def session_activity_swap(
     domain, bank_activity = match
 
     card, internal = build_card_from_bank(
-        session_id, plan_id, key=activity_id, domain=domain,
+        session_id, plan_id, key=target, domain=domain,
         bank_activity=bank_activity, source_bank_type="swap",
     )
 
     overlay = ensure_overlay(doc, plan_id)
     overrides = overlay.setdefault("activity_overrides", {})
-    prev = overrides.get(activity_id) or {}
+    prev = overrides.get(target) or {}
     prev_repl_id = (prev.get("replacement_activity") or {}).get("id")
 
     if prev_repl_id != card["id"]:
-        overrides[activity_id] = {
+        overrides[target] = {
             "mode": "swapped",
             "replacement_activity": card,
             "replacement_internal": internal,
@@ -914,7 +920,23 @@ async def session_activity_add(
     if existing is not None:
         day = existing.get("day", "")  # idempotent — already added
     else:
-        day = body.day or choose_add_day(doc, plan_id)
+        # Respect a provided day: match it (case-insensitive, trimmed) to an actual
+        # day in the current plan. Invalid → 400 (never silently fall back). Only
+        # auto-pick when day is omitted/blank.
+        requested = (body.day or "").strip()
+        if requested:
+            day = match_plan_day(requested, plan_day_labels(doc, plan_id))
+            if day is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "code": "invalid_day",
+                        "message": "The selected day is not part of the current plan.",
+                        "valid_days": plan_day_labels(doc, plan_id),
+                    },
+                )
+        else:
+            day = choose_add_day(doc, plan_id)
         added.append({
             "activity": card,
             "internal": internal,
