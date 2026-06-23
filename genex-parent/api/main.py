@@ -32,6 +32,11 @@ from api.adapters import (
     sanitize_concern,
 )
 from api.auth import AuthUser, require_auth, verify_beta_code
+from api.customization import (
+    find_overlay_internal,
+    get_overlay,
+    resolve_plan_response,
+)
 from api.pipeline import (
     get_current_question,
     get_expected_question_id,
@@ -648,10 +653,17 @@ async def session_feedback(
             detail="No plan has been generated for this session. Call /plan first.",
         )
 
-    # Look up internal metadata for enrichment
+    # Look up internal metadata for enrichment. Original cards resolve via the
+    # frozen plan_internal; Beta 2.1 swapped/added cards live only in the overlay,
+    # so fall back to the overlay's internal block. This keeps domain/subdomain
+    # and doctor/ST/OT-PT report routing working for customized activities.
     internal_act = _find_activity_internal(
         doc, body.plan_id, body.activity_id, body.day
     )
+    if internal_act is None:
+        internal_act = find_overlay_internal(
+            get_overlay(doc, body.plan_id), body.activity_id
+        )
     metadata_found = internal_act is not None
 
     feedback_id = str(uuid.uuid4())
@@ -794,8 +806,15 @@ async def session_get(
     plans = doc.get("plans") or {}
     plan_entry = plans.get(current_plan_id, {}) if current_plan_id else {}
 
-    plan_response = plan_entry.get("plan_response") or {}
+    original_plan_response = plan_entry.get("plan_response") or {}
     plan_period   = plan_entry.get("plan_period") or {}
+    # Beta 2.1: resolve the current plan through its customization overlay (if any).
+    # Identity-safe — returns the original object unchanged when there is no overlay,
+    # so uncustomized sessions are byte-compatible with Beta 2.0. The stored
+    # plan_response is never mutated.
+    plan_response = resolve_plan_response(
+        original_plan_response, get_overlay(doc, current_plan_id)
+    )
     progress_summary = plan_response.get("progress_summary") or {}
 
     # Feedback summary — aggregate counts, no raw notes exposed

@@ -47,6 +47,9 @@ Session document shape:
         "plan_response": dict,   # parent-facing plan (cached for fast reload)
         "plan_internal": dict,   # rich internal metadata (never sent to frontend)
       }
+    },
+    "plan_customizations": {               # Beta 2.1 current-week overlay, keyed by plan_id
+      "<plan_id>": dict,                   # see api/customization.py; never mutates plans[*]
     }
   }
 
@@ -203,6 +206,9 @@ def new_session_doc(
         # plan history — populated by /plan; supports future weekly refresh
         "current_plan_id": None,
         "plans": {},
+        # Beta 2.1 current-week customization overlay, keyed by plan_id.
+        # Empty by default; old sessions without this key still work (readers use .get()).
+        "plan_customizations": {},
     }
 
 
