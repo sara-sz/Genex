@@ -197,9 +197,12 @@ def test_get_session_no_overlay_identity():
     print("\n── GET /session with no overlay == original plan (Beta 2.0 shape)")
     sid, plan = _start_and_plan()
     g = client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()
-    check("GET keys unchanged", set(g.keys()) == {
+    # Existing Beta 2.0 keys must all remain (additive keys like plan_acceptance allowed).
+    _beta20_keys = {
         "session_id", "status", "age_in_months", "daily_time_minutes",
-        "current_plan_id", "plan", "progress_summary", "feedback_summary"}, sorted(g.keys()))
+        "current_plan_id", "plan", "progress_summary", "feedback_summary"}
+    check("existing GET keys preserved (no removal/rename)",
+          _beta20_keys.issubset(g.keys()), sorted(g.keys()))
     check("plan equals original plan_response", g["plan"] == plan, "plan differs from POST /plan")
     # old session has the key but empty
     doc = session_store.load("uid-a", sid)

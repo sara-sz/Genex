@@ -586,6 +586,76 @@ async def session_plan_next_week(
     return plan_response
 
 
+# ── Plan acceptance endpoint (Beta 2.1 Step 2B) ─────────────────────────────
+
+@app.post(
+    "/api/v1/session/{session_id}/plan/{plan_id}/accept",
+    tags=["session"],
+)
+async def session_plan_accept(
+    session_id: str,
+    plan_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Mark the current weekly plan as accepted by the parent.
+
+    Acceptance is per session_id + plan_id, stored OUTSIDE the generated plan
+    (doc["plans"][plan_id]["accepted_at"] / ["accepted_by_uid"]). The
+    plan_response and plan_internal are never mutated. Each week has its own
+    plan_id, so accepting Week 1 does not accept Week 2.
+
+    Rules:
+      - Same Firebase auth + session ownership as other session routes.
+      - 404 if plan_id is not in this session's plans.
+      - 409 (only_current_plan_can_be_accepted) if plan_id is not the current plan.
+      - Idempotent: re-accepting returns the same accepted_at (never overwritten).
+    """
+    doc = _require_session(auth.uid, session_id)
+
+    plans: Dict[str, Any] = doc.get("plans") or {}
+    if plan_id not in plans:
+        raise HTTPException(status_code=404, detail="plan_not_found")
+
+    # Only the current plan can be accepted; previous weeks are read-only.
+    if plan_id != doc.get("current_plan_id"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "only_current_plan_can_be_accepted",
+                "message": "Only the current weekly plan can be accepted.",
+            },
+        )
+
+    plan_entry = plans[plan_id]
+    existing = plan_entry.get("accepted_at")
+
+    if existing:
+        # Idempotent: already accepted — do not overwrite or re-save.
+        return {
+            "session_id": session_id,
+            "plan_id": plan_id,
+            "accepted": True,
+            "accepted_at": existing,
+        }
+
+    accepted_at = datetime.now(timezone.utc).isoformat()
+    plan_entry["accepted_at"] = accepted_at
+    plan_entry["accepted_by_uid"] = auth.uid
+
+    try:
+        store_save(auth.uid, session_id, doc)
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save acceptance: {exc}")
+
+    return {
+        "session_id": session_id,
+        "plan_id": plan_id,
+        "accepted": True,
+        "accepted_at": accepted_at,
+    }
+
+
 # ── Feedback helpers ───────────────────────────────────────────────────────
 
 def _find_activity_internal(
@@ -832,6 +902,15 @@ async def session_get(
         "domains_practised":   domains_practised,
     }
 
+    # Beta 2.1: additive per-current-plan acceptance state (read from outside the
+    # generated plan; never mutates plan_response/plan_internal).
+    accepted_at = plan_entry.get("accepted_at")
+    plan_acceptance = {
+        "plan_id":     current_plan_id,
+        "accepted":    bool(accepted_at),
+        "accepted_at": accepted_at,
+    }
+
     response: Dict[str, Any] = {
         "session_id":        session_id,
         "status":            status,
@@ -841,6 +920,7 @@ async def session_get(
         "plan":              plan_response,
         "progress_summary":  progress_summary,
         "feedback_summary":  feedback_summary,
+        "plan_acceptance":   plan_acceptance,
     }
 
     # Include gate_report in plan_period only when ADMIN_DEBUG=1
