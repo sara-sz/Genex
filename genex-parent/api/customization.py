@@ -225,9 +225,249 @@ def overlay_summary(overlay: Optional[Dict[str, Any]], plan_id: Optional[str]) -
     saved = ov.get("saved_for_later_activity_ids") or []
     overrides = ov.get("activity_overrides") or {}
     added = ov.get("added_activities") or []
+    swapped = sum(1 for o in overrides.values() if (o or {}).get("mode") == "swapped")
     return {
         "plan_id": plan_id,
         "removed_count": len(removed),
         "saved_for_later_count": len(saved),
+        "swapped_count": swapped,
+        "added_count": len(added),
         "has_customizations": bool(removed or saved or overrides or added),
     }
+
+
+# ── Bank-based suggestions for swap / add (Beta 2.1 Step 2D) ─────────────────
+# LLM-free: replacement/add cards are drawn from the session's already-generated,
+# already-safety-filtered activity banks in brain_state["activity_banks"]. The
+# banks are never mutated.
+
+import re as _re
+import uuid as _uuid
+from datetime import datetime as _datetime, timezone as _dt_timezone
+
+from api.adapters import DOMAIN_LABELS, _split_instructions_into_steps
+from api.planning_period import WEEK_DAY_NAMES, _local_date
+
+_DURATION_LABEL = "5–15 min"
+
+
+def _norm_root(title: str) -> str:
+    """Normalized title root for near-duplicate detection (mirrors activity_engine)."""
+    t = (title or "").lower()
+    t = _re.sub(r"[^a-z0-9\s]", " ", t)
+    t = _re.sub(
+        r"\b(easier|stretch|supported|slow|quick|simple|easy|gentle|basic|little|"
+        r"tiny|short|fun|new|my|your|our|a|the|an)\b", "", t)
+    t = _re.sub(r"\b(game|activity|practice|challenge|time|session|version|exercise)\b", "", t)
+    return _re.sub(r"\s+", " ", t).strip()
+
+
+def iter_bank_activities(brain_state: Dict[str, Any]):
+    """Yield (domain_key, bank_activity) for every activity in every domain bank."""
+    for domain, bank in (brain_state.get("activity_banks") or {}).items():
+        for act in (bank or {}).get("activities", []):
+            yield domain, act
+
+
+def suggestion_id_for(domain: str, bank_activity: Dict[str, Any]) -> str:
+    """Deterministic, stateless suggestion id from (domain, title).
+
+    Titles are de-duplicated within a bank, so (domain, title) is unique. GET and
+    POST compute the same id, so a suggestion can be resolved without server state.
+    """
+    return str(_uuid.uuid5(_uuid.NAMESPACE_URL, f"sugg|{domain}|{bank_activity.get('title', '')}"))
+
+
+def find_bank_activity_by_suggestion_id(brain_state: Dict[str, Any], suggestion_id: str):
+    """Resolve a suggestion_id back to (domain, bank_activity), or None."""
+    if not suggestion_id:
+        return None
+    for domain, act in iter_bank_activities(brain_state):
+        if suggestion_id_for(domain, act) == suggestion_id:
+            return domain, act
+    return None
+
+
+def _suggestion_preview(domain: str, act: Dict[str, Any]) -> Dict[str, Any]:
+    """Parent-facing suggestion preview (no card id yet — minted on apply)."""
+    instr = act.get("instructions", "")
+    return {
+        "suggestion_id": suggestion_id_for(domain, act),
+        "title": act.get("title", ""),
+        "domain": domain,
+        "domain_label": DOMAIN_LABELS.get(domain, domain),
+        "duration_label": _DURATION_LABEL,
+        "why": act.get("why", ""),
+        "instructions": instr,
+        "instructions_steps": _split_instructions_into_steps(instr),
+        "materials": act.get("materials", ""),
+        "success_criteria": act.get("success", ""),
+        "make_easier": act.get("easier", ""),
+        "make_harder": act.get("harder", ""),
+        "avoid": act.get("avoid", ""),
+    }
+
+
+def build_card_from_bank(
+    session_id: str, plan_id: str, key: str, domain: str,
+    bank_activity: Dict[str, Any], source_bank_type: str,
+):
+    """Build a full parent-facing card + its internal metadata block from a bank
+    activity. `key` makes the new card id deterministic (for idempotency)."""
+    dbg = bank_activity.get("_debug", {}) or {}
+    new_id = str(_uuid.uuid5(
+        _uuid.NAMESPACE_URL,
+        f"{source_bank_type}|{session_id}|{plan_id}|{key}|{bank_activity.get('title', '')}",
+    ))
+    instr = bank_activity.get("instructions", "")
+    card = {
+        "id": new_id,
+        "title": bank_activity.get("title", ""),
+        "domain": domain,
+        "domain_label": DOMAIN_LABELS.get(domain, domain),
+        "duration_label": _DURATION_LABEL,
+        "why": bank_activity.get("why", ""),
+        "instructions": instr,
+        "instructions_steps": _split_instructions_into_steps(instr),
+        "materials": bank_activity.get("materials", ""),
+        "success_criteria": bank_activity.get("success", ""),
+        "make_easier": bank_activity.get("easier", ""),
+        "make_harder": bank_activity.get("harder", ""),
+        "group_play": bank_activity.get("group_play", ""),
+        "avoid": bank_activity.get("avoid", ""),
+    }
+    internal = {
+        "domain": domain,
+        "subdomain": dbg.get("subdomain", ""),
+        "milestone_text": dbg.get("milestone", ""),
+        "milestone_age_months": None,
+        "bridge_step_index": dbg.get("bridge_step_number"),
+        "bridge_step_text": dbg.get("bridge_step_1", ""),
+        "activity_family": dbg.get("activity_family", ""),
+        "theme": bank_activity.get("theme", ""),
+        "difficulty_level": "",
+        "source_bank_type": source_bank_type,
+        "weekend_mode": "",
+        "support_tier": "",
+    }
+    return card, internal
+
+
+def get_plan_activity(plan_response: Dict[str, Any], activity_id: str) -> Optional[Dict[str, Any]]:
+    """Return the original generated card with this id, or None."""
+    for day_entry in (plan_response or {}).get("week", []):
+        for act in day_entry.get("activities", []):
+            if act.get("id") == activity_id:
+                return act
+    return None
+
+
+def find_plan_internal(plan_entry: Dict[str, Any], activity_id: str) -> Optional[Dict[str, Any]]:
+    """Return the plan_internal record for activity_id (by frontend_id), or None."""
+    pi = plan_entry.get("plan_internal") or {}
+    for day_entry in pi.get("week", []):
+        for act in day_entry.get("activities", []):
+            if act.get("frontend_id") == activity_id:
+                return act
+    return None
+
+
+def _excluded_titles(plan_response: Dict[str, Any], overlay: Optional[Dict[str, Any]]):
+    """Titles to avoid suggesting: everything currently in the resolved plan, plus
+    any originally-removed activity (don't re-suggest something the parent removed)."""
+    resolved = resolve_plan_response(plan_response, overlay)
+    titles = {(a.get("title", "") or "").strip().lower()
+              for d in resolved.get("week", []) for a in d.get("activities", [])}
+    removed_ids = set((overlay or {}).get("removed_activity_ids") or [])
+    for d in (plan_response or {}).get("week", []):
+        for a in d.get("activities", []):
+            if a.get("id") in removed_ids:
+                titles.add((a.get("title", "") or "").strip().lower())
+    roots = {_norm_root(t) for t in titles}
+    return titles, roots
+
+
+def swap_suggestions(doc: Dict[str, Any], plan_id: str, activity_id: str, limit: int = 3):
+    """Up to `limit` safe bank alternatives for activity_id, preferring same
+    activity_family, then bridge_step, then subdomain (same domain only)."""
+    plan_entry = (doc.get("plans") or {}).get(plan_id, {})
+    plan_response = plan_entry.get("plan_response") or {}
+    overlay = get_overlay(doc, plan_id)
+    target = find_plan_internal(plan_entry, activity_id) or {}
+    domain = target.get("domain", "")
+    fam = target.get("activity_family", "")
+    bridge = target.get("bridge_step_index")
+    sub = target.get("subdomain", "")
+    orig = get_plan_activity(plan_response, activity_id) or {}
+    orig_title = (orig.get("title", "") or "").strip().lower()
+
+    titles, roots = _excluded_titles(plan_response, overlay)
+    brain_state = doc.get("brain_state") or {}
+
+    scored = []
+    for d, act in iter_bank_activities(brain_state):
+        if d != domain:
+            continue
+        t = (act.get("title", "") or "").strip().lower()
+        if not t or t == orig_title or t in titles or _norm_root(t) in roots:
+            continue
+        dbg = act.get("_debug", {}) or {}
+        score = 0
+        if fam and dbg.get("activity_family") == fam:
+            score += 4
+        if bridge is not None and dbg.get("bridge_step_number") == bridge:
+            score += 3
+        if sub and dbg.get("subdomain") == sub:
+            score += 2
+        scored.append((score, t, d, act))
+
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return [_suggestion_preview(d, act) for _, _, d, act in scored[:limit]]
+
+
+def add_suggestions(
+    doc: Dict[str, Any], plan_id: str, domain_filter: Optional[str] = None, limit: int = 5,
+):
+    """Up to `limit` bank activities not already in the resolved plan (optionally
+    filtered to one domain). Removed activities are not re-suggested."""
+    plan_entry = (doc.get("plans") or {}).get(plan_id, {})
+    plan_response = plan_entry.get("plan_response") or {}
+    overlay = get_overlay(doc, plan_id)
+    titles, roots = _excluded_titles(plan_response, overlay)
+    brain_state = doc.get("brain_state") or {}
+
+    out = []
+    seen = set()
+    for d, act in iter_bank_activities(brain_state):
+        if domain_filter and d != domain_filter:
+            continue
+        t = (act.get("title", "") or "").strip().lower()
+        if not t or t in titles or _norm_root(t) in roots or t in seen:
+            continue
+        seen.add(t)
+        out.append(_suggestion_preview(d, act))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def choose_add_day(doc: Dict[str, Any], plan_id: str) -> str:
+    """Pick a day to add an activity: prefer today (if it's a day in the plan),
+    else the day with the fewest activities (ties → earliest weekday)."""
+    plan_entry = (doc.get("plans") or {}).get(plan_id, {})
+    overlay = get_overlay(doc, plan_id)
+    resolved = resolve_plan_response(plan_entry.get("plan_response") or {}, overlay)
+    week = resolved.get("week", [])
+    if not week:
+        return ""
+    today = _local_date(doc.get("timezone") or "UTC", _datetime.now(_dt_timezone.utc)).isoformat()
+    for d in week:
+        if d.get("date") == today:
+            return d.get("day", "")
+
+    def _key(d):
+        day = d.get("day", "")
+        idx = WEEK_DAY_NAMES.index(day) if day in WEEK_DAY_NAMES else 99
+        return (len(d.get("activities", [])), idx)
+
+    return min(week, key=_key).get("day", "")

@@ -154,6 +154,17 @@ class ReportRequest(BaseModel):
     report_type: ReportTypeLiteral
 
 
+# ── Beta 2.1 current-week customization request bodies ─────────────────────
+
+class SwapRequest(BaseModel):
+    suggestion_id: str = Field(..., min_length=1)
+
+
+class AddActivityRequest(BaseModel):
+    suggestion_id: str = Field(..., min_length=1)
+    day: Optional[str] = Field(default=None, max_length=20)
+
+
 # ─────────────────────────────────────────────────────────────────────────
 # Response models
 # ─────────────────────────────────────────────────────────────────────────

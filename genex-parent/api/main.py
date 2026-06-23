@@ -33,12 +33,17 @@ from api.adapters import (
 )
 from api.auth import AuthUser, require_auth, verify_beta_code
 from api.customization import (
+    add_suggestions,
+    build_card_from_bank,
+    choose_add_day,
     ensure_overlay,
+    find_bank_activity_by_suggestion_id,
     find_overlay_internal,
     get_overlay,
     overlay_summary,
     plan_has_activity,
     resolve_plan_response,
+    swap_suggestions,
     _add_unique,
 )
 from api.pipeline import (
@@ -58,6 +63,7 @@ from api.planning_period import (
 )
 from api.report_generator import REPORT_TITLES, generate_report_body
 from api.schemas import (
+    AddActivityRequest,
     AnswerRequest,
     FeedbackRequest,
     InterviewCompleteResponse,
@@ -65,6 +71,7 @@ from api.schemas import (
     ReportRequest,
     SessionStartRequest,
     SessionStartResponse,
+    SwapRequest,
 )
 from api.session_store import (
     SessionLoadError,
@@ -662,16 +669,8 @@ async def session_plan_accept(
 
 # ── Current-week customization endpoints (Beta 2.1 Step 2C) ─────────────────
 
-def _require_customizable_activity(
-    doc: Dict[str, Any], plan_id: str, activity_id: str
-) -> None:
-    """Shared guard for current-week activity customization.
-
-    Raises:
-      404 plan_not_found       — plan_id not in this session.
-      409 only_current_plan_can_be_customized — plan_id is not the current plan.
-      404 activity_not_found   — activity_id is not a generated card in that plan.
-    """
+def _require_current_plan(doc: Dict[str, Any], plan_id: str) -> Dict[str, Any]:
+    """Guard: plan must exist (404) and be the current plan (409). Returns the entry."""
     plans: Dict[str, Any] = doc.get("plans") or {}
     if plan_id not in plans:
         raise HTTPException(status_code=404, detail="plan_not_found")
@@ -683,8 +682,16 @@ def _require_customizable_activity(
                 "message": "Only the current weekly plan can be customized.",
             },
         )
-    plan_response = plans[plan_id].get("plan_response") or {}
-    if not plan_has_activity(plan_response, activity_id):
+    return plans[plan_id]
+
+
+def _require_customizable_activity(
+    doc: Dict[str, Any], plan_id: str, activity_id: str
+) -> None:
+    """Current-plan guard + 404 activity_not_found if activity_id is not a
+    generated card in that plan."""
+    plan_entry = _require_current_plan(doc, plan_id)
+    if not plan_has_activity(plan_entry.get("plan_response") or {}, activity_id):
         raise HTTPException(status_code=404, detail="activity_not_found")
 
 
@@ -763,6 +770,169 @@ async def session_activity_save_for_later(
         "activity_id": activity_id,
         "removed": True,
         "saved_for_later": True,
+    }
+
+
+# ── Swap activity (Beta 2.1 Step 2D) — bank alternatives, LLM-free ──────────
+
+@app.get(
+    "/api/v1/session/{session_id}/plan/{plan_id}/activity/{activity_id}/swap-suggestions",
+    tags=["session"],
+)
+async def session_activity_swap_suggestions(
+    session_id: str,
+    plan_id: str,
+    activity_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Return 1–3 safe replacement suggestions for an activity, from the existing
+    activity bank (no OpenAI). Current plan only."""
+    doc = _require_session(auth.uid, session_id)
+    _require_customizable_activity(doc, plan_id, activity_id)
+    return {
+        "session_id": session_id,
+        "plan_id": plan_id,
+        "activity_id": activity_id,
+        "suggestions": swap_suggestions(doc, plan_id, activity_id),
+    }
+
+
+@app.post(
+    "/api/v1/session/{session_id}/plan/{plan_id}/activity/{activity_id}/swap",
+    tags=["session"],
+)
+async def session_activity_swap(
+    session_id: str,
+    plan_id: str,
+    activity_id: str,
+    body: SwapRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Replace an activity with a chosen bank suggestion (overlay-only, LLM-free).
+
+    Stores an activity_overrides entry with the replacement card (new stable id)
+    and its replacement_internal. Idempotent for the same suggestion; a different
+    suggestion replaces the prior override for that activity.
+    """
+    doc = _require_session(auth.uid, session_id)
+    _require_customizable_activity(doc, plan_id, activity_id)
+
+    match = find_bank_activity_by_suggestion_id(doc.get("brain_state") or {}, body.suggestion_id)
+    if match is None:
+        raise HTTPException(status_code=404, detail="suggestion_not_found")
+    domain, bank_activity = match
+
+    card, internal = build_card_from_bank(
+        session_id, plan_id, key=activity_id, domain=domain,
+        bank_activity=bank_activity, source_bank_type="swap",
+    )
+
+    overlay = ensure_overlay(doc, plan_id)
+    overrides = overlay.setdefault("activity_overrides", {})
+    prev = overrides.get(activity_id) or {}
+    prev_repl_id = (prev.get("replacement_activity") or {}).get("id")
+
+    if prev_repl_id != card["id"]:
+        overrides[activity_id] = {
+            "mode": "swapped",
+            "replacement_activity": card,
+            "replacement_internal": internal,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "reason": "parent_request",
+        }
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to save swap: {exc}")
+        replacement_id = card["id"]
+    else:
+        replacement_id = prev_repl_id  # idempotent — same suggestion already applied
+
+    return {
+        "session_id": session_id,
+        "plan_id": plan_id,
+        "activity_id": activity_id,
+        "swapped": True,
+        "replacement_activity_id": replacement_id,
+        "plan_customization_summary": overlay_summary(overlay, plan_id),
+    }
+
+
+# ── Add recommended activity (Beta 2.1 Step 2D) — bank add-ons, LLM-free ────
+
+@app.get(
+    "/api/v1/session/{session_id}/plan/{plan_id}/activity-suggestions",
+    tags=["session"],
+)
+async def session_activity_add_suggestions(
+    session_id: str,
+    plan_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+    domain: Optional[str] = None,
+):
+    """Return 1–5 add-on suggestions from the existing bank (optionally filtered by
+    domain), excluding activities already in the resolved plan. Current plan only."""
+    doc = _require_session(auth.uid, session_id)
+    _require_current_plan(doc, plan_id)
+    return {
+        "session_id": session_id,
+        "plan_id": plan_id,
+        "domain": domain,
+        "suggestions": add_suggestions(doc, plan_id, domain_filter=domain),
+    }
+
+
+@app.post(
+    "/api/v1/session/{session_id}/plan/{plan_id}/activities/add",
+    tags=["session"],
+)
+async def session_activity_add(
+    session_id: str,
+    plan_id: str,
+    body: AddActivityRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Add a recommended bank activity to a day of the current week (overlay-only,
+    LLM-free). Duplicate adds (same suggestion) are idempotent."""
+    doc = _require_session(auth.uid, session_id)
+    _require_current_plan(doc, plan_id)
+
+    match = find_bank_activity_by_suggestion_id(doc.get("brain_state") or {}, body.suggestion_id)
+    if match is None:
+        raise HTTPException(status_code=404, detail="suggestion_not_found")
+    domain, bank_activity = match
+
+    card, internal = build_card_from_bank(
+        session_id, plan_id, key=f"add:{body.suggestion_id}", domain=domain,
+        bank_activity=bank_activity, source_bank_type="parent_added",
+    )
+
+    overlay = ensure_overlay(doc, plan_id)
+    added = overlay.setdefault("added_activities", [])
+    existing = next((it for it in added if (it.get("activity") or {}).get("id") == card["id"]), None)
+
+    if existing is not None:
+        day = existing.get("day", "")  # idempotent — already added
+    else:
+        day = body.day or choose_add_day(doc, plan_id)
+        added.append({
+            "activity": card,
+            "internal": internal,
+            "day": day,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to save added activity: {exc}")
+
+    return {
+        "session_id": session_id,
+        "plan_id": plan_id,
+        "added": True,
+        "activity_id": card["id"],
+        "day": day,
+        "plan_customization_summary": overlay_summary(overlay, plan_id),
     }
 
 
