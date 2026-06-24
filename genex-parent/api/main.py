@@ -78,6 +78,7 @@ from api.schemas import (
 from api.session_store import (
     SessionLoadError,
     SessionSaveError,
+    find_latest_for_uid as store_find_latest_for_uid,
     load as store_load,
     new_session_doc,
     save as store_save,
@@ -1139,28 +1140,13 @@ async def session_report(
 
 # ── GET session endpoint ───────────────────────────────────────────────────
 
-@app.get(
-    "/api/v1/session/{session_id}",
-    tags=["session"],
-)
-async def session_get(
-    session_id: str,
-    auth: Annotated[AuthUser, Depends(require_auth)],
-):
+def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+    """Build the frontend-safe session payload (shared by GET /session/{id} and
+    GET /session/current). Read-only — never mutates the doc or starts work.
+
+    Never returns: child name, brain_state, plan_internal, or debug fields
+    (gate_report only when ADMIN_DEBUG=1).
     """
-    Reload a saved session in frontend-safe form.
-
-    Returns only what the Lovable frontend needs to resume a session:
-      - If interview in progress: session_id, status, current_question
-      - If plan ready: session_id, status, age/time metadata, current plan,
-        progress_summary, feedback_summary
-
-    Never returns: child name, brain_state, plan_internal, gate_report
-    (gate_report is included only when ADMIN_DEBUG=1), or any internal
-    debug fields.
-    """
-    doc = _require_session(auth.uid, session_id)
-
     status = doc.get("status", "questions")
 
     # ── Interview in progress ─────────────────────────────────────────────
@@ -1179,33 +1165,21 @@ async def session_get(
     plan_entry = plans.get(current_plan_id, {}) if current_plan_id else {}
 
     original_plan_response = plan_entry.get("plan_response") or {}
-    plan_period   = plan_entry.get("plan_period") or {}
     # Beta 2.1: resolve the current plan through its customization overlay (if any).
-    # Identity-safe — returns the original object unchanged when there is no overlay,
-    # so uncustomized sessions are byte-compatible with Beta 2.0. The stored
-    # plan_response is never mutated.
+    # Identity-safe; the stored plan_response is never mutated.
     plan_response = resolve_plan_response(
         original_plan_response, get_overlay(doc, current_plan_id)
     )
     progress_summary = plan_response.get("progress_summary") or {}
 
-    # Feedback summary — aggregate counts, no raw notes exposed
     feedback_list: List[Dict[str, Any]] = doc.get("feedback") or []
-    total_feedback = len(feedback_list)
-    completed = sum(1 for f in feedback_list if f.get("completion") == "did_it")
-    flagged   = sum(1 for f in feedback_list if f.get("discuss_with_care_team"))
-    domains_practised = list({
-        f.get("domain", "") for f in feedback_list if f.get("domain")
-    })
     feedback_summary = {
-        "total":               total_feedback,
-        "completed":           completed,
-        "flagged_for_care_team": flagged,
-        "domains_practised":   domains_practised,
+        "total":               len(feedback_list),
+        "completed":           sum(1 for f in feedback_list if f.get("completion") == "did_it"),
+        "flagged_for_care_team": sum(1 for f in feedback_list if f.get("discuss_with_care_team")),
+        "domains_practised":   list({f.get("domain", "") for f in feedback_list if f.get("domain")}),
     }
 
-    # Beta 2.1: additive per-current-plan acceptance state (read from outside the
-    # generated plan; never mutates plan_response/plan_internal).
     accepted_at = plan_entry.get("accepted_at")
     plan_acceptance = {
         "plan_id":     current_plan_id,
@@ -1223,13 +1197,11 @@ async def session_get(
         "progress_summary":  progress_summary,
         "feedback_summary":  feedback_summary,
         "plan_acceptance":   plan_acceptance,
-        # Beta 2.1: additive customization counts for the current plan.
         "plan_customization_summary": overlay_summary(
             get_overlay(doc, current_plan_id), current_plan_id
         ),
     }
 
-    # Include gate_report in plan_period only when ADMIN_DEBUG=1
     if _ADMIN_DEBUG:
         brain_state = doc.get("brain_state") or {}
         gate_report = brain_state.get("_gate_report")
@@ -1237,3 +1209,53 @@ async def session_get(
             response["_gate_report"] = gate_report
 
     return response
+
+
+# NOTE: /session/current MUST be declared before /session/{session_id} so FastAPI
+# does not treat "current" as a session_id path parameter.
+@app.get(
+    "/api/v1/session/current",
+    tags=["session"],
+)
+async def session_current(
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Resume the authenticated user's latest session (after sign-out/in, localStorage
+    loss, or a new device) — without knowing the session_id.
+
+    Read-only: finds the latest session owned by auth.uid (by created_at) and
+    returns the SAME payload as GET /session/{session_id}. Never creates, mutates,
+    or starts plan generation. 404 (no_existing_session) if the user has none.
+    """
+    try:
+        result = store_find_latest_for_uid(auth.uid)
+    except SessionLoadError as exc:
+        raise HTTPException(status_code=500, detail=f"Session storage error: {exc}")
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "no_existing_session",
+                "message": "No existing session found for this user.",
+            },
+        )
+
+    session_id, doc = result
+    return _build_session_view(doc, session_id)
+
+
+@app.get(
+    "/api/v1/session/{session_id}",
+    tags=["session"],
+)
+async def session_get(
+    session_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Reload a saved session in frontend-safe form (same payload as /session/current).
+    """
+    doc = _require_session(auth.uid, session_id)
+    return _build_session_view(doc, session_id)

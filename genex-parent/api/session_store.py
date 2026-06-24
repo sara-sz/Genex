@@ -62,7 +62,7 @@ import os
 import threading
 from datetime import datetime, timezone as timezone_module
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # ── Config ─────────────────────────────────────────────────────────────────
 
@@ -298,6 +298,73 @@ def load(uid: str, session_id: str) -> Optional[Dict[str, Any]]:
             return doc
 
     return None
+
+
+def _gcs_list_for_uid(uid: str) -> List[Tuple[str, Dict[str, Any]]]:
+    """List all session docs under sessions/{uid}/ in GCS. Read-only."""
+    from google.cloud import storage  # lazy import
+    client = storage.Client()
+    out: List[Tuple[str, Dict[str, Any]]] = []
+    for blob in client.list_blobs(GCS_BUCKET_NAME, prefix=f"sessions/{uid}/"):
+        if not blob.name.endswith(".json"):
+            continue
+        try:
+            doc = json.loads(blob.download_as_text())
+        except Exception:
+            continue  # skip unreadable/corrupt blobs, never crash
+        if doc.get("owner_uid") == uid:
+            sid = doc.get("session_id") or blob.name.rsplit("/", 1)[-1][:-5]
+            out.append((sid, doc))
+    return out
+
+
+def _local_list_for_uid(uid: str) -> List[Tuple[str, Dict[str, Any]]]:
+    """List local session docs owned by uid. Only used with LOCAL_SESSION_FALLBACK=1."""
+    out: List[Tuple[str, Dict[str, Any]]] = []
+    if not _LOCAL_SESSION_DIR.exists():
+        return out
+    for path in _LOCAL_SESSION_DIR.glob("*.json"):
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if doc.get("owner_uid") == uid:
+            out.append((doc.get("session_id") or path.stem, doc))
+    return out
+
+
+def find_latest_for_uid(uid: str) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """Return (session_id, doc) for the uid's LATEST session by created_at, or None.
+
+    Read-only: lists the durable store (GCS in staging/prod, local fallback in dev),
+    filters by owner_uid, and selects the newest created_at. Docs missing created_at
+    are handled safely (treated as oldest) and never crash the lookup. Never creates,
+    mutates, or caches.
+    """
+    if not uid:
+        return None
+
+    candidates: List[Tuple[str, Dict[str, Any]]] = []
+    if GCS_BUCKET_NAME:
+        try:
+            candidates = _gcs_list_for_uid(uid)
+        except Exception as exc:
+            if _LOCAL_FALLBACK:
+                print(f"[session_store] GCS list error, trying local fallback: {exc}")
+                candidates = _local_list_for_uid(uid)
+            else:
+                raise SessionLoadError(
+                    f"GCS list error for sessions/{uid}/: {exc}"
+                ) from exc
+    else:
+        candidates = _local_list_for_uid(uid)
+
+    if not candidates:
+        return None
+
+    # Latest by created_at (ISO-8601 strings sort chronologically; missing → "").
+    candidates.sort(key=lambda item: item[1].get("created_at") or "")
+    return candidates[-1]
 
 
 def evict(session_id: str) -> None:
