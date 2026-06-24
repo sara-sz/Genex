@@ -315,8 +315,8 @@ def _norm_root(title: str) -> str:
     t = (title or "").lower()
     t = _re.sub(r"[^a-z0-9\s]", " ", t)
     t = _re.sub(
-        r"\b(easier|stretch|supported|slow|quick|simple|easy|gentle|basic|little|"
-        r"tiny|short|fun|new|my|your|our|a|the|an)\b", "", t)
+        r"\b(easier|stretch|harder|advanced|supported|slow|quick|simple|easy|gentle|"
+        r"basic|little|tiny|short|fun|new|my|your|our|a|the|an)\b", "", t)
     t = _re.sub(r"\b(game|activity|practice|challenge|time|session|version|exercise)\b", "", t)
     return _re.sub(r"\s+", " ", t).strip()
 
@@ -446,42 +446,117 @@ def _excluded_titles(plan_response: Dict[str, Any], overlay: Optional[Dict[str, 
     return titles, roots
 
 
-def swap_suggestions(doc: Dict[str, Any], plan_id: str, activity_id: str, limit: int = 3):
-    """Up to `limit` safe bank alternatives for activity_id, preferring same
-    activity_family, then bridge_step, then subdomain (same domain only)."""
+def _activity_target_profile(
+    doc: Dict[str, Any], plan_id: str, activity_id: str
+) -> Optional[Dict[str, Any]]:
+    """Skill-target profile (domain/subdomain/activity_family/bridge/title) for any
+    VISIBLE activity, reading from the correct source:
+      - original generated → plan_internal + plan_response card
+      - added activity      → its overlay `internal` block + card title
+      - swapped replacement → the override's `replacement_internal` + replacement title
+    Returns None only if the id is not a current-plan activity.
+    """
+    plan_entry = (doc.get("plans") or {}).get(plan_id, {})
+    plan_response = plan_entry.get("plan_response") or {}
+    overlay = get_overlay(doc, plan_id) or {}
+
+    def _profile(internal: Dict[str, Any], title: str) -> Dict[str, Any]:
+        internal = internal or {}
+        return {
+            "domain": internal.get("domain", ""),
+            "subdomain": internal.get("subdomain", ""),
+            "activity_family": internal.get("activity_family", ""),
+            "bridge_step_index": internal.get("bridge_step_index"),
+            "title": title or "",
+        }
+
+    # Original generated activity.
+    internal = find_plan_internal(plan_entry, activity_id)
+    card = get_plan_activity(plan_response, activity_id)
+    if internal is not None or card is not None:
+        return _profile(internal or {}, (card or {}).get("title", ""))
+
+    # Added activity.
+    for item in overlay.get("added_activities") or []:
+        a = item.get("activity") or {}
+        if a.get("id") == activity_id:
+            return _profile(item.get("internal") or {}, a.get("title", ""))
+
+    # Visible swapped replacement.
+    for ov in (overlay.get("activity_overrides") or {}).values():
+        repl = (ov or {}).get("replacement_activity") or {}
+        if repl.get("id") == activity_id:
+            return _profile((ov or {}).get("replacement_internal") or {}, repl.get("title", ""))
+
+    return None
+
+
+def swap_suggestions(doc: Dict[str, Any], plan_id: str, activity_id: str, limit: int = 8):
+    """Up to `limit` safe bank alternatives for ANY visible activity (original,
+    added, or a swapped replacement). Prefers same domain, then activity_family /
+    bridge_step / subdomain; falls back to broader bank activities (and, if the
+    same-domain pool is empty or the target domain is unknown, cross-domain) rather
+    than returning []. Output is de-duplicated by normalized title root so parents
+    don't see several versions of the same activity. Bank-only, no OpenAI."""
     plan_entry = (doc.get("plans") or {}).get(plan_id, {})
     plan_response = plan_entry.get("plan_response") or {}
     overlay = get_overlay(doc, plan_id)
-    target = find_plan_internal(plan_entry, activity_id) or {}
-    domain = target.get("domain", "")
-    fam = target.get("activity_family", "")
-    bridge = target.get("bridge_step_index")
-    sub = target.get("subdomain", "")
-    orig = get_plan_activity(plan_response, activity_id) or {}
-    orig_title = (orig.get("title", "") or "").strip().lower()
+    profile = _activity_target_profile(doc, plan_id, activity_id) or {}
+    domain = profile.get("domain", "")
+    fam = profile.get("activity_family", "")
+    bridge = profile.get("bridge_step_index")
+    sub = profile.get("subdomain", "")
+    target_title = (profile.get("title", "") or "").strip().lower()
+    target_root = _norm_root(target_title)
 
+    # Exclude everything currently visible (incl. same-day), removed titles, and the
+    # target activity itself + its root variants.
     titles, roots = _excluded_titles(plan_response, overlay)
+    if target_title:
+        titles = titles | {target_title}
+    if target_root:
+        roots = roots | {target_root}
     brain_state = doc.get("brain_state") or {}
 
-    scored = []
-    for d, act in iter_bank_activities(brain_state):
-        if d != domain:
-            continue
-        t = (act.get("title", "") or "").strip().lower()
-        if not t or t == orig_title or t in titles or _norm_root(t) in roots:
-            continue
-        dbg = act.get("_debug", {}) or {}
-        score = 0
-        if fam and dbg.get("activity_family") == fam:
-            score += 4
-        if bridge is not None and dbg.get("bridge_step_number") == bridge:
-            score += 3
-        if sub and dbg.get("subdomain") == sub:
-            score += 2
-        scored.append((score, t, d, act))
+    def _gather(domain_only: bool):
+        out = []
+        for d, act in iter_bank_activities(brain_state):
+            if domain_only and domain and d != domain:
+                continue
+            t = (act.get("title", "") or "").strip().lower()
+            if not t or t in titles or _norm_root(t) in roots:
+                continue
+            dbg = act.get("_debug", {}) or {}
+            score = 0
+            if domain and d == domain:
+                score += 8
+            if fam and dbg.get("activity_family") == fam:
+                score += 4
+            if bridge is not None and dbg.get("bridge_step_number") == bridge:
+                score += 3
+            if sub and dbg.get("subdomain") == sub:
+                score += 2
+            out.append((score, t, d, act))
+        return out
 
-    scored.sort(key=lambda x: (-x[0], x[1]))
-    return [_suggestion_preview(d, act) for _, _, d, act in scored[:limit]]
+    # Prefer same domain; broaden to all domains only if that pool is empty.
+    candidates = _gather(domain_only=True) if domain else _gather(domain_only=False)
+    if not candidates:
+        candidates = _gather(domain_only=False)
+    candidates.sort(key=lambda x: (-x[0], x[1]))
+
+    # De-duplicate by normalized root, keeping the highest-scored variant.
+    previews: List[Dict[str, Any]] = []
+    seen_roots: set = set()
+    for _, t, d, act in candidates:
+        r = _norm_root(t)
+        if r in seen_roots:
+            continue
+        seen_roots.add(r)
+        previews.append(_suggestion_preview(d, act))
+        if len(previews) >= limit:
+            break
+    return previews
 
 
 def add_suggestions(
@@ -496,14 +571,15 @@ def add_suggestions(
     brain_state = doc.get("brain_state") or {}
 
     out = []
-    seen = set()
+    seen_roots = set()
     for d, act in iter_bank_activities(brain_state):
         if domain_filter and d != domain_filter:
             continue
         t = (act.get("title", "") or "").strip().lower()
-        if not t or t in titles or _norm_root(t) in roots or t in seen:
+        r = _norm_root(t)
+        if not t or t in titles or r in roots or r in seen_roots:
             continue
-        seen.add(t)
+        seen_roots.add(r)  # one card per normalized root → meaningfully different
         out.append(_suggestion_preview(d, act))
         if len(out) >= limit:
             break

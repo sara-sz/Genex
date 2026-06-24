@@ -244,10 +244,59 @@ def test_add_omitted_day_autopick():
     check("auto-picked a real plan day", r.json().get("day") in days, r.json().get("day"))
 
 
+def test_swap_suggestions_for_added_nonempty_and_apply():
+    print("\n── swap-suggestions for an ADDED activity are non-empty + applicable")
+    sid, w1 = _start_and_plan()
+    pid = w1["plan_period"]["plan_id"]; day0 = w1["week"][0]["day"]
+    date0 = w1["week"][0]["activities"][0]["activity_date"]
+    r, _ = _add_first_suggestion(sid, pid, day=day0)
+    added_id = r.json()["activity_id"]
+
+    ss = client.get(f"/api/v1/session/{sid}/plan/{pid}/activity/{added_id}/swap-suggestions", headers=_hdr()).json()
+    sugg = ss["suggestions"]
+    check("swap-suggestions for added are non-empty (bank has options)", len(sugg) >= 1, len(sugg))
+    check("up to 8 suggestions", len(sugg) <= 8, len(sugg))
+    titles = [s["title"] for s in sugg]
+    check("suggestions de-duplicated by root (no repeated roots)",
+          len({__import__('api.customization', fromlist=['_norm_root'])._norm_root(t) for t in titles}) == len(titles), titles)
+
+    # apply the added activity's OWN first swap suggestion
+    sw = client.post(f"/api/v1/session/{sid}/plan/{pid}/activity/{added_id}/swap",
+                     headers=_hdr(), json={"suggestion_id": sugg[0]["suggestion_id"]})
+    check("swap added from its own suggestion → 200", sw.status_code == 200 and sw.json().get("swapped") is True, sw.text[:160])
+    repl_id = sw.json()["replacement_activity_id"]
+    check("replacement visible in resolved plan", repl_id in _resolved_ids(_get(sid)))
+    fb = client.post(f"/api/v1/session/{sid}/feedback", headers=_hdr(), json={
+        "plan_id": pid, "activity_id": repl_id, "day": day0, "activity_date": date0,
+        "enjoyment": "loved_it", "difficulty": "just_right", "completion": "did_it"})
+    check("feedback on swapped-added metadata_found", fb.json().get("metadata_found") is True)
+
+
+def test_swap_suggestions_for_replacement_nonempty():
+    print("\n── swap-suggestions for a VISIBLE replacement are non-empty")
+    sid, w1 = _start_and_plan()
+    pid = w1["plan_period"]["plan_id"]
+    orig_id = w1["week"][0]["activities"][0]["id"]
+    ss0 = client.get(f"/api/v1/session/{sid}/plan/{pid}/activity/{orig_id}/swap-suggestions", headers=_hdr()).json()
+    if not ss0["suggestions"]:
+        check("(no swap suggestions for original — skipping)", True)
+        return
+    sw = client.post(f"/api/v1/session/{sid}/plan/{pid}/activity/{orig_id}/swap",
+                     headers=_hdr(), json={"suggestion_id": ss0["suggestions"][0]["suggestion_id"]})
+    repl_id = sw.json()["replacement_activity_id"]
+    # swap-suggestions for the VISIBLE replacement id should resolve via replacement_internal
+    ss1 = client.get(f"/api/v1/session/{sid}/plan/{pid}/activity/{repl_id}/swap-suggestions", headers=_hdr())
+    check("swap-suggestions for replacement → 200", ss1.status_code == 200, ss1.text[:160])
+    check("replacement swap-suggestions non-empty (bank has options)", len(ss1.json()["suggestions"]) >= 1,
+          len(ss1.json()["suggestions"]))
+
+
 def run_all():
     test_remove_added_activity()
     test_save_added_activity()
     test_swap_added_activity()
+    test_swap_suggestions_for_added_nonempty_and_apply()
+    test_swap_suggestions_for_replacement_nonempty()
     test_actions_on_visible_replacement_id()
     test_prior_feedback_on_added_survives_removal()
     test_add_respects_day()
