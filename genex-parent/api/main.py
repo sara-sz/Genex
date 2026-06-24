@@ -900,7 +900,16 @@ async def session_activity_add(
     auth: Annotated[AuthUser, Depends(require_auth)],
 ):
     """Add a recommended bank activity to a day of the current week (overlay-only,
-    LLM-free). Duplicate adds (same suggestion) are idempotent."""
+    LLM-free). Day-specific and day-stable:
+
+      - The canonical day is resolved FIRST (validate an explicit day → 400
+        invalid_day on no match; auto-pick only when omitted/blank).
+      - The added card id is deterministic on session+plan+suggestion+canonical_day,
+        so the SAME suggestion on DIFFERENT days are distinct entries (no cross-day
+        collision), and the SAME suggestion on the SAME day is idempotent.
+      - Adding a new activity never relocates existing added activities; each renders
+        on its own stored day.
+    """
     doc = _require_session(auth.uid, session_id)
     _require_current_plan(doc, plan_id)
 
@@ -909,8 +918,25 @@ async def session_activity_add(
         raise HTTPException(status_code=404, detail="suggestion_not_found")
     domain, bank_activity = match
 
+    # ── Resolve the canonical day FIRST (before building the id) ──────────────
+    requested = (body.day or "").strip()
+    if requested:
+        day = match_plan_day(requested, plan_day_labels(doc, plan_id))
+        if day is None:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "invalid_day",
+                    "message": "The selected day is not part of the current plan.",
+                    "valid_days": plan_day_labels(doc, plan_id),
+                },
+            )
+    else:
+        day = choose_add_day(doc, plan_id)
+
+    # ── Day-specific deterministic id → no cross-day collisions ───────────────
     card, internal = build_card_from_bank(
-        session_id, plan_id, key=f"add:{body.suggestion_id}", domain=domain,
+        session_id, plan_id, key=f"add:{body.suggestion_id}:{day}", domain=domain,
         bank_activity=bank_activity, source_bank_type="parent_added",
     )
 
@@ -918,26 +944,7 @@ async def session_activity_add(
     added = overlay.setdefault("added_activities", [])
     existing = next((it for it in added if (it.get("activity") or {}).get("id") == card["id"]), None)
 
-    if existing is not None:
-        day = existing.get("day", "")  # idempotent — already added
-    else:
-        # Respect a provided day: match it (case-insensitive, trimmed) to an actual
-        # day in the current plan. Invalid → 400 (never silently fall back). Only
-        # auto-pick when day is omitted/blank.
-        requested = (body.day or "").strip()
-        if requested:
-            day = match_plan_day(requested, plan_day_labels(doc, plan_id))
-            if day is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "code": "invalid_day",
-                        "message": "The selected day is not part of the current plan.",
-                        "valid_days": plan_day_labels(doc, plan_id),
-                    },
-                )
-        else:
-            day = choose_add_day(doc, plan_id)
+    if existing is None:
         added.append({
             "activity": card,
             "internal": internal,
@@ -948,6 +955,7 @@ async def session_activity_add(
             store_save(auth.uid, session_id, doc)
         except SessionSaveError as exc:
             raise HTTPException(status_code=500, detail=f"Failed to save added activity: {exc}")
+    # else: same suggestion + same day already added → idempotent, no change.
 
     return {
         "session_id": session_id,
