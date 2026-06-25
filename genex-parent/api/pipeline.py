@@ -99,8 +99,20 @@ def run_session_start(
     brain_state["selected_domain_keys"] = list(domain_keys)
     brain_state["focus"] = build_focus_block(primary_key, detected)
 
-    # Stage 3: question building — one pass per domain, all questions upfront
-    # Max questions per domain mirrors app.py: 7 for 1 domain, 5 for 2 domains
+    # Stage 3: question building (shared with add-on focus intake, Beta 2.2 Slice 2b).
+    interview = _build_interview_for_domains(brain_state, domain_keys)
+    return brain_state, interview
+
+
+def _build_interview_for_domains(
+    brain_state: Dict[str, Any], domain_keys: List[str]
+) -> Dict[str, Any]:
+    """Build the API-layer interview tracking dict for the given domain(s).
+
+    One pass per domain, all questions upfront, grouped into age bands — mirrors
+    app.py. Max questions per domain: 7 for a single domain, 5 for two. Shared by
+    run_session_start (primary intake) and run_focus_intake_start (add-on intake).
+    """
     max_q_per_domain = 7 if len(domain_keys) == 1 else 5
 
     band_state: Dict[str, Any] = {}
@@ -129,8 +141,8 @@ def run_session_start(
             "current_band_norm_answers": {}, # question_id → norm_answer (for band scoring)
         }
 
-    interview: Dict[str, Any] = {
-        "domain_keys": domain_keys,
+    return {
+        "domain_keys": list(domain_keys),
         "domain_idx": 0,
         "max_q_per_domain": max_q_per_domain,
         "band_state": band_state,
@@ -139,6 +151,28 @@ def run_session_start(
         "status": "in_progress",
     }
 
+
+def run_focus_intake_start(
+    primary_brain_state: Dict[str, Any], focus_key: str
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Beta 2.2 Slice 2b — start a focused add-on intake for ONE chosen focus area.
+
+    Builds a FRESH, independent brain_state from the SAME child profile (age,
+    diagnosis, sanitized concern, daily time) as the primary, then asks that single
+    domain's normal focused questions (≤7). The primary brain_state/interview and
+    the stored plan are never touched — this returns a separate state to be stored
+    under doc["added_focus"][focus_key]. No LLM calls; genex_core stays frozen.
+    """
+    child = (primary_brain_state or {}).get("child") or {}
+    brain_state = init_state_from_profile(
+        name="your child",          # child name never enters the brain
+        chronological_months=int(child.get("chronological_months") or 0),
+        diagnosis=child.get("diagnosis") or "",
+        concern=child.get("concern") or "",
+        daily_time_min=int(child.get("daily_time_min") or 0),
+    )
+    brain_state["selected_domain_keys"] = [focus_key]
+    interview = _build_interview_for_domains(brain_state, [focus_key])
     return brain_state, interview
 
 

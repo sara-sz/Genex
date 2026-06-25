@@ -32,7 +32,7 @@ from api.adapters import (
     sanitize_concern,
 )
 from api.auth import AuthUser, require_auth, verify_beta_code
-from api.focus_selector import focus_view
+from api.focus_selector import FOCUS_LABELS, focus_view
 from api.customization import (
     add_suggestions,
     build_card_from_bank,
@@ -52,6 +52,7 @@ from api.customization import (
 from api.pipeline import (
     get_current_question,
     get_expected_question_id,
+    run_focus_intake_start,
     run_plan_pipeline,
     run_record_answer,
     run_refresh_pipeline,
@@ -1306,4 +1307,201 @@ async def session_focus_areas(
             {"focus_key": r["key"], "label": r["label"], "recommended": r["recommended"]}
             for r in view["remaining_focus_areas"]
         ],
+    }
+
+
+# ── Beta 2.2 Slice 2b: add-on focused intake ────────────────────────────────
+
+def _addon_intake_view(session_id: str, focus_key: str, entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Frontend-safe view of one add-on intake module (never returns brain_state)."""
+    status = entry.get("status", "")
+    complete = status == "interview_complete"
+    return {
+        "session_id": session_id,
+        "focus_key": focus_key,
+        "focus_label": entry.get("focus_label", FOCUS_LABELS.get(focus_key, focus_key)),
+        "module_id": entry.get("module_id", ""),
+        "status": status,
+        "total_questions_estimate": (entry.get("interview") or {}).get(
+            "total_questions_estimate", 0
+        ),
+        "current_question": (
+            None if complete else get_current_question(entry.get("interview") or {})
+        ),
+        "ready_for_generate": complete,
+    }
+
+
+@app.post(
+    "/api/v1/session/{session_id}/focus/{focus_key}/start",
+    tags=["session"],
+)
+async def session_focus_start(
+    session_id: str,
+    focus_key: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Start a focused add-on intake for one of the 3 non-primary focus areas (Beta 2.2).
+
+    This is a full mini-onboarding for the chosen domain: it asks that domain's normal
+    focused questions (≤7), because the app has not evaluated that area yet. Intake
+    state is stored separately under doc["added_focus"][focus_key] — the primary plan,
+    primary interview, and doc["plans"] are never touched. No activities are generated
+    here and no LLM is called.
+
+    Guards:
+      404 unknown_focus      — focus_key is not one of the 4 supported areas
+      409 focus_is_primary   — focus_key is the parent's primary focus
+      409 focus_already_added— focus is already generating/ready
+    Idempotent: if the focus is already interviewing (or intake complete), returns the
+    CURRENT intake state without restarting.
+    """
+    doc = _require_session(auth.uid, session_id)
+
+    if focus_key not in FOCUS_LABELS:
+        raise HTTPException(status_code=404, detail="unknown_focus")
+
+    fb = doc.get("focus") or {}
+    if focus_key == fb.get("primary_focus_key"):
+        raise HTTPException(status_code=409, detail="focus_is_primary")
+
+    added = doc.get("added_focus") or {}
+    existing = added.get(focus_key)
+    if existing:
+        status = existing.get("status")
+        if status in ("generating", "ready"):
+            raise HTTPException(status_code=409, detail="focus_already_added")
+        if status in ("interviewing", "interview_complete"):
+            # Idempotent — return the in-progress intake, do NOT restart.
+            return _addon_intake_view(session_id, focus_key, existing)
+        # status == "error" (or anything else) → fall through and start fresh.
+
+    try:
+        addon_brain, addon_interview = run_focus_intake_start(
+            doc.get("brain_state") or {}, focus_key
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Focus intake error: {exc}")
+
+    current_q = get_current_question(addon_interview)
+    if current_q is None:
+        raise HTTPException(
+            status_code=500,
+            detail="No questions generated for this focus. Please try again.",
+        )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    entry = {
+        "focus_key": focus_key,
+        "focus_label": FOCUS_LABELS[focus_key],
+        "status": "interviewing",
+        "module_id": str(uuid.uuid4()),
+        "brain_state": addon_brain,       # separate add-on brain_state (never the primary)
+        "interview": addon_interview,     # separate add-on interview state
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    }
+    doc.setdefault("added_focus", {})[focus_key] = entry
+
+    try:
+        store_save(auth.uid, session_id, doc)
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save session: {exc}")
+
+    return _addon_intake_view(session_id, focus_key, entry)
+
+
+@app.post(
+    "/api/v1/session/{session_id}/focus/{focus_key}/answer",
+    tags=["session"],
+)
+async def session_focus_answer(
+    session_id: str,
+    focus_key: str,
+    body: AnswerRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Record one answer for an add-on focus intake (Beta 2.2 Slice 2b).
+
+    Uses the SAME domain-question / band / adaptive-stop logic as primary onboarding,
+    scoped to this focus's separate interview state only. Writes only under
+    doc["added_focus"][focus_key]; the primary interview, primary plan, and
+    doc["plans"] are never touched. No activities generated, no LLM call.
+
+    Returns either status "interviewing" + current_question, or status
+    "interview_complete" + ready_for_generate=true.
+
+    Guards:
+      404 unknown_focus          — focus_key is not one of the 4 supported areas
+      404 focus_not_started      — no add-on intake exists for this focus
+      409 focus_not_interviewing — intake is complete/generating/ready/errored
+      422 — question_id does not match the expected next question
+    """
+    doc = _require_session(auth.uid, session_id)
+
+    if focus_key not in FOCUS_LABELS:
+        raise HTTPException(status_code=404, detail="unknown_focus")
+
+    entry = (doc.get("added_focus") or {}).get(focus_key)
+    if not entry:
+        raise HTTPException(status_code=404, detail="focus_not_started")
+    if entry.get("status") != "interviewing":
+        raise HTTPException(status_code=409, detail="focus_not_interviewing")
+
+    addon_interview = entry["interview"]
+    addon_brain = entry["brain_state"]
+
+    expected_qid = get_expected_question_id(addon_interview)
+    if expected_qid is None:
+        raise HTTPException(status_code=409, detail="focus_not_interviewing")
+    if body.question_id != expected_qid:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unexpected question_id {body.question_id!r}. "
+                f"Expected {expected_qid!r}. Answers must be submitted in order."
+            ),
+        )
+
+    try:
+        addon_brain, addon_interview, interview_complete = run_record_answer(
+            brain_state=addon_brain,
+            interview=addon_interview,
+            question_id=body.question_id,
+            norm_answer=body.answer,  # already validated by Pydantic Literal
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Answer recording error: {exc}")
+
+    entry["brain_state"] = addon_brain
+    entry["interview"] = addon_interview
+    entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+    if interview_complete:
+        entry["status"] = "interview_complete"
+
+    try:
+        store_save(auth.uid, session_id, doc)
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save session: {exc}")
+
+    if interview_complete:
+        return {
+            "session_id": session_id,
+            "focus_key": focus_key,
+            "status": "interview_complete",
+            "ready_for_generate": True,
+            "questions_answered": addon_interview["questions_answered_total"],
+        }
+
+    next_q = get_current_question(addon_interview)
+    if next_q is None:
+        raise HTTPException(status_code=500, detail="No next question available.")
+
+    return {
+        "session_id": session_id,
+        "focus_key": focus_key,
+        "status": "interviewing",
+        "current_question": next_q,
     }

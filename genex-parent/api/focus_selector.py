@@ -153,9 +153,15 @@ def earliest_focus_in_text(text: str) -> str:
     return next(k for k in FOCUS_PRIORITY if k in tied)  # tie-break by priority
 
 
-# Statuses of an added focus that "occupy" the area (cannot be added again).
+# Statuses of an added focus that "occupy" the area (cannot be added again):
+# interview in progress, intake done & awaiting generation, generating, or ready.
 # An add in 'error' (or absent) stays available to (re)add.
-ADDED_BLOCKING_STATUSES = ("interviewing", "generating", "ready")
+ADDED_BLOCKING_STATUSES = (
+    "interviewing",
+    "interview_complete",
+    "generating",
+    "ready",
+)
 
 
 def focus_view(
