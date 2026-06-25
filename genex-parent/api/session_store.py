@@ -50,6 +50,9 @@ Session document shape:
     },
     "plan_customizations": {               # Beta 2.1 current-week overlay, keyed by plan_id
       "<plan_id>": dict,                   # see api/customization.py; never mutates plans[*]
+    },
+    "added_focus": {                       # Beta 2.2 add-on focus modules, keyed by focus_key
+      "<focus_key>": dict,                 # see api/focus_selector.py; separate from plans[*]
     }
   }
 
@@ -209,6 +212,9 @@ def new_session_doc(
         # Beta 2.1 current-week customization overlay, keyed by plan_id.
         # Empty by default; old sessions without this key still work (readers use .get()).
         "plan_customizations": {},
+        # Beta 2.2 added focus modules, keyed by focus_key. Empty by default;
+        # populated by the "Add another focus area" flow (later slices).
+        "added_focus": {},
     }
 
 

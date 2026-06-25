@@ -153,6 +153,51 @@ def earliest_focus_in_text(text: str) -> str:
     return next(k for k in FOCUS_PRIORITY if k in tied)  # tie-break by priority
 
 
+# Statuses of an added focus that "occupy" the area (cannot be added again).
+# An add in 'error' (or absent) stays available to (re)add.
+ADDED_BLOCKING_STATUSES = ("interviewing", "generating", "ready")
+
+
+def focus_view(
+    focus_block: Dict[str, Any], added_focus: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Return the stored focus block with added_focus_areas + remaining_focus_areas
+    RECOMPUTED from the current add-on modules (doc["added_focus"]). Pure / read-only.
+
+    - added_focus_areas: every focus present in added_focus, as {focus_key,label,status}.
+    - remaining_focus_areas: all areas except the primary and any focus currently
+      occupied (status interviewing/generating/ready); recommended ones first, each
+      flagged. recommended_focus_area_keys (Slice-1 detection) is preserved.
+    """
+    fb = dict(focus_block or {})
+    primary = fb.get("primary_focus_key", "")
+    recommended = set(fb.get("recommended_focus_area_keys", []))
+    added_focus = added_focus or {}
+
+    added_areas = [
+        {
+            "focus_key": k,
+            "label": FOCUS_LABELS.get(k, k),
+            "status": (added_focus.get(k) or {}).get("status", ""),
+        }
+        for k in FOCUS_ORDER if k in added_focus
+    ]
+    occupied = {
+        k for k in added_focus
+        if (added_focus.get(k) or {}).get("status") in ADDED_BLOCKING_STATUSES
+    }
+    remaining_keys = [k for k in FOCUS_ORDER if k and k != primary and k not in occupied]
+    rec_first = [k for k in FOCUS_PRIORITY if k in remaining_keys and k in recommended]
+    rest = [k for k in remaining_keys if k not in rec_first]
+
+    fb["added_focus_areas"] = added_areas
+    fb["remaining_focus_areas"] = [
+        {"key": k, "label": FOCUS_LABELS[k], "recommended": k in recommended}
+        for k in (rec_first + rest)
+    ]
+    return fb
+
+
 def select_focus(diagnosis: str, concern: str) -> Tuple[str, List[str]]:
     """Return (primary_key, detected_keys).
 

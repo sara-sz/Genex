@@ -32,6 +32,7 @@ from api.adapters import (
     sanitize_concern,
 )
 from api.auth import AuthUser, require_auth, verify_beta_code
+from api.focus_selector import focus_view
 from api.customization import (
     add_suggestions,
     build_card_from_bank,
@@ -1167,7 +1168,8 @@ def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
             "session_id": session_id,
             "status": status,
             "current_question": current_q,
-            "focus": doc.get("focus") or {},   # Beta 2.2 primary-focus metadata
+            # Beta 2.2 focus metadata; added/remaining recomputed from added_focus.
+            "focus": focus_view(doc.get("focus") or {}, doc.get("added_focus") or {}),
         }
 
     # ── Plan ready ────────────────────────────────────────────────────────
@@ -1211,7 +1213,8 @@ def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
         "plan_customization_summary": overlay_summary(
             get_overlay(doc, current_plan_id), current_plan_id
         ),
-        "focus": doc.get("focus") or {},   # Beta 2.2 primary-focus metadata
+        # Beta 2.2 focus metadata; added/remaining recomputed from added_focus.
+        "focus": focus_view(doc.get("focus") or {}, doc.get("added_focus") or {}),
     }
 
     if _ADMIN_DEBUG:
@@ -1271,3 +1274,36 @@ async def session_get(
     """
     doc = _require_session(auth.uid, session_id)
     return _build_session_view(doc, session_id)
+
+
+@app.get(
+    "/api/v1/session/{session_id}/focus-areas",
+    tags=["session"],
+)
+async def session_focus_areas(
+    session_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    List the parent's focus areas (Beta 2.2): the primary, any added focus modules,
+    and the remaining/addable areas. Read-only — never creates, mutates, or generates.
+
+    remaining = all 4 focus areas − primary − any focus already occupied (status
+    interviewing/generating/ready). `recommended` comes from the original concern
+    detection (Slice 1). Returns the parent-friendly labels.
+    """
+    doc = _require_session(auth.uid, session_id)
+    fb = doc.get("focus") or {}
+    view = focus_view(fb, doc.get("added_focus") or {})
+    return {
+        "session_id": session_id,
+        "primary": {
+            "focus_key": fb.get("primary_focus_key", ""),
+            "label": fb.get("primary_focus_label", ""),
+        },
+        "added": view["added_focus_areas"],   # [{focus_key, label, status}]
+        "remaining": [
+            {"focus_key": r["key"], "label": r["label"], "recommended": r["recommended"]}
+            for r in view["remaining_focus_areas"]
+        ],
+    }
