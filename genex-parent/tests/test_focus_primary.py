@@ -63,16 +63,22 @@ def _start(concern, age_in_months=36):
         "daily_time_minutes": 10, "timezone": "UTC", "beta_access_code": "genex"})
 
 
-# ── Unit: the 5 required examples ────────────────────────────────────────────
+# ── Unit: focus examples (primary = EARLIEST addressable concern; priority is
+#         only a tie-break / fallback). Includes the original 5 + order-sensitive 7.
 def test_five_examples_unit():
-    print("\n── selector: 5 required examples")
+    print("\n── selector: required examples (earliest-mention rule)")
     cases = [
+        # original 5
         ("speech delay and learning difficulty", "language_and_communication", ["cognitive"]),
         ("seizures, speech regression, not walking steady, not running, fine motor delay",
          "language_and_communication", ["movement_and_physical"]),
         ("lack of attention, socially afraid", "cognitive", ["social_and_emotional"]),
         ("not walking steadily, not running, fine motor delay", "movement_and_physical", []),
         ("learning difficulty", "cognitive", []),
+        # order-sensitive corrections — earliest mention wins, NOT fixed priority
+        ("lack of attention, learning difficulty, speech delay", "cognitive", ["language_and_communication"]),
+        ("learning difficulty and speech delay", "cognitive", ["language_and_communication"]),
+        ("socially afraid, lack of attention", "social_and_emotional", ["cognitive"]),
     ]
     for concern, exp_primary, exp_rec in cases:
         primary, detected = select_focus("", concern)

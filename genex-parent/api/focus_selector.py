@@ -125,8 +125,47 @@ def build_focus_block(primary_key: str, detected: List[str]) -> Dict[str, Any]:
     }
 
 
+def earliest_focus_in_text(text: str) -> str:
+    """Return the focus whose keyword appears EARLIEST in `text`, or "" if none.
+
+    This implements the product rule: the primary focus is the FIRST addressable
+    developmental concern the parent writes. If two focus areas match at the same
+    earliest position (a true tie / ambiguous order), the fixed FOCUS_PRIORITY
+    order breaks it. Medical/safety-only terms (e.g. seizures) carry no focus
+    keyword, so they are naturally skipped here.
+    """
+    t = (text or "").lower()
+    positions: Dict[str, int] = {}
+    for key in FOCUS_ORDER:
+        best = None
+        for pat in FOCUS_KEYWORDS[key]:
+            m = re.search(pat, t)
+            if m is not None:
+                best = m.start() if best is None else min(best, m.start())
+        if best is not None:
+            positions[key] = best
+    if not positions:
+        return ""
+    min_pos = min(positions.values())
+    tied = [k for k in FOCUS_ORDER if positions.get(k) == min_pos]
+    if len(tied) == 1:
+        return tied[0]
+    return next(k for k in FOCUS_PRIORITY if k in tied)  # tie-break by priority
+
+
 def select_focus(diagnosis: str, concern: str) -> Tuple[str, List[str]]:
-    """Return (primary_key, detected_keys). primary_key is "" when nothing is
-    detected — the caller falls back to the genex_core single-domain pick."""
+    """Return (primary_key, detected_keys).
+
+    Primary = the EARLIEST addressable developmental focus mentioned in the parent's
+    CONCERN text. Fixed FOCUS_PRIORITY is used ONLY as a fallback — when there is a
+    positional tie, or the concern text names no focus (then detection across
+    diagnosis+concern is used with priority order). primary_key is "" only when
+    nothing is detected anywhere — the caller falls back to the genex_core pick.
+    """
     detected = detect_focus_areas(diagnosis, concern)
-    return primary_from_detected(detected), detected
+    primary = earliest_focus_in_text(concern)
+    if not primary:
+        # No focus named in the concern text → fall back to detection (incl.
+        # diagnosis) ordered by the fixed priority.
+        primary = primary_from_detected(detected)
+    return primary, detected
