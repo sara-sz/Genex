@@ -535,6 +535,43 @@ def adapt_weekly_plan(
     }
 
 
+# ── Add-on module provenance (Beta 2.2 Slice 2c) ──────────────────────────────
+
+def apply_addon_provenance(
+    plan_response: Dict[str, Any],
+    *,
+    focus_key: str,
+    focus_label: str,
+    module_id: str,
+    plan_period: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Stamp additive provenance onto every card of an ADD-ON plan_response.
+
+    Additive only — never removes or renames existing card fields. The primary
+    plan is NEVER passed here; primary cards stay exactly as adapt_weekly_plan
+    produced them (Lovable infers missing `source` as "primary"). Each add-on card
+    gains: source="addon", focus_key, focus_label, module_id, plan_period_id,
+    week_start_date. domain/domain_label and activity_date are already present from
+    adapt_weekly_plan. Mutates and returns the same plan_response dict.
+    """
+    plan_period_id = plan_period.get("plan_id", "")
+    week_start_date = plan_period.get("week_start_date", "")
+    for day in plan_response.get("week", []):
+        for card in day.get("activities", []):
+            card["source"] = "addon"
+            card["focus_key"] = focus_key
+            card["focus_label"] = focus_label
+            card["module_id"] = module_id
+            card["plan_period_id"] = plan_period_id
+            card["week_start_date"] = week_start_date
+    # Surface the focus on the module envelope too (handy for labeled display).
+    plan_response["source"] = "addon"
+    plan_response["focus_key"] = focus_key
+    plan_response["focus_label"] = focus_label
+    plan_response["module_id"] = module_id
+    return plan_response
+
+
 # ── Internal plan metadata (plan_internal) ────────────────────────────────────
 
 def _build_milestone_lookup(

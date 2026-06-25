@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.adapters import (
     adapt_weekly_plan,
+    apply_addon_provenance,
     build_plan_internal,
     normalize_diagnosis_for_brain,
     sanitize_concern,
@@ -1505,3 +1506,198 @@ async def session_focus_answer(
         "status": "interviewing",
         "current_question": next_q,
     }
+
+
+# ── Beta 2.2 Slice 2c: current-week date-aware add-on generation ─────────────
+
+def _addon_module_view(session_id: str, focus_key: str, entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Frontend-safe view of one add-on focus module across all states.
+
+    Used by GET /focus/{focus_key} (poll/resume) and as the success payload of
+    /generate. NEVER returns brain_state, the raw interview, or plan_internal. The
+    full add-on plan (plan_response, with provenance) is returned ONLY here — not in
+    the /session views, which carry just {focus_key, label, status}.
+    """
+    status = entry.get("status", "")
+    view: Dict[str, Any] = {
+        "session_id": session_id,
+        "focus_key": focus_key,
+        "focus_label": entry.get("focus_label", FOCUS_LABELS.get(focus_key, focus_key)),
+        "module_id": entry.get("module_id", ""),
+        "source": "addon",
+        "status": status,
+    }
+    if status == "interviewing":
+        view["current_question"] = get_current_question(entry.get("interview") or {})
+        view["total_questions_estimate"] = (entry.get("interview") or {}).get(
+            "total_questions_estimate", 0
+        )
+        view["ready_for_generate"] = False
+    elif status == "interview_complete":
+        view["current_question"] = None
+        view["total_questions_estimate"] = (entry.get("interview") or {}).get(
+            "total_questions_estimate", 0
+        )
+        view["ready_for_generate"] = True
+    elif status == "generating":
+        view["ready_for_generate"] = False
+    elif status == "ready":
+        view["plan_period"] = entry.get("plan_period") or {}
+        view["plan"] = entry.get("plan_response") or {}
+        view["dev_age_summary"] = entry.get("dev_age_summary") or {}
+        view["generated_at"] = entry.get("generated_at", "")
+        view["ready_for_generate"] = False
+    elif status == "error":
+        view["error"] = entry.get("error", "")
+        view["ready_for_generate"] = True  # retryable — re-call /generate
+    return view
+
+
+@app.post(
+    "/api/v1/session/{session_id}/focus/{focus_key}/generate",
+    tags=["session"],
+)
+async def session_focus_generate(
+    session_id: str,
+    focus_key: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Generate the date-aware add-on activity module for a completed focus intake.
+
+    Builds a single-domain plan for `focus_key` from that focus's separate, completed
+    add-on brain_state, anchored to the CURRENT week and exposing today→Sunday only.
+    The module is stored under doc["added_focus"][focus_key] (status "ready") and is
+    the ONLY place this writes — doc["plans"], current_plan_id, and the primary
+    plan_response/plan_internal are never touched. Every add-on card carries additive
+    provenance (source="addon", focus_key, focus_label, module_id, plan_period_id).
+
+    Idempotency / state:
+      ready        → returns the cached module, no regeneration.
+      generating   → 409 focus_already_generating (no duplicate work).
+      interviewing → 409 focus_intake_not_complete.
+      interview_complete | error → generates (error is retryable).
+
+    Guards: 404 unknown_focus / focus_not_started · 409 focus_is_primary.
+    On generation failure the module is marked status="error" (retry by re-calling).
+    """
+    doc = _require_session(auth.uid, session_id)
+
+    if focus_key not in FOCUS_LABELS:
+        raise HTTPException(status_code=404, detail="unknown_focus")
+
+    fb = doc.get("focus") or {}
+    if focus_key == fb.get("primary_focus_key"):
+        raise HTTPException(status_code=409, detail="focus_is_primary")
+
+    entry = (doc.get("added_focus") or {}).get(focus_key)
+    if not entry:
+        raise HTTPException(status_code=404, detail="focus_not_started")
+
+    status = entry.get("status")
+    if status == "ready":
+        return _addon_module_view(session_id, focus_key, entry)  # cached, idempotent
+    if status == "generating":
+        raise HTTPException(status_code=409, detail="focus_already_generating")
+    if status == "interviewing":
+        raise HTTPException(status_code=409, detail="focus_intake_not_complete")
+    # status in ("interview_complete", "error") → (re)generate.
+
+    # Mark generating + persist first, so concurrent polls/calls see it and do not
+    # duplicate generation.
+    entry["status"] = "generating"
+    entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+    entry.pop("error", None)
+    entry.pop("error_at", None)
+    try:
+        store_save(auth.uid, session_id, doc)
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save session: {exc}")
+
+    try:
+        addon_brain = entry["brain_state"]
+        timezone_str = doc.get("timezone") or "UTC"
+        plan_period = compute_plan_period(timezone_str)  # today→Sunday, current week
+
+        addon_brain, _ = run_plan_pipeline(brain_state=addon_brain, admin_debug=False)
+        weekly_schedule = addon_brain.get("weekly_schedule", {})
+
+        plan_response = adapt_weekly_plan(
+            session_id=session_id,
+            age_in_months=doc["age_in_months"],
+            daily_time_minutes=doc["daily_time_minutes"],
+            weekly_schedule=weekly_schedule,
+            plan_period=plan_period,
+        )
+        apply_addon_provenance(
+            plan_response,
+            focus_key=focus_key,
+            focus_label=entry.get("focus_label", FOCUS_LABELS[focus_key]),
+            module_id=entry["module_id"],
+            plan_period=plan_period,
+        )
+        plan_internal = build_plan_internal(
+            session_id=session_id,
+            brain_state=addon_brain,
+            weekly_schedule=weekly_schedule,
+            plan_period=plan_period,
+            daily_time_minutes=doc["daily_time_minutes"],
+        )
+        dev_age = addon_brain.get("dev_age") or {}
+        dev_age_summary = {
+            "focus_key": focus_key,
+            "dev_age_months": dev_age.get(focus_key),
+            "chronological_months": (addon_brain.get("child") or {}).get("chronological_months"),
+            "by_domain": dev_age,
+        }
+    except Exception as exc:
+        entry["status"] = "error"
+        entry["error"] = str(exc)
+        entry["error_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError:
+            pass
+        raise HTTPException(status_code=500, detail=f"Add-on generation failed: {exc}")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    entry["brain_state"] = addon_brain
+    entry["status"] = "ready"
+    entry["source"] = "addon"
+    entry["plan_period"] = plan_period
+    entry["plan_response"] = plan_response
+    entry["plan_internal"] = plan_internal
+    entry["dev_age_summary"] = dev_age_summary
+    entry["generated_at"] = now_iso
+    entry["updated_at"] = now_iso
+
+    try:
+        store_save(auth.uid, session_id, doc)
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500, detail=f"Module generated but failed to save: {exc}")
+
+    return _addon_module_view(session_id, focus_key, entry)
+
+
+@app.get(
+    "/api/v1/session/{session_id}/focus/{focus_key}",
+    tags=["session"],
+)
+async def session_focus_get(
+    session_id: str,
+    focus_key: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Read one add-on focus module (poll / resume). Returns the current status and, when
+    ready, the full date-aware add-on plan (with provenance). Read-only — never starts
+    or duplicates generation. States: interviewing | interview_complete | generating |
+    ready | error. Guards: 404 unknown_focus / focus_not_started.
+    """
+    doc = _require_session(auth.uid, session_id)
+    if focus_key not in FOCUS_LABELS:
+        raise HTTPException(status_code=404, detail="unknown_focus")
+    entry = (doc.get("added_focus") or {}).get(focus_key)
+    if not entry:
+        raise HTTPException(status_code=404, detail="focus_not_started")
+    return _addon_module_view(session_id, focus_key, entry)
