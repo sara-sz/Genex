@@ -26,6 +26,7 @@ from genex_core.interview_engine import (
     score_answer,
     normalize_answer,
 )
+from api.focus_selector import build_focus_block, select_focus
 from genex_core.scoring import finalize_domain_dev_age
 from genex_core.support_tiers import (
     determine_family_guidance_floor,
@@ -49,6 +50,10 @@ _BAND_PASS_THRESHOLD = 0.5
 
 # Max consecutive band failures before stopping a domain — matches app.py
 _MAX_CONSEC_FAILS = 2
+
+
+# Beta 2.2 focus selection lives in api/focus_selector.py (API layer; genex_core
+# stays frozen). build_focus_block / select_focus are imported above.
 
 
 # ── Stage 1-3: session start ───────────────────────────────────────────────
@@ -81,8 +86,18 @@ def run_session_start(
         daily_time_min=daily_time_minutes,
     )
 
-    # Stage 2: domain selection
-    domain_keys = choose_focus_domains(brain_state)
+    # Stage 2: domain selection — Beta 2.2: ONE primary focus only (shorter intake,
+    # faster plan). The other 3 focus areas stay available for the parent to add later.
+    # Primary is chosen by the API-layer focus selector (keyword + confirmed priority);
+    # if it detects nothing, fall back to the genex_core single-domain pick.
+    primary_key, detected = select_focus(diagnosis_for_brain, sanitized_concern)
+    if not primary_key:
+        fallback = choose_focus_domains(brain_state, max_domains=1)
+        primary_key = fallback[0] if fallback else "language_and_communication"
+    domain_keys = [primary_key]
+    # Persist the selected focus so the plan pipeline builds ONLY the primary domain.
+    brain_state["selected_domain_keys"] = list(domain_keys)
+    brain_state["focus"] = build_focus_block(primary_key, detected)
 
     # Stage 3: question building — one pass per domain, all questions upfront
     # Max questions per domain mirrors app.py: 7 for 1 domain, 5 for 2 domains
@@ -317,12 +332,14 @@ def run_plan_pipeline(
     """
     domain_keys: List[str] = list(brain_state.get("activity_banks", {}).keys())
 
-    # Need to re-derive domain_keys from interview since activity_banks not yet built.
-    # Use the domains stored by run_session_start via choose_focus_domains.
-    # They are available in brain_state["concern_profile"] but more reliably
-    # we re-run choose_focus_domains (it is deterministic and cheap).
+    # activity_banks isn't built yet at plan time, so re-derive the focus domains.
+    # Beta 2.2: prefer the single primary focus persisted at session start; fall back
+    # to a 1-domain selection so the plan builds ONLY the primary focus (not 2).
     if not domain_keys:
-        domain_keys = choose_focus_domains(brain_state)
+        domain_keys = (
+            brain_state.get("selected_domain_keys")
+            or choose_focus_domains(brain_state, max_domains=1)
+        )
 
     # Stage 5: scoring — compute developmental age per domain
     for dk in domain_keys:

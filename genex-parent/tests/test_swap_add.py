@@ -124,7 +124,8 @@ def test_swap_flow():
 
     sug = client.get(f"/api/v1/session/{sid}/plan/{pid}/activity/{aid}/swap-suggestions", headers=_hdr()).json()
     suggestions = sug["suggestions"]
-    check("1–3 swap suggestions returned (LLM-free bank)", 1 <= len(suggestions) <= 3, len(suggestions))
+    # swap_suggestions contract is "up to 8" (limit=8 since the Step 2D quality fix).
+    check("1–8 swap suggestions returned (LLM-free bank)", 1 <= len(suggestions) <= 8, len(suggestions))
     titles = {s["title"].strip().lower() for s in suggestions}
     check("suggestions exclude the original activity title", act["title"].strip().lower() not in titles, titles)
     check("each suggestion has suggestion_id + content",

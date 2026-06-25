@@ -220,6 +220,8 @@ async def session_start(
         timezone=body.timezone,
         beta_authorized=True,  # passed the beta gate above; code itself is never stored
     )
+    # Beta 2.2: surface the primary-focus metadata at the top level for the frontend.
+    doc["focus"] = brain_state.get("focus") or {}
 
     try:
         store_save(auth.uid, session_id, doc)
@@ -1165,6 +1167,7 @@ def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
             "session_id": session_id,
             "status": status,
             "current_question": current_q,
+            "focus": doc.get("focus") or {},   # Beta 2.2 primary-focus metadata
         }
 
     # ── Plan ready ────────────────────────────────────────────────────────
@@ -1208,6 +1211,7 @@ def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
         "plan_customization_summary": overlay_summary(
             get_overlay(doc, current_plan_id), current_plan_id
         ),
+        "focus": doc.get("focus") or {},   # Beta 2.2 primary-focus metadata
     }
 
     if _ADMIN_DEBUG:
