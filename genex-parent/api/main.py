@@ -1508,6 +1508,84 @@ async def session_focus_answer(
     }
 
 
+# ── Beta 2.2 Slice 2d: add-on hardening (stale recovery + size trim) ─────────
+
+# A "generating" add-on is considered stale (crashed / timed-out / interrupted) once
+# this many seconds have elapsed since generation_started_at. Chosen > Cloud Run's
+# 600s request timeout so an in-flight synchronous /generate is never mistaken for
+# stale; after this window a parent can safely re-call /generate to recover.
+ADDON_GENERATION_STALE_SECONDS = 900  # 15 minutes
+
+
+def _parse_iso(ts: str) -> Optional[datetime]:
+    """Parse an ISO-8601 timestamp; return None (never raise) on bad/empty input."""
+    try:
+        dt = datetime.fromisoformat(ts)
+    except (TypeError, ValueError):
+        return None
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+def _is_generation_stale(entry: Dict[str, Any], now: Optional[datetime] = None) -> bool:
+    """True if a 'generating' add-on has exceeded the stale threshold (recoverable).
+
+    Uses generation_started_at (set when generation began), falling back to
+    updated_at. A missing/unparseable timestamp is treated as stale so a parent is
+    never permanently blocked.
+    """
+    now = now or datetime.now(timezone.utc)
+    started = _parse_iso(entry.get("generation_started_at") or entry.get("updated_at") or "")
+    if started is None:
+        return True
+    return (now - started).total_seconds() > ADDON_GENERATION_STALE_SECONDS
+
+
+# Bulky, fully-regenerable add-on brain_state keys dropped after a module is ready.
+# Each is rebuilt by run_plan_pipeline from the retained lean context (child, qna,
+# dev_age, concern_profile, safety_profile, selected_domain_keys, family_guidance_floor)
+# and/or is already captured in plan_response / plan_internal. Dropping these takes the
+# stored add-on brain_state from ~137 KB to ~7 KB while staying regeneration-capable
+# for Slice 2e (future-week generation across primary + all ready add-ons).
+ADDON_BULKY_BRAIN_KEYS = (
+    "activity_banks",          # generated activities — captured in plan_response
+    "weekly_schedule",         # scheduled week — captured in plan_response
+    "week1_schedule",          # duplicate of weekly_schedule
+    "bridge_plans",            # bridge steps — rebuilt from dev_age/scoring
+    "weekly_slot_allocation",  # scheduling intermediate
+    "_gate_report",            # admin-debug only
+)
+
+
+def _trim_ready_addon(entry: Dict[str, Any], focus_key: str) -> None:
+    """Slice 2d size optimization — after a module is READY, slim the stored add-on to
+    a lean, regeneration-capable context. Mutates `entry` in place.
+
+    Strategy: KEEP brain_state but drop only the bulky, regenerable keys
+    (ADDON_BULKY_BRAIN_KEYS). The retained lean brain_state (child, qna, dev_age,
+    concern_profile, safety_profile, selected_domain_keys, family_guidance_floor, …)
+    is exactly what run_plan_pipeline needs to regenerate / repeat-adapt this focus for
+    a future week (Slice 2e). The interview's heavy per-band question dicts
+    (interview.band_state) are replaced with a lean summary.
+
+    Preserved: brain_state (lean), plan_response, plan_internal, dev_age_summary,
+    plan_period, focus_key, focus_label, module_id, source, status, generated_at,
+    created_at, updated_at, lean interview summary.
+    Removed: activity_banks, weekly_schedule, week1_schedule, bridge_plans,
+    weekly_slot_allocation, _gate_report; interview.band_state.
+    """
+    bs = entry.get("brain_state")
+    if isinstance(bs, dict):
+        for k in ADDON_BULKY_BRAIN_KEYS:
+            bs.pop(k, None)
+    iv = entry.get("interview") or {}
+    entry["interview"] = {
+        "status": "complete",
+        "domain_keys": iv.get("domain_keys") or [focus_key],
+        "questions_answered_total": iv.get("questions_answered_total", 0),
+        "total_questions_estimate": iv.get("total_questions_estimate", 0),
+    }
+
+
 # ── Beta 2.2 Slice 2c: current-week date-aware add-on generation ─────────────
 
 def _addon_module_view(session_id: str, focus_key: str, entry: Dict[str, Any]) -> Dict[str, Any]:
@@ -1572,11 +1650,12 @@ async def session_focus_generate(
     plan_response/plan_internal are never touched. Every add-on card carries additive
     provenance (source="addon", focus_key, focus_label, module_id, plan_period_id).
 
-    Idempotency / state:
-      ready        → returns the cached module, no regeneration.
-      generating   → 409 focus_already_generating (no duplicate work).
-      interviewing → 409 focus_intake_not_complete.
-      interview_complete | error → generates (error is retryable).
+    Idempotency / state (Slice 2d hardened):
+      ready                       → returns the cached module, no regeneration.
+      interviewing                → 409 focus_intake_not_complete.
+      generating (fresh)          → 409 focus_already_generating (no duplicate work).
+      generating (stale > 15 min) → recovers: re-generates safely.
+      interview_complete | error  → generates (error is retryable).
 
     Guards: 404 unknown_focus / focus_not_started · 409 focus_is_primary.
     On generation failure the module is marked status="error" (retry by re-calling).
@@ -1597,16 +1676,19 @@ async def session_focus_generate(
     status = entry.get("status")
     if status == "ready":
         return _addon_module_view(session_id, focus_key, entry)  # cached, idempotent
-    if status == "generating":
-        raise HTTPException(status_code=409, detail="focus_already_generating")
     if status == "interviewing":
         raise HTTPException(status_code=409, detail="focus_intake_not_complete")
-    # status in ("interview_complete", "error") → (re)generate.
+    if status == "generating" and not _is_generation_stale(entry):
+        # A generation is genuinely in flight — do not duplicate work.
+        raise HTTPException(status_code=409, detail="focus_already_generating")
+    # Proceed for: interview_complete, error (retry), or a STALE generating (recover).
 
     # Mark generating + persist first, so concurrent polls/calls see it and do not
-    # duplicate generation.
+    # duplicate generation. generation_started_at anchors stale detection.
+    now_start = datetime.now(timezone.utc).isoformat()
     entry["status"] = "generating"
-    entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+    entry["generation_started_at"] = now_start
+    entry["updated_at"] = now_start
     entry.pop("error", None)
     entry.pop("error_at", None)
     try:
@@ -1670,6 +1752,11 @@ async def session_focus_generate(
     entry["dev_age_summary"] = dev_age_summary
     entry["generated_at"] = now_iso
     entry["updated_at"] = now_iso
+    entry.pop("generation_started_at", None)
+    # Slice 2d: slim to a lean, regeneration-capable context — drop only the bulky,
+    # regenerable brain_state keys + question bands. Everything GET /focus, the cached
+    # ready response, reports, and Slice-2e future-week generation need is retained.
+    _trim_ready_addon(entry, focus_key)
 
     try:
         store_save(auth.uid, session_id, doc)
