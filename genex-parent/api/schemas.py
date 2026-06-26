@@ -174,6 +174,12 @@ class AddonActivityRequest(BaseModel):
     module_id: Optional[str] = Field(default=None, max_length=64)
 
 
+class AddonSwapRequest(BaseModel):
+    """Body for add-on activity swap (Beta 2.2 Slice 2f-2)."""
+    suggestion_id: str = Field(..., min_length=1)
+    module_id: Optional[str] = Field(default=None, max_length=64)
+
+
 # ─────────────────────────────────────────────────────────────────────────
 # Response models
 # ─────────────────────────────────────────────────────────────────────────

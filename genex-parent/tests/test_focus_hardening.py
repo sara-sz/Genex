@@ -287,11 +287,13 @@ def test_trim_after_ready():
     bs = e.get("brain_state") or {}
     raw_bytes = len(_json.dumps(e, default=str))
 
-    # (2) bulky fields removed
-    for bulky in ("activity_banks", "weekly_schedule", "week1_schedule", "bridge_plans",
+    # (2) bulky scheduling artifacts removed
+    for bulky in ("weekly_schedule", "week1_schedule", "bridge_plans",
                   "weekly_slot_allocation", "_gate_report"):
         check(f"bulky dropped: {bulky}", bulky not in bs, bulky)
     check("interview is lean summary (no band_state)", "band_state" not in (e.get("interview") or {}), e.get("interview"))
+    # Slice 2f-2 (Option A): activity_banks RETAINED for LLM-free swap.
+    check("activity_banks retained for swap", bool(bs.get("activity_banks")), list(bs))
 
     # (1)(3) brain_state retained with regeneration-capable context for Slice 2e
     check("brain_state retained (not dropped)", isinstance(e.get("brain_state"), dict), list(e))
@@ -301,8 +303,9 @@ def test_trim_after_ready():
     check("selected_domain_keys == [cognitive]", bs.get("selected_domain_keys") == ["cognitive"], bs.get("selected_domain_keys"))
     check("qna has the cognitive answers", bool((bs.get("qna") or {}).get("cognitive")), list((bs.get("qna") or {})))
 
-    # smaller than the full raw generation state (~137 KB) — lean entry well under 60 KB
-    check("trimmed entry is small (< 60 KB)", raw_bytes < 60000, raw_bytes)
+    # smaller than the full raw generation state (~137 KB). With activity_banks
+    # retained for swap (Slice 2f-2), the trimmed entry is still well below raw.
+    check("trimmed entry smaller than raw (< 110 KB)", raw_bytes < 110000, raw_bytes)
 
     # (3b) the lean context can actually regenerate via run_plan_pipeline (Slice-2e shape)
     from api.pipeline import run_plan_pipeline

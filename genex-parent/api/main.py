@@ -20,7 +20,7 @@ Do NOT touch genex_core/, app.py, tests/, requirements.txt, or Dockerfile.
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -72,6 +72,7 @@ from api.report_generator import REPORT_TITLES, generate_report_body
 from api.schemas import (
     AddActivityRequest,
     AddonActivityRequest,
+    AddonSwapRequest,
     AnswerRequest,
     FeedbackRequest,
     InterviewCompleteResponse,
@@ -1551,13 +1552,15 @@ def _is_generation_stale(entry: Dict[str, Any], now: Optional[datetime] = None) 
 
 
 # Bulky, fully-regenerable add-on brain_state keys dropped after a module is ready.
-# Each is rebuilt by run_plan_pipeline from the retained lean context (child, qna,
-# dev_age, concern_profile, safety_profile, selected_domain_keys, family_guidance_floor)
-# and/or is already captured in plan_response / plan_internal. Dropping these takes the
-# stored add-on brain_state from ~137 KB to ~7 KB while staying regeneration-capable
-# for Slice 2e (future-week generation across primary + all ready add-ons).
+# Each is rebuilt by run_plan_pipeline from the retained lean context and/or is already
+# captured in plan_response / plan_internal.
+#
+# Slice 2f-2 (Option A): activity_banks is RETAINED so add-on swap can draw safe
+# replacements from the already-generated, already-safety-filtered bank — LLM-free,
+# exactly like primary swap. The scheduling artifacts below are still dropped. Net
+# stored brain_state ≈ 59 KB (vs ~7 KB at 2d, ~137 KB raw) — still well below raw and
+# regeneration-capable for Slice 2e.
 ADDON_BULKY_BRAIN_KEYS = (
-    "activity_banks",          # generated activities — captured in plan_response
     "weekly_schedule",         # scheduled week — captured in plan_response
     "week1_schedule",          # duplicate of weekly_schedule
     "bridge_plans",            # bridge steps — rebuilt from dev_age/scoring
@@ -1571,17 +1574,17 @@ def _trim_ready_addon(entry: Dict[str, Any], focus_key: str) -> None:
     a lean, regeneration-capable context. Mutates `entry` in place.
 
     Strategy: KEEP brain_state but drop only the bulky, regenerable keys
-    (ADDON_BULKY_BRAIN_KEYS). The retained lean brain_state (child, qna, dev_age,
-    concern_profile, safety_profile, selected_domain_keys, family_guidance_floor, …)
-    is exactly what run_plan_pipeline needs to regenerate / repeat-adapt this focus for
-    a future week (Slice 2e). The interview's heavy per-band question dicts
-    (interview.band_state) are replaced with a lean summary.
+    (ADDON_BULKY_BRAIN_KEYS). The retained brain_state (child, qna, dev_age,
+    concern_profile, safety_profile, selected_domain_keys, family_guidance_floor,
+    activity_banks) powers both Slice-2e regeneration and Slice-2f-2 LLM-free swap.
+    The interview's heavy per-band question dicts (interview.band_state) are replaced
+    with a lean summary.
 
-    Preserved: brain_state (lean), plan_response, plan_internal, dev_age_summary,
-    plan_period, focus_key, focus_label, module_id, source, status, generated_at,
-    created_at, updated_at, lean interview summary.
-    Removed: activity_banks, weekly_schedule, week1_schedule, bridge_plans,
-    weekly_slot_allocation, _gate_report; interview.band_state.
+    Preserved: brain_state (incl. activity_banks for swap), plan_response,
+    plan_internal, dev_age_summary, plan_period, focus_key, focus_label, module_id,
+    source, status, generated_at, created_at, updated_at, lean interview summary.
+    Removed: weekly_schedule, week1_schedule, bridge_plans, weekly_slot_allocation,
+    _gate_report; interview.band_state.
     """
     bs = entry.get("brain_state")
     if isinstance(bs, dict):
@@ -1890,13 +1893,52 @@ def _require_ready_addon(
     return entry
 
 
-def _require_addon_activity(entry: Dict[str, Any], activity_id: str) -> str:
-    """The activity must be one of the add-on module's generated cards. Returns the
-    activity_id (overlay key). 404 activity_not_found otherwise. (Slice 2f-1 has no
-    swap/added cards yet, so the stored plan_response is the actionable set.)"""
-    if not plan_has_activity(entry.get("plan_response") or {}, activity_id):
+def _addon_overlay_doc(entry: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
+    """Build a synthetic single-plan (doc, plan_id) view of one ready add-on so the
+    existing primary customization helpers (resolve_customization_target,
+    swap_suggestions, …) can be reused UNCHANGED. plan_id == the add-on module_id.
+
+    The overlay is the SAME object as entry["customizations"] (by reference) when it
+    exists, so reads see live state; mutations go through _ensure_addon_overlay(entry).
+    The brain_state carries the retained activity_banks (Slice 2f-2) used for swaps.
+    """
+    module_id = entry.get("module_id", "")
+    return {
+        "brain_state": entry.get("brain_state") or {},
+        "plans": {module_id: {
+            "plan_response": entry.get("plan_response") or {},
+            "plan_internal": entry.get("plan_internal") or {},
+        }},
+        "plan_customizations": {module_id: entry.get("customizations") or empty_overlay()},
+        "current_plan_id": module_id,
+    }, module_id
+
+
+def _require_addon_target(entry: Dict[str, Any], activity_id: str) -> str:
+    """Map a VISIBLE add-on activity id to its canonical overlay key (original id, or
+    the source key of a swapped replacement). 404 activity_not_found if it is not a
+    current actionable add-on activity. Mirrors the primary _require_customizable_activity.
+    """
+    addon_doc, module_id = _addon_overlay_doc(entry)
+    target = resolve_customization_target(addon_doc, module_id, activity_id)
+    if target is None:
         raise HTTPException(status_code=404, detail="activity_not_found")
-    return activity_id
+    return target
+
+
+def _stamp_addon_card(card: Dict[str, Any], entry: Dict[str, Any], activity_date: str = "") -> Dict[str, Any]:
+    """Stamp add-on provenance onto a bank-built card so a swapped/added add-on card
+    stays labeled like the rest of the module (source=addon, focus_key, …)."""
+    pp = entry.get("plan_period") or {}
+    card["source"] = "addon"
+    card["focus_key"] = entry.get("focus_key", "")
+    card["focus_label"] = entry.get("focus_label", "")
+    card["module_id"] = entry.get("module_id", "")
+    card["plan_period_id"] = pp.get("plan_id", "")
+    card["week_start_date"] = pp.get("week_start_date", "")
+    if activity_date:
+        card["activity_date"] = activity_date
+    return card
 
 
 def _ensure_addon_overlay(entry: Dict[str, Any]) -> Dict[str, Any]:
@@ -1915,15 +1957,15 @@ def _ensure_addon_overlay(entry: Dict[str, Any]) -> Dict[str, Any]:
 
 def _addon_customize_response(
     session_id: str, focus_key: str, entry: Dict[str, Any],
-    activity_id: str, overlay: Dict[str, Any],
+    activity_id: str, target: str, overlay: Dict[str, Any],
 ) -> Dict[str, Any]:
     return {
         "session_id": session_id,
         "focus_key": focus_key,
         "module_id": entry.get("module_id", ""),
         "activity_id": activity_id,
-        "removed": activity_id in (overlay.get("removed_activity_ids") or []),
-        "saved_for_later": activity_id in (overlay.get("saved_for_later_activity_ids") or []),
+        "removed": target in (overlay.get("removed_activity_ids") or []),
+        "saved_for_later": target in (overlay.get("saved_for_later_activity_ids") or []),
         "plan_customization_summary": overlay_summary(overlay, entry.get("module_id")),
     }
 
@@ -1949,7 +1991,7 @@ async def session_addon_activity_remove(
     """
     doc = _require_session(auth.uid, session_id)
     entry = _require_ready_addon(doc, focus_key, body)
-    target = _require_addon_activity(entry, activity_id)
+    target = _require_addon_target(entry, activity_id)
 
     overlay = _ensure_addon_overlay(entry)
     changed = _add_unique(overlay.setdefault("removed_activity_ids", []), target)
@@ -1960,7 +2002,7 @@ async def session_addon_activity_remove(
         except SessionSaveError as exc:
             raise HTTPException(status_code=500, detail=f"Failed to save customization: {exc}")
 
-    return _addon_customize_response(session_id, focus_key, entry, activity_id, overlay)
+    return _addon_customize_response(session_id, focus_key, entry, activity_id, target, overlay)
 
 
 @app.post(
@@ -1983,7 +2025,7 @@ async def session_addon_activity_save_for_later(
     """
     doc = _require_session(auth.uid, session_id)
     entry = _require_ready_addon(doc, focus_key, body)
-    target = _require_addon_activity(entry, activity_id)
+    target = _require_addon_target(entry, activity_id)
 
     overlay = _ensure_addon_overlay(entry)
     a1 = _add_unique(overlay.setdefault("saved_for_later_activity_ids", []), target)
@@ -1995,4 +2037,105 @@ async def session_addon_activity_save_for_later(
         except SessionSaveError as exc:
             raise HTTPException(status_code=500, detail=f"Failed to save customization: {exc}")
 
-    return _addon_customize_response(session_id, focus_key, entry, activity_id, overlay)
+    return _addon_customize_response(session_id, focus_key, entry, activity_id, target, overlay)
+
+
+# ── Beta 2.2 Slice 2f-2: add-on activity swap (LLM-free, bank-based) ─────────
+
+@app.get(
+    "/api/v1/session/{session_id}/focus/{focus_key}/activity/{activity_id}/swap-suggestions",
+    tags=["session"],
+)
+async def session_addon_activity_swap_suggestions(
+    session_id: str,
+    focus_key: str,
+    activity_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Return safe replacement suggestions for a READY add-on activity, drawn from the
+    add-on's retained per-focus activity bank (no OpenAI). Reuses the primary
+    swap_suggestions logic via a synthetic single-plan view of the add-on module."""
+    doc = _require_session(auth.uid, session_id)
+    entry = _require_ready_addon(doc, focus_key, None)
+    _require_addon_target(entry, activity_id)  # 404 if not a visible add-on activity
+    addon_doc, module_id = _addon_overlay_doc(entry)
+    return {
+        "session_id": session_id,
+        "focus_key": focus_key,
+        "module_id": module_id,
+        "activity_id": activity_id,
+        "suggestions": swap_suggestions(addon_doc, module_id, activity_id),
+    }
+
+
+@app.post(
+    "/api/v1/session/{session_id}/focus/{focus_key}/activity/{activity_id}/swap",
+    tags=["session"],
+)
+async def session_addon_activity_swap(
+    session_id: str,
+    focus_key: str,
+    activity_id: str,
+    body: AddonSwapRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Replace a READY add-on activity with a chosen bank suggestion (overlay-only,
+    LLM-free). Writes only to the add-on overlay's activity_overrides under
+    doc["added_focus"][focus_key]["customizations"]; the stored plan_response,
+    doc["plans"], current_plan_id, and the primary customizations are never touched.
+    The replacement card keeps add-on provenance (source=addon, focus_key, module_id,
+    activity_date). Idempotent for the same suggestion_id; a different suggestion
+    replaces the prior override for that activity.
+    """
+    doc = _require_session(auth.uid, session_id)
+    entry = _require_ready_addon(doc, focus_key, body)
+    target = _require_addon_target(entry, activity_id)
+
+    match = find_bank_activity_by_suggestion_id(entry.get("brain_state") or {}, body.suggestion_id)
+    if match is None:
+        raise HTTPException(status_code=404, detail="suggestion_not_found")
+    domain, bank_activity = match
+
+    module_id = entry.get("module_id", "")
+    card, internal = build_card_from_bank(
+        session_id, module_id, key=target, domain=domain,
+        bank_activity=bank_activity, source_bank_type="swap",
+    )
+    # Preserve the day of the activity the parent is looking at, then stamp provenance.
+    resolved = resolve_plan_response(entry.get("plan_response") or {}, entry.get("customizations"))
+    visible = next(
+        (c for d in resolved.get("week", []) for c in d.get("activities", [])
+         if c.get("id") == activity_id), {}
+    )
+    _stamp_addon_card(card, entry, activity_date=visible.get("activity_date", ""))
+
+    overlay = _ensure_addon_overlay(entry)
+    overrides = overlay.setdefault("activity_overrides", {})
+    prev = overrides.get(target) or {}
+    prev_repl_id = (prev.get("replacement_activity") or {}).get("id")
+
+    if prev_repl_id != card["id"]:
+        overrides[target] = {
+            "mode": "swapped",
+            "replacement_activity": card,
+            "replacement_internal": internal,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "reason": "parent_request",
+        }
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to save swap: {exc}")
+        replacement_id = card["id"]
+    else:
+        replacement_id = prev_repl_id  # idempotent — same suggestion already applied
+
+    return {
+        "session_id": session_id,
+        "focus_key": focus_key,
+        "module_id": module_id,
+        "activity_id": activity_id,
+        "swapped": True,
+        "replacement_activity_id": replacement_id,
+        "plan_customization_summary": overlay_summary(overlay, module_id),
+    }
