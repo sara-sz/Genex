@@ -1295,6 +1295,13 @@ async def session_focus_areas(
     detection (Slice 1). Returns the parent-friendly labels.
     """
     doc = _require_session(auth.uid, session_id)
+    return _focus_areas_payload(session_id, doc)
+
+
+def _focus_areas_payload(session_id: str, doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the primary / added / remaining focus-areas payload from the session doc.
+    Shared by GET /focus-areas and the cancel endpoint so both return an identical
+    shape (the frontend can refresh the picker from either)."""
     fb = doc.get("focus") or {}
     view = focus_view(fb, doc.get("added_focus") or {})
     return {
@@ -1788,3 +1795,64 @@ async def session_focus_get(
     if not entry:
         raise HTTPException(status_code=404, detail="focus_not_started")
     return _addon_module_view(session_id, focus_key, entry)
+
+
+@app.post(
+    "/api/v1/session/{session_id}/focus/{focus_key}/cancel",
+    tags=["session"],
+)
+async def session_focus_cancel(
+    session_id: str,
+    focus_key: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """
+    Cancel/abandon an UNFINISHED add-on focus before generation, returning it to
+    remaining_focus_areas (e.g. the parent closes the intake modal without finishing).
+
+    Removes doc["added_focus"][focus_key] entirely, so the focus is no longer added/
+    occupied and reappears in remaining. Never touches the primary plan, doc["plans"],
+    or current_plan_id; never generates.
+
+    Cancellable statuses: interviewing, interview_complete, error, and a STALE
+    'generating' (> 15 min — an abandoned/crashed generation, same staleness rule as
+    /generate recovery).
+
+    Guards / non-cancellable:
+      404 unknown_focus            — focus_key is not one of the 4 supported areas
+      409 focus_is_primary         — the primary focus cannot be canceled
+      409 focus_already_ready      — a generated module exists (removal is a later feature)
+      409 focus_already_generating — a generation is genuinely in flight (not stale)
+    Idempotent: if no add-on exists for this focus, returns 200 status="canceled"
+    (closing a modal twice must not error).
+    """
+    doc = _require_session(auth.uid, session_id)
+
+    if focus_key not in FOCUS_LABELS:
+        raise HTTPException(status_code=404, detail="unknown_focus")
+
+    fb = doc.get("focus") or {}
+    if focus_key == fb.get("primary_focus_key"):
+        raise HTTPException(status_code=409, detail="focus_is_primary")
+
+    added = doc.get("added_focus") or {}
+    entry = added.get(focus_key)
+
+    if entry is not None:
+        status = entry.get("status")
+        if status == "ready":
+            raise HTTPException(status_code=409, detail="focus_already_ready")
+        if status == "generating" and not _is_generation_stale(entry):
+            raise HTTPException(status_code=409, detail="focus_already_generating")
+        # interviewing | interview_complete | error | stale-generating → cancel.
+        added.pop(focus_key, None)
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to save session: {exc}")
+    # else: already absent → idempotent success (no write needed).
+
+    payload = _focus_areas_payload(session_id, doc)
+    payload["focus_key"] = focus_key
+    payload["status"] = "canceled"
+    return payload
