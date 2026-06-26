@@ -529,3 +529,80 @@ def run_refresh_pipeline(
     state["cycle_week"] = 2
     build_weekly_schedule(state)               # sets state["weekly_schedule"] = Week 2
     return state
+
+
+# ── Beta 2.2 Slice 2e-2: integrated next-week across active focus areas ──────
+# API-layer composition of FROZEN scheduler functions. No genex_core changes, no LLM:
+# add-on Week-1 schedules are reconstructed from the retained add-on activity_banks,
+# unioned with the primary Week-1 schedule, then repeat-adapted by the same frozen
+# Week-2 builder used by run_refresh_pipeline.
+
+def reconstruct_addon_week1_schedule(
+    addon_brain_state: Dict[str, Any], focus_key: str
+) -> Optional[Dict[str, Any]]:
+    """Re-derive a ready add-on's Week-1 scheduler schedule from its RETAINED bank.
+
+    Works on a deep copy so the stored add-on brain_state is never mutated. Returns a
+    weekly_schedule dict whose day items are filtered to `focus_key` only, or None when
+    the add-on has no retained activity_banks (old pre-2f-2 module → skip gracefully).
+    LLM-free: the bank already exists; only allocation + scheduling are re-run.
+    """
+    bs = addon_brain_state or {}
+    if not (bs.get("activity_banks") or {}):
+        return None
+    state = copy.deepcopy(bs)
+    state.pop("weekly_slot_allocation", None)   # force a fresh allocation
+    state["cycle_week"] = 1
+    allocate_weekly_slots(state)
+    build_weekly_schedule(state)                # cycle_week=1 → Week-1-shaped schedule
+    sched = state.get("weekly_schedule") or {}
+
+    filtered_days: Dict[str, Any] = {}
+    for day, info in (sched.get("days") or {}).items():
+        items = [it for it in info.get("items", []) if it.get("category_key") == focus_key]
+        filtered_days[day] = {**info, "items": items}
+    return {**sched, "days": filtered_days}
+
+
+def merge_week1_schedules(
+    primary_schedule: Dict[str, Any], addon_schedules: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Union the primary Week-1 schedule with each add-on's reconstructed Week-1
+    schedule into ONE combined Week-1 (per-day items concatenated). Deep-copies the
+    primary so the stored brain_state is never mutated."""
+    merged = copy.deepcopy(primary_schedule or {})
+    days = merged.setdefault("days", {})
+    for sched in addon_schedules:
+        for day, info in (sched.get("days") or {}).items():
+            if day not in days:
+                days[day] = {
+                    "items": [],
+                    "total_minutes": 0,
+                    "is_weekend": info.get("is_weekend", False),
+                }
+            days[day]["items"] = list(days[day].get("items", [])) + list(info.get("items", []))
+    return merged
+
+
+def run_integrated_next_week(
+    primary_brain_state: Dict[str, Any],
+    merged_week1: Dict[str, Any],
+    activity_feedback: Dict[str, Dict[str, Dict[str, str]]],
+    active_focus_areas: List[str],
+) -> Dict[str, Any]:
+    """Build ONE integrated Week-2 across all active focus areas from the combined
+    Week-1 + merged feedback, using the FROZEN cycle_week=2 repeat-adapt builder.
+
+    Works on a deep copy of the primary brain_state; the caller persists only on
+    success. No LLM calls. Raises ValueError if the combined Week-1 is empty.
+    """
+    if not (merged_week1 or {}).get("days"):
+        raise ValueError("No combined Week-1 schedule available to build the next week.")
+    state = copy.deepcopy(primary_brain_state or {})
+    state["week1_schedule"] = merged_week1
+    state["weekly_schedule"] = merged_week1
+    state["activity_feedback"] = activity_feedback or {}
+    state["cycle_week"] = 2
+    state["selected_domain_keys"] = list(active_focus_areas)
+    build_weekly_schedule(state)                # → integrated Week-2
+    return state

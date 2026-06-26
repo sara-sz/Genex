@@ -572,6 +572,29 @@ def apply_addon_provenance(
     return plan_response
 
 
+def apply_integrated_provenance(
+    plan_response: Dict[str, Any], primary_focus_key: str = ""
+) -> Dict[str, Any]:
+    """Stamp per-activity focus provenance onto an INTEGRATED next-week plan_response
+    (Beta 2.2 Slice 2e-2). Additive only — never removes or renames existing fields.
+
+    Each card already carries domain/domain_label/activity_date from adapt_weekly_plan.
+    This adds: focus_key (== the card's domain), focus_label (parent-facing FOCUS_LABELS),
+    and focus_origin ("primary" if the card's domain is the original primary focus, else
+    "added"). source stays "primary" — this is one integrated weekly plan under
+    doc["plans"], not an add-on module. Mutates and returns the same plan_response.
+    """
+    from api.focus_selector import FOCUS_LABELS  # local import avoids any import cycle
+    for day in plan_response.get("week", []):
+        for card in day.get("activities", []):
+            domain = card.get("domain", "")
+            card["source"] = "primary"
+            card["focus_key"] = domain
+            card["focus_label"] = FOCUS_LABELS.get(domain, card.get("domain_label", ""))
+            card["focus_origin"] = "primary" if domain == primary_focus_key else "added"
+    return plan_response
+
+
 # ── Internal plan metadata (plan_internal) ────────────────────────────────────
 
 def _build_milestone_lookup(

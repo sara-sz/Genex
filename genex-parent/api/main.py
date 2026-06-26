@@ -29,6 +29,7 @@ from api.adapters import (
     DOMAIN_LABELS,
     adapt_weekly_plan,
     apply_addon_provenance,
+    apply_integrated_provenance,
     build_plan_internal,
     normalize_diagnosis_for_brain,
     sanitize_concern,
@@ -56,7 +57,10 @@ from api.customization import (
 from api.pipeline import (
     get_current_question,
     get_expected_question_id,
+    merge_week1_schedules,
+    reconstruct_addon_week1_schedule,
     run_focus_intake_start,
+    run_integrated_next_week,
     run_plan_pipeline,
     run_record_answer,
     run_refresh_pipeline,
@@ -554,15 +558,62 @@ async def session_plan_next_week(
             detail="Stored plan state is incomplete; cannot build the next week.",
         )
 
-    # ── Translate feedback (base plan only) → brain signals, then build Week 2 ──
-    activity_feedback = translate_feedback_to_activity_feedback(
-        doc.get("feedback") or [],
-        base_entry.get("plan_response") or {},
-        base_plan_id,
+    # ── Beta 2.2 Slice 2e-2: active focus areas = primary + ready add-ons ─────
+    primary_focus_key = (doc.get("focus") or {}).get("primary_focus_key", "") or (
+        (brain_state.get("selected_domain_keys") or [""])[0]
     )
+    ready_addons = [
+        (fk, e) for fk, e in (doc.get("added_focus") or {}).items()
+        if (e or {}).get("status") == "ready"
+    ]
+
+    # Default markers for the primary-only path (no integration).
+    active_focus_areas: List[str] = [primary_focus_key] if primary_focus_key else []
+    skipped_focus_areas: List[str] = []
+
     try:
-        # run_refresh_pipeline works on a deep copy; brain_state is untouched on error.
-        refresh_state = run_refresh_pipeline(brain_state, activity_feedback)
+        if not ready_addons:
+            # ── Primary-only: unchanged Beta 2.1 behaviour (byte-identical) ──
+            activity_feedback = translate_feedback_to_activity_feedback(
+                doc.get("feedback") or [],
+                base_entry.get("plan_response") or {},
+                base_plan_id,
+            )
+            refresh_state = run_refresh_pipeline(brain_state, activity_feedback)
+            integrated = False
+        else:
+            # ── Integrated: one weekly plan across all active focus areas ────
+            addon_schedules: List[Dict[str, Any]] = []
+            extra_plans: List[Dict[str, Any]] = []
+            included_focus: List[str] = []
+            for fk, e in ready_addons:
+                sched = reconstruct_addon_week1_schedule(e.get("brain_state") or {}, fk)
+                if sched is None or not (sched.get("days") or {}):
+                    skipped_focus_areas.append(fk)  # old add-on w/o retained bank → skip
+                    continue
+                addon_schedules.append(sched)
+                included_focus.append(fk)
+                extra_plans.append({
+                    "plan_id": e.get("module_id"),
+                    "plan_response": resolve_plan_response(
+                        e.get("plan_response") or {}, e.get("customizations")
+                    ),
+                })
+            active_focus_areas = ([primary_focus_key] if primary_focus_key else []) + included_focus
+
+            merged_week1 = merge_week1_schedules(
+                brain_state.get("weekly_schedule") or {}, addon_schedules
+            )
+            activity_feedback = translate_feedback_to_activity_feedback(
+                doc.get("feedback") or [],
+                base_entry.get("plan_response") or {},
+                base_plan_id,
+                extra_plans=extra_plans,
+            )
+            refresh_state = run_integrated_next_week(
+                brain_state, merged_week1, activity_feedback, active_focus_areas
+            )
+            integrated = True
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -575,6 +626,11 @@ async def session_plan_next_week(
     # is_partial_week=False) with additive markers (cycle_week=2, plan_type,
     # base_plan_id, available_from).
     plan_period = compute_next_week_period(base_period, doc.get("timezone") or "UTC")
+    if integrated:
+        # Additive metadata so Lovable can see the integration (does not change shape).
+        plan_period["active_focus_areas"] = active_focus_areas
+        plan_period["skipped_focus_areas"] = skipped_focus_areas
+        plan_period["is_integrated"] = True
 
     plan_response = adapt_weekly_plan(
         session_id=session_id,
@@ -583,6 +639,9 @@ async def session_plan_next_week(
         weekly_schedule=weekly_schedule,
         plan_period=plan_period,
     )
+    if integrated:
+        # Per-activity focus/domain provenance on the integrated plan (additive).
+        apply_integrated_provenance(plan_response, primary_focus_key)
     plan_internal = build_plan_internal(
         session_id=session_id,
         brain_state=refresh_state,
