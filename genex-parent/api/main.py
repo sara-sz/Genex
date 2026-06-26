@@ -26,6 +26,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.adapters import (
+    DOMAIN_LABELS,
     adapt_weekly_plan,
     apply_addon_provenance,
     build_plan_internal,
@@ -1045,17 +1046,42 @@ async def session_feedback(
             detail="No plan has been generated for this session. Call /plan first.",
         )
 
-    # Look up internal metadata for enrichment. Original cards resolve via the
-    # frozen plan_internal; Beta 2.1 swapped/added cards live only in the overlay,
-    # so fall back to the overlay's internal block. This keeps domain/subdomain
-    # and doctor/ST/OT-PT report routing working for customized activities.
-    internal_act = _find_activity_internal(
-        doc, body.plan_id, body.activity_id, body.day
+    # Resolve internal metadata for enrichment + provenance. Beta 2.2 Slice 2e-1:
+    # body.plan_id may be a PRIMARY plan_id (doc["plans"]) or a ready ADD-ON module_id
+    # (doc["added_focus"][*].module_id). Detect which, then resolve from the right
+    # source. Original cards resolve via plan_internal; swapped/added cards via the
+    # overlay's internal block — for primary AND add-on alike.
+    addon_entry = next(
+        (e for e in (doc.get("added_focus") or {}).values()
+         if e.get("module_id") == body.plan_id),
+        None,
     )
-    if internal_act is None:
-        internal_act = find_overlay_internal(
-            get_overlay(doc, body.plan_id), body.activity_id
+
+    if addon_entry is not None:
+        source = "addon"
+        addon_doc, _module_id = _addon_overlay_doc(addon_entry)
+        internal_act = _find_activity_internal(addon_doc, _module_id, body.activity_id, body.day)
+        if internal_act is None:
+            internal_act = find_overlay_internal(get_overlay(addon_doc, _module_id), body.activity_id)
+        plan_period = addon_entry.get("plan_period") or {}
+        module_id_val: Optional[str] = addon_entry.get("module_id")
+        focus_key_fallback = addon_entry.get("focus_key", "")
+        focus_label_fallback = addon_entry.get("focus_label", "")
+        orig_key = resolve_customization_target(addon_doc, _module_id, body.activity_id)
+    else:
+        source = "primary"
+        internal_act = _find_activity_internal(doc, body.plan_id, body.activity_id, body.day)
+        if internal_act is None:
+            internal_act = find_overlay_internal(get_overlay(doc, body.plan_id), body.activity_id)
+        plan_period = ((doc.get("plans") or {}).get(body.plan_id) or {}).get("plan_period") or {}
+        module_id_val = None
+        focus_key_fallback = ""
+        focus_label_fallback = ""
+        orig_key = (
+            resolve_customization_target(doc, body.plan_id, body.activity_id)
+            if body.plan_id in (doc.get("plans") or {}) else None
         )
+
     metadata_found = internal_act is not None
 
     feedback_id = str(uuid.uuid4())
@@ -1084,6 +1110,19 @@ async def session_feedback(
     if metadata_found and internal_act:
         for field in _INTERNAL_METADATA_FIELDS:
             record[field] = internal_act.get(field)
+
+    # ── Beta 2.2 Slice 2e-1: additive provenance (primary + add-on) ──────────
+    domain = record.get("domain") or ""
+    record["source"] = source
+    record["focus_key"] = domain or focus_key_fallback
+    record["focus_label"] = FOCUS_LABELS.get(domain, "") or focus_label_fallback
+    record["domain_label"] = DOMAIN_LABELS.get(domain, "") if domain else ""
+    record["module_id"] = module_id_val
+    record["original_activity_id"] = (
+        orig_key if (orig_key and orig_key != body.activity_id) else None
+    )
+    record["plan_period_id"] = plan_period.get("plan_id", "")
+    record["cycle_week"] = int(plan_period.get("cycle_week", 1) or 1)
 
     # Append to feedback list and save
     doc.setdefault("feedback", []).append(record)

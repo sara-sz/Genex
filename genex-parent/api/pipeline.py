@@ -458,28 +458,44 @@ def translate_feedback_to_activity_feedback(
     feedback_list: List[Dict[str, Any]],
     base_plan_response: Dict[str, Any],
     base_plan_id: Optional[str],
+    extra_plans: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Dict[str, Dict[str, str]]]:
     """Translate API feedback (doc["feedback"]) → brain activity_feedback.
 
     Output shape (what scheduler._v22_build_week2_schedule reads):
         { category_key: { activity_title: {difficulty, performance, engagement} } }
 
-    Titles are recovered from the base (Week-1) plan_response by activity_id, since
-    the feedback record stores activity_id + domain but not the card title. Only
-    feedback for the base plan is used; records that cannot be mapped to a Week-1
-    card title are skipped (domain-level signals are intentionally not invented).
+    Titles are recovered from each plan_response by activity_id, since the feedback
+    record stores activity_id + domain but not the card title. Records that cannot be
+    mapped to a known card title are skipped (domain-level signals are not invented).
+
+    Beta 2.2 Slice 2e-1: `extra_plans` optionally adds ready add-on modules so add-on
+    feedback is included alongside the primary base plan. Each item is
+    {"plan_id": <module_id>, "plan_response": <resolved add-on plan_response>}. When
+    omitted, behaviour is byte-identical to the original primary-only translation
+    (the current /plan/next-week caller passes nothing — unchanged until 2e-2).
     """
     id_to_card: Dict[str, Tuple[str, str]] = {}
-    for day in (base_plan_response or {}).get("week", []):
-        for act in day.get("activities", []):
-            aid = act.get("id")
-            if aid:
-                id_to_card[aid] = (act.get("title", ""), act.get("domain", ""))
+
+    def _index(plan_response: Optional[Dict[str, Any]]) -> None:
+        for day in (plan_response or {}).get("week", []):
+            for act in day.get("activities", []):
+                aid = act.get("id")
+                if aid:
+                    id_to_card[aid] = (act.get("title", ""), act.get("domain", ""))
+
+    _index(base_plan_response)
+    allowed_plan_ids: set = {base_plan_id} if base_plan_id else set()
+    for p in (extra_plans or []):
+        _index(p.get("plan_response"))
+        if p.get("plan_id"):
+            allowed_plan_ids.add(p["plan_id"])
 
     grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
     for f in feedback_list or []:
-        # Only consider feedback for the base plan we are advancing from.
-        if base_plan_id and f.get("plan_id") not in (None, base_plan_id):
+        # Restrict to the plans we are advancing from (primary base + any add-ons).
+        # When allowed_plan_ids is empty (no base_plan_id, no extras), keep all.
+        if allowed_plan_ids and f.get("plan_id") not in ({None} | allowed_plan_ids):
             continue
         title, domain = id_to_card.get(f.get("activity_id"), ("", f.get("domain", "")))
         if not title or not domain:
