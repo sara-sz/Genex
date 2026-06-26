@@ -165,6 +165,15 @@ class AddActivityRequest(BaseModel):
     day: Optional[str] = Field(default=None, max_length=20)
 
 
+class AddonActivityRequest(BaseModel):
+    """Optional body for add-on activity customization (Beta 2.2 Slice 2f-1).
+
+    module_id is an optional stale-guard: if present and it does not match the
+    ready add-on's module_id, the request is rejected (409 stale_module).
+    """
+    module_id: Optional[str] = Field(default=None, max_length=64)
+
+
 # ─────────────────────────────────────────────────────────────────────────
 # Response models
 # ─────────────────────────────────────────────────────────────────────────

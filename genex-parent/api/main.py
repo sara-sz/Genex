@@ -38,6 +38,7 @@ from api.customization import (
     add_suggestions,
     build_card_from_bank,
     choose_add_day,
+    empty_overlay,
     ensure_overlay,
     find_bank_activity_by_suggestion_id,
     find_overlay_internal,
@@ -45,6 +46,7 @@ from api.customization import (
     match_plan_day,
     overlay_summary,
     plan_day_labels,
+    plan_has_activity,
     resolve_customization_target,
     resolve_plan_response,
     swap_suggestions,
@@ -69,6 +71,7 @@ from api.planning_period import (
 from api.report_generator import REPORT_TITLES, generate_report_body
 from api.schemas import (
     AddActivityRequest,
+    AddonActivityRequest,
     AnswerRequest,
     FeedbackRequest,
     InterviewCompleteResponse,
@@ -1627,10 +1630,15 @@ def _addon_module_view(session_id: str, focus_key: str, entry: Dict[str, Any]) -
     elif status == "generating":
         view["ready_for_generate"] = False
     elif status == "ready":
+        # Resolve the stored plan_response through the add-on customization overlay
+        # (Slice 2f-1). Identity-safe: an uncustomized module returns the stored
+        # plan_response unchanged. The stored plan_response is never mutated.
+        overlay = entry.get("customizations")
         view["plan_period"] = entry.get("plan_period") or {}
-        view["plan"] = entry.get("plan_response") or {}
+        view["plan"] = resolve_plan_response(entry.get("plan_response") or {}, overlay)
         view["dev_age_summary"] = entry.get("dev_age_summary") or {}
         view["generated_at"] = entry.get("generated_at", "")
+        view["plan_customization_summary"] = overlay_summary(overlay, entry.get("module_id"))
         view["ready_for_generate"] = False
     elif status == "error":
         view["error"] = entry.get("error", "")
@@ -1856,3 +1864,135 @@ async def session_focus_cancel(
     payload["focus_key"] = focus_key
     payload["status"] = "canceled"
     return payload
+
+
+# ── Beta 2.2 Slice 2f-1: add-on activity customization (remove / save) ───────
+
+def _require_ready_addon(
+    doc: Dict[str, Any], focus_key: str, body: Optional[AddonActivityRequest]
+) -> Dict[str, Any]:
+    """Guard for add-on activity customization. Returns the ready add-on entry.
+
+    404 unknown_focus      — focus_key is not one of the 4 supported areas
+    404 focus_not_started  — no add-on exists for this focus
+    409 focus_not_ready    — the add-on has not been generated yet
+    409 stale_module       — body.module_id is given and != entry["module_id"]
+    """
+    if focus_key not in FOCUS_LABELS:
+        raise HTTPException(status_code=404, detail="unknown_focus")
+    entry = (doc.get("added_focus") or {}).get(focus_key)
+    if not entry:
+        raise HTTPException(status_code=404, detail="focus_not_started")
+    if entry.get("status") != "ready":
+        raise HTTPException(status_code=409, detail="focus_not_ready")
+    if body is not None and body.module_id and body.module_id != entry.get("module_id"):
+        raise HTTPException(status_code=409, detail="stale_module")
+    return entry
+
+
+def _require_addon_activity(entry: Dict[str, Any], activity_id: str) -> str:
+    """The activity must be one of the add-on module's generated cards. Returns the
+    activity_id (overlay key). 404 activity_not_found otherwise. (Slice 2f-1 has no
+    swap/added cards yet, so the stored plan_response is the actionable set.)"""
+    if not plan_has_activity(entry.get("plan_response") or {}, activity_id):
+        raise HTTPException(status_code=404, detail="activity_not_found")
+    return activity_id
+
+
+def _ensure_addon_overlay(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the (mutable) add-on customization overlay, creating an empty one if
+    absent. Stored under doc["added_focus"][focus_key]["customizations"] — fully
+    separate from the primary doc["plan_customizations"]."""
+    cz = entry.get("customizations")
+    if not isinstance(cz, dict):
+        cz = empty_overlay()
+        entry["customizations"] = cz
+    else:
+        for k, v in empty_overlay().items():
+            cz.setdefault(k, v)
+    return cz
+
+
+def _addon_customize_response(
+    session_id: str, focus_key: str, entry: Dict[str, Any],
+    activity_id: str, overlay: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "session_id": session_id,
+        "focus_key": focus_key,
+        "module_id": entry.get("module_id", ""),
+        "activity_id": activity_id,
+        "removed": activity_id in (overlay.get("removed_activity_ids") or []),
+        "saved_for_later": activity_id in (overlay.get("saved_for_later_activity_ids") or []),
+        "plan_customization_summary": overlay_summary(overlay, entry.get("module_id")),
+    }
+
+
+@app.post(
+    "/api/v1/session/{session_id}/focus/{focus_key}/activity/{activity_id}/remove",
+    tags=["session"],
+)
+async def session_addon_activity_remove(
+    session_id: str,
+    focus_key: str,
+    activity_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+    body: Optional[AddonActivityRequest] = None,
+):
+    """
+    Hide an activity from a READY add-on module's resolved plan (Beta 2.2 Slice 2f-1).
+
+    Overlay-only and LLM-free: adds activity_id to the add-on overlay's
+    removed_activity_ids under doc["added_focus"][focus_key]["customizations"]. Never
+    mutates entry["plan_response"], doc["plans"], current_plan_id, or the primary
+    plan_customizations. Idempotent (no duplicate ids). Only a ready add-on is editable.
+    """
+    doc = _require_session(auth.uid, session_id)
+    entry = _require_ready_addon(doc, focus_key, body)
+    target = _require_addon_activity(entry, activity_id)
+
+    overlay = _ensure_addon_overlay(entry)
+    changed = _add_unique(overlay.setdefault("removed_activity_ids", []), target)
+
+    if changed:
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to save customization: {exc}")
+
+    return _addon_customize_response(session_id, focus_key, entry, activity_id, overlay)
+
+
+@app.post(
+    "/api/v1/session/{session_id}/focus/{focus_key}/activity/{activity_id}/save-for-later",
+    tags=["session"],
+)
+async def session_addon_activity_save_for_later(
+    session_id: str,
+    focus_key: str,
+    activity_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+    body: Optional[AddonActivityRequest] = None,
+):
+    """
+    Save a READY add-on activity for later ("I like this, but not this week").
+
+    Adds activity_id to saved_for_later_activity_ids AND hides it from the current week
+    via removed_activity_ids, in the add-on overlay. Overlay-only, LLM-free, idempotent.
+    Never mutates entry["plan_response"], doc["plans"], or the primary customizations.
+    """
+    doc = _require_session(auth.uid, session_id)
+    entry = _require_ready_addon(doc, focus_key, body)
+    target = _require_addon_activity(entry, activity_id)
+
+    overlay = _ensure_addon_overlay(entry)
+    a1 = _add_unique(overlay.setdefault("saved_for_later_activity_ids", []), target)
+    a2 = _add_unique(overlay.setdefault("removed_activity_ids", []), target)
+
+    if a1 or a2:
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to save customization: {exc}")
+
+    return _addon_customize_response(session_id, focus_key, entry, activity_id, overlay)
