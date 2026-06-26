@@ -64,6 +64,7 @@ from api.pipeline import (
 )
 from api.planning_period import (
     _local_date,
+    activity_date_for_day,
     compute_next_week_period,
     compute_plan_period,
     next_week_available_from,
@@ -72,6 +73,7 @@ from api.report_generator import REPORT_TITLES, generate_report_body
 from api.schemas import (
     AddActivityRequest,
     AddonActivityRequest,
+    AddonAddActivityRequest,
     AddonSwapRequest,
     AnswerRequest,
     FeedbackRequest,
@@ -1911,6 +1913,8 @@ def _addon_overlay_doc(entry: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
         }},
         "plan_customizations": {module_id: entry.get("customizations") or empty_overlay()},
         "current_plan_id": module_id,
+        # plan_period carries the add-on's timezone; choose_add_day uses it for "today".
+        "timezone": (entry.get("plan_period") or {}).get("timezone") or "UTC",
     }, module_id
 
 
@@ -2137,5 +2141,128 @@ async def session_addon_activity_swap(
         "activity_id": activity_id,
         "swapped": True,
         "replacement_activity_id": replacement_id,
+        "plan_customization_summary": overlay_summary(overlay, module_id),
+    }
+
+
+# ── Beta 2.2 Slice 2f-3: add another activity to an add-on day ───────────────
+
+def _addon_plan_period_days(entry: Dict[str, Any]) -> Dict[str, str]:
+    """Map {day_name: activity_date} for the add-on's current plan_period (today→Sunday)."""
+    pp = entry.get("plan_period") or {}
+    week_start = pp.get("week_start_date", "")
+    return {d: activity_date_for_day(week_start, d) for d in pp.get("days_included", [])}
+
+
+@app.get(
+    "/api/v1/session/{session_id}/focus/{focus_key}/activity-suggestions",
+    tags=["session"],
+)
+async def session_addon_activity_add_suggestions(
+    session_id: str,
+    focus_key: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+    domain: Optional[str] = None,
+):
+    """Return add-on bank activities not already in the resolved add-on module
+    (optionally filtered by domain). Bank-only, no OpenAI. Ready add-on only."""
+    doc = _require_session(auth.uid, session_id)
+    entry = _require_ready_addon(doc, focus_key, None)
+    addon_doc, module_id = _addon_overlay_doc(entry)
+    return {
+        "session_id": session_id,
+        "focus_key": focus_key,
+        "module_id": module_id,
+        "domain": domain,
+        "suggestions": add_suggestions(addon_doc, module_id, domain_filter=domain),
+    }
+
+
+@app.post(
+    "/api/v1/session/{session_id}/focus/{focus_key}/activities/add",
+    tags=["session"],
+)
+async def session_addon_activity_add(
+    session_id: str,
+    focus_key: str,
+    body: AddonAddActivityRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Add a recommended bank activity to a day of a READY add-on module (overlay-only,
+    LLM-free). Writes only to the add-on overlay's added_activities under
+    doc["added_focus"][focus_key]["customizations"]; the stored plan_response,
+    doc["plans"], current_plan_id, and the primary customizations are never touched.
+
+    Day/date is constrained to the add-on plan_period (today→Sunday). Provide `day`
+    or `activity_date`; both omitted → a day is auto-picked. The added card keeps
+    add-on provenance. Day-specific deterministic id → same suggestion on the same day
+    is idempotent; the same suggestion on a different day is a separate card.
+    """
+    doc = _require_session(auth.uid, session_id)
+    entry = _require_ready_addon(doc, focus_key, body)
+
+    match = find_bank_activity_by_suggestion_id(entry.get("brain_state") or {}, body.suggestion_id)
+    if match is None:
+        raise HTTPException(status_code=404, detail="suggestion_not_found")
+    domain, bank_activity = match
+
+    # ── Resolve the day within the add-on plan_period (today→Sunday) ──────────
+    valid = _addon_plan_period_days(entry)  # {day_name: date}
+    req_date = (body.activity_date or "").strip()
+    req_day = (body.day or "").strip()
+    if req_date:
+        day = next((d for d, dt in valid.items() if dt == req_date), None)
+        if day is None:
+            raise HTTPException(status_code=400, detail={
+                "code": "invalid_date",
+                "message": "The selected date is not within this add-on's current week.",
+                "valid_dates": list(valid.values())})
+    elif req_day:
+        day = match_plan_day(req_day, list(valid.keys()))
+        if day is None:
+            raise HTTPException(status_code=400, detail={
+                "code": "invalid_day",
+                "message": "The selected day is not within this add-on's current week.",
+                "valid_days": list(valid.keys())})
+    else:
+        addon_doc, module_id_ = _addon_overlay_doc(entry)
+        day = choose_add_day(addon_doc, module_id_)
+        if day not in valid:
+            day = next(iter(valid), "")
+    activity_date = valid.get(day, "")
+
+    module_id = entry.get("module_id", "")
+    card, internal = build_card_from_bank(
+        session_id, module_id, key=f"add:{body.suggestion_id}:{day}", domain=domain,
+        bank_activity=bank_activity, source_bank_type="parent_added",
+    )
+    _stamp_addon_card(card, entry, activity_date=activity_date)
+
+    overlay = _ensure_addon_overlay(entry)
+    added = overlay.setdefault("added_activities", [])
+    existing = next((it for it in added if (it.get("activity") or {}).get("id") == card["id"]), None)
+
+    if existing is None:
+        added.append({
+            "activity": card,
+            "internal": internal,
+            "day": day,
+            "date": activity_date,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to save added activity: {exc}")
+    # else: same suggestion + same day already added → idempotent, no change.
+
+    return {
+        "session_id": session_id,
+        "focus_key": focus_key,
+        "module_id": module_id,
+        "added": True,
+        "activity_id": card["id"],
+        "day": day,
+        "activity_date": activity_date,
         "plan_customization_summary": overlay_summary(overlay, module_id),
     }

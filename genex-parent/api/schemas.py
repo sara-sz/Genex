@@ -180,6 +180,18 @@ class AddonSwapRequest(BaseModel):
     module_id: Optional[str] = Field(default=None, max_length=64)
 
 
+class AddonAddActivityRequest(BaseModel):
+    """Body for adding an activity to an add-on day/date (Beta 2.2 Slice 2f-3).
+
+    Provide `day` (a weekday name within the add-on plan_period) OR `activity_date`
+    (a YYYY-MM-DD within today→Sunday). Both omitted → a day is auto-picked.
+    """
+    suggestion_id: str = Field(..., min_length=1)
+    day: Optional[str] = Field(default=None, max_length=20)
+    activity_date: Optional[str] = Field(default=None, max_length=20)
+    module_id: Optional[str] = Field(default=None, max_length=64)
+
+
 # ─────────────────────────────────────────────────────────────────────────
 # Response models
 # ─────────────────────────────────────────────────────────────────────────
