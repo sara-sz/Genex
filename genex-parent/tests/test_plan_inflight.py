@@ -177,7 +177,46 @@ def test_normal_behavior_unchanged():
     check("plan_ready view has no plan_generating flag set", not cur.get("plan_generating", False))
 
 
+import copy as _copy  # noqa: E402
+
+
+# ── 8. force_remote bypasses a stale in-memory cache (cross-instance) ────────
+def test_force_remote_bypasses_stale_cache():
+    print("\n── force_remote=True reads authoritative durable state, not stale cache")
+    sid = _intake_done()  # cache + durable both have the (no-marker) doc
+    # Simulate another instance writing a marker to the DURABLE store only, leaving
+    # this process's in-memory cache stale (no marker).
+    fresh = _copy.deepcopy(session_store.load("uid-a", sid))
+    fresh["plan_generation_started_at"] = "2099-01-01T00:00:00+00:00"
+    session_store._local_save(sid, fresh)  # durable updated; _cache NOT touched
+    stale = session_store.load("uid-a", sid)                       # default = cache
+    auth = session_store.load("uid-a", sid, force_remote=True)     # authoritative
+    check("default load returns STALE cache (no marker)", "plan_generation_started_at" not in stale, list(stale)[:8])
+    check("force_remote reads the durable marker", auth.get("plan_generation_started_at") == "2099-01-01T00:00:00+00:00")
+
+
+# ── 9. /plan decides on authoritative state despite a stale cache ───────────
+def test_plan_uses_authoritative_state():
+    print("\n── /plan sees a durable in-flight marker even when the cache is stale")
+    sid = _intake_done()
+    fresh = _copy.deepcopy(session_store.load("uid-a", sid))
+    fresh["plan_generation_started_at"] = datetime.now(timezone.utc).isoformat()
+    session_store._local_save(sid, fresh)  # durable has a fresh marker; cache is stale
+    calls = {"n": 0}
+    real = main.run_plan_pipeline
+    main.run_plan_pipeline = lambda *a, **k: (calls.__setitem__("n", calls["n"] + 1) or real(*a, **k))
+    try:
+        r = _plan(sid)
+    finally:
+        main.run_plan_pipeline = real
+    check("→ 409 plan_generating (read authoritative marker)",
+          r.status_code == 409 and r.json()["detail"]["code"] == "plan_generating", r.text[:160])
+    check("run_plan_pipeline NOT invoked despite stale cache (no duplicate)", calls["n"] == 0, calls["n"])
+
+
 def run_all():
+    test_force_remote_bypasses_stale_cache()
+    test_plan_uses_authoritative_state()
     test_first_plan_ready()
     test_retry_cached()
     test_inflight_blocks_duplicate()

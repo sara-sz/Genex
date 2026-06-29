@@ -132,10 +132,14 @@ app.add_middleware(
 
 # ── Shared session helper ──────────────────────────────────────────────────
 
-def _require_session(uid: str, session_id: str) -> Dict[str, Any]:
+def _require_session(uid: str, session_id: str, force_remote: bool = False) -> Dict[str, Any]:
     """
     Load a session document and enforce ownership.
     Used by every endpoint that operates on an existing session.
+
+    force_remote=True reads authoritative durable state (bypassing the per-instance
+    memory cache) — used only by the primary /plan in-flight guard. Default False
+    keeps existing behavior for all other endpoints.
 
     Raises:
       404 if the session does not exist in memory/GCS.
@@ -143,7 +147,7 @@ def _require_session(uid: str, session_id: str) -> Dict[str, Any]:
       500 if GCS returns an error (SessionLoadError).
     """
     try:
-        doc = store_load(uid, session_id)
+        doc = store_load(uid, session_id, force_remote=force_remote)
     except SessionLoadError as exc:
         raise HTTPException(status_code=500, detail=f"Session storage error: {exc}")
 
@@ -403,7 +407,9 @@ async def session_plan(
       409 if the plan has already been generated (idempotency guard).
       500 if plan generation or GCS save fails.
     """
-    doc = _require_session(auth.uid, session_id)
+    # Read authoritative durable state (not the per-instance cache) so the
+    # idempotency + in-flight guard decisions are correct across Cloud Run instances.
+    doc = _require_session(auth.uid, session_id, force_remote=True)
 
     # Guard: interview must be complete
     if doc.get("status") not in ("interview_complete", "plan_ready"):

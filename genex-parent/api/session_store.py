@@ -257,14 +257,21 @@ def save(uid: str, session_id: str, doc: Dict[str, Any]) -> str:
         return "local"
 
 
-def load(uid: str, session_id: str) -> Optional[Dict[str, Any]]:
+def load(uid: str, session_id: str, force_remote: bool = False) -> Optional[Dict[str, Any]]:
     """
     Load a session document.
 
-    Load order:
+    Load order (default):
       1. Memory cache (fast path — no I/O)
       2. GCS when GCS_BUCKET is set
       3. Local fallback only when LOCAL_SESSION_FALLBACK=1
+
+    force_remote=True: SKIP the memory cache and read authoritative state from the
+    durable store (GCS, then local fallback), refreshing the cache. Used only on the
+    primary /plan generation path so the in-flight guard / idempotency decision is not
+    made on a stale per-instance cache (Cloud Run runs multiple instances; a marker
+    written by one instance is invisible to another's cache). Default False keeps every
+    other endpoint's behavior byte-identical.
 
     Returns: session document dict, or None if not found anywhere.
     Raises: SessionLoadError if GCS returns an error other than not-found
@@ -273,11 +280,12 @@ def load(uid: str, session_id: str) -> Optional[Dict[str, Any]]:
     IMPORTANT: caller must check doc["owner_uid"] == uid and raise 403 on mismatch.
     This function does not enforce ownership — it returns whatever it finds.
     """
-    # 1. Memory cache
-    with _lock:
-        doc = _cache.get(session_id)
-    if doc is not None:
-        return doc
+    # 1. Memory cache (skipped when force_remote=True)
+    if not force_remote:
+        with _lock:
+            doc = _cache.get(session_id)
+        if doc is not None:
+            return doc
 
     # 2. GCS
     if GCS_BUCKET_NAME:
