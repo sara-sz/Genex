@@ -422,7 +422,8 @@ check("4c. session_doc has no child_name", "child_name" not in doc4)
 print("\n── Check 5: Report generates for all four types ──────────────────────")
 
 REPORT_TYPES = [
-    "doctor", "speech_therapist", "occupational_therapist", "physical_therapist"
+    "doctor", "speech_therapist", "occupational_therapist", "physical_therapist",
+    "ot_pt",  # combined OT/PT report — the title-check loop iterates all REPORT_TITLES
 ]
 
 doc5 = _make_session_doc()
