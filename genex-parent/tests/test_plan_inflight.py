@@ -214,7 +214,29 @@ def test_plan_uses_authoritative_state():
     check("run_plan_pipeline NOT invoked despite stale cache (no duplicate)", calls["n"] == 0, calls["n"])
 
 
+import threading as _threading  # noqa: E402
+
+
+# ── 10. run_plan_pipeline is offloaded to a worker thread (non-blocking) ─────
+def test_pipeline_runs_off_event_loop():
+    print("\n── run_plan_pipeline runs in a worker thread (run_in_threadpool)")
+    sid = _intake_done()
+    seen = {}
+    real = main.run_plan_pipeline
+    def _record(*a, **k):
+        seen["thread"] = _threading.current_thread().name
+        return real(*a, **k)
+    main.run_plan_pipeline = _record
+    try:
+        r = _plan(sid)
+    finally:
+        main.run_plan_pipeline = real
+    check("→ 200 plan_ready", r.status_code == 200 and "week" in r.json(), r.text[:120])
+    check("pipeline ran OFF the main thread (offloaded)", seen.get("thread") and seen["thread"] != "MainThread", seen.get("thread"))
+
+
 def run_all():
+    test_pipeline_runs_off_event_loop()
     test_force_remote_bypasses_stale_cache()
     test_plan_uses_authoritative_state()
     test_first_plan_ready()

@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.adapters import (
@@ -463,9 +464,12 @@ async def session_plan(
     timezone_str: str = doc.get("timezone") or "UTC"
     plan_period = compute_plan_period(timezone_str)
 
-    # Run pipeline stages 5–11
+    # Run pipeline stages 5–11 in a worker thread so the ~80–126s blocking generation
+    # does NOT block the event loop — concurrent /session/current polls and /plan
+    # retries on this instance are served immediately during generation.
     try:
-        brain_state, gate_report = run_plan_pipeline(
+        brain_state, gate_report = await run_in_threadpool(
+            run_plan_pipeline,
             brain_state=brain_state,
             admin_debug=_ADMIN_DEBUG,
         )
