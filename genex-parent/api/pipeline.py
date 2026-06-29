@@ -16,6 +16,7 @@ Do NOT modify genex_core files.
 """
 
 import copy
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from genex_core.interview_engine import (
@@ -324,13 +325,66 @@ def get_current_question(interview: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     return {
         "question_id": q["question_id"],
-        "question_text": q["question_text"],   # already "Can your child ... right now?"
+        # Display-only grammar polish (Beta 2.2): "Can your child says…" → "say…".
+        # The stored q["question_text"] / milestone are NEVER mutated.
+        "question_text": humanize_question_text(q["question_text"]),
         "helper_text": q.get("parent_explanation", "") or "",
         "domain": domain,
         "domain_label": DOMAIN_LABELS.get(domain, domain),
         "progress_index": interview["questions_answered_total"],
         "progress_total_estimate": interview["total_questions_estimate"],
     }
+
+
+# ── Display-only intake-question grammar polish (Beta 2.2) ───────────────────
+# The milestone strings (genex_core, frozen) are third-person ("says…", "walks…"),
+# so the template "Can your child {milestone} right now?" reads "Can your child
+# says… right now?". This normalizes ONLY the parent-facing question_text returned
+# by get_current_question — the stored question_text, milestone, question_id, and
+# interview band_state are untouched, so scoring / milestone selection / activity
+# generation are unaffected. No genex_core change.
+
+_QUESTION_PREFIX = "Can your child "
+
+# Irregulars + explicit overrides for the (frozen) milestone set where the generic
+# rule below would mis-stem. Keyed on the lowercased leading word.
+_VERB_BASE_OVERRIDES = {
+    "is": "be", "has": "have", "does": "do", "goes": "go",
+}
+
+
+def _to_base_verb(word: str) -> str:
+    """De-conjugate a third-person-singular present verb to its base form. Only words
+    ending in 's' are treated as conjugated; everything else is returned unchanged
+    (so already-base verbs and non-verb leaders are never altered)."""
+    lower = word.lower()
+    if lower in _VERB_BASE_OVERRIDES:
+        return _VERB_BASE_OVERRIDES[lower]
+    if len(lower) <= 2 or not lower.endswith("s") or lower.endswith("ss"):
+        return lower if word[:1].isupper() else word  # lowercase a capitalized leader
+    if lower.endswith("ies"):
+        return lower[:-3] + "y"                       # tries→try, copies→copy
+    if lower.endswith(("sses", "shes", "ches", "xes", "zzes", "oes")):
+        return lower[:-2]                             # catches→catch, pushes→push
+    return lower[:-1]                                  # says→say, uses→use, closes→close
+
+
+def humanize_question_text(text: str) -> str:
+    """Return `text` with the leading third-person verb de-conjugated for display.
+
+    "Can your child says two words right now?" → "Can your child say two words right
+    now?". Leaves text that does not start with the known prefix unchanged, and strips
+    a stray sentence period some milestones embed before "right now?".
+    """
+    if not text or not text.startswith(_QUESTION_PREFIX):
+        return text
+    rest = text[len(_QUESTION_PREFIX):]
+    m = re.match(r"(\S+)(.*)", rest, re.DOTALL)
+    if not m:
+        return text
+    base = _to_base_verb(m.group(1))
+    result = _QUESTION_PREFIX + base + m.group(2)
+    return result.replace(". right now?", " right now?").replace(".right now?", " right now?")
 
 
 def get_expected_question_id(interview: Dict[str, Any]) -> Optional[str]:
