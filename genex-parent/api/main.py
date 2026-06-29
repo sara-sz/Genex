@@ -57,8 +57,8 @@ from api.customization import (
 from api.pipeline import (
     get_current_question,
     get_expected_question_id,
-    merge_week1_schedules,
     reconstruct_addon_week1_schedule,
+    rebalance_week1_across_domains,
     run_focus_intake_start,
     run_integrated_next_week,
     run_plan_pipeline,
@@ -601,8 +601,10 @@ async def session_plan_next_week(
                 })
             active_focus_areas = ([primary_focus_key] if primary_focus_key else []) + included_focus
 
-            merged_week1 = merge_week1_schedules(
-                brain_state.get("weekly_schedule") or {}, addon_schedules
+            # 2e-2b: budget-balanced fill (not concatenation) — keep the primary's
+            # baseline daily slot count, distribute slots across all active focuses.
+            merged_week1 = rebalance_week1_across_domains(
+                brain_state.get("weekly_schedule") or {}, addon_schedules, active_focus_areas
             )
             activity_feedback = translate_feedback_to_activity_feedback(
                 doc.get("feedback") or [],

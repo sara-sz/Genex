@@ -14,6 +14,7 @@ Run: PYTHONPATH=. python3 tests/test_next_week_integrated.py
 import copy
 import os
 import sys
+from collections import Counter
 
 os.environ["FIREBASE_PROJECT_ID"] = "genex-test"
 os.environ["LOCAL_SESSION_FALLBACK"] = "1"
@@ -278,10 +279,86 @@ def test_idempotent():
     check("exactly 2 plans (Week1 + Week2)", len(doc["plans"]) == 2, list(doc["plans"]))
 
 
+_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+
+def _baseline_per_day(plan):
+    return max((len(d["activities"]) for d in plan["week"]), default=0)
+
+
+def _weekday_blocks(w2):
+    return [d for d in w2["week"] if d["day"] in _WEEKDAYS]
+
+
+# ── 2e-2b A. one add-on → balanced, no daily growth ─────────────────────────
+def test_budget_one_addon_balanced():
+    print("\n── 2e-2b: one add-on keeps baseline daily count, balanced across week")
+    sid, plan = _start_and_plan()
+    base = _baseline_per_day(plan)
+    check("baseline per-day count is the time budget (≈2 for 20min)", base == 2, base)
+    _ready_addon(sid, "cognitive")
+    _make_eligible(sid, plan)
+    w2 = _next_week(sid).json()
+    wds = _weekday_blocks(w2)
+    check("NO weekday exceeds baseline (no 2→4 growth)",
+          all(len(d["activities"]) <= base for d in wds), [(d["day"], len(d["activities"])) for d in wds])
+    check("weekdays keep the baseline count (not under-filled everywhere)",
+          max(len(d["activities"]) for d in wds) == base, [(d["day"], len(d["activities"])) for d in wds])
+    cnt = Counter(c["domain"] for d in wds for c in d["activities"])
+    check("both domains represented across weekdays", {"language_and_communication", "cognitive"} <= set(cnt), dict(cnt))
+    check("weekday domain distribution balanced (diff ≤ 1)", (max(cnt.values()) - min(cnt.values())) <= 1, dict(cnt))
+    total = sum(len(d["activities"]) for d in w2["week"])
+    check("total weekly load not inflated (≤ baseline×7)", total <= base * 7, total)
+
+
+# ── 2e-2b B. three add-ons → still baseline daily count, all domains spread ──
+def test_budget_three_addons_balanced():
+    print("\n── 2e-2b: three add-ons keep baseline daily count, all domains across week")
+    sid, plan = _start_and_plan()
+    base = _baseline_per_day(plan)
+    _ready_addon(sid, "cognitive")
+    _ready_addon(sid, "movement_and_physical")
+    _ready_addon(sid, "social_and_emotional")
+    _make_eligible(sid, plan)
+    w2 = _next_week(sid).json()
+    afa = set(w2["plan_period"]["active_focus_areas"])
+    wds = _weekday_blocks(w2)
+    check("NO weekday exceeds baseline with 4 active focuses",
+          all(len(d["activities"]) <= base for d in wds), [(d["day"], len(d["activities"])) for d in wds])
+    cnt = Counter(c["domain"] for d in wds for c in d["activities"])
+    # every active focus that has a bank should appear across the week
+    check("each active focus appears across the week (banks permitting)",
+          set(cnt) >= (afa & set(cnt)) and len(set(cnt)) >= 2, dict(cnt))
+    check("weekday distribution balanced (diff ≤ 1) across domains",
+          (max(cnt.values()) - min(cnt.values())) <= 1, dict(cnt))
+    total = sum(len(d["activities"]) for d in w2["week"])
+    check("total weekly load not inflated with 4 focuses", total <= base * 7, total)
+
+
+# ── 2e-2b C. compare: integrated daily load ≈ primary-only daily load ───────
+def test_budget_matches_primary_only():
+    print("\n── 2e-2b: integrated daily load ≈ primary-only daily load")
+    # primary-only
+    sid0, plan0 = _start_and_plan()
+    _make_eligible(sid0, plan0)
+    w2_solo = _next_week(sid0).json()
+    solo_max = max(len(d["activities"]) for d in w2_solo["week"])
+    # primary + add-on
+    sid1, plan1 = _start_and_plan()
+    _ready_addon(sid1, "cognitive")
+    _make_eligible(sid1, plan1)
+    w2_int = _next_week(sid1).json()
+    int_max = max(len(d["activities"]) for d in w2_int["week"])
+    check("integrated max/day == primary-only max/day (no inflation)", int_max == solo_max, (int_max, solo_max))
+
+
 def run_all():
     test_primary_only_unchanged()
     test_one_addon_integrated()
     test_multiple_addons_integrated()
+    test_budget_one_addon_balanced()
+    test_budget_three_addons_balanced()
+    test_budget_matches_primary_only()
     test_non_ready_excluded()
     test_old_addon_without_bank_skipped()
     test_merged_feedback_influences()

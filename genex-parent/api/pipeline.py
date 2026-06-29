@@ -564,23 +564,77 @@ def reconstruct_addon_week1_schedule(
     return {**sched, "days": filtered_days}
 
 
-def merge_week1_schedules(
-    primary_schedule: Dict[str, Any], addon_schedules: List[Dict[str, Any]]
+_WEEKDAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+
+def rebalance_week1_across_domains(
+    primary_schedule: Dict[str, Any],
+    addon_schedules: List[Dict[str, Any]],
+    active_domains: List[str],
 ) -> Dict[str, Any]:
-    """Union the primary Week-1 schedule with each add-on's reconstructed Week-1
-    schedule into ONE combined Week-1 (per-day items concatenated). Deep-copies the
-    primary so the stored brain_state is never mutated."""
-    merged = copy.deepcopy(primary_schedule or {})
-    days = merged.setdefault("days", {})
+    """Beta 2.2 Slice 2e-2b — build ONE combined Week-1 that keeps the primary's
+    baseline daily slot count but DISTRIBUTES those slots across all active focus
+    areas (instead of concatenating, which inflated the daily load).
+
+    Baseline: the per-weekday item count of the primary Week-1 schedule (the parent's
+    original daily budget for their chosen time). Each active domain contributes a
+    deduplicated pool of activities (from primary + reconstructed add-on schedules).
+    The baseline slots are then filled with a WEEKLY-balanced round-robin: each slot
+    goes to the active domain with the fewest picks so far (ties broken by
+    active_domains order), drawing the next unused activity from that domain's pool.
+
+    Result: same per-day count and ~same weekly total as the original one-domain plan,
+    with domains spread ~evenly across the week (difference ≤ 1 when banks allow; a
+    domain with too few activities is gracefully under-filled and others absorb the
+    remaining slots). Deep-copies the primary schedule; never mutates stored state.
+    """
+    primary_days = (primary_schedule or {}).get("days", {})
+    day_order = [d for d in _WEEKDAY_ORDER if d in primary_days]
+    baseline = {d: len((primary_days.get(d) or {}).get("items", [])) for d in day_order}
+
+    # Per-domain deduplicated activity pools (by lowercased title), keyed by category.
+    pools: Dict[str, List[Dict[str, Any]]] = {d: [] for d in active_domains}
+    seen: Dict[str, set] = {d: set() for d in active_domains}
+
+    def _gather(schedule: Dict[str, Any]) -> None:
+        for day in _WEEKDAY_ORDER:
+            for item in ((schedule.get("days") or {}).get(day) or {}).get("items", []):
+                dom = item.get("category_key", "")
+                if dom not in pools:
+                    continue
+                title = (item.get("title", "") or "").strip().lower()
+                if not title or title in seen[dom]:
+                    continue
+                seen[dom].add(title)
+                pools[dom].append(item)
+
+    _gather(primary_schedule or {})
     for sched in addon_schedules:
-        for day, info in (sched.get("days") or {}).items():
-            if day not in days:
-                days[day] = {
-                    "items": [],
-                    "total_minutes": 0,
-                    "is_weekend": info.get("is_weekend", False),
-                }
-            days[day]["items"] = list(days[day].get("items", [])) + list(info.get("items", []))
+        _gather(sched or {})
+
+    week_count = {d: 0 for d in active_domains}
+    ptr = {d: 0 for d in active_domains}
+    new_days: Dict[str, Any] = {}
+    for day in day_order:
+        items: List[Dict[str, Any]] = []
+        for _ in range(baseline[day]):
+            candidates = [d for d in active_domains if ptr[d] < len(pools[d])]
+            if not candidates:
+                break  # all pools exhausted → fewer than baseline (graceful)
+            candidates.sort(key=lambda d: (week_count[d], active_domains.index(d)))
+            chosen = candidates[0]
+            items.append(pools[chosen][ptr[chosen]])
+            ptr[chosen] += 1
+            week_count[chosen] += 1
+        base_info = primary_days.get(day, {})
+        new_days[day] = {
+            "items": items,
+            "total_minutes": base_info.get("total_minutes", 0),
+            "is_weekend": False,
+        }
+
+    merged = copy.deepcopy(primary_schedule or {})
+    merged["days"] = new_days
     return merged
 
 
