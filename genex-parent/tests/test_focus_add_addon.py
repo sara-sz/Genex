@@ -277,9 +277,16 @@ def test_primary_byte_stable():
     pc_before = copy.deepcopy(doc_b["plan_customizations"])
 
     m = _ready(sid, "movement_and_physical")
-    day = list(_module_days(m).keys())[0]
-    sg = _suggestions(sid, "movement_and_physical").json()["suggestions"][0]["suggestion_id"]
-    _add(sid, "movement_and_physical", {"suggestion_id": sg, "day": day})
+    suggs = _suggestions(sid, "movement_and_physical").json()["suggestions"]
+    if suggs:
+        day = list(_module_days(m).keys())[0]
+        _add(sid, "movement_and_physical", {"suggestion_id": suggs[0]["suggestion_id"], "day": day})
+    else:
+        # Full-week generation can consume the whole bank → no add suggestions. Dirty
+        # the add-on overlay with a bank-free remove so the byte-stability check is
+        # still meaningful regardless of the calendar/bank state.
+        aid = _cards(m)[0]["id"]
+        client.post(f"/api/v1/session/{sid}/focus/movement_and_physical/activity/{aid}/remove", headers=_hdr())
 
     doc_a = session_store.load("uid-a", sid)
     check("primary doc['plans'] byte-identical", doc_a["plans"] == plans_before)

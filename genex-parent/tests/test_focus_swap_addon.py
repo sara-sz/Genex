@@ -259,11 +259,16 @@ def test_primary_byte_stable():
     plans_before = copy.deepcopy(doc_b["plans"])
     pc_before = copy.deepcopy(doc_b["plan_customizations"])
 
-    # add-on swap
+    # add-on customization (swap when the bank has alternatives; else a bank-free
+    # remove — a full-week generation can consume the whole bank, leaving no swap
+    # suggestions. Either way the point is: customizing an add-on never touches primary.)
     m = _ready(sid, "movement_and_physical")
     aid = _cards(m)[0]["id"]
-    sg = _swap_suggestions(sid, "movement_and_physical", aid).json()["suggestions"][0]["suggestion_id"]
-    _swap(sid, "movement_and_physical", aid, {"suggestion_id": sg})
+    suggs = _swap_suggestions(sid, "movement_and_physical", aid).json()["suggestions"]
+    if suggs:
+        _swap(sid, "movement_and_physical", aid, {"suggestion_id": suggs[0]["suggestion_id"]})
+    else:
+        client.post(f"/api/v1/session/{sid}/focus/movement_and_physical/activity/{aid}/remove", headers=_hdr())
 
     doc_a = session_store.load("uid-a", sid)
     check("primary doc['plans'] byte-identical", doc_a["plans"] == plans_before)
