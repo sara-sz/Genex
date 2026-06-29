@@ -109,6 +109,13 @@ app = FastAPI(
 
 _ADMIN_DEBUG = os.environ.get("ADMIN_DEBUG", "0").strip() == "1"
 
+# Primary /plan in-flight guard (freeze-blocker fix): a synchronous generation runs
+# ~80–126s. If a retry arrives while one is in flight, do NOT start a second
+# run_plan_pipeline. A marker older than this threshold is treated as stale (crashed
+# request) and regeneration is allowed. Chosen > Cloud Run's 600s request timeout so a
+# still-running request is never mistaken for stale (mirrors the add-on /generate rule).
+PLAN_GENERATION_STALE_SECONDS = 900  # 15 minutes
+
 # ── CORS ───────────────────────────────────────────────────────────────────
 
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").strip()
@@ -413,6 +420,37 @@ async def session_plan(
     if current_plan_id and current_plan_id in (doc.get("plans") or {}):
         return doc["plans"][current_plan_id]["plan_response"]
 
+    # ── In-flight guard ────────────────────────────────────────────────────
+    # If a generation is already running for this session and is not stale, do NOT
+    # start a second run_plan_pipeline — return 409 so the frontend polls instead.
+    started_at = doc.get("plan_generation_started_at")
+    if started_at:
+        started_dt = _parse_iso(started_at)
+        is_stale = (
+            started_dt is None
+            or (datetime.now(timezone.utc) - started_dt).total_seconds()
+            > PLAN_GENERATION_STALE_SECONDS
+        )
+        if not is_stale:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "plan_generating",
+                    "message": "Your plan is being generated. Keep this screen open — it can take a couple of minutes.",
+                    "started_at": started_at,
+                    "poll": "GET /api/v1/session/current",
+                },
+            )
+        # else: stale marker (crashed request) → fall through and regenerate.
+
+    # Mark generation in-flight + persist FIRST, so concurrent retries see it and do
+    # not duplicate work. Status stays "interview_complete"; the marker drives polling.
+    doc["plan_generation_started_at"] = datetime.now(timezone.utc).isoformat()
+    try:
+        store_save(auth.uid, session_id, doc)
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save session: {exc}")
+
     brain_state = doc["brain_state"]
 
     # Compute planning period in the parent's local timezone
@@ -426,6 +464,12 @@ async def session_plan(
             admin_debug=_ADMIN_DEBUG,
         )
     except Exception as exc:
+        # Clear the in-flight marker so the parent can retry.
+        doc.pop("plan_generation_started_at", None)
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError:
+            pass
         raise HTTPException(
             status_code=500,
             detail=f"Plan generation failed: {exc}",
@@ -461,6 +505,7 @@ async def session_plan(
     doc["status"] = "plan_ready"
     doc["plan_generated"] = True          # kept for backwards-compat checks
     doc["current_plan_id"] = plan_id
+    doc.pop("plan_generation_started_at", None)   # clear the in-flight marker
     doc.setdefault("plans", {})[plan_id] = {
         "plan_period": plan_period,
         "plan_response": plan_response,
@@ -1281,6 +1326,9 @@ def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
             "session_id": session_id,
             "status": status,
             "current_question": current_q,
+            # Additive: True while a primary /plan generation is in flight, so the
+            # frontend can poll this endpoint until status flips to "plan_ready".
+            "plan_generating": bool(doc.get("plan_generation_started_at")),
             # Beta 2.2 focus metadata; added/remaining recomputed from added_focus.
             "focus": focus_view(doc.get("focus") or {}, doc.get("added_focus") or {}),
         }
