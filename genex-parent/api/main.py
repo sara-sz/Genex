@@ -584,14 +584,17 @@ async def session_plan_next_week(
         else:
             # ── Integrated: one weekly plan across all active focus areas ────
             addon_schedules: List[Dict[str, Any]] = []
+            addon_brain_states: List[Dict[str, Any]] = []
             extra_plans: List[Dict[str, Any]] = []
             included_focus: List[str] = []
             for fk, e in ready_addons:
-                sched = reconstruct_addon_week1_schedule(e.get("brain_state") or {}, fk)
+                addon_bs = e.get("brain_state") or {}
+                sched = reconstruct_addon_week1_schedule(addon_bs, fk)
                 if sched is None or not (sched.get("days") or {}):
                     skipped_focus_areas.append(fk)  # old add-on w/o retained bank → skip
                     continue
                 addon_schedules.append(sched)
+                addon_brain_states.append(addon_bs)  # for the bank union (2e-3)
                 included_focus.append(fk)
                 extra_plans.append({
                     "plan_id": e.get("module_id"),
@@ -612,8 +615,10 @@ async def session_plan_next_week(
                 base_plan_id,
                 extra_plans=extra_plans,
             )
+            # 2e-3: union add-on banks so swap/add work on add-on-domain cards.
             refresh_state = run_integrated_next_week(
-                brain_state, merged_week1, activity_feedback, active_focus_areas
+                brain_state, merged_week1, activity_feedback, active_focus_areas,
+                addon_brain_states=addon_brain_states,
             )
             integrated = True
     except Exception as exc:

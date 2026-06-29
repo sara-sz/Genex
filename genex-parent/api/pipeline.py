@@ -643,12 +643,21 @@ def run_integrated_next_week(
     merged_week1: Dict[str, Any],
     activity_feedback: Dict[str, Dict[str, Dict[str, str]]],
     active_focus_areas: List[str],
+    addon_brain_states: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Build ONE integrated Week-2 across all active focus areas from the combined
     Week-1 + merged feedback, using the FROZEN cycle_week=2 repeat-adapt builder.
 
     Works on a deep copy of the primary brain_state; the caller persists only on
     success. No LLM calls. Raises ValueError if the combined Week-1 is empty.
+
+    Beta 2.2 Slice 2e-3: `addon_brain_states` (the included ready add-ons' retained
+    brain_states) are UNIONED into the integrated state's activity_banks AFTER the
+    schedule is built, so post-generation customization (swap/add suggestions) can
+    draw same-domain activities for add-on-domain cards — i.e. the integrated plan
+    behaves like a native multi-domain plan. This does NOT affect the generated
+    schedule: the cycle_week=2 repeat-adapt builder reads week1_schedule +
+    activity_feedback only and never touches activity_banks.
     """
     if not (merged_week1 or {}).get("days"):
         raise ValueError("No combined Week-1 schedule available to build the next week.")
@@ -658,5 +667,13 @@ def run_integrated_next_week(
     state["activity_feedback"] = activity_feedback or {}
     state["cycle_week"] = 2
     state["selected_domain_keys"] = list(active_focus_areas)
-    build_weekly_schedule(state)                # → integrated Week-2
+    build_weekly_schedule(state)                # → integrated Week-2 (banks not read)
+
+    # Union retained add-on banks so swap/add can serve all active domains later.
+    if addon_brain_states:
+        banks = dict(state.get("activity_banks") or {})
+        for addon_state in addon_brain_states:
+            for domain, bank in ((addon_state or {}).get("activity_banks") or {}).items():
+                banks.setdefault(domain, bank)  # primary banks win on any key clash
+        state["activity_banks"] = banks
     return state
