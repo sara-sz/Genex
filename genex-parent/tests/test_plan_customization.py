@@ -203,7 +203,11 @@ def test_get_session_no_overlay_identity():
         "current_plan_id", "plan", "progress_summary", "feedback_summary"}
     check("existing GET keys preserved (no removal/rename)",
           _beta20_keys.issubset(g.keys()), sorted(g.keys()))
-    check("plan equals original plan_response", g["plan"] == plan, "plan differs from POST /plan")
+    # Beta 2.2: the legacy `plan` field is the balanced display plan (provenance-
+    # stamped; no add-ons → same cards in the same order). Compare activity identity.
+    g_ids = [[a.get("id") for a in d["activities"]] for d in g["plan"]["week"]]
+    p_ids = [[a.get("id") for a in d["activities"]] for d in plan["week"]]
+    check("plan shows original activities", g_ids == p_ids, "plan differs from POST /plan")
     # old session has the key but empty
     doc = session_store.load("uid-a", sid)
     check("doc has plan_customizations (empty)", doc.get("plan_customizations") == {}, doc.get("plan_customizations"))

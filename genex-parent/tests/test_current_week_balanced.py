@@ -118,11 +118,14 @@ def test_one_addon_two_per_day():
     doms = Counter(a["focus_key"] for d in cwp["week"] for a in d["activities"])
     check("both focuses represented", {"cognitive", "language_and_communication"} <= set(doms), dict(doms))
     check("balanced split (diff ≤ 1)", max(doms.values()) - min(doms.values()) <= 1, dict(doms))
-    # primary 'plan' still shows 2/day primary-only (unchanged)
+    # Compatibility shim: legacy 'plan' now MIRRORS the balanced display plan
+    # (primary + add-on, budget-balanced) so 'plan'-rendering clients show add-ons.
     g = client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()
-    check("primary 'plan' unchanged (cognitive 2/day)",
+    pdoms = Counter(a["focus_key"] for d in g["plan"]["week"] for a in d["activities"])
+    check("legacy 'plan' mirrors balanced (2/day, both focuses)",
           all(len(d["activities"]) == 2 for d in g["plan"]["week"])
-          and {a["domain"] for d in g["plan"]["week"] for a in d["activities"]} == {"cognitive"})
+          and {"cognitive", "language_and_communication"} <= set(pdoms), dict(pdoms))
+    check("legacy 'plan' == current_week_plan", g["plan"]["week"] == cwp["week"])
 
 
 # ── 3. multiple add-ons → still ~2/day, balanced across week ────────────────
@@ -214,8 +217,39 @@ def test_past_days_unchanged():
         check(f"{dt} (today/future) balanced both focuses", fks == {"cognitive", "language_and_communication"} and len(by[dt]) == 2, [a["focus_key"] for a in by[dt]])
 
 
+# ── 10. compatibility shim: legacy `plan` mirrors balanced display plan ─────
+def test_plan_shim_compat():
+    print("\n── compatibility shim: legacy `plan` == balanced display plan")
+    sid = _start_plan(daily=10)
+
+    # No add-ons → `plan` is effectively the primary plan (same cards), with
+    # provenance + is_balanced; current_week_plan present and matches.
+    g = client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()
+    prim_ids = [a["activity_id"] for d in g["plan"]["week"] for a in d["activities"]]
+    cwp_ids = [a["activity_id"] for d in g["current_week_plan"]["week"] for a in d["activities"]]
+    check("(no add-on) plan == current_week_plan", g["plan"]["week"] == g["current_week_plan"]["week"])
+    check("(no add-on) plan is_balanced + provenance", g["plan"].get("is_balanced") is True
+          and all(a.get("source") == "primary" and a.get("activity_id") for d in g["plan"]["week"] for a in d["activities"]))
+
+    # Add an add-on → `plan` now includes BOTH primary + add-on cards.
+    _add(sid, "language_and_communication")
+    for ep in (f"/api/v1/session/{sid}", "/api/v1/session/current"):
+        g = client.get(ep, headers=_hdr()).json()
+        cards = [a for d in g["plan"]["week"] for a in d["activities"]]
+        srcs = {a["source"] for a in cards}
+        fks = {a["focus_key"] for a in cards}
+        check(f"[{ep}] plan has primary + add-on cards", {"primary", "addon"} <= srcs, srcs)
+        check(f"[{ep}] plan covers both focuses", {"cognitive", "language_and_communication"} <= fks, fks)
+        check(f"[{ep}] plan == current_week_plan", g["plan"]["week"] == g["current_week_plan"]["week"])
+        check(f"[{ep}] add-on cards route to module_id (source-based customization)",
+              all(c["module_id"] and c["plan_id"] is None for c in cards if c["source"] == "addon"))
+        check(f"[{ep}] primary cards route to plan_id",
+              all(c["plan_id"] and c["module_id"] is None for c in cards if c["source"] == "primary"))
+
+
 def run_all():
     test_no_addon_matches_primary()
+    test_plan_shim_compat()
     test_one_addon_two_per_day()
     test_multi_addon_balanced()
     test_provenance()

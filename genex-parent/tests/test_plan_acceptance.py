@@ -162,9 +162,15 @@ def test_accept_does_not_mutate_plan():
     doc_after = session_store.load("uid-a", sid)
     check("plan_response unchanged", doc_after["plans"][w1_id]["plan_response"] == pr_before)
     check("plan_internal unchanged", doc_after["plans"][w1_id]["plan_internal"] == pi_before)
-    # GET /session plan still equals original (overlay foundation unchanged)
+    # GET /session plan still shows the original activities (overlay foundation
+    # unchanged). The legacy `plan` field is the Beta-2.2 balanced display plan
+    # (provenance-stamped, no add-ons → same cards), so compare activity identity
+    # per day rather than byte-equality.
     g = _get(sid)
-    check("GET plan equals original plan_response", g["plan"] == pr_before)
+    def _ids(p):
+        return [[a.get("id") for a in d["activities"]] for d in p["week"]]
+    check("GET plan shows original activities", _ids(g["plan"]) == _ids(pr_before),
+          (_ids(g["plan"])[:1], _ids(pr_before)[:1]))
     check("plan_customizations still empty (foundation intact)",
           doc_after.get("plan_customizations") == {}, doc_after.get("plan_customizations"))
 

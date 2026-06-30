@@ -1390,33 +1390,54 @@ def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
     }
 
     # Beta 2.2: additive read-only balanced current-week view (primary + ready add-ons,
-    # budget-balanced today→Sunday). Stored primary plan + add-on modules are untouched;
-    # `plan` above stays the primary plan for backward-compat + primary customization.
-    addon_modules = [
-        {
-            "focus_key": fk,
-            "focus_label": (e or {}).get("focus_label", ""),
-            "module_id": (e or {}).get("module_id", ""),
-            "plan_response": resolve_plan_response(
-                (e or {}).get("plan_response") or {}, (e or {}).get("customizations")
-            ),
-        }
-        for fk, e in (doc.get("added_focus") or {}).items()
-        if (e or {}).get("status") == "ready"
-    ]
-    today_iso = _local_date(
-        doc.get("timezone") or "UTC", datetime.now(timezone.utc)
-    ).isoformat()
-    response["current_week_plan"] = build_balanced_current_week(
-        session_id=session_id,
-        primary_plan_response=plan_response,
-        primary_plan_id=current_plan_id,
-        primary_focus_key=(doc.get("focus") or {}).get("primary_focus_key", ""),
-        addon_modules=addon_modules,
-        today_iso=today_iso,
-        daily_time_minutes=doc.get("daily_time_minutes"),
-        age_in_months=doc.get("age_in_months"),
+    # budget-balanced today→Sunday). Stored primary plan + add-on modules are untouched.
+    plan_period = plan_response.get("plan_period") or {}
+    is_integrated = (
+        bool(plan_period.get("is_integrated"))
+        or int(plan_period.get("cycle_week", 1) or 1) >= 2
     )
+    if is_integrated:
+        # The integrated next-week plan already contains every active focus (primary +
+        # added), balanced across the week. Re-merging the current-week add-on modules
+        # would double-count them, so the balanced view IS the integrated plan as-is.
+        current_week_plan = plan_response
+    else:
+        addon_modules = [
+            {
+                "focus_key": fk,
+                "focus_label": (e or {}).get("focus_label", ""),
+                "module_id": (e or {}).get("module_id", ""),
+                "plan_response": resolve_plan_response(
+                    (e or {}).get("plan_response") or {}, (e or {}).get("customizations")
+                ),
+            }
+            for fk, e in (doc.get("added_focus") or {}).items()
+            if (e or {}).get("status") == "ready"
+        ]
+        today_iso = _local_date(
+            doc.get("timezone") or "UTC", datetime.now(timezone.utc)
+        ).isoformat()
+        current_week_plan = build_balanced_current_week(
+            session_id=session_id,
+            primary_plan_response=plan_response,
+            primary_plan_id=current_plan_id,
+            primary_focus_key=(doc.get("focus") or {}).get("primary_focus_key", ""),
+            addon_modules=addon_modules,
+            today_iso=today_iso,
+            daily_time_minutes=doc.get("daily_time_minutes"),
+            age_in_months=doc.get("age_in_months"),
+        )
+    response["current_week_plan"] = current_week_plan
+
+    # Compatibility shim (Beta 2.2 freeze): the legacy `plan` field MIRRORS the balanced
+    # display plan, so clients that render `plan` show the correct current-week result
+    # (primary + ready add-ons, budget-balanced) even when they don't read
+    # current_week_plan. This is response-only — the stored primary plan
+    # (doc["plans"]), add-on modules (doc["added_focus"]), and overlays are never
+    # mutated, and current_week_plan is still returned. Cards keep routing provenance
+    # (source "primary"|"addon" + plan_id|module_id) so customization routes by card.
+    # No add-ons (or an integrated week) → this is effectively the primary plan.
+    response["plan"] = current_week_plan
 
     if _ADMIN_DEBUG:
         brain_state = doc.get("brain_state") or {}

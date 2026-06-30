@@ -678,11 +678,18 @@ def build_balanced_current_week(
                 pools.setdefault(fk, {}).setdefault(dt, []).append(sc)
 
     # Build the balanced week.
+    addons_present = bool(addon_modules)
     week: List[Dict[str, Any]] = []
     week_count: Dict[str, int] = {fk: 0 for fk in order}
     ptr: Dict[Tuple[str, str], int] = {}
     for day_name, dt in day_seq:
-        if dt and today_iso and dt < today_iso:
+        if not addons_present:
+            # No ready add-ons → the balanced view IS the primary plan: keep EVERY
+            # primary card (including any parent-added ones — no budget cap), only
+            # stamped with provenance. (Capping/distribution applies only when there
+            # is an add-on to make room for, so existing primary cards are preserved.)
+            activities = primary_by_date.get(dt, [])
+        elif dt and today_iso and dt < today_iso:
             activities = primary_by_date.get(dt, [])           # past: primary, unchanged
         else:
             activities = []
@@ -699,16 +706,19 @@ def build_balanced_current_week(
                 week_count[chosen] += 1
         week.append({"day": day_name, "date": dt, "activities": activities})
 
-    return {
-        "session_id": session_id,
-        "plan_period": (primary_plan_response or {}).get("plan_period", {}),
-        "age_in_months": age_in_months,
-        "daily_time_minutes": daily_time_minutes,
-        "daily_card_count": daily_n,
-        "active_focus_areas": list(order),
-        "is_balanced": True,
-        "week": week,
-    }
+    # Preserve the primary plan_response envelope (progress_summary, plan_period,
+    # plan_id, …) so the compatibility shim can serve this as the legacy `plan`
+    # field without dropping fields clients rely on. Only the week + balance markers
+    # are overridden; the primary_plan_response is a resolved copy (never the stored doc).
+    result: Dict[str, Any] = dict(primary_plan_response or {})
+    result["session_id"] = session_id
+    result["age_in_months"] = age_in_months
+    result["daily_time_minutes"] = daily_time_minutes
+    result["daily_card_count"] = daily_n
+    result["active_focus_areas"] = list(order)
+    result["is_balanced"] = True
+    result["week"] = week
+    return result
 
 
 # ── Internal plan metadata (plan_internal) ────────────────────────────────────
