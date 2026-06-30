@@ -395,9 +395,43 @@ def get_expected_question_id(interview: Dict[str, Any]) -> Optional[str]:
 
 # ── Stages 5–11: plan generation ──────────────────────────────────────────
 
+def apply_enrichment_allocation(brain_state: Dict[str, Any], focus_key: str) -> bool:
+    """Genex Brain enrichment rule (Beta 2.2, API-layer only).
+
+    When a parent explicitly adds a focus area but the child is ON TRACK for it
+    (no developmental gap), the frozen allocate_weekly_slots assigns it 0 minutes, so
+    the module would be empty. If that focus has a populated activity bank but received
+    0 allocated minutes, force an enrichment allocation to that focus so the existing
+    frozen build_weekly_schedule still produces age-appropriate PRACTICE activities at
+    the child's assessed/chronological level. Reuses the already-generated bank — no new
+    LLM call, no genex_core change. Daily count matches the normal/gap budget.
+
+    No-op (returns False) when the focus already has allocated minutes (gap case →
+    byte-identical) or has no bank. Returns True when enrichment is applied.
+    """
+    alloc = brain_state.get("weekly_slot_allocation") or {}
+    if (alloc.get("target_minutes_by_category") or {}).get(focus_key, 0) > 0:
+        return False  # gap case — focus already scheduled; leave untouched
+    bank = (brain_state.get("activity_banks") or {}).get(focus_key) or {}
+    if not bank.get("activities"):
+        return False  # nothing to enrich from
+    daily = int((brain_state.get("child") or {}).get("daily_time_min") or 0)
+    weekly = max(5, daily * 5)
+    brain_state["weekly_slot_allocation"] = {
+        "daily_time_min": daily,
+        "weekly_minutes": weekly,
+        "supported_categories": [focus_key],
+        "gap_by_category": {focus_key: 0},
+        "target_minutes_by_category": {focus_key: weekly},
+        "planning_mode": "enrichment",
+    }
+    return True
+
+
 def run_plan_pipeline(
     brain_state: Dict[str, Any],
     admin_debug: bool = False,
+    enrichment_focus: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
     """
     Run pipeline stages 5–11 against an interview-complete brain_state.
@@ -451,6 +485,12 @@ def run_plan_pipeline(
     # Stage 10: weekly scheduling
     brain_state["cycle_week"] = 1
     allocate_weekly_slots(brain_state)
+    # Beta 2.2 enrichment: if an explicitly-added focus is on-track (0 allocated
+    # minutes) but has a bank, force an enrichment allocation so the parent still gets
+    # age-appropriate practice activities. Default (enrichment_focus=None) → no-op, so
+    # primary plan generation is byte-identical.
+    if enrichment_focus:
+        apply_enrichment_allocation(brain_state, enrichment_focus)
     build_weekly_schedule(brain_state)
 
     # Stage 11: final gate — validate and repair
@@ -608,6 +648,10 @@ def reconstruct_addon_week1_schedule(
     state.pop("weekly_slot_allocation", None)   # force a fresh allocation
     state["cycle_week"] = 1
     allocate_weekly_slots(state)
+    # Same enrichment rule as /generate: an on-track add-on focus (0 allocated minutes
+    # but a populated bank) still contributes age-appropriate activities to the
+    # integrated next week.
+    apply_enrichment_allocation(state, focus_key)
     build_weekly_schedule(state)                # cycle_week=1 → Week-1-shaped schedule
     sched = state.get("weekly_schedule") or {}
 

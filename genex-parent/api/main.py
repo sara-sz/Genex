@@ -1807,6 +1807,11 @@ def _addon_module_view(session_id: str, focus_key: str, entry: Dict[str, Any]) -
         view["dev_age_summary"] = entry.get("dev_age_summary") or {}
         view["generated_at"] = entry.get("generated_at", "")
         view["plan_customization_summary"] = overlay_summary(overlay, entry.get("module_id"))
+        # Genex Brain enrichment signals (additive): on-track ⇒ age-appropriate practice.
+        view["on_track"] = bool(entry.get("on_track"))
+        view["enrichment_mode"] = bool(entry.get("enrichment_mode"))
+        if entry.get("enrichment_message"):
+            view["message"] = entry["enrichment_message"]
         view["ready_for_generate"] = False
     elif status == "error":
         view["error"] = entry.get("error", "")
@@ -1884,7 +1889,11 @@ async def session_focus_generate(
         timezone_str = doc.get("timezone") or "UTC"
         plan_period = compute_plan_period(timezone_str)  # today→Sunday, current week
 
-        addon_brain, _ = run_plan_pipeline(brain_state=addon_brain, admin_debug=False)
+        # enrichment_focus: if this added focus is on-track (no gap), still produce
+        # age-appropriate practice activities from its bank (Genex Brain rule).
+        addon_brain, _ = run_plan_pipeline(
+            brain_state=addon_brain, admin_debug=False, enrichment_focus=focus_key,
+        )
         weekly_schedule = addon_brain.get("weekly_schedule", {})
 
         plan_response = adapt_weekly_plan(
@@ -1909,12 +1918,24 @@ async def session_focus_generate(
             daily_time_minutes=doc["daily_time_minutes"],
         )
         dev_age = addon_brain.get("dev_age") or {}
+        dev_age_months = dev_age.get(focus_key)
+        chrono = (addon_brain.get("child") or {}).get("chronological_months")
         dev_age_summary = {
             "focus_key": focus_key,
-            "dev_age_months": dev_age.get(focus_key),
-            "chronological_months": (addon_brain.get("child") or {}).get("chronological_months"),
+            "dev_age_months": dev_age_months,
+            "chronological_months": chrono,
             "by_domain": dev_age,
         }
+        # On-track ⇒ the module is age-appropriate practice/enrichment (no gap).
+        on_track = (
+            dev_age_months is not None and chrono is not None
+            and dev_age_months >= chrono
+        )
+        focus_label = entry.get("focus_label", FOCUS_LABELS[focus_key])
+        enrichment_message = (
+            f"Great news — based on your answers, {focus_label} looks on track right now. "
+            "We'll still add age-appropriate activities so you can keep supporting this area at home."
+        ) if on_track else ""
     except Exception as exc:
         entry["status"] = "error"
         entry["error"] = str(exc)
@@ -1933,6 +1954,9 @@ async def session_focus_generate(
     entry["plan_response"] = plan_response
     entry["plan_internal"] = plan_internal
     entry["dev_age_summary"] = dev_age_summary
+    entry["on_track"] = on_track
+    entry["enrichment_mode"] = on_track   # on-track add-on ⇒ enrichment activities
+    entry["enrichment_message"] = enrichment_message
     entry["generated_at"] = now_iso
     entry["updated_at"] = now_iso
     entry.pop("generation_started_at", None)
