@@ -595,6 +595,122 @@ def apply_integrated_provenance(
     return plan_response
 
 
+# ── Beta 2.2: balanced current-week view (read-only) ──────────────────────────
+
+_BAL_WEEKDAYS = WEEK_DAY_NAMES  # Monday … Sunday
+
+
+def build_balanced_current_week(
+    *,
+    session_id: str,
+    primary_plan_response: Dict[str, Any],
+    primary_plan_id: Optional[str],
+    primary_focus_key: str,
+    addon_modules: List[Dict[str, Any]],
+    today_iso: str,
+    daily_time_minutes: int,
+    age_in_months: Optional[int],
+) -> Dict[str, Any]:
+    """Build ONE read-only, budget-balanced current-week plan from the (already
+    resolved) primary plan + ready add-on modules — without mutating any input.
+
+    Rules (Beta 2.2):
+      • Past days (date < today): keep the PRIMARY activities exactly as-is.
+      • Today → end of week: keep the primary daily budget (_daily_card_count) and
+        DISTRIBUTE those slots across active focus areas (primary + ready add-ons) via
+        the same weekly-balanced round-robin as the integrated next week — so the total
+        stays ~2/day for 10 min instead of stacking to 4/6.
+      • Every visible card is a DEEP COPY stamped with routing provenance:
+        source ("primary"|"addon"), focus_origin ("primary"|"added"), focus_key,
+        focus_label, domain, domain_label, plan_id|module_id, activity_id, activity_date.
+
+    `addon_modules`: [{focus_key, focus_label, module_id, plan_response (resolved)}].
+    Inputs are never mutated (cards are deep-copied before stamping).
+    """
+    from api.focus_selector import FOCUS_LABELS  # local import avoids any import cycle
+
+    daily_n = _daily_card_count(int(daily_time_minutes or 0))
+
+    def _stamp(card, *, source, focus_origin, focus_key, focus_label, plan_id, module_id):
+        c = copy.deepcopy(card)
+        domain = c.get("domain", "") or focus_key
+        c["source"] = source
+        c["focus_origin"] = focus_origin
+        c["focus_key"] = focus_key
+        c["focus_label"] = focus_label or FOCUS_LABELS.get(focus_key, focus_key)
+        c["domain"] = domain
+        c["domain_label"] = c.get("domain_label") or DOMAIN_LABELS.get(domain, domain)
+        c["plan_id"] = plan_id
+        c["module_id"] = module_id
+        c["activity_id"] = c.get("id")
+        return c
+
+    # Active-focus order: primary first, then add-ons (in given order).
+    order: List[str] = [primary_focus_key] if primary_focus_key else []
+    pools: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}   # focus_key → date → [card]
+    primary_by_date: Dict[str, List[Dict[str, Any]]] = {}    # for past days (primary as-is)
+    day_seq: List[Tuple[str, str]] = []                      # ordered (day_name, date)
+
+    for d in (primary_plan_response or {}).get("week", []):
+        dt = d.get("date", "")
+        day_seq.append((d.get("day", ""), dt))
+        arr: List[Dict[str, Any]] = []
+        for card in d.get("activities", []):
+            fk = card.get("domain", "") or primary_focus_key
+            sc = _stamp(card, source="primary", focus_origin="primary", focus_key=fk,
+                        focus_label=FOCUS_LABELS.get(fk, fk), plan_id=primary_plan_id, module_id=None)
+            arr.append(sc)
+            if fk not in order:
+                order.append(fk)
+            pools.setdefault(fk, {}).setdefault(dt, []).append(sc)
+        primary_by_date[dt] = arr
+
+    for mod in (addon_modules or []):
+        fk = mod.get("focus_key", "")
+        flabel = mod.get("focus_label", "") or FOCUS_LABELS.get(fk, fk)
+        if fk and fk not in order:
+            order.append(fk)
+        for d in (mod.get("plan_response") or {}).get("week", []):
+            dt = d.get("date", "")
+            for card in d.get("activities", []):
+                sc = _stamp(card, source="addon", focus_origin="added", focus_key=fk,
+                            focus_label=flabel, plan_id=None, module_id=mod.get("module_id"))
+                pools.setdefault(fk, {}).setdefault(dt, []).append(sc)
+
+    # Build the balanced week.
+    week: List[Dict[str, Any]] = []
+    week_count: Dict[str, int] = {fk: 0 for fk in order}
+    ptr: Dict[Tuple[str, str], int] = {}
+    for day_name, dt in day_seq:
+        if dt and today_iso and dt < today_iso:
+            activities = primary_by_date.get(dt, [])           # past: primary, unchanged
+        else:
+            activities = []
+            for _ in range(daily_n):
+                cands = [fk for fk in order
+                         if len(pools.get(fk, {}).get(dt, [])) > ptr.get((fk, dt), 0)]
+                if not cands:
+                    break
+                cands.sort(key=lambda fk: (week_count[fk], order.index(fk)))
+                chosen = cands[0]
+                i = ptr.get((chosen, dt), 0)
+                activities.append(pools[chosen][dt][i])
+                ptr[(chosen, dt)] = i + 1
+                week_count[chosen] += 1
+        week.append({"day": day_name, "date": dt, "activities": activities})
+
+    return {
+        "session_id": session_id,
+        "plan_period": (primary_plan_response or {}).get("plan_period", {}),
+        "age_in_months": age_in_months,
+        "daily_time_minutes": daily_time_minutes,
+        "daily_card_count": daily_n,
+        "active_focus_areas": list(order),
+        "is_balanced": True,
+        "week": week,
+    }
+
+
 # ── Internal plan metadata (plan_internal) ────────────────────────────────────
 
 def _build_milestone_lookup(

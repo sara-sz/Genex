@@ -31,6 +31,7 @@ from api.adapters import (
     adapt_weekly_plan,
     apply_addon_provenance,
     apply_integrated_provenance,
+    build_balanced_current_week,
     build_plan_internal,
     normalize_diagnosis_for_brain,
     sanitize_concern,
@@ -1387,6 +1388,35 @@ def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
         # Beta 2.2 focus metadata; added/remaining recomputed from added_focus.
         "focus": focus_view(doc.get("focus") or {}, doc.get("added_focus") or {}),
     }
+
+    # Beta 2.2: additive read-only balanced current-week view (primary + ready add-ons,
+    # budget-balanced today→Sunday). Stored primary plan + add-on modules are untouched;
+    # `plan` above stays the primary plan for backward-compat + primary customization.
+    addon_modules = [
+        {
+            "focus_key": fk,
+            "focus_label": (e or {}).get("focus_label", ""),
+            "module_id": (e or {}).get("module_id", ""),
+            "plan_response": resolve_plan_response(
+                (e or {}).get("plan_response") or {}, (e or {}).get("customizations")
+            ),
+        }
+        for fk, e in (doc.get("added_focus") or {}).items()
+        if (e or {}).get("status") == "ready"
+    ]
+    today_iso = _local_date(
+        doc.get("timezone") or "UTC", datetime.now(timezone.utc)
+    ).isoformat()
+    response["current_week_plan"] = build_balanced_current_week(
+        session_id=session_id,
+        primary_plan_response=plan_response,
+        primary_plan_id=current_plan_id,
+        primary_focus_key=(doc.get("focus") or {}).get("primary_focus_key", ""),
+        addon_modules=addon_modules,
+        today_iso=today_iso,
+        daily_time_minutes=doc.get("daily_time_minutes"),
+        age_in_months=doc.get("age_in_months"),
+    )
 
     if _ADMIN_DEBUG:
         brain_state = doc.get("brain_state") or {}
