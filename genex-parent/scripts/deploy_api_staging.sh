@@ -29,7 +29,10 @@ REGION="us-central1"
 SERVICE_NAME="genex-api-staging"
 IMAGE="us-central1-docker.pkg.dev/${PROJECT_ID}/genex-parent/${SERVICE_NAME}:latest"
 
-GCS_BUCKET="genex-parent-sessions-genex-mvp-2026"
+# DEV/STAGING sessions bucket — kept separate from prod (genex-api-prod-sessions-…)
+# so Beta 2.3+ dev work never touches parent data. Do NOT point staging at the
+# prod bucket. (Prod is a separate service deployed by pinned digest, not this script.)
+GCS_BUCKET="genex-api-dev-sessions-genex-mvp-2026"
 FIREBASE_PROJECT_ID="genex-mvp-2026"
 
 # ACTIVITY_MODEL — OpenAI model name used by genex_core activity_engine.
@@ -39,10 +42,11 @@ FIREBASE_PROJECT_ID="genex-mvp-2026"
 ACTIVITY_MODEL="${ACTIVITY_MODEL:-gpt-4o-mini}"
 
 # ALLOWED_ORIGINS: comma-separated list of permitted CORS origins.
-# Default includes Lovable editor (https://lovable.dev) and local dev servers.
-# Do NOT use * in production.
+# DEV/STAGING ONLY — Lovable editor + dev preview + dev published app + localhost.
+# Must NOT include the PRODUCTION origin https://dear-journey.lovable.app (that is
+# allowed only on genex-api-prod). Do NOT use * anywhere.
 # Override with: ALLOWED_ORIGINS="..." bash scripts/deploy_api_staging.sh
-ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,https://lovable.dev,https://dear-journey.lovable.app,https://8fc006ff-8275-4dce-b0ac-2f3c0dd82694.lovableproject.com,https://id-preview--8fc006ff-8275-4dce-b0ac-2f3c0dd82694.lovable.app}"
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,https://lovable.dev,https://8fc006ff-8275-4dce-b0ac-2f3c0dd82694.lovableproject.com,https://id-preview--8fc006ff-8275-4dce-b0ac-2f3c0dd82694.lovable.app,https://genex-kiddo-compass.lovable.app}"
 
 # Beta access: any signed-in Firebase user may start a session by entering the
 # shared beta access code (case-insensitive, space-trimmed). Replaces the old
