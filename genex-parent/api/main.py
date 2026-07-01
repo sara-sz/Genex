@@ -172,6 +172,32 @@ async def health():
     return {"ok": True, "service": "genex-api", "version": "v22"}
 
 
+# ── App config (Beta 2.3 dev/prod release-pipeline test) ───────────────────────
+# Static, read-only client config. No storage, session, plan, generation, feedback,
+# genex_core, or auth/beta-code involvement. app_version is the promotion marker.
+_APP_CONFIG: Dict[str, Any] = {
+    "app_version": "beta-2.3-devprod-test",
+    "progress_rewards_preview": {
+        "enabled": True,
+        "title": "Rewards are coming soon",
+        "message": "Earn stars, badges, milestone wins, and celebration cups as you complete activities together.",
+        "items": [
+            {"icon": "⭐", "label": "Stars"},
+            {"icon": "🏅", "label": "Badges"},
+            {"icon": "🎯", "label": "Milestones"},
+            {"icon": "🏆", "label": "Cups"},
+        ],
+    },
+}
+
+
+@app.get("/api/v1/app/config", tags=["app"])
+async def app_config(auth: Annotated[AuthUser, Depends(require_auth)]):
+    """Return static client app config (read-only). Auth-gated like the rest of the
+    /api/v1 surface; identical for every user. No storage or session access."""
+    return _APP_CONFIG
+
+
 # ── Auth smoke-test stub — ADMIN_DEBUG=1 only ──────────────────────────────
 
 if _ADMIN_DEBUG:
