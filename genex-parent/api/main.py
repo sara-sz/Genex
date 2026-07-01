@@ -30,6 +30,7 @@ from api.adapters import (
     DOMAIN_LABELS,
     adapt_weekly_plan,
     apply_addon_provenance,
+    apply_display_overlays,
     apply_integrated_provenance,
     build_balanced_current_week,
     build_plan_internal,
@@ -1402,24 +1403,29 @@ def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
         # would double-count them, so the balanced view IS the integrated plan as-is.
         current_week_plan = plan_response
     else:
+        # Beta 2.2 customization fix: balance the UN-customized BASE plans first, then
+        # apply overlays on top of the balanced display (see apply_display_overlays).
+        # This prevents remove/save from refilling the freed slot with a hidden
+        # same-domain card, and keeps parent-added cards visible past the daily budget.
+        ready_addons = [
+            (fk, e) for fk, e in (doc.get("added_focus") or {}).items()
+            if (e or {}).get("status") == "ready"
+        ]
         addon_modules = [
             {
                 "focus_key": fk,
                 "focus_label": (e or {}).get("focus_label", ""),
                 "module_id": (e or {}).get("module_id", ""),
-                "plan_response": resolve_plan_response(
-                    (e or {}).get("plan_response") or {}, (e or {}).get("customizations")
-                ),
+                "plan_response": (e or {}).get("plan_response") or {},   # BASE (un-resolved)
             }
-            for fk, e in (doc.get("added_focus") or {}).items()
-            if (e or {}).get("status") == "ready"
+            for fk, e in ready_addons
         ]
         today_iso = _local_date(
             doc.get("timezone") or "UTC", datetime.now(timezone.utc)
         ).isoformat()
         current_week_plan = build_balanced_current_week(
             session_id=session_id,
-            primary_plan_response=plan_response,
+            primary_plan_response=original_plan_response,               # BASE (un-resolved)
             primary_plan_id=current_plan_id,
             primary_focus_key=(doc.get("focus") or {}).get("primary_focus_key", ""),
             addon_modules=addon_modules,
@@ -1427,6 +1433,21 @@ def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
             daily_time_minutes=doc.get("daily_time_minutes"),
             age_in_months=doc.get("age_in_months"),
         )
+        # Overlays applied AFTER balancing — primary + each ready add-on. focus_key /
+        # focus_label are None for primary → derived per card's own domain.
+        overlay_specs = [{
+            "overlay": get_overlay(doc, current_plan_id),
+            "stamp": {"source": "primary", "focus_origin": "primary",
+                      "focus_key": None, "focus_label": None,
+                      "plan_id": current_plan_id, "module_id": None},
+        }]
+        overlay_specs += [{
+            "overlay": (e or {}).get("customizations"),
+            "stamp": {"source": "addon", "focus_origin": "added",
+                      "focus_key": fk, "focus_label": (e or {}).get("focus_label", ""),
+                      "plan_id": None, "module_id": (e or {}).get("module_id", "")},
+        } for fk, e in ready_addons]
+        current_week_plan = apply_display_overlays(current_week_plan, overlay_specs)
     response["current_week_plan"] = current_week_plan
 
     # Compatibility shim (Beta 2.2 freeze): the legacy `plan` field MIRRORS the balanced

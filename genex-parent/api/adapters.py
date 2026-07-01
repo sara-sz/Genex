@@ -600,6 +600,135 @@ def apply_integrated_provenance(
 _BAL_WEEKDAYS = WEEK_DAY_NAMES  # Monday … Sunday
 
 
+def _stamp_display_card(
+    card: Dict[str, Any], *, source: str, focus_origin: str,
+    focus_key: Optional[str], focus_label: Optional[str],
+    plan_id: Optional[str], module_id: Optional[str],
+    activity_date: str = "",
+) -> Dict[str, Any]:
+    """Deep-copy a card and stamp it with routing provenance for the display plan.
+
+    Shared by the balancer (base selection) and apply_display_overlays (swapped /
+    added cards) so every visible card — original, swapped, or added, primary or
+    add-on — carries the same provenance shape. Inputs are never mutated.
+    """
+    from api.focus_selector import FOCUS_LABELS  # local import avoids any import cycle
+    c = copy.deepcopy(card)
+    fk = focus_key or c.get("domain", "") or ""
+    domain = c.get("domain", "") or fk
+    c["source"] = source
+    c["focus_origin"] = focus_origin
+    c["focus_key"] = fk
+    c["focus_label"] = focus_label or FOCUS_LABELS.get(fk, fk)
+    c["domain"] = domain
+    c["domain_label"] = c.get("domain_label") or DOMAIN_LABELS.get(domain, domain)
+    c["plan_id"] = plan_id
+    c["module_id"] = module_id
+    c["activity_id"] = c.get("id")
+    if activity_date:
+        c["activity_date"] = activity_date
+    return c
+
+
+def apply_display_overlays(
+    balanced_plan: Dict[str, Any],
+    overlay_specs: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Apply customization overlays ON TOP of an already-balanced display plan.
+
+    Beta 2.2 fix: the balanced base display is built FIRST (from the un-customized
+    plans), then overlays are resolved here so remove/save does NOT trigger a refill
+    from the base pool and parent-added cards are NOT dropped by the daily budget cap.
+
+    `overlay_specs`: list of dicts, one per governing overlay (primary + each ready
+    add-on):
+        {"overlay": <overlay dict>, "stamp": {source, focus_origin, focus_key,
+         focus_label, plan_id, module_id}}
+    `focus_key`/`focus_label` may be None for the primary spec → derived from each
+    card's own domain (mirrors the balancer's primary stamping).
+
+    Rules (per overlay, matched by the card's stable `activity_id`/`id`; ids are
+    globally unique across primary + add-ons so each overlay only touches its cards):
+      • removed / saved-for-later id  → drop that exact card (NO refill).
+      • swap override                 → replace only that card with replacement_activity.
+      • added_activities              → append to their day WITH provenance, even if the
+                                        day now exceeds the base daily budget.
+
+    Read-only: the balanced_plan's week is rebuilt from copies; stored overlays and
+    plans are never mutated.
+    """
+    removed: set = set()
+    overrides: Dict[str, Dict[str, Any]] = {}   # activity_id → {"card":…, "stamp":…}
+    added: List[Dict[str, Any]] = []            # [{"item":…, "stamp":…}]
+    for spec in overlay_specs:
+        ov = spec.get("overlay") or {}
+        stamp = spec.get("stamp") or {}
+        for rid in ov.get("removed_activity_ids") or []:
+            removed.add(rid)
+        for aid, o in (ov.get("activity_overrides") or {}).items():
+            if o and o.get("replacement_activity"):
+                overrides[aid] = {"card": o["replacement_activity"], "stamp": stamp}
+        for item in ov.get("added_activities") or []:
+            added.append({"item": item, "stamp": stamp})
+
+    week: List[Dict[str, Any]] = balanced_plan.get("week") or []
+
+    # Pass 1: drop removed/saved cards + apply swap overrides (no refill).
+    for day in week:
+        new_acts: List[Dict[str, Any]] = []
+        for card in day.get("activities", []):
+            aid = card.get("activity_id") or card.get("id")
+            if aid in removed:
+                continue
+            ov = overrides.get(aid)
+            if ov:
+                st = ov["stamp"]
+                new_acts.append(_stamp_display_card(
+                    ov["card"], source=st.get("source", card.get("source", "primary")),
+                    focus_origin=st.get("focus_origin", card.get("focus_origin", "primary")),
+                    focus_key=st.get("focus_key") or card.get("focus_key"),
+                    focus_label=st.get("focus_label") or card.get("focus_label"),
+                    plan_id=st.get("plan_id"), module_id=st.get("module_id"),
+                    activity_date=card.get("activity_date", ""),
+                ))
+            else:
+                new_acts.append(card)
+        day["activities"] = new_acts
+
+    # Pass 2: append parent-added cards to their day (past the budget cap is fine).
+    if added:
+        day_index = {d.get("day"): d for d in week}
+        for entry in added:
+            item = entry["item"]
+            st = entry["stamp"]
+            card = item.get("activity")
+            if not card:
+                continue
+            cid = card.get("id")
+            if cid in removed:
+                continue                       # added card later removed / saved
+            ov = overrides.get(cid)
+            if ov:
+                card = ov["card"]              # added card later swapped
+            day_name = item.get("day") or ""
+            target = day_index.get(day_name)
+            if target is None:
+                target = {"day": day_name, "date": item.get("date", ""), "activities": []}
+                week.append(target)
+                day_index[day_name] = target
+            adate = item.get("activity_date") or target.get("date", "") or item.get("date", "")
+            target.setdefault("activities", []).append(_stamp_display_card(
+                card, source=st.get("source", "primary"),
+                focus_origin=st.get("focus_origin", "primary"),
+                focus_key=st.get("focus_key"), focus_label=st.get("focus_label"),
+                plan_id=st.get("plan_id"), module_id=st.get("module_id"),
+                activity_date=adate,
+            ))
+
+    balanced_plan["week"] = week
+    return balanced_plan
+
+
 def build_balanced_current_week(
     *,
     session_id: str,
@@ -632,18 +761,10 @@ def build_balanced_current_week(
     daily_n = _daily_card_count(int(daily_time_minutes or 0))
 
     def _stamp(card, *, source, focus_origin, focus_key, focus_label, plan_id, module_id):
-        c = copy.deepcopy(card)
-        domain = c.get("domain", "") or focus_key
-        c["source"] = source
-        c["focus_origin"] = focus_origin
-        c["focus_key"] = focus_key
-        c["focus_label"] = focus_label or FOCUS_LABELS.get(focus_key, focus_key)
-        c["domain"] = domain
-        c["domain_label"] = c.get("domain_label") or DOMAIN_LABELS.get(domain, domain)
-        c["plan_id"] = plan_id
-        c["module_id"] = module_id
-        c["activity_id"] = c.get("id")
-        return c
+        return _stamp_display_card(
+            card, source=source, focus_origin=focus_origin, focus_key=focus_key,
+            focus_label=focus_label, plan_id=plan_id, module_id=module_id,
+        )
 
     # Active-focus order: primary first, then add-ons (in given order).
     order: List[str] = [primary_focus_key] if primary_focus_key else []

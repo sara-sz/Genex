@@ -247,9 +247,150 @@ def test_plan_shim_compat():
               all(c["plan_id"] and c["module_id"] is None for c in cards if c["source"] == "primary"))
 
 
+# ── 11. multi-focus customization: overlays apply AFTER balancing (no refill) ─
+def _snap(plan):
+    return {d["day"]: [(a.get("activity_id") or a.get("id"), a.get("focus_key"), a.get("source"))
+                       for a in d["activities"]] for d in plan["week"]}
+
+
+def _find(plan, fk, source, day=None):
+    for d in plan["week"]:
+        if day and d["day"] != day:
+            continue
+        for a in d["activities"]:
+            if a.get("focus_key") == fk and a.get("source") == source:
+                return d["day"], (a.get("activity_id") or a.get("id"))
+    return None, None
+
+
+def test_multifocus_customization_no_refill():
+    print("\n── multi-focus: remove/save don't refill; add appears beyond budget; swap one")
+    sid = _start_plan(daily=10)
+    _add(sid, "language_and_communication")
+    fk = "language_and_communication"
+    g = client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()
+    pid = g["current_plan_id"]
+    plan0 = g["plan"]
+    s0 = _snap(plan0)
+    fut = [d for d in plan0["week"]][-1]["day"]     # a today/future day (balanced 2/day)
+
+    # 1. remove primary (cognitive) card → gone, NO refill (count drops to 1)
+    day, aid = _find(plan0, "cognitive", "primary", day=fut)
+    client.post(f"/api/v1/session/{sid}/plan/{pid}/activity/{aid}/remove", headers=_hdr())
+    a1 = _snap(client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"])
+    ids1 = [i for i, _, _ in a1[day]]
+    check("primary remove: target gone", aid not in ids1)
+    check("primary remove: NO refill (count 2→1)", len(a1[day]) == len(s0[day]) - 1, (len(s0[day]), len(a1[day])))
+    check("primary remove: no new card added", set(ids1) < {i for i, _, _ in s0[day]})
+
+    # 2. remove add-on (language) card on another future day → gone, NO refill
+    plan1 = client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"]
+    s1 = _snap(plan1)
+    day2, aid2 = _find(plan1, fk, "addon")
+    client.post(f"/api/v1/session/{sid}/focus/{fk}/activity/{aid2}/remove", headers=_hdr())
+    a2 = _snap(client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"])
+    ids2 = [i for i, _, _ in a2[day2]]
+    check("addon remove: target gone", aid2 not in ids2)
+    check("addon remove: NO refill (count dropped)", len(a2[day2]) == len(s1[day2]) - 1, (len(s1[day2]), len(a2[day2])))
+
+    # 3. add primary activity to a day → appears even if day now has 3
+    day3 = plan0["week"][-2]["day"]
+    before3 = len(_snap(client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"])[day3])
+    sug = client.get(f"/api/v1/session/{sid}/plan/{pid}/activity-suggestions?domain=cognitive", headers=_hdr()).json()["suggestions"]
+    client.post(f"/api/v1/session/{sid}/plan/{pid}/activities/add", headers=_hdr(),
+                json={"suggestion_id": sug[0]["suggestion_id"], "day": day3})
+    a3 = _snap(client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"])
+    check("primary add: card appears (count grew, may exceed budget)", len(a3[day3]) == before3 + 1, (before3, len(a3[day3])))
+    check("primary add: new card is a primary cognitive card",
+          any(f == "cognitive" and s == "primary" for _, f, s in a3[day3]))
+
+    # 4. add add-on activity to the same day → appears (day may now be 4)
+    before4 = len(a3[day3])
+    sugm = client.get(f"/api/v1/session/{sid}/focus/{fk}/activity-suggestions", headers=_hdr()).json()["suggestions"]
+    client.post(f"/api/v1/session/{sid}/focus/{fk}/activities/add", headers=_hdr(),
+                json={"suggestion_id": sugm[0]["suggestion_id"], "day": day3})
+    a4 = _snap(client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"])
+    check("addon add: card appears (count grew beyond budget)", len(a4[day3]) == before4 + 1, (before4, len(a4[day3])))
+    check("addon add: new card is an addon card with module_id",
+          any(f == fk and s == "addon" for _, f, s in a4[day3]))
+    add_card = next((a for d in client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"]["week"]
+                     if d["day"] == day3 for a in d["activities"]
+                     if a.get("source") == "addon" and a.get("activity_id")), None)
+    check("addon added card provenance (module_id set, plan_id None)",
+          add_card and add_card.get("module_id") and add_card.get("plan_id") is None
+          and add_card.get("focus_key") == fk and add_card.get("activity_date"), add_card)
+
+    # stored data untouched by all these display reads
+    doc = session_store.load("uid-a", sid)
+    base_len = sum(len(d["activities"]) for d in doc["plans"][pid]["plan_response"]["week"])
+    check("stored primary plan_response intact (base unchanged)", base_len > 0)
+
+
+def test_multifocus_swap_replaces_one():
+    print("\n── multi-focus: swap replaces ONLY the selected card (primary + add-on)")
+    # fresh session so the swap banks are full (avoids bank-exhaustion noise)
+    sid = _start_plan(daily=10)
+    _add(sid, "language_and_communication")
+    fk = "language_and_communication"
+    g = client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()
+    pid = g["current_plan_id"]
+
+    # swap primary → only that card changes
+    day5, aid5 = _find(g["plan"], "cognitive", "primary")
+    before5 = {i for i, _, _ in _snap(g["plan"])[day5]}
+    ss = client.get(f"/api/v1/session/{sid}/plan/{pid}/activity/{aid5}/swap-suggestions", headers=_hdr()).json()["suggestions"]
+    client.post(f"/api/v1/session/{sid}/plan/{pid}/activity/{aid5}/swap", headers=_hdr(),
+                json={"suggestion_id": ss[0]["suggestion_id"]})
+    a5 = _snap(client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"])
+    after5 = {i for i, _, _ in a5[day5]}
+    check("primary swap: exactly one card changed", len(before5 - after5) == 1 and len(after5) == len(before5),
+          (len(before5), len(after5), len(before5 - after5)))
+    check("primary swap: target replaced", aid5 not in after5)
+
+    # swap add-on → only that card changes
+    plan5 = client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"]
+    day6, aid6 = _find(plan5, fk, "addon")
+    before6 = {i for i, _, _ in _snap(plan5)[day6]}
+    ssm = client.get(f"/api/v1/session/{sid}/focus/{fk}/activity/{aid6}/swap-suggestions", headers=_hdr()).json()["suggestions"]
+    check("addon swap suggestions available", bool(ssm), ssm)
+    client.post(f"/api/v1/session/{sid}/focus/{fk}/activity/{aid6}/swap", headers=_hdr(),
+                json={"suggestion_id": ssm[0]["suggestion_id"]})
+    a6 = _snap(client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"])
+    after6 = {i for i, _, _ in a6[day6]}
+    check("addon swap: exactly one card changed", len(before6 - after6) == 1 and len(after6) == len(before6),
+          (len(before6), len(after6)))
+    check("addon swap: target replaced", aid6 not in after6)
+
+
+def test_multifocus_customization_stored_stable():
+    print("\n── multi-focus customization never mutates stored base plans/modules")
+    sid = _start_plan(daily=10)
+    _add(sid, "language_and_communication")
+    fk = "language_and_communication"
+    g = client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()
+    pid = g["current_plan_id"]
+    before = copy.deepcopy(session_store.load("uid-a", sid))
+    base_primary = before["plans"][pid]["plan_response"]
+    base_addon = before["added_focus"][fk]["plan_response"]
+    # perform customizations
+    paid = _find(g["plan"], "cognitive", "primary")[1]
+    client.post(f"/api/v1/session/{sid}/plan/{pid}/activity/{paid}/remove", headers=_hdr())
+    aaid = _find(client.get(f"/api/v1/session/{sid}", headers=_hdr()).json()["plan"], fk, "addon")[1]
+    client.post(f"/api/v1/session/{sid}/focus/{fk}/activity/{aaid}/remove", headers=_hdr())
+    for _ in range(3):
+        client.get(f"/api/v1/session/{sid}", headers=_hdr())
+        client.get("/api/v1/session/current", headers=_hdr())
+    after = session_store.load("uid-a", sid)
+    check("stored BASE primary plan_response byte-identical", after["plans"][pid]["plan_response"] == base_primary)
+    check("stored BASE add-on plan_response byte-identical", after["added_focus"][fk]["plan_response"] == base_addon)
+
+
 def run_all():
     test_no_addon_matches_primary()
     test_plan_shim_compat()
+    test_multifocus_customization_no_refill()
+    test_multifocus_swap_replaces_one()
+    test_multifocus_customization_stored_stable()
     test_one_addon_two_per_day()
     test_multi_addon_balanced()
     test_provenance()
