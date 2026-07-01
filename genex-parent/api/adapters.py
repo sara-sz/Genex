@@ -600,6 +600,78 @@ def apply_integrated_provenance(
 _BAL_WEEKDAYS = WEEK_DAY_NAMES  # Monday … Sunday
 
 
+def apply_completion_state(
+    display_plans: List[Optional[Dict[str, Any]]],
+    feedback_list: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Stamp per-activity completion onto the display cards and return the
+    `completed_activities` list — additive, read-only.
+
+    Beta 2.2: the frontend restores exact done cards + Progress from the backend
+    (source of truth) after refresh/sign-in, instead of relying on localStorage.
+
+    • Matches persisted `did_it` feedback to visible cards by (activity_id,
+      activity_date) — the same identity the card carries and the client submits.
+    • Stamps every visible card with `completed` (bool) + `feedback_id`,
+      `completed_at`, `enjoyment`, `difficulty` when done.
+    • Returns `completed_activities` derived from the feedback records (so it
+      includes completions even if a card was later removed), with `title`
+      best-effort from a matching visible card.
+
+    `display_plans` are the fresh response copies (`plan`, `current_week_plan`);
+    they may be the same object — deduped by identity. Stored plans / add-on
+    modules / feedback are never mutated.
+    """
+    # Latest did_it feedback per (activity_id, activity_date).
+    done: Dict[Tuple[Optional[str], Optional[str]], Dict[str, Any]] = {}
+    for f in feedback_list or []:
+        if f.get("completion") != "did_it":
+            continue
+        key = (f.get("activity_id"), f.get("activity_date"))
+        prev = done.get(key)
+        if prev is None or (f.get("created_at", "") or "") >= (prev.get("created_at", "") or ""):
+            done[key] = f
+
+    title_by_key: Dict[Tuple[Optional[str], Optional[str]], str] = {}
+    seen: set = set()
+    for plan in display_plans:
+        if not plan or id(plan) in seen:
+            continue
+        seen.add(id(plan))
+        for day in plan.get("week", []):
+            for card in day.get("activities", []):
+                key = (card.get("activity_id") or card.get("id"), card.get("activity_date"))
+                title_by_key.setdefault(key, card.get("title", ""))
+                f = done.get(key)
+                if f:
+                    card["completed"] = True
+                    card["feedback_id"] = f.get("feedback_id")
+                    card["completed_at"] = f.get("created_at")
+                    card["enjoyment"] = f.get("enjoyment")
+                    card["difficulty"] = f.get("difficulty")
+                else:
+                    card["completed"] = False
+
+    completed_activities: List[Dict[str, Any]] = []
+    for (aid, adate), f in done.items():
+        src = f.get("source")
+        completed_activities.append({
+            "activity_id":  aid,
+            "activity_date": adate,
+            "day":          f.get("day"),
+            "plan_id":      f.get("plan_id") if src == "primary" else None,
+            "module_id":    f.get("module_id"),
+            "source":       src,
+            "focus_key":    f.get("focus_key"),
+            "focus_label":  f.get("focus_label"),
+            "title":        title_by_key.get((aid, adate), ""),
+            "completed_at": f.get("created_at"),
+            "feedback_id":  f.get("feedback_id"),
+        })
+    completed_activities.sort(key=lambda x: ((x.get("completed_at") or ""), (x.get("activity_date") or "")))
+    return completed_activities
+
+
 def _stamp_display_card(
     card: Dict[str, Any], *, source: str, focus_origin: str,
     focus_key: Optional[str], focus_label: Optional[str],

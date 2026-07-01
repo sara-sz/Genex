@@ -30,6 +30,7 @@ from api.adapters import (
     DOMAIN_LABELS,
     adapt_weekly_plan,
     apply_addon_provenance,
+    apply_completion_state,
     apply_display_overlays,
     apply_integrated_provenance,
     build_balanced_current_week,
@@ -1459,6 +1460,15 @@ def _build_session_view(doc: Dict[str, Any], session_id: str) -> Dict[str, Any]:
     # (source "primary"|"addon" + plan_id|module_id) so customization routes by card.
     # No add-ons (or an integrated week) → this is effectively the primary plan.
     response["plan"] = current_week_plan
+
+    # Beta 2.2: additive read-only completion state. Stamp `completed` (+ feedback
+    # metadata) onto the visible cards in `plan`/`current_week_plan` and expose
+    # `feedback_summary.completed_activities`, so the frontend restores exact done
+    # cards + Progress from the backend (source of truth) after refresh/sign-in.
+    # Response-only — stored plans, add-on modules, and feedback are never mutated.
+    feedback_summary["completed_activities"] = apply_completion_state(
+        [response.get("plan"), response.get("current_week_plan")], feedback_list
+    )
 
     if _ADMIN_DEBUG:
         brain_state = doc.get("brain_state") or {}
