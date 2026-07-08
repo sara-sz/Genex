@@ -94,13 +94,16 @@ from api.schemas import (
     SwapRequest,
 )
 from api.session_store import (
+    SessionContentionError,
     SessionLoadError,
     SessionSaveError,
     find_latest_for_uid as store_find_latest_for_uid,
     load as store_load,
+    mutate_session as store_mutate_session,
     new_session_doc,
     save as store_save,
 )
+from api import progress as progress_lib
 
 # ── App ────────────────────────────────────────────────────────────────────
 
@@ -1164,6 +1167,73 @@ _INTERNAL_METADATA_FIELDS = (
 )
 
 
+def _resolve_activity_snapshot(
+    doc: Dict[str, Any], body: "FeedbackRequest", source: str, module_id_val: Optional[str],
+    internal_act: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Best-effort snapshot of the completed activity card (title/instructions/domain/…)
+    so history stays readable after plans change. Missing fields stay empty (never
+    fabricated). Resolves against the current resolved plan / add-on module."""
+    card: Dict[str, Any] = {}
+    if source == "addon":
+        entry = next((e for e in (doc.get("added_focus") or {}).values()
+                      if e.get("module_id") == module_id_val), None) or {}
+        resolved = resolve_plan_response(entry.get("plan_response") or {}, entry.get("customizations"))
+    else:
+        entry = (doc.get("plans") or {}).get(body.plan_id, {})
+        resolved = resolve_plan_response(entry.get("plan_response") or {}, get_overlay(doc, body.plan_id))
+    for d in resolved.get("week", []):
+        for a in d.get("activities", []):
+            if a.get("id") == body.activity_id:
+                card = a
+                break
+        if card:
+            break
+    internal = internal_act or {}
+    domain = (card.get("domain") or internal.get("domain") or "")
+    return {
+        "title": card.get("title", ""),
+        "instructions": card.get("instructions", ""),
+        "domain": domain,
+        "domain_label": card.get("domain_label") or DOMAIN_LABELS.get(domain, ""),
+        "focus_key": card.get("focus_key") or domain,
+        "focus_label": card.get("focus_label") or FOCUS_LABELS.get(domain, ""),
+        "difficulty_level": internal.get("difficulty_level", ""),
+        "age_band": internal.get("milestone_age_months"),
+        "materials": card.get("materials", ""),
+        "duration": card.get("duration_label", ""),
+        "source_bank_type": internal.get("source_bank_type", ""),
+    }
+
+
+def _activity_provenance(
+    doc: Dict[str, Any], body: "FeedbackRequest", source: str, module_id_val: Optional[str],
+    orig_key: Optional[str], internal_act: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Classify original|swapped|parent_added + generated|manual + template/source ids."""
+    if source == "addon":
+        entry = next((e for e in (doc.get("added_focus") or {}).values()
+                      if e.get("module_id") == module_id_val), None) or {}
+        overlay = entry.get("customizations") or {}
+    else:
+        overlay = get_overlay(doc, body.plan_id) or {}
+    added_ids = {(it.get("activity") or {}).get("id") for it in (overlay.get("added_activities") or [])}
+    swap_repl_ids = {(o or {}).get("replacement_activity", {}).get("id")
+                     for o in (overlay.get("activity_overrides") or {}).values()}
+    if body.activity_id in added_ids:
+        provenance = "parent_added"
+    elif body.activity_id in swap_repl_ids:
+        provenance = "swapped"
+    else:
+        provenance = "original"
+    return {
+        "provenance": provenance,
+        "source_activity_id": orig_key if provenance == "swapped" else None,
+        "generated_or_manual": "manual" if provenance in ("swapped", "parent_added") else "generated",
+        "activity_template_id": (internal_act or {}).get("activity_id"),  # v22_… bank id when present
+    }
+
+
 # ── Feedback endpoint ──────────────────────────────────────────────────────
 
 @app.post(
@@ -1234,13 +1304,35 @@ async def session_feedback(
 
     metadata_found = internal_act is not None
 
-    feedback_id = str(uuid.uuid4())
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
 
-    # Build the feedback record
-    record: Dict[str, Any] = {
-        "feedback_id":           feedback_id,
+    # Beta 2.3 Phase 1: timezone-safe local dates + idempotency keys (computed once;
+    # static given the request + plan, which concurrent feedback writes never change).
+    tz, tz_source = progress_lib.validate_timezone(doc.get("timezone"))
+    local_date = progress_lib.local_date_for(now_dt, tz)   # local submission == local completion date
+    date_confidence = "high" if tz_source == "session" else "low"
+    fb_key = progress_lib.feedback_req_key(
+        session_id, body.activity_id, local_date, body.completion, body.enjoyment,
+        body.difficulty, body.discuss_with_care_team, body.care_team_member,
+        body.care_team_tags, body.note,
+    )
+    comp_key = progress_lib.completion_idem_key(session_id, body.activity_id, local_date)
+    snapshot = _resolve_activity_snapshot(doc, body, source, module_id_val, internal_act)
+    prov = _activity_provenance(doc, body, source, module_id_val, orig_key, internal_act)
+    milestone = progress_lib.derive_milestone(internal_act, snapshot.get("domain", ""))
+
+    # Base feedback record fields (backward-compatible superset). ids are minted inside
+    # the mutator so a lost compare-and-swap re-mints on the fresh doc.
+    base_record: Dict[str, Any] = {
+        "feedback_schema_version": 1,
         "created_at":            now_iso,
+        "completed_at_utc":      now_iso,
+        "completion_tz":         tz,
+        "tz_source":             tz_source,
+        "local_submission_date": local_date,
+        "feedback_req_key":      fb_key,
+        "owner_uid":             auth.uid,
         "plan_id":               body.plan_id,
         "activity_id":           body.activity_id,
         "day":                   body.day,
@@ -1250,52 +1342,146 @@ async def session_feedback(
         "completion":            body.completion,
         "discuss_with_care_team": body.discuss_with_care_team,
         "care_team_member":      body.care_team_member,   # legacy single-select (kept)
-        # Beta 2.0 provider tags for report visibility. None for old clients.
-        "care_team_tags":        body.care_team_tags,
+        "care_team_tags":        body.care_team_tags,      # Beta 2.0 provider tags
         "note":                  body.note,
         "metadata_found":        metadata_found,
     }
-
-    # Enrich with internal metadata fields if found
     if metadata_found and internal_act:
         for field in _INTERNAL_METADATA_FIELDS:
-            record[field] = internal_act.get(field)
+            base_record[field] = internal_act.get(field)
+    # Beta 2.2 provenance fields (unchanged)
+    _domain = base_record.get("domain") or ""
+    base_record["source"] = source
+    base_record["focus_key"] = _domain or focus_key_fallback
+    base_record["focus_label"] = FOCUS_LABELS.get(_domain, "") or focus_label_fallback
+    base_record["domain_label"] = DOMAIN_LABELS.get(_domain, "") if _domain else ""
+    base_record["module_id"] = module_id_val
+    base_record["original_activity_id"] = orig_key if (orig_key and orig_key != body.activity_id) else None
+    base_record["plan_period_id"] = plan_period.get("plan_id", "")
+    base_record["cycle_week"] = int(plan_period.get("cycle_week", 1) or 1)
 
-    # ── Beta 2.2 Slice 2e-1: additive provenance (primary + add-on) ──────────
-    domain = record.get("domain") or ""
-    record["source"] = source
-    record["focus_key"] = domain or focus_key_fallback
-    record["focus_label"] = FOCUS_LABELS.get(domain, "") or focus_label_fallback
-    record["domain_label"] = DOMAIN_LABELS.get(domain, "") if domain else ""
-    record["module_id"] = module_id_val
-    record["original_activity_id"] = (
-        orig_key if (orig_key and orig_key != body.activity_id) else None
-    )
-    record["plan_period_id"] = plan_period.get("plan_id", "")
-    record["cycle_week"] = int(plan_period.get("cycle_week", 1) or 1)
+    def _mutator(d: Dict[str, Any]):
+        feedback = d.setdefault("feedback", [])
+        fb_index = d.setdefault("feedback_index", {})
+        completions = d.setdefault("completions", [])
+        comp_index = d.setdefault("completion_index", {})
+        events = d.setdefault("events", [])
 
-    # Append to feedback list and save
-    doc.setdefault("feedback", []).append(record)
+        def _done_today():
+            return sum(1 for f in feedback
+                       if f.get("activity_date") == body.activity_date and f.get("completion") == "did_it")
+
+        # Exact-retry dedupe (incl. non-did_it): identical fingerprint → replay, no writes.
+        if fb_key in fb_index:
+            return False, {
+                "ok": True, "feedback_id": fb_index[fb_key],
+                "completion_id": comp_index.get(comp_key),
+                "star_awarded": False, "idempotent_replay": True,
+                "activities_done_today": _done_today(), "metadata_found": metadata_found,
+                "flagged_for_care_team": body.discuss_with_care_team,
+            }
+
+        # Revision detection: a prior feedback for the SAME activity + local date but a
+        # different fingerprint → append-only revision (earlier record is preserved).
+        prior = None
+        for f in reversed(feedback):
+            if f.get("activity_id") == body.activity_id and (
+                f.get("local_submission_date") == local_date or f.get("activity_date") == body.activity_date
+            ):
+                prior = f
+                break
+        is_revision = prior is not None
+
+        feedback_id = progress_lib.new_id("fb")
+        record = dict(base_record)
+        record["feedback_id"] = feedback_id
+        record["supersedes_feedback_id"] = prior.get("feedback_id") if is_revision else None
+        feedback.append(record)
+        fb_index[fb_key] = feedback_id
+
+        events.append(progress_lib.build_event(
+            session_id=session_id, owner_uid=auth.uid,
+            event_type=("feedback_updated" if is_revision else "feedback_recorded"),
+            source_record_id=feedback_id, created_at_utc=now_iso, local_event_date=local_date,
+            idempotency_key=fb_key, actor_type="parent", provenance="parent_reported",
+            metadata={"revision": is_revision, "supersedes": record["supersedes_feedback_id"]},
+        ))
+
+        completion_id: Optional[str] = comp_index.get(comp_key)
+        star_awarded = False
+        # Exactly one completion + star per activity instance per local date.
+        if body.completion == "did_it" and comp_key not in comp_index:
+            star_event_id = progress_lib.new_id("evt")
+            completion = progress_lib.build_completion_record(
+                session_id=session_id, owner_uid=auth.uid, feedback_id=feedback_id,
+                idempotency_key=comp_key, completed_at_utc=now_iso, completion_tz=tz,
+                tz_source=tz_source, local_completion_date=local_date,
+                scheduled_date=body.activity_date, date_confidence=date_confidence,
+                data_completeness=("complete" if (metadata_found and snapshot.get("title")) else "partial"),
+                plan_id=body.plan_id, plan_period_id=plan_period.get("plan_id", ""),
+                cycle_week=int(plan_period.get("cycle_week", 1) or 1), scheduled_day=body.day,
+                activity_instance_id=body.activity_id,
+                activity_template_id=prov["activity_template_id"], source=source,
+                module_id=module_id_val, provenance=prov["provenance"],
+                source_activity_id=prov["source_activity_id"],
+                generated_or_manual=prov["generated_or_manual"], snapshot=snapshot,
+                milestone=milestone, star_event_id=star_event_id,
+            )
+            completion_id = completion["completion_id"]
+            completions.append(completion)
+            comp_index[comp_key] = completion_id
+            events.append(progress_lib.build_event(
+                session_id=session_id, owner_uid=auth.uid, event_type="activity_completed",
+                source_record_id=completion_id, created_at_utc=now_iso, local_event_date=local_date,
+                idempotency_key=comp_key, actor_type="parent", provenance="app_recorded",
+            ))
+            events.append(progress_lib.build_event(
+                event_id=star_event_id, session_id=session_id, owner_uid=auth.uid,
+                event_type="star_awarded", source_record_id=completion_id, created_at_utc=now_iso,
+                local_event_date=local_date, idempotency_key=comp_key, actor_type="system",
+                provenance="system_calculated", rule_version=progress_lib.STAR_RULE_VERSION,
+                metadata={"stars_delta": 1},
+            ))
+            star_awarded = True
+
+        return True, {
+            "ok": True, "feedback_id": feedback_id, "completion_id": completion_id,
+            "star_awarded": star_awarded, "idempotent_replay": False,
+            "activities_done_today": _done_today(), "metadata_found": metadata_found,
+            "flagged_for_care_team": body.discuss_with_care_team,
+        }
 
     try:
-        store_save(auth.uid, session_id, doc)
+        _doc, _changed, result = store_mutate_session(auth.uid, session_id, _mutator)
+    except SessionContentionError as exc:
+        raise HTTPException(status_code=503, detail=f"write_contention_retry: {exc}")
     except SessionSaveError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to save feedback: {exc}")
+    if result is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return result
 
-    # Count activities completed today (including the one just saved)
-    activities_done_today = sum(
-        1 for f in doc["feedback"]
-        if f.get("activity_date") == body.activity_date
-        and f.get("completion") == "did_it"
+
+# ── Progress endpoint (Beta 2.3 Phase 1) ───────────────────────────────────
+
+@app.get(
+    "/api/v1/session/{session_id}/progress",
+    tags=["session"],
+)
+async def session_progress(
+    session_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Progress screen data (read-only): timezone-safe Monday–Sunday practice
+    statuses (no_practice|practiced in Phase 1) + weekly and all-time stars.
+    Future arrays (badges/milestones_in_practice/checkins_ready/cups_by_domain)
+    are present but empty until later phases. Computed from doc["completions"]."""
+    doc = _require_session(auth.uid, session_id)
+    return progress_lib.build_progress_response(
+        session_id=session_id,
+        timezone_str=doc.get("timezone"),
+        completions=doc.get("completions") or [],
     )
-
-    return {
-        "ok": True,
-        "feedback_id": feedback_id,
-        "activities_done_today": activities_done_today,
-        "flagged_for_care_team": body.discuss_with_care_team,
-        "metadata_found": metadata_found,
-    }
 
 
 # ── Report endpoint ────────────────────────────────────────────────────────

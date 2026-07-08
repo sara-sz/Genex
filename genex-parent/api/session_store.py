@@ -101,6 +101,15 @@ class SessionLoadError(Exception):
     """Raised when GCS returns an error (distinct from a simple not-found)."""
 
 
+class PreconditionFailedError(Exception):
+    """Raised when a generation-guarded save loses the compare-and-swap (the object
+    changed since it was read). The caller (mutate_session) reloads and retries."""
+
+
+class SessionContentionError(SessionSaveError):
+    """Raised when a compare-and-swap write cannot succeed within max_retries."""
+
+
 # ── Memory cache ───────────────────────────────────────────────────────────
 
 _cache: Dict[str, Dict[str, Any]] = {}
@@ -312,6 +321,102 @@ def load(uid: str, session_id: str, force_remote: bool = False) -> Optional[Dict
             return doc
 
     return None
+
+
+# ── Concurrency-safe compare-and-swap (Beta 2.3 Phase 1) ─────────────────────
+#
+# GCS supports optimistic concurrency via `if_generation_match`. We read a doc
+# together with its object generation, mutate in memory, and save only if the
+# generation is unchanged. If another writer won the race the save raises
+# PreconditionFailedError; mutate_session reloads (now seeing the other writer's
+# state) and re-runs the mutator, which re-checks its idempotency indexes. This
+# guarantees two simultaneous identical /feedback requests cannot create two
+# feedback records / two completions / two events / two stars.
+
+def load_with_generation(uid: str, session_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[int]]:
+    """Authoritative read (cache-bypassing) returning (doc, generation).
+    generation is None for the local-fallback store (no GCS object generation)."""
+    if GCS_BUCKET_NAME:
+        try:
+            from google.cloud import storage  # lazy import
+            client = storage.Client()
+            bucket = client.bucket(GCS_BUCKET_NAME)
+            blob = bucket.get_blob(_blob_name(uid, session_id))  # None if missing; carries generation
+            if blob is not None:
+                doc = json.loads(blob.download_as_text())
+                return doc, blob.generation
+        except Exception as exc:
+            if not _LOCAL_FALLBACK:
+                raise SessionLoadError(
+                    f"GCS read error for sessions/{uid}/{session_id}.json: {exc}"
+                ) from exc
+        # fall through to local when GCS missing/errored and fallback allowed
+    if _LOCAL_FALLBACK:
+        return _local_load(session_id), None
+    return None, None
+
+
+def save_if_generation_match(
+    uid: str, session_id: str, doc: Dict[str, Any], generation: Optional[int]
+) -> None:
+    """Durably save doc only if the object generation still matches. Raises
+    PreconditionFailedError on a lost compare-and-swap. Updates the cache on success."""
+    if GCS_BUCKET_NAME:
+        from google.cloud import storage  # lazy import
+        from google.api_core.exceptions import PreconditionFailed  # type: ignore
+        client = storage.Client()
+        bucket = client.bucket(GCS_BUCKET_NAME)
+        blob = bucket.blob(_blob_name(uid, session_id))
+        try:
+            blob.upload_from_string(
+                json.dumps(doc, indent=2, default=str),
+                content_type="application/json",
+                if_generation_match=(generation if generation is not None else 0),
+            )
+        except PreconditionFailed as exc:
+            raise PreconditionFailedError(str(exc)) from exc
+        with _lock:
+            _cache[session_id] = doc
+        return
+    # Local fallback: no object generation → plain write (sequential in dev/tests).
+    _local_save(session_id, doc)
+    with _lock:
+        _cache[session_id] = doc
+
+
+def mutate_with_cas(load_fn, save_fn, mutator, max_retries: int = 6):
+    """Generic compare-and-swap loop (dependency-injected load/save for testability).
+
+    mutator(doc) -> (changed: bool, result). When changed is False no save is
+    attempted (idempotent replay / no-op). On PreconditionFailedError the doc is
+    reloaded and the mutator re-runs (re-checking its idempotency indexes)."""
+    import random
+    import time
+    for _ in range(max_retries):
+        doc, generation = load_fn()
+        if doc is None:
+            return None, False, None  # not-found sentinel; caller pre-validates existence
+        changed, result = mutator(doc)
+        if not changed:
+            return doc, False, result
+        try:
+            save_fn(doc, generation)
+            return doc, True, result
+        except PreconditionFailedError:
+            time.sleep(random.uniform(0.02, 0.15))
+            continue
+    raise SessionContentionError("write contention: exceeded max compare-and-swap retries")
+
+
+def mutate_session(uid: str, session_id: str, mutator, max_retries: int = 6):
+    """Compare-and-swap mutate of a stored session. Returns (doc, changed, result).
+    `result` is whatever the mutator returns (e.g. the feedback response payload)."""
+    return mutate_with_cas(
+        load_fn=lambda: load_with_generation(uid, session_id),
+        save_fn=lambda doc, gen: save_if_generation_match(uid, session_id, doc, gen),
+        mutator=mutator,
+        max_retries=max_retries,
+    )
 
 
 def _gcs_list_for_uid(uid: str) -> List[Tuple[str, Dict[str, Any]]]:
