@@ -54,7 +54,22 @@ def test_didit_counts_and_aggregation():
     check("distinct_practice_days == 2", lang["milestones"][0]["distinct_practice_days"] == 2)
     soc = next(c for c in cats if c["domain_key"] == "social_and_emotional")
     check("separate domain group with its milestone", soc["milestones"][0]["short_label"] == "Taking Turns")
-    check("domain_label present (parent-facing)", lang["domain_label"] and soc["domain_label"])
+    check("clean parent-facing domain_label", lang["domain_label"] == "Speech & Communication"
+          and soc["domain_label"] == "Social & Emotional", (lang["domain_label"], soc["domain_label"]))
+    check("source_domain_label preserved", lang.get("source_domain_label") and soc.get("source_domain_label"))
+    check("domain_key stable (unchanged)", lang["domain_key"] == "language_and_communication")
+
+
+def test_clean_domain_labels_all_four():
+    print("\n── all four clean domain labels")
+    want = {"language_and_communication": "Speech & Communication",
+            "social_and_emotional": "Social & Emotional",
+            "cognitive": "Learning & Thinking",
+            "movement_and_physical": "Movement & Daily Skills"}
+    comps = [comp(f"mv1:cdc:{dk}:30:x{i}", dk, "2026-07-08", idem=f"k{i}") for i, dk in enumerate(want)]
+    cats = pg.compute_categories_in_practice(comps, [])
+    got = {c["domain_key"]: c["domain_label"] for c in cats}
+    check("all four labels normalized", got == want, got)
 
 
 def test_two_milestones_same_domain():
@@ -171,6 +186,7 @@ def test_http_phase1_fields_intact_no_cups():
 
 def run_all():
     test_didit_counts_and_aggregation()
+    test_clean_domain_labels_all_four()
     test_two_milestones_same_domain()
     test_cap_at_5_true_preserved()
     test_unreliable_excluded()

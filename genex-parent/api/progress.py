@@ -314,6 +314,15 @@ def build_completion_record(
 
 PRACTICE_TARGET = 5
 
+# Clean, short, parent-facing category labels for the Progress screen. Keyed by the
+# stable Genex domain_key. Falls back to the source focus label if a key is unmapped.
+PROGRESS_DOMAIN_LABELS = {
+    "language_and_communication": "Speech & Communication",
+    "social_and_emotional": "Social & Emotional",
+    "cognitive": "Learning & Thinking",
+    "movement_and_physical": "Movement & Daily Skills",
+}
+
 _OBSERVABLE_LOOKUP: Optional[Dict[Tuple[str, str], str]] = None
 
 
@@ -414,9 +423,11 @@ def compute_categories_in_practice(
             "practice_ready": true_count >= PRACTICE_TARGET,          # informational (no check-in created)
             "cup_eligible": bool(e["cup_eligible"]),
         }
+        source_label = FOCUS_LABELS.get(e["domain"], e["domain"])
         g = domains.setdefault(e["domain"], {
             "domain_key": e["domain"],
-            "domain_label": FOCUS_LABELS.get(e["domain"], e["domain"]),
+            "domain_label": PROGRESS_DOMAIN_LABELS.get(e["domain"], source_label),  # clean, parent-facing
+            "source_domain_label": source_label,                                    # original, for reporting
             "milestones": [],
         })
         g["milestones"].append(row)
