@@ -61,21 +61,26 @@ def ev_types(d):
 
 
 def test_didit_creates_exactly_one_of_each():
-    print("\n── did_it → 1 feedback + 1 completion + 3 events + 1 index")
+    print("\n── did_it → 1 feedback + 1 attempt + 1 completion + 3 events + indexes")
     sid, base = _bootstrap()
     r = fb(sid, base).json()
     check("star_awarded true", r["star_awarded"] is True, r)
     check("completion_id set", bool(r["completion_id"]))
+    check("attempt_id set", bool(r["attempt_id"]))
     check("not replay", r["idempotent_replay"] is False)
     d = doc(sid)
     check("1 feedback record", len(d["feedback"]) == 1, len(d["feedback"]))
+    check("1 attempt record (effort)", len(d["attempts"]) == 1, len(d["attempts"]))
+    check("attempt is_completion=True + outcome completed", d["attempts"][0]["is_completion"] is True
+          and d["attempts"][0]["outcome"] == "completed", d["attempts"][0])
     check("1 completion record", len(d["completions"]) == 1, len(d["completions"]))
+    check("completion links attempt_id", d["completions"][0]["attempt_id"] == d["attempts"][0]["attempt_id"])
     et = ev_types(d)
     check("exactly 3 events", sum(et.values()) == 3, dict(et))
-    check("1 feedback_recorded + 1 activity_completed + 1 star_awarded",
-          et["feedback_recorded"] == 1 and et["activity_completed"] == 1 and et["star_awarded"] == 1, dict(et))
-    check("1 completion_index entry", len(d["completion_index"]) == 1)
-    check("1 feedback_index entry", len(d["feedback_index"]) == 1)
+    check("1 feedback_recorded + 1 star_awarded + 1 activity_completed",
+          et["feedback_recorded"] == 1 and et["star_awarded"] == 1 and et["activity_completed"] == 1, dict(et))
+    check("indexes: 1 attempt + 1 completion + 1 feedback",
+          len(d["attempt_index"]) == 1 and len(d["completion_index"]) == 1 and len(d["feedback_index"]) == 1)
 
 
 def test_exact_didit_retry_is_replay():
@@ -95,18 +100,32 @@ def test_exact_didit_retry_is_replay():
     check("still 3 events", sum(ev_types(d).values()) == 3)
 
 
-def test_non_didit_and_retry():
-    print("\n── not_yet feedback + exact retry")
+def test_non_didit_earns_star_no_completion():
+    print("\n── not_ready: earns EFFORT star + attempt, but NO completion")
     sid, base = _bootstrap()
     r1 = fb(sid, base, completion="wasnt_ready_yet").json()
-    check("no completion for not_yet", r1["completion_id"] is None and r1["star_awarded"] is False, r1)
+    check("star_awarded True (effort)", r1["star_awarded"] is True, r1)
+    check("NO completion for not_yet", r1["completion_id"] is None, r1)
+    check("attempt_id set", bool(r1["attempt_id"]))
     d = doc(sid)
-    check("1 feedback, 0 completions", len(d["feedback"]) == 1 and len(d["completions"]) == 0)
-    check("1 event feedback_recorded", ev_types(d)["feedback_recorded"] == 1 and sum(ev_types(d).values()) == 1)
+    check("1 feedback, 1 attempt, 0 completions", len(d["feedback"]) == 1 and len(d["attempts"]) == 1 and len(d["completions"]) == 0)
+    check("attempt outcome not_ready, is_completion False", d["attempts"][0]["outcome"] == "not_ready" and d["attempts"][0]["is_completion"] is False, d["attempts"][0])
+    et = ev_types(d)
+    check("2 events: feedback_recorded + star_awarded", et["feedback_recorded"] == 1 and et["star_awarded"] == 1 and sum(et.values()) == 2 and et["activity_completed"] == 0, dict(et))
     r2 = fb(sid, base, completion="wasnt_ready_yet").json()
-    check("retry is replay", r2["idempotent_replay"] is True)
+    check("exact retry is replay", r2["idempotent_replay"] is True)
     d = doc(sid)
-    check("still 1 feedback / 1 event", len(d["feedback"]) == 1 and sum(ev_types(d).values()) == 1)
+    check("still 1 feedback / 1 attempt / 2 events", len(d["feedback"]) == 1 and len(d["attempts"]) == 1 and sum(ev_types(d).values()) == 2)
+
+
+def test_didnt_want_also_earns_star():
+    print("\n── didn't-want-to-try also earns an effort star, no completion")
+    sid, base = _bootstrap()
+    r = fb(sid, base, completion="didnt_want_to_try").json()
+    check("star_awarded True", r["star_awarded"] is True and r["completion_id"] is None, r)
+    d = doc(sid)
+    check("attempt outcome did_not_want", d["attempts"][0]["outcome"] == "did_not_want", d["attempts"][0])
+    check("no completion record", len(d["completions"]) == 0)
 
 
 def test_changed_feedback_revision_preserved():
@@ -122,29 +141,33 @@ def test_changed_feedback_revision_preserved():
     check("feedback_updated event emitted", ev_types(d)["feedback_updated"] == 1, dict(ev_types(d)))
 
 
-def test_notyet_then_didit_awards_one_star():
-    print("\n── not_yet → did_it creates the one completion/star; later edit adds none")
+def test_star_on_first_attempt_completion_on_didit():
+    print("\n── star earned on FIRST attempt (not_yet); did_it adds completion, not a 2nd star")
     sid, base = _bootstrap()
-    fb(sid, base, completion="wasnt_ready_yet")
-    r = fb(sid, base, completion="did_it").json()   # change to did_it
-    check("did_it revision awards star", r["star_awarded"] is True and r["completion_id"], r)
+    r1 = fb(sid, base, completion="wasnt_ready_yet").json()
+    check("not_yet earns the star", r1["star_awarded"] is True and r1["completion_id"] is None, r1)
+    r2 = fb(sid, base, completion="did_it").json()   # change to did_it same day
+    check("did_it adds completion", bool(r2["completion_id"]))
+    check("did_it does NOT award a 2nd star (already earned)", r2["star_awarded"] is False, r2)
     d = doc(sid)
+    check("exactly 1 attempt", len(d["attempts"]) == 1, len(d["attempts"]))
     check("exactly 1 completion", len(d["completions"]) == 1, len(d["completions"]))
-    check("star_awarded event count == 1", ev_types(d)["star_awarded"] == 1, dict(ev_types(d)))
-    # later edit (enjoyment change) — completion already exists → no 2nd star
+    check("exactly 1 star_awarded event", ev_types(d)["star_awarded"] == 1, dict(ev_types(d)))
+    # later edit (enjoyment) — attempt + completion already exist → nothing new
     r3 = fb(sid, base, completion="did_it", enjoyment="it_was_okay").json()
     check("later edit: no new star", r3["star_awarded"] is False, r3)
     d = doc(sid)
-    check("still exactly 1 completion", len(d["completions"]) == 1)
-    check("still exactly 1 star_awarded event", ev_types(d)["star_awarded"] == 1, dict(ev_types(d)))
+    check("still 1 attempt / 1 completion / 1 star event",
+          len(d["attempts"]) == 1 and len(d["completions"]) == 1 and ev_types(d)["star_awarded"] == 1)
 
 
 def run_all():
     test_didit_creates_exactly_one_of_each()
     test_exact_didit_retry_is_replay()
-    test_non_didit_and_retry()
+    test_non_didit_earns_star_no_completion()
+    test_didnt_want_also_earns_star()
     test_changed_feedback_revision_preserved()
-    test_notyet_then_didit_awards_one_star()
+    test_star_on_first_attempt_completion_on_didit()
     print(f"\n{'='*50}\nResults: {_p} passed, {_f} failed")
     if _f: print("❌ feedback idempotency FAILED"); sys.exit(1)
     print("✅ All feedback idempotency tests PASSED")

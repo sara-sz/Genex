@@ -30,6 +30,18 @@ STAR_RULE_VERSION = "sv1"
 
 _WEEK_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
+# Star / attempt semantics (product correction 2026-07-09):
+#   Any real parent attempt earns ONE effort star per activity instance per local
+#   date. ONLY did_it creates a completion record and can contribute to future
+#   milestone practice. Attempt records carry the exact outcome so the data model
+#   never implies a non-did_it activity was "completed".
+ELIGIBLE_STAR_STATUSES = ("did_it", "wasnt_ready_yet", "didnt_want_to_try")
+OUTCOME_BY_STATUS = {
+    "did_it": "completed",
+    "wasnt_ready_yet": "not_ready",
+    "didnt_want_to_try": "did_not_want",
+}
+
 # Phase 1 emits only these two; "daily_plan_completed" is Phase 2 (needs a stored
 # daily-goal snapshot) and is intentionally NEVER returned in Phase 1.
 STATUS_NO_PRACTICE = "no_practice"
@@ -101,8 +113,15 @@ def _norm_note(note: Optional[str]) -> str:
     return re.sub(r"\s+", " ", (note or "").strip().lower())
 
 
+def attempt_idem_key(session_id: str, activity_instance_id: str, local_date: str) -> str:
+    """At most one effort star (attempt) per activity instance per local date —
+    regardless of the outcome (did_it / not_ready / did_not_want)."""
+    return _sha256("att1", session_id, activity_instance_id, local_date)
+
+
 def completion_idem_key(session_id: str, activity_instance_id: str, local_completion_date: str) -> str:
-    """At most one completion/star per activity instance per local date."""
+    """At most one COMPLETION (did_it, milestone-practice unit) per activity
+    instance per local date. Distinct namespace from the attempt/star key."""
     return _sha256("cmp1", session_id, activity_instance_id, local_completion_date)
 
 
@@ -199,6 +218,48 @@ def build_event(
     }
 
 
+def build_attempt_record(
+    *, session_id: str, owner_uid: str, feedback_id: str, idempotency_key: str,
+    status: str, completed_at_utc: str, completion_tz: str, tz_source: str,
+    local_date: str, date_confidence: str, plan_id: Optional[str],
+    scheduled_day: Optional[str], activity_instance_id: str, source: str,
+    module_id: Optional[str], provenance: str, snapshot: Dict[str, Any],
+    star_event_id: str,
+) -> Dict[str, Any]:
+    """One immutable ATTEMPT record — a real parent engagement with an activity on a
+    local date. Earns exactly one effort star. `outcome` distinguishes completed /
+    not_ready / did_not_want; is_completion is True only for did_it. This never
+    implies completion for non-did_it feedback."""
+    week_start, week_end = week_bounds(local_date)
+    return {
+        "schema_version": 1,
+        "attempt_id": new_id("att"),
+        "idempotency_key": idempotency_key,
+        "session_id": session_id,
+        "owner_uid": owner_uid,
+        "feedback_id": feedback_id,
+        "activity_instance_id": activity_instance_id,
+        "status": status,                                   # did_it | wasnt_ready_yet | didnt_want_to_try
+        "outcome": OUTCOME_BY_STATUS.get(status, status),   # completed | not_ready | did_not_want
+        "is_completion": status == "did_it",
+        "completed_at_utc": completed_at_utc,
+        "completion_tz": completion_tz,
+        "tz_source": tz_source,
+        "local_date": local_date,
+        "date_confidence": date_confidence,
+        "week_start": week_start,
+        "week_end": week_end,
+        "plan_id": plan_id,
+        "scheduled_day": scheduled_day,
+        "source": source,
+        "module_id": module_id,
+        "provenance": provenance,
+        "snapshot": snapshot,
+        "star_awarded": True,
+        "star_event_id": star_event_id,
+    }
+
+
 def build_completion_record(
     *, session_id: str, owner_uid: str, feedback_id: str, idempotency_key: str,
     completed_at_utc: str, completion_tz: str, tz_source: str,
@@ -208,10 +269,11 @@ def build_completion_record(
     scheduled_day: Optional[str], activity_instance_id: str,
     activity_template_id: Optional[str], source: str, module_id: Optional[str],
     provenance: str, source_activity_id: Optional[str], generated_or_manual: str,
-    snapshot: Dict[str, Any], milestone: Dict[str, Any], star_event_id: Optional[str],
+    snapshot: Dict[str, Any], milestone: Dict[str, Any], attempt_id: Optional[str],
 ) -> Dict[str, Any]:
-    """Immutable completion record (§1, §4) — no forward-mutable refs; only the
-    same-transaction star_event_id is embedded."""
+    """Immutable completion record for did_it ONLY (the milestone-practice unit, §1,
+    §4). Links the attempt that earned the star (attempt_id); the effort star itself
+    lives on the attempt, not here. No forward-mutable refs."""
     week_start, week_end = week_bounds(local_completion_date)
     return {
         "schema_version": COMPLETION_SCHEMA_VERSION,
@@ -244,41 +306,43 @@ def build_completion_record(
         "milestone": milestone,
         "valid_completion": True,
         "completion_action": "feedback_did_it",
-        "star_event_id": star_event_id,
+        "attempt_id": attempt_id,
     }
 
 
 # ── Progress read computation (§3) ────────────────────────────────────────────
 
-def compute_stars(completions: List[Dict[str, Any]], week_start: str, week_end: str) -> Dict[str, int]:
-    """Stars = valid completions (deduped by idempotency_key). this_week bounded to
-    the current local Mon–Sun; all_time = all. Never negative."""
+def compute_stars(attempts: List[Dict[str, Any]], week_start: str, week_end: str) -> Dict[str, int]:
+    """Stars = effort ATTEMPTS (any eligible feedback), deduped by idempotency_key —
+    one per activity instance per local date. this_week bounded to the current local
+    Mon–Sun; all_time = all. Never negative. (Milestone practice uses completions, not
+    this.)"""
     seen = set()
     all_time = 0
     this_week = 0
-    for c in completions or []:
-        if not c.get("valid_completion", True):
-            continue
-        k = c.get("idempotency_key") or c.get("completion_id")
+    for a in attempts or []:
+        k = a.get("idempotency_key") or a.get("attempt_id")
         if k in seen:
             continue
         seen.add(k)
         all_time += 1
-        d = c.get("local_completion_date") or ""
+        d = a.get("local_date") or a.get("local_completion_date") or ""
         if week_start <= d <= week_end:
             this_week += 1
     return {"this_week": this_week, "all_time": all_time}
 
 
-def compute_week(completions: List[Dict[str, Any]], today_local_iso: str) -> List[Dict[str, Any]]:
-    """Exactly 7 ordered Monday→Sunday entries for the local week of today.
-    Phase 1 status ∈ {no_practice, practiced}; daily_plan_completed is never emitted."""
+def compute_week(attempts: List[Dict[str, Any]], today_local_iso: str) -> List[Dict[str, Any]]:
+    """Exactly 7 ordered Monday→Sunday entries for the local week of today. A day is
+    `practiced` when the parent engaged with ≥1 activity (any eligible attempt) that
+    day — effort, matching stars. Phase 1 status ∈ {no_practice, practiced};
+    daily_plan_completed (all planned did_it) is Phase 2 and never emitted here."""
     week_start, _ = week_bounds(today_local_iso)
     monday = date.fromisoformat(week_start)
     practiced_dates = {
-        c.get("local_completion_date")
-        for c in (completions or [])
-        if c.get("valid_completion", True) and c.get("date_confidence") != "low"
+        a.get("local_date")
+        for a in (attempts or [])
+        if a.get("date_confidence") != "low"
     }
     week: List[Dict[str, Any]] = []
     for i in range(7):
@@ -293,10 +357,13 @@ def compute_week(completions: List[Dict[str, Any]], today_local_iso: str) -> Lis
 
 
 def build_progress_response(
-    *, session_id: str, timezone_str: str, completions: List[Dict[str, Any]],
+    *, session_id: str, timezone_str: str, attempts: List[Dict[str, Any]],
+    completions: Optional[List[Dict[str, Any]]] = None,
     now_utc: Optional[datetime] = None,
 ) -> Dict[str, Any]:
-    """Full versioned Progress payload (§3). Future arrays present but empty."""
+    """Full versioned Progress payload (§3). Stars + weekly circles are effort-based
+    (attempts). `completions` (did_it) is accepted for forward compatibility with the
+    Phase 3 milestone-practice sections. Future arrays present but empty."""
     tz, _src = validate_timezone(timezone_str)
     now = now_utc or datetime.now(timezone.utc)
     today_local = local_date_for(now, tz)
@@ -305,11 +372,11 @@ def build_progress_response(
         "progress_schema_version": PROGRESS_SCHEMA_VERSION,
         "session_id": session_id,
         "timezone": tz,
-        "week": compute_week(completions, today_local),
-        "stars": compute_stars(completions, week_start, week_end),
+        "week": compute_week(attempts, today_local),
+        "stars": compute_stars(attempts, week_start, week_end),
         "latest_wins": [],               # Phase 2+ (badges/cups only — never plain stars)
         "badges": [],                    # Phase 2
-        "milestones_in_practice": [],    # Phase 3
+        "milestones_in_practice": [],    # Phase 3 (from completions)
         "checkins_ready": [],            # Phase 4
         "cups_by_domain": [],            # Phase 4
     }

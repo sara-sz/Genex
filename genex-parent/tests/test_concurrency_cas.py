@@ -23,16 +23,19 @@ def check(l, ok, d=""):
 
 
 def _make_mutator(session_id, activity_id, local_date):
-    """A minimal feedback-style mutator using the same idempotency indexes as the
-    real /feedback handler (fb_index + comp_index), producing 1 feedback + 1
-    completion + 3 events on first apply, replay thereafter."""
+    """A minimal feedback-style mutator using the same idempotency indexes as the real
+    /feedback handler (fb_index + attempt_index + comp_index), producing 1 feedback +
+    1 attempt + 1 completion + 3 events on first apply, replay thereafter."""
     fb_key = pg.feedback_req_key(session_id, activity_id, local_date, "did_it",
                                  "loved_it", "just_right", False, None, None, "")
+    att_key = pg.attempt_idem_key(session_id, activity_id, local_date)
     comp_key = pg.completion_idem_key(session_id, activity_id, local_date)
 
     def mutator(d):
         feedback = d.setdefault("feedback", [])
         fb_index = d.setdefault("feedback_index", {})
+        attempts = d.setdefault("attempts", [])
+        attempt_index = d.setdefault("attempt_index", {})
         completions = d.setdefault("completions", [])
         comp_index = d.setdefault("completion_index", {})
         events = d.setdefault("events", [])
@@ -47,6 +50,16 @@ def _make_mutator(session_id, activity_id, local_date):
                       source_record_id=fid, created_at_utc="t", local_event_date=local_date,
                       idempotency_key=fb_key, actor_type="parent", provenance="parent_reported"))
         star_id = pg.new_id("evt")
+        att = pg.build_attempt_record(session_id=session_id, owner_uid="u", feedback_id=fid,
+                    idempotency_key=att_key, status="did_it", completed_at_utc="t", completion_tz="UTC",
+                    tz_source="session", local_date=local_date, date_confidence="high", plan_id="p",
+                    scheduled_day="Monday", activity_instance_id=activity_id, source="primary",
+                    module_id=None, provenance="original", snapshot={"title": "T"}, star_event_id=star_id)
+        attempts.append(att); attempt_index[att_key] = att["attempt_id"]
+        events.append(pg.build_event(event_id=star_id, session_id=session_id, owner_uid="u",
+                      event_type="star_awarded", source_record_id=att["attempt_id"], created_at_utc="t",
+                      local_event_date=local_date, idempotency_key=att_key, actor_type="system",
+                      provenance="system_calculated", rule_version=pg.STAR_RULE_VERSION, metadata={"stars_delta": 1}))
         comp = pg.build_completion_record(session_id=session_id, owner_uid="u", feedback_id=fid,
                     idempotency_key=comp_key, completed_at_utc="t", completion_tz="UTC", tz_source="session",
                     local_completion_date=local_date, scheduled_date=local_date, date_confidence="high",
@@ -54,16 +67,11 @@ def _make_mutator(session_id, activity_id, local_date):
                     scheduled_day="Monday", activity_instance_id=activity_id, activity_template_id=None,
                     source="primary", module_id=None, provenance="original", source_activity_id=None,
                     generated_or_manual="generated", snapshot={"title": "T"}, milestone={"milestone_id": None},
-                    star_event_id=star_id)
-        completions.append(comp)
-        comp_index[comp_key] = comp["completion_id"]
+                    attempt_id=att["attempt_id"])
+        completions.append(comp); comp_index[comp_key] = comp["completion_id"]
         events.append(pg.build_event(session_id=session_id, owner_uid="u", event_type="activity_completed",
                       source_record_id=comp["completion_id"], created_at_utc="t", local_event_date=local_date,
                       idempotency_key=comp_key, actor_type="parent", provenance="app_recorded"))
-        events.append(pg.build_event(event_id=star_id, session_id=session_id, owner_uid="u",
-                      event_type="star_awarded", source_record_id=comp["completion_id"], created_at_utc="t",
-                      local_event_date=local_date, idempotency_key=comp_key, actor_type="system",
-                      provenance="system_calculated", rule_version=pg.STAR_RULE_VERSION, metadata={"stars_delta": 1}))
         return True, {"feedback_id": fid, "completion_id": comp["completion_id"], "idempotent_replay": False}
     return mutator
 

@@ -60,15 +60,16 @@ def test_dst_transition():
 
 def test_week_array_and_status():
     print("\n── /progress week: 7 entries, no daily_plan_completed in Phase 1")
-    comps = [
-        {"valid_completion": True, "local_completion_date": "2026-07-06", "idempotency_key": "a"},
-        {"valid_completion": True, "local_completion_date": "2026-07-08", "idempotency_key": "b"},
-        {"valid_completion": True, "local_completion_date": "2026-07-08", "idempotency_key": "c"},
-        {"valid_completion": True, "local_completion_date": "2026-07-01", "idempotency_key": "d"},  # prior week
-        {"valid_completion": True, "local_completion_date": "2026-07-09", "date_confidence": "low", "idempotency_key": "e"},  # excluded from circles
+    # attempts (effort) drive circles + stars
+    atts = [
+        {"local_date": "2026-07-06", "idempotency_key": "a"},
+        {"local_date": "2026-07-08", "idempotency_key": "b"},
+        {"local_date": "2026-07-08", "idempotency_key": "c"},
+        {"local_date": "2026-07-01", "idempotency_key": "d"},  # prior week
+        {"local_date": "2026-07-09", "date_confidence": "low", "idempotency_key": "e"},  # excluded from circles
     ]
     resp = pg.build_progress_response(session_id="s", timezone_str="America/Los_Angeles",
-                                      completions=comps, now_utc=U("2026-07-08T19:00:00Z"))
+                                      attempts=atts, now_utc=U("2026-07-08T19:00:00Z"))
     week = resp["week"]
     check("exactly 7 days", len(week) == 7, len(week))
     check("ordered Monday→Sunday", [d["day"] for d in week] ==
@@ -84,15 +85,15 @@ def test_week_array_and_status():
 
 
 def test_stars_weekly_and_alltime():
-    print("\n── stars: weekly bucket + all-time + dedupe")
-    comps = [
-        {"valid_completion": True, "local_completion_date": "2026-07-06", "idempotency_key": "k1"},
-        {"valid_completion": True, "local_completion_date": "2026-07-08", "idempotency_key": "k2"},
-        {"valid_completion": True, "local_completion_date": "2026-07-08", "idempotency_key": "k2"},  # dup key → not double counted
-        {"valid_completion": True, "local_completion_date": "2026-06-30", "idempotency_key": "k3"},  # prior week
+    print("\n── stars (effort attempts): weekly bucket + all-time + dedupe")
+    atts = [
+        {"local_date": "2026-07-06", "idempotency_key": "k1"},
+        {"local_date": "2026-07-08", "idempotency_key": "k2"},
+        {"local_date": "2026-07-08", "idempotency_key": "k2"},  # dup key → not double counted
+        {"local_date": "2026-06-30", "idempotency_key": "k3"},  # prior week
     ]
     resp = pg.build_progress_response(session_id="s", timezone_str="America/Los_Angeles",
-                                      completions=comps, now_utc=U("2026-07-08T19:00:00Z"))
+                                      attempts=atts, now_utc=U("2026-07-08T19:00:00Z"))
     check("all_time dedup (3 unique)", resp["stars"]["all_time"] == 3, resp["stars"])
     check("this_week only current Mon–Sun (2)", resp["stars"]["this_week"] == 2, resp["stars"])
     check("future arrays present + empty",

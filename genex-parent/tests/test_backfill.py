@@ -21,8 +21,8 @@ def check(l, ok, d=""):
 
 
 def _legacy_doc(tz="America/Los_Angeles"):
-    # 3 did_it (one with metadata_found+title=complete, one partial, one bad-timestamp=unavailable)
-    # + 1 not_yet (ignored). No pre-existing completions/index (pre-Phase-1 shape).
+    # eligible feedback: 2 did_it (complete, partial) + 1 did_it bad-timestamp (unavailable)
+    # + 1 not_ready (now earns an EFFORT star, no completion). Pre-Phase-1 shape.
     return {
         "session_id": "s1", "owner_uid": "uid-a", "timezone": tz,
         "feedback": [
@@ -46,30 +46,30 @@ def test_dry_run_counts_no_mutation():
     doc = _legacy_doc()
     before = copy.deepcopy(doc)
     stats, changed = backfill_doc(doc, dry_run=True)
-    check("did_it examined == 3", stats["feedback_examined"] == 3, stats)
-    check("complete == 1", stats["complete"] == 1, stats)
-    check("partial == 1", stats["partial"] == 1, stats)
+    check("eligible examined == 4 (3 did_it + 1 not_ready)", stats["feedback_examined"] == 4, stats)
     check("unavailable == 1 (bad timestamp)", stats["unavailable"] == 1, stats)
-    check("stars_proposed == 2 (unavailable excluded)", stats["stars_proposed"] == 2, stats)
+    check("stars_proposed == 3 (attempts; unavailable excluded)", stats["stars_proposed"] == 3, stats)
+    check("completions_proposed == 2 (did_it only)", stats["completions_proposed"] == 2, stats)
+    check("complete == 1, partial == 2", stats["complete"] == 1 and stats["partial"] == 2, stats)
     check("changed False in dry-run", changed is False)
     check("doc UNCHANGED by dry-run", doc == before)
 
 
-def test_apply_creates_completions_and_stars():
-    print("\n── apply: creates completions + migration stars")
+def test_apply_creates_attempts_completions_stars():
+    print("\n── apply: 3 effort stars (attempts) + 2 completions (did_it only)")
     doc = _legacy_doc()
     stats, changed = backfill_doc(doc, dry_run=False)
     check("changed True", changed is True)
-    check("2 completions created", len(doc["completions"]) == 2, len(doc.get("completions", [])))
-    check("all backfilled+migration provenance", all(c.get("backfilled") for c in doc["completions"]))
+    check("3 attempts (effort stars)", len(doc["attempts"]) == 3, len(doc.get("attempts", [])))
+    check("2 completions (did_it only)", len(doc["completions"]) == 2, len(doc.get("completions", [])))
+    check("not_ready attempt has NO completion (outcome not_ready)",
+          any(a["outcome"] == "not_ready" and not a["is_completion"] for a in doc["attempts"]))
     ev = [e for e in doc["events"] if e["type"] == "star_awarded"]
-    check("2 migration star events", len(ev) == 2 and all(e["actor_type"] == "migration" and e["provenance"] == "migrated" for e in ev), ev)
-    check("completion_index has 2", len(doc["completion_index"]) == 2)
-    # all-time stars via progress
+    check("3 migration star events", len(ev) == 3 and all(e["actor_type"] == "migration" for e in ev), len(ev))
+    check("all backfilled", all(a.get("backfilled") for a in doc["attempts"]) and all(c.get("backfilled") for c in doc["completions"]))
     prog = pg.build_progress_response(session_id="s1", timezone_str="America/Los_Angeles",
-                                      completions=doc["completions"])
-    check("all-time stars == 2", prog["stars"]["all_time"] == 2, prog["stars"])
-    # data completeness distinguished
+                                      attempts=doc["attempts"], completions=doc["completions"])
+    check("all-time stars == 3 (effort)", prog["stars"]["all_time"] == 3, prog["stars"])
     comp = {c["activity_instance_id"]: c["data_completeness"] for c in doc["completions"]}
     check("a1 complete, a2 partial", comp.get("a1") == "complete" and comp.get("a2") == "partial", comp)
 
@@ -80,29 +80,28 @@ def test_idempotent_rerun():
     backfill_doc(doc, dry_run=False)
     snapshot = copy.deepcopy(doc)
     stats2, changed2 = backfill_doc(doc, dry_run=False)
-    check("second run skips 2 existing", stats2["skipped_existing"] == 2, stats2)
-    check("second run stars_proposed 0", stats2["stars_proposed"] == 0, stats2)
+    check("second run skips 3 existing attempts", stats2["skipped_existing"] == 3, stats2)
+    check("second run stars_proposed 0 + completions_proposed 0", stats2["stars_proposed"] == 0 and stats2["completions_proposed"] == 0, stats2)
     check("second run changed False", changed2 is False)
-    check("doc unchanged by second run", doc["completions"] == snapshot["completions"] and doc["events"] == snapshot["events"])
+    check("doc unchanged by second run",
+          doc["attempts"] == snapshot["attempts"] and doc["completions"] == snapshot["completions"] and doc["events"] == snapshot["events"])
 
 
 def test_low_confidence_excluded_from_circles():
     print("\n── missing/invalid tz → low confidence, excluded from week circles")
     doc = _legacy_doc(tz="Not/AZone")     # invalid → default_utc, low confidence
     backfill_doc(doc, dry_run=False)
-    check("completions marked low confidence", all(c["date_confidence"] == "low" for c in doc["completions"]))
+    check("attempts marked low confidence", all(a["date_confidence"] == "low" for a in doc["attempts"]))
     check("still count toward all-time stars",
-          pg.build_progress_response(session_id="s1", timezone_str="Not/AZone", completions=doc["completions"])["stars"]["all_time"] == 2)
-    # week circles must NOT show low-confidence dates
-    from datetime import datetime, timezone
-    week = pg.compute_week(doc["completions"], "2026-07-08")
+          pg.build_progress_response(session_id="s1", timezone_str="Not/AZone", attempts=doc["attempts"])["stars"]["all_time"] == 3)
+    week = pg.compute_week(doc["attempts"], "2026-07-08")
     check("no low-confidence date shown as practiced",
           all(d["status"] == "no_practice" for d in week), [d["status"] for d in week])
 
 
 def run_all():
     test_dry_run_counts_no_mutation()
-    test_apply_creates_completions_and_stars()
+    test_apply_creates_attempts_completions_stars()
     test_idempotent_rerun()
     test_low_confidence_excluded_from_circles()
     print(f"\n{'='*50}\nResults: {_p} passed, {_f} failed")

@@ -77,7 +77,8 @@ def test_snapshot_and_immutable_primary():
     check("timing fields present", c["completed_at_utc"] and c["completion_tz"] == "America/Los_Angeles"
           and c["local_completion_date"] and c["week_start"] and c["week_end"])
     check("scheduled_date kept separately", c["scheduled_date"] == card["activity_date"])
-    check("star_event_id linked", bool(c["star_event_id"]))
+    check("completion links attempt_id (star lives on the attempt)", bool(c["attempt_id"]))
+    check("attempt record exists + is_completion", len(doc(sid)["attempts"]) == 1 and doc(sid)["attempts"][0]["is_completion"] is True)
     check("schema_version + valid", c["schema_version"] == 1 and c["valid_completion"] is True)
     check("NO forward-mutable refs on completion", not (_FORBIDDEN & set(c.keys())), _FORBIDDEN & set(c.keys()))
     check("milestone block present (nullable)", "milestone" in c and "milestone_id" in c["milestone"])
@@ -152,15 +153,15 @@ def test_reearn_on_later_date():
     card = next(a for d in plan["week"] for a in d["activities"])
     day = next(d["day"] for d in plan["week"] for a in d["activities"] if a["activity_id"] == card["activity_id"])
     _complete(sid, card, day)
-    # simulate a completion recorded on a different local date by editing the stored record's date key
+    # simulate an ATTEMPT (effort star) on a different local date (stars come from attempts)
     d = doc(sid)
     from api import progress as pg
     later = "2026-12-25"
-    c2 = copy.deepcopy(d["completions"][0])
-    c2["completion_id"] = "cmp_manual2"
-    c2["local_completion_date"] = later
-    c2["idempotency_key"] = pg.completion_idem_key(sid, card["activity_id"], later)
-    d["completions"].append(c2)
+    a2 = copy.deepcopy(d["attempts"][0])
+    a2["attempt_id"] = "att_manual2"
+    a2["local_date"] = later
+    a2["idempotency_key"] = pg.attempt_idem_key(sid, card["activity_id"], later)
+    d["attempts"].append(a2)
     session_store.save("uid-a", sid, d)
     prog = G(f"/api/v1/session/{sid}/progress").json()
     check("two stars for same activity across two dates", prog["stars"]["all_time"] == 2, prog["stars"])

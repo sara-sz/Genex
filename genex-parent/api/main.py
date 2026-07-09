@@ -1317,6 +1317,7 @@ async def session_feedback(
         body.difficulty, body.discuss_with_care_team, body.care_team_member,
         body.care_team_tags, body.note,
     )
+    att_key = progress_lib.attempt_idem_key(session_id, body.activity_id, local_date)
     comp_key = progress_lib.completion_idem_key(session_id, body.activity_id, local_date)
     snapshot = _resolve_activity_snapshot(doc, body, source, module_id_val, internal_act)
     prov = _activity_provenance(doc, body, source, module_id_val, orig_key, internal_act)
@@ -1363,6 +1364,8 @@ async def session_feedback(
     def _mutator(d: Dict[str, Any]):
         feedback = d.setdefault("feedback", [])
         fb_index = d.setdefault("feedback_index", {})
+        attempts = d.setdefault("attempts", [])
+        attempt_index = d.setdefault("attempt_index", {})
         completions = d.setdefault("completions", [])
         comp_index = d.setdefault("completion_index", {})
         events = d.setdefault("events", [])
@@ -1375,7 +1378,7 @@ async def session_feedback(
         if fb_key in fb_index:
             return False, {
                 "ok": True, "feedback_id": fb_index[fb_key],
-                "completion_id": comp_index.get(comp_key),
+                "completion_id": comp_index.get(comp_key), "attempt_id": attempt_index.get(att_key),
                 "star_awarded": False, "idempotent_replay": True,
                 "activities_done_today": _done_today(), "metadata_found": metadata_found,
                 "flagged_for_care_team": body.discuss_with_care_team,
@@ -1407,11 +1410,38 @@ async def session_feedback(
             metadata={"revision": is_revision, "supersedes": record["supersedes_feedback_id"]},
         ))
 
-        completion_id: Optional[str] = comp_index.get(comp_key)
+        # ── Effort STAR: any eligible attempt (did_it / not_ready / did_not_want),
+        #    at most one per activity instance per local date. Records the ATTEMPT so
+        #    the model never implies a non-did_it activity was completed.
         star_awarded = False
-        # Exactly one completion + star per activity instance per local date.
-        if body.completion == "did_it" and comp_key not in comp_index:
+        attempt_id = attempt_index.get(att_key)
+        if body.completion in progress_lib.ELIGIBLE_STAR_STATUSES and att_key not in attempt_index:
             star_event_id = progress_lib.new_id("evt")
+            attempt = progress_lib.build_attempt_record(
+                session_id=session_id, owner_uid=auth.uid, feedback_id=feedback_id,
+                idempotency_key=att_key, status=body.completion, completed_at_utc=now_iso,
+                completion_tz=tz, tz_source=tz_source, local_date=local_date,
+                date_confidence=date_confidence, plan_id=body.plan_id, scheduled_day=body.day,
+                activity_instance_id=body.activity_id, source=source, module_id=module_id_val,
+                provenance=prov["provenance"], snapshot=snapshot, star_event_id=star_event_id,
+            )
+            attempt_id = attempt["attempt_id"]
+            attempts.append(attempt)
+            attempt_index[att_key] = attempt_id
+            events.append(progress_lib.build_event(
+                event_id=star_event_id, session_id=session_id, owner_uid=auth.uid,
+                event_type="star_awarded", source_record_id=attempt_id, created_at_utc=now_iso,
+                local_event_date=local_date, idempotency_key=att_key, actor_type="system",
+                provenance="system_calculated", rule_version=progress_lib.STAR_RULE_VERSION,
+                metadata={"stars_delta": 1, "awarded_for": "attempt", "status": body.completion,
+                          "outcome": progress_lib.OUTCOME_BY_STATUS.get(body.completion)},
+            ))
+            star_awarded = True
+
+        # ── COMPLETION (did_it only): the milestone-practice unit. Non-did_it never
+        #    creates a completion. At most one per activity instance per local date.
+        completion_id: Optional[str] = comp_index.get(comp_key)
+        if body.completion == "did_it" and comp_key not in comp_index:
             completion = progress_lib.build_completion_record(
                 session_id=session_id, owner_uid=auth.uid, feedback_id=feedback_id,
                 idempotency_key=comp_key, completed_at_utc=now_iso, completion_tz=tz,
@@ -1425,7 +1455,7 @@ async def session_feedback(
                 module_id=module_id_val, provenance=prov["provenance"],
                 source_activity_id=prov["source_activity_id"],
                 generated_or_manual=prov["generated_or_manual"], snapshot=snapshot,
-                milestone=milestone, star_event_id=star_event_id,
+                milestone=milestone, attempt_id=attempt_id,
             )
             completion_id = completion["completion_id"]
             completions.append(completion)
@@ -1434,19 +1464,12 @@ async def session_feedback(
                 session_id=session_id, owner_uid=auth.uid, event_type="activity_completed",
                 source_record_id=completion_id, created_at_utc=now_iso, local_event_date=local_date,
                 idempotency_key=comp_key, actor_type="parent", provenance="app_recorded",
+                metadata={"milestone_practice": bool(milestone.get("milestone_id"))},
             ))
-            events.append(progress_lib.build_event(
-                event_id=star_event_id, session_id=session_id, owner_uid=auth.uid,
-                event_type="star_awarded", source_record_id=completion_id, created_at_utc=now_iso,
-                local_event_date=local_date, idempotency_key=comp_key, actor_type="system",
-                provenance="system_calculated", rule_version=progress_lib.STAR_RULE_VERSION,
-                metadata={"stars_delta": 1},
-            ))
-            star_awarded = True
 
         return True, {
             "ok": True, "feedback_id": feedback_id, "completion_id": completion_id,
-            "star_awarded": star_awarded, "idempotent_replay": False,
+            "attempt_id": attempt_id, "star_awarded": star_awarded, "idempotent_replay": False,
             "activities_done_today": _done_today(), "metadata_found": metadata_found,
             "flagged_for_care_team": body.discuss_with_care_team,
         }
@@ -1480,7 +1503,8 @@ async def session_progress(
     return progress_lib.build_progress_response(
         session_id=session_id,
         timezone_str=doc.get("timezone"),
-        completions=doc.get("completions") or [],
+        attempts=doc.get("attempts") or [],          # stars + circles = effort
+        completions=doc.get("completions") or [],    # forward-compat (milestone practice)
     )
 
 
