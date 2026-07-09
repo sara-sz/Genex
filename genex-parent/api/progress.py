@@ -365,6 +365,7 @@ def _milestone_reliable(milestone: Dict[str, Any], domain: str) -> bool:
 def compute_categories_in_practice(
     completions: List[Dict[str, Any]],
     active_milestones: Optional[List[Dict[str, Any]]] = None,
+    ready_checkins: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
     """`Categories & Milestones We're Working On`, grouped by developmental domain.
 
@@ -407,9 +408,11 @@ def compute_categories_in_practice(
             _seed(am["milestone_id"], "cdc", am.get("short_label"), am.get("domain"),
                   am.get("canonical_age_months"), am.get("cup_eligible"))
 
+    ready_checkins = ready_checkins or {}
     domains: Dict[str, Dict[str, Any]] = {}
     for e in per.values():
         true_count = e["count"]
+        checkin_id = ready_checkins.get(e["milestone_id"])
         row = {
             "milestone_id": e["milestone_id"],
             "milestone_source": e["milestone_source"],
@@ -419,8 +422,9 @@ def compute_categories_in_practice(
             "practices_completed_true": true_count,                    # preserved for analytics
             "practices_target": PRACTICE_TARGET,
             "distinct_practice_days": len(e["hi_dates"]),
-            "check_in_ready": False,                                   # Phase 4 — never true in Phase 2
-            "practice_ready": true_count >= PRACTICE_TARGET,          # informational (no check-in created)
+            "practice_ready": true_count >= PRACTICE_TARGET,           # informational (>= target)
+            "check_in_ready": checkin_id is not None,                  # Phase 4 — full readiness met
+            "checkin_id": checkin_id,                                  # None unless check_in_ready
             "cup_eligible": bool(e["cup_eligible"]),
         }
         source_label = FOCUS_LABELS.get(e["domain"], e["domain"])
@@ -437,6 +441,105 @@ def compute_categories_in_practice(
         g = domains[dk]
         g["milestones"].sort(key=lambda m: (-m["practices_completed_true"], m["short_label"]))
         out.append(g)
+    return out
+
+
+# ── Phase 4: parent milestone check-in READINESS (did_it only; no cups) ────────
+#
+# A milestone becomes ready for a gentle parent check-in when it has >=5 did_it
+# completions for the SAME canonical CDC milestone across >=3 distinct HIGH-confidence
+# local practice dates, with reliable observable_text and cup_eligible. Non-did_it
+# attempts never count. Read-time deterministic derivation from durable completions:
+# checkin_id is stable per (session, milestone) so the same ready milestone never
+# produces duplicate active check-ins. NO cups, NO stored parent responses in Phase 4
+# (persisting the milestone_checkin_ready event + response handling is deferred to
+# Phase 5 / cups — readiness needs no stored state to prevent duplicates). The backend
+# owns the exact prompt; the frontend must not invent the question. Name-blind by
+# design (the session doc never stores the child's name), so the prompt says
+# "your child" — switching to a first name would require storing child_first_name.
+
+CHECKIN_READY_MIN_COMPLETIONS = 5
+CHECKIN_READY_MIN_DAYS = 3
+CHECKIN_RULE_VERSION = "cr1"
+
+
+def _observable_phrase(short_label: str) -> str:
+    """Milestone skill phrase for the prompt: de-conjugate the leading 3rd-person verb
+    ('points'→'point') and lowercase, reusing the proven pipeline helper."""
+    from api.pipeline import _to_base_verb  # local import avoids load-time cycle
+    words = (short_label or "").strip().split()
+    if not words:
+        return ""
+    return " ".join([_to_base_verb(words[0])] + [w.lower() for w in words[1:]])
+
+
+def build_checkin_prompt(short_label: str) -> str:
+    """Warm, parent-friendly, name-blind yes/no prompt from observable milestone
+    wording. No clinical claims, no 'mastered', no causal claim."""
+    phrase = _observable_phrase(short_label)
+    return f"After the practice you have done together, is your child now usually able to {phrase}?"
+
+
+def compute_checkins_ready(session_id: str, completions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Milestones ready for a parent check-in (see rule above). Deterministic + idempotent."""
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for c in completions or []:
+        if not c.get("valid_completion", True):
+            continue
+        ms = c.get("milestone") or {}
+        domain = (c.get("snapshot") or {}).get("domain") or ""
+        if not _milestone_reliable(ms, domain) or not ms.get("cup_eligible"):
+            continue
+        groups.setdefault(ms["milestone_id"], []).append(c)
+
+    out: List[Dict[str, Any]] = []
+    for mid, recs in groups.items():
+        ms = (recs[0].get("milestone") or {})
+        domain = (recs[0].get("snapshot") or {}).get("domain") or ""
+        short_label = ms.get("short_label", "")
+        observable = resolve_observable_text(domain, short_label)
+        if not observable:                              # reliable observable_text required
+            continue
+        recs = sorted(recs, key=lambda c: (c.get("completed_at_utc") or ""))
+        seen: set = set()
+        count = 0
+        days: set = set()
+        source_ids: List[str] = []
+        created_at: Optional[str] = None
+        created_local: Optional[str] = None
+        for c in recs:
+            k = c.get("idempotency_key") or c.get("completion_id")
+            if k in seen:                               # completions are already unique per activity/date
+                continue
+            seen.add(k)
+            count += 1
+            source_ids.append(c.get("completion_id"))
+            d = c.get("local_completion_date")
+            if d and c.get("date_confidence") != "low":
+                days.add(d)
+            if created_at is None and count >= CHECKIN_READY_MIN_COMPLETIONS and len(days) >= CHECKIN_READY_MIN_DAYS:
+                created_at = c.get("completed_at_utc")
+                created_local = d
+        if count >= CHECKIN_READY_MIN_COMPLETIONS and len(days) >= CHECKIN_READY_MIN_DAYS:
+            out.append({
+                "checkin_id": "chk_" + _sha256("chk1", session_id, mid)[:16],
+                "milestone_id": mid,
+                "domain_key": domain,
+                "domain_label": PROGRESS_DOMAIN_LABELS.get(domain, domain),
+                "short_label": short_label,
+                "observable_text": observable,
+                "prompt": build_checkin_prompt(short_label),
+                "practices_completed": min(count, PRACTICE_TARGET),
+                "practices_completed_true": count,
+                "distinct_practice_days": len(days),
+                "practices_target": PRACTICE_TARGET,
+                "source": "parent_checkin_ready",
+                "rule_version": CHECKIN_RULE_VERSION,
+                "created_at": created_at,
+                "local_event_date": created_local,
+                "source_completion_ids": source_ids,
+            })
+    out.sort(key=lambda x: (x["domain_key"], x["milestone_id"]))
     return out
 
 
@@ -573,6 +676,9 @@ def build_progress_response(
     today_local = local_date_for(now, tz)
     week_start, week_end = week_bounds(today_local)
     badges = compute_badges(attempts)                     # Phase 3 — from practice days (effort)
+    comps = completions or []
+    checkins_ready = compute_checkins_ready(session_id, comps)   # Phase 4 — did_it only
+    ready_map = {c["milestone_id"]: c["checkin_id"] for c in checkins_ready}
     return {
         "progress_schema_version": PROGRESS_SCHEMA_VERSION,
         "session_id": session_id,
@@ -580,10 +686,10 @@ def build_progress_response(
         "week": compute_week(attempts, today_local),
         "stars": compute_stars(attempts, week_start, week_end),
         "categories_in_practice": compute_categories_in_practice(
-            completions or [], active_plan_milestones or []),
+            comps, active_plan_milestones or [], ready_checkins=ready_map),
         "badges": badges,                                 # Phase 3 (earned consistency badges)
         "latest_wins": compute_latest_wins(badges),       # Phase 3 (recent badges only — no stars/cups)
+        "checkins_ready": checkins_ready,                 # Phase 4 (readiness only — no cups)
         "milestones_in_practice": [],    # backward-compat placeholder (grouped view is categories_in_practice)
-        "checkins_ready": [],            # Phase 4
-        "cups_by_domain": [],            # Phase 4
+        "cups_by_domain": [],            # Phase 5
     }
