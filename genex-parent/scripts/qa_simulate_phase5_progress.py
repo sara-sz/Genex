@@ -112,6 +112,19 @@ def build_scenario_doc(session_id, owner_uid, scenario):
     for i, dt in enumerate(dates):
         d["attempts"].append(_att(dt, i=i))
         d["completions"].append(_comp(dt, f"{dt}T1{i}:00:00Z", i))
+    if scenario == "recheck_after_more_practice":
+        # Represent the READY-AGAIN state directly (single deterministic write, no POST):
+        # a Not yet was answered at 5/3, then +3 did_it across +2 more dates happened.
+        d["completions"] += _extra_recheck_completions()
+        d["checkin_responses"] = [{
+            "schema_version": 1, "response_id": "resp_seed_notyet", "checkin_id": None,
+            "milestone_id": MID, "owner_uid": owner_uid, "response": "not_yet",
+            "response_label": "Not yet", "domain_key": DOMAIN, "short_label": SHORT,
+            "practices_completed_at": 5, "distinct_days_at": 3,
+            "created_at_utc": "2026-07-08T20:00:00Z", "local_date": "2026-07-08",
+            "rule_version": "cr1", "supersedes_response_id": None,
+        }]
+        d["checkin_response_index"] = {"seed": "resp_seed_notyet"}
     return d
 
 
@@ -166,18 +179,13 @@ def run_local():
         session_store._cache.clear()
         session_store.save("qa-uid", sid, build_scenario_doc(sid, "qa-uid", sc))
         cid = pg.checkin_id_for(sid, MID)
-        # scenario actions that hit the real response endpoint
-        if sc in ("yes_cup_awarded", "sometimes_no_cup", "not_yet_no_cup", "duplicate_yes_no_duplicate_cup", "recheck_after_more_practice"):
+        # scenario actions that hit the real response endpoint (recheck is pre-seeded)
+        if sc in ("yes_cup_awarded", "sometimes_no_cup", "not_yet_no_cup", "duplicate_yes_no_duplicate_cup"):
             val = {"yes_cup_awarded": "yes_usually", "sometimes_no_cup": "sometimes_emerging",
-                   "not_yet_no_cup": "not_yet", "duplicate_yes_no_duplicate_cup": "yes_usually",
-                   "recheck_after_more_practice": "not_yet"}[sc]
+                   "not_yet_no_cup": "not_yet", "duplicate_yes_no_duplicate_cup": "yes_usually"}[sc]
             client.post(f"/api/v1/session/{sid}/milestone-checkins/{cid}/response", headers=H, json={"response": val})
             if sc == "duplicate_yes_no_duplicate_cup":
                 client.post(f"/api/v1/session/{sid}/milestone-checkins/{cid}/response", headers=H, json={"response": "yes_usually"})
-            if sc == "recheck_after_more_practice":
-                doc = session_store.load("qa-uid", sid)
-                doc["completions"] += _extra_recheck_completions()
-                session_store.save("qa-uid", sid, doc)
         prog = client.get(f"/api/v1/session/{sid}/progress", headers=H).json()
         ok, detail = EXPECT[sc](prog)
         passed += ok
@@ -224,18 +232,12 @@ def run_seed_staging():
         subprocess.check_call(["gcloud", "storage", "cp", "/tmp/qa_seed.json", blob],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         cid = "chk_" + __import__("hashlib").sha256(f"chk1|{sid}|{MID}".encode()).hexdigest()[:16]
-        if sc in ("yes_cup_awarded", "sometimes_no_cup", "not_yet_no_cup", "duplicate_yes_no_duplicate_cup", "recheck_after_more_practice"):
+        if sc in ("yes_cup_awarded", "sometimes_no_cup", "not_yet_no_cup", "duplicate_yes_no_duplicate_cup"):
             val = {"yes_cup_awarded": "yes_usually", "sometimes_no_cup": "sometimes_emerging",
-                   "not_yet_no_cup": "not_yet", "duplicate_yes_no_duplicate_cup": "yes_usually",
-                   "recheck_after_more_practice": "not_yet"}[sc]
+                   "not_yet_no_cup": "not_yet", "duplicate_yes_no_duplicate_cup": "yes_usually"}[sc]
             _http(f"{STAGING_URL}/api/v1/session/{sid}/milestone-checkins/{cid}/response", {"response": val}, tok)
             if sc == "duplicate_yes_no_duplicate_cup":
                 _http(f"{STAGING_URL}/api/v1/session/{sid}/milestone-checkins/{cid}/response", {"response": "yes_usually"}, tok)
-            if sc == "recheck_after_more_practice":
-                cur = json.loads(subprocess.check_output(["gcloud", "storage", "cat", blob]))
-                cur["completions"] += _extra_recheck_completions()
-                open("/tmp/qa_seed.json", "w").write(json.dumps(cur, indent=2))
-                subprocess.check_call(["gcloud", "storage", "cp", "/tmp/qa_seed.json", blob], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         prog = _http(f"{STAGING_URL}/api/v1/session/{sid}/progress", tok=tok)[1]
         ok = EXPECT[sc](prog)[0] if prog.get("progress_schema_version") else False
         seeded.append({"scenario": sc, "session_id": sid, "login_email": em, "password": QA_PW,
