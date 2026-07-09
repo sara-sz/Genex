@@ -440,6 +440,78 @@ def compute_categories_in_practice(
     return out
 
 
+# ── Phase 3: consistency badges (from attempts / practice days) ───────────────
+#
+# A "practice day" = a local calendar date with ≥1 eligible parent attempt that
+# earned a star (did_it OR wasnt_ready_yet OR didnt_want_to_try). Badges reward
+# family rhythm/effort — NOT did_it completion. Earned once, permanent, derived
+# read-only from the durable attempts (a gap ends the current streak but a past
+# qualifying run stays in history, so the badge remains earned). No guilt / no
+# missed-day state / no "lost streak" language.
+
+BADGE_DEFINITIONS = [
+    {"badge_id": "first_step",          "label": "First Step",      "description": "For trying your first activity",   "threshold": 1,  "kind": "count"},
+    {"badge_id": "three_day_rhythm",    "label": "3-Day Rhythm",    "description": "For practicing 3 days in a row",   "threshold": 3,  "kind": "streak"},
+    {"badge_id": "seven_day_streak",    "label": "7-Day Streak",    "description": "For practicing 7 days in a row",   "threshold": 7,  "kind": "streak"},
+    {"badge_id": "fourteen_day_streak", "label": "14-Day Streak",   "description": "For practicing 14 days in a row",  "threshold": 14, "kind": "streak"},
+    {"badge_id": "thirty_day_streak",   "label": "30-Day Streak",   "description": "For practicing 30 days in a row",  "threshold": 30, "kind": "streak"},
+]
+_LATEST_WINS_LIMIT = 5
+
+
+def _practice_days(attempts: List[Dict[str, Any]]) -> List[str]:
+    """Sorted distinct local practice dates (multiple attempts same day = one day).
+    Low-confidence dates are excluded — a streak can't be reliably anchored on them."""
+    return sorted({
+        a.get("local_date") for a in (attempts or [])
+        if a.get("local_date") and a.get("date_confidence") != "low"
+    })
+
+
+def compute_badges(attempts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return the EARNED consistency badges (each once, permanent) with the local date
+    each was first achieved. Only earned badges are returned (no guilt/locked state)."""
+    dates = _practice_days(attempts)
+    if not dates:
+        return []
+    earned_at: Dict[str, str] = {"first_step": dates[0]}   # First Step = first practice day
+
+    streak_defs = [(b["badge_id"], b["threshold"]) for b in BADGE_DEFINITIONS if b["kind"] == "streak"]
+    remaining = dict(streak_defs)
+    run = 0
+    prev: Optional[date] = None
+    for ds in dates:
+        d = date.fromisoformat(ds)
+        run = run + 1 if (prev is not None and d == prev + timedelta(days=1)) else 1
+        prev = d
+        for bid, th in list(remaining.items()):
+            if run >= th:                     # first date this run reaches the threshold
+                earned_at[bid] = ds
+                del remaining[bid]
+
+    total_days = len(dates)
+    out: List[Dict[str, Any]] = []
+    for b in BADGE_DEFINITIONS:               # stable order: First Step → 30-day
+        if b["badge_id"] in earned_at:
+            out.append({
+                "badge_id": b["badge_id"], "label": b["label"], "description": b["description"],
+                "earned": True, "earned_at": earned_at[b["badge_id"]],
+                "practice_days": total_days,
+            })
+    return out
+
+
+def compute_latest_wins(badges: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Recent wins = recently EARNED badges only (never plain stars, never cups)."""
+    wins = [
+        {"type": "badge", "badge_id": b["badge_id"], "label": b["label"],
+         "description": b["description"], "earned_at": b["earned_at"]}
+        for b in (badges or [])
+    ]
+    wins.sort(key=lambda w: (w.get("earned_at") or ""), reverse=True)
+    return wins[:_LATEST_WINS_LIMIT]
+
+
 # ── Progress read computation (§3) ────────────────────────────────────────────
 
 def compute_stars(attempts: List[Dict[str, Any]], week_start: str, week_end: str) -> Dict[str, int]:
@@ -500,6 +572,7 @@ def build_progress_response(
     now = now_utc or datetime.now(timezone.utc)
     today_local = local_date_for(now, tz)
     week_start, week_end = week_bounds(today_local)
+    badges = compute_badges(attempts)                     # Phase 3 — from practice days (effort)
     return {
         "progress_schema_version": PROGRESS_SCHEMA_VERSION,
         "session_id": session_id,
@@ -508,8 +581,8 @@ def build_progress_response(
         "stars": compute_stars(attempts, week_start, week_end),
         "categories_in_practice": compute_categories_in_practice(
             completions or [], active_plan_milestones or []),
-        "latest_wins": [],               # Phase 2+ (badges/cups only — never plain stars)
-        "badges": [],                    # Phase 2 (badges)
+        "badges": badges,                                 # Phase 3 (earned consistency badges)
+        "latest_wins": compute_latest_wins(badges),       # Phase 3 (recent badges only — no stars/cups)
         "milestones_in_practice": [],    # backward-compat placeholder (grouped view is categories_in_practice)
         "checkins_ready": [],            # Phase 4
         "cups_by_domain": [],            # Phase 4

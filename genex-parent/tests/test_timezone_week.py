@@ -96,9 +96,10 @@ def test_stars_weekly_and_alltime():
                                       attempts=atts, now_utc=U("2026-07-08T19:00:00Z"))
     check("all_time dedup (3 unique)", resp["stars"]["all_time"] == 3, resp["stars"])
     check("this_week only current Mon–Sun (2)", resp["stars"]["this_week"] == 2, resp["stars"])
-    check("future arrays present + empty",
-          resp["latest_wins"] == [] and resp["badges"] == [] and resp["milestones_in_practice"] == []
-          and resp["checkins_ready"] == [] and resp["cups_by_domain"] == [])
+    check("badges earned from practice days (First Step present)",
+          any(b["badge_id"] == "first_step" for b in resp["badges"]), resp["badges"])
+    check("reserved future arrays still empty (Phase 4)",
+          resp["milestones_in_practice"] == [] and resp["checkins_ready"] == [] and resp["cups_by_domain"] == [])
     check("schema version + timezone echoed", resp["progress_schema_version"] == 1 and resp["timezone"] == "America/Los_Angeles")
 
 
