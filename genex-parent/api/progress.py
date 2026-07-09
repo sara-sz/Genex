@@ -310,6 +310,125 @@ def build_completion_record(
     }
 
 
+# ── Phase 2: categories & milestones we're working on ────────────────────────
+
+PRACTICE_TARGET = 5
+
+_OBSERVABLE_LOOKUP: Optional[Dict[Tuple[str, str], str]] = None
+
+
+def _observable_lookup() -> Dict[Tuple[str, str], str]:
+    """Cached {(category_key, norm(milestone_text)): parent_explanation} from the CDC
+    table (read-only use of genex_core — never modifies it). Empty on any failure so
+    observable_text degrades to null rather than raising."""
+    global _OBSERVABLE_LOOKUP
+    if _OBSERVABLE_LOOKUP is None:
+        lookup: Dict[Tuple[str, str], str] = {}
+        try:
+            from genex_core.milestones import get_cdc_df  # read-only
+            df = get_cdc_df()
+            for _, r in df.iterrows():
+                ck = str(r.get("category_key", "") or "").strip()
+                ms = str(r.get("milestone", "") or "").strip()
+                pe = str(r.get("parent_explanation", "") or "").strip()
+                if ck and ms and pe:
+                    lookup[(ck, _norm_text(ms))] = pe
+        except Exception:
+            lookup = {}
+        _OBSERVABLE_LOOKUP = lookup
+    return _OBSERVABLE_LOOKUP
+
+
+def resolve_observable_text(domain: str, short_label: str) -> Optional[str]:
+    """Parent-friendly observable sentence for a milestone, or None if not resolvable.
+    Never fabricated."""
+    if not domain or not short_label:
+        return None
+    return _observable_lookup().get((domain, _norm_text(short_label)))
+
+
+def _milestone_reliable(milestone: Dict[str, Any], domain: str) -> bool:
+    """A milestone row may appear in categories_in_practice only when its mapping is
+    reliable: a canonical CDC milestone_id + a known domain."""
+    return bool((milestone or {}).get("milestone_id")) and (milestone or {}).get("milestone_source") == "cdc" and bool(domain)
+
+
+def compute_categories_in_practice(
+    completions: List[Dict[str, Any]],
+    active_milestones: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """`Categories & Milestones We're Working On`, grouped by developmental domain.
+
+    Milestone-practice dots come ONLY from did_it COMPLETIONS with a reliable canonical
+    CDC milestone_id + domain (non-did_it never creates a completion, so it can never
+    fill a dot). Different activities for the same canonical milestone aggregate into
+    ONE row (the id excludes activity_family). Duplicate did_it is already deduped by
+    the completion index, so it can't double-count. `active_milestones` (reliable
+    milestones from the current plan) seed rows at 0 practices so parents can see what
+    they're working on. Unreliable/unmapped completions never create a row (they still
+    earned stars via attempts). No cups, no check-ins. practices capped at 5 for the UI;
+    the true count is preserved for analytics."""
+    from api.focus_selector import FOCUS_LABELS  # local import avoids import cycle
+
+    per: Dict[str, Dict[str, Any]] = {}
+
+    def _seed(mid, source, short_label, domain, age, cup):
+        return per.setdefault(mid, {
+            "milestone_id": mid, "milestone_source": source, "short_label": short_label or "",
+            "domain": domain, "canonical_age_months": age, "cup_eligible": bool(cup),
+            "count": 0, "hi_dates": set(),
+        })
+
+    for c in completions or []:
+        if not c.get("valid_completion", True):
+            continue
+        ms = c.get("milestone") or {}
+        domain = (c.get("snapshot") or {}).get("domain") or ""
+        if not _milestone_reliable(ms, domain):
+            continue
+        e = _seed(ms["milestone_id"], "cdc", ms.get("short_label"), domain,
+                  ms.get("canonical_age_months"), ms.get("cup_eligible"))
+        e["count"] += 1                                   # completions are already unique per activity/date
+        d = c.get("local_completion_date")
+        if d and c.get("date_confidence") != "low":       # distinct DAYS from reliable dates only
+            e["hi_dates"].add(d)
+
+    for am in active_milestones or []:
+        if _milestone_reliable(am, am.get("domain")) and am["milestone_id"] not in per:
+            _seed(am["milestone_id"], "cdc", am.get("short_label"), am.get("domain"),
+                  am.get("canonical_age_months"), am.get("cup_eligible"))
+
+    domains: Dict[str, Dict[str, Any]] = {}
+    for e in per.values():
+        true_count = e["count"]
+        row = {
+            "milestone_id": e["milestone_id"],
+            "milestone_source": e["milestone_source"],
+            "short_label": e["short_label"],
+            "observable_text": resolve_observable_text(e["domain"], e["short_label"]),
+            "practices_completed": min(true_count, PRACTICE_TARGET),   # capped for the UI
+            "practices_completed_true": true_count,                    # preserved for analytics
+            "practices_target": PRACTICE_TARGET,
+            "distinct_practice_days": len(e["hi_dates"]),
+            "check_in_ready": False,                                   # Phase 4 — never true in Phase 2
+            "practice_ready": true_count >= PRACTICE_TARGET,          # informational (no check-in created)
+            "cup_eligible": bool(e["cup_eligible"]),
+        }
+        g = domains.setdefault(e["domain"], {
+            "domain_key": e["domain"],
+            "domain_label": FOCUS_LABELS.get(e["domain"], e["domain"]),
+            "milestones": [],
+        })
+        g["milestones"].append(row)
+
+    out: List[Dict[str, Any]] = []
+    for dk in sorted(domains):
+        g = domains[dk]
+        g["milestones"].sort(key=lambda m: (-m["practices_completed_true"], m["short_label"]))
+        out.append(g)
+    return out
+
+
 # ── Progress read computation (§3) ────────────────────────────────────────────
 
 def compute_stars(attempts: List[Dict[str, Any]], week_start: str, week_end: str) -> Dict[str, int]:
@@ -359,11 +478,13 @@ def compute_week(attempts: List[Dict[str, Any]], today_local_iso: str) -> List[D
 def build_progress_response(
     *, session_id: str, timezone_str: str, attempts: List[Dict[str, Any]],
     completions: Optional[List[Dict[str, Any]]] = None,
+    active_plan_milestones: Optional[List[Dict[str, Any]]] = None,
     now_utc: Optional[datetime] = None,
 ) -> Dict[str, Any]:
-    """Full versioned Progress payload (§3). Stars + weekly circles are effort-based
-    (attempts). `completions` (did_it) is accepted for forward compatibility with the
-    Phase 3 milestone-practice sections. Future arrays present but empty."""
+    """Full versioned Progress payload. Stars + weekly circles are effort-based
+    (attempts). `categories_in_practice` (Phase 2) is milestone practice grouped by
+    domain, sourced ONLY from did_it completions (+ reliable current-plan milestones at
+    0). No cups/check-ins. Reserved future arrays present but empty."""
     tz, _src = validate_timezone(timezone_str)
     now = now_utc or datetime.now(timezone.utc)
     today_local = local_date_for(now, tz)
@@ -374,9 +495,11 @@ def build_progress_response(
         "timezone": tz,
         "week": compute_week(attempts, today_local),
         "stars": compute_stars(attempts, week_start, week_end),
+        "categories_in_practice": compute_categories_in_practice(
+            completions or [], active_plan_milestones or []),
         "latest_wins": [],               # Phase 2+ (badges/cups only — never plain stars)
-        "badges": [],                    # Phase 2
-        "milestones_in_practice": [],    # Phase 3 (from completions)
+        "badges": [],                    # Phase 2 (badges)
+        "milestones_in_practice": [],    # backward-compat placeholder (grouped view is categories_in_practice)
         "checkins_ready": [],            # Phase 4
         "cups_by_domain": [],            # Phase 4
     }

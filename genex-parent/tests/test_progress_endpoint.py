@@ -55,7 +55,8 @@ def test_auth_and_shape():
     check("200 with auth", r.status_code == 200, r.status_code)
     b = r.json()
     keys = {"progress_schema_version", "session_id", "timezone", "week", "stars",
-            "latest_wins", "badges", "milestones_in_practice", "checkins_ready", "cups_by_domain"}
+            "categories_in_practice", "latest_wins", "badges", "milestones_in_practice",
+            "checkins_ready", "cups_by_domain"}
     check("exact top-level keys", set(b.keys()) == keys, set(b.keys()) ^ keys)
     check("schema version 1", b["progress_schema_version"] == 1)
     check("week has 7 entries Mon→Sun", len(b["week"]) == 7 and [d["day"] for d in b["week"]][0] == "Monday" and b["week"][-1]["day"] == "Sunday")

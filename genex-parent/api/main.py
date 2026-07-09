@@ -1504,8 +1504,40 @@ async def session_progress(
         session_id=session_id,
         timezone_str=doc.get("timezone"),
         attempts=doc.get("attempts") or [],          # stars + circles = effort
-        completions=doc.get("completions") or [],    # forward-compat (milestone practice)
+        completions=doc.get("completions") or [],    # milestone practice = did_it only
+        active_plan_milestones=_active_plan_milestones(doc),
     )
+
+
+def _active_plan_milestones(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Reliable canonical milestones from the CURRENT plan (primary + ready add-ons) so
+    the Progress screen can show what the family is working on even at 0 practices.
+    Read-only; derives milestone identity from plan_internal, never fabricated."""
+    out: List[Dict[str, Any]] = []
+    seen: set = set()
+
+    def _from_internal(plan_internal: Optional[Dict[str, Any]]):
+        for day in (plan_internal or {}).get("week", []):
+            for act in day.get("activities", []):
+                domain = act.get("domain", "")
+                ms = progress_lib.derive_milestone(act, domain)
+                mid = ms.get("milestone_id")
+                if mid and ms.get("milestone_source") == "cdc" and mid not in seen:
+                    seen.add(mid)
+                    out.append({
+                        "milestone_id": mid, "milestone_source": "cdc",
+                        "short_label": ms.get("short_label", ""), "domain": domain,
+                        "canonical_age_months": ms.get("canonical_age_months"),
+                        "cup_eligible": ms.get("cup_eligible"),
+                    })
+
+    pid = doc.get("current_plan_id")
+    if pid:
+        _from_internal(((doc.get("plans") or {}).get(pid) or {}).get("plan_internal"))
+    for entry in (doc.get("added_focus") or {}).values():
+        if (entry or {}).get("status") == "ready":
+            _from_internal(entry.get("plan_internal"))
+    return out
 
 
 # ── Report endpoint ────────────────────────────────────────────────────────
