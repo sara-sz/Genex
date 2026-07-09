@@ -461,6 +461,20 @@ def compute_categories_in_practice(
 CHECKIN_READY_MIN_COMPLETIONS = 5
 CHECKIN_READY_MIN_DAYS = 3
 CHECKIN_RULE_VERSION = "cr1"
+# Re-check (Phase 5): after a sometimes/not_yet answer, the same milestone becomes
+# ready again only after this many ADDITIONAL did_it completions across additional days.
+RECHECK_MIN_ADDITIONAL_COMPLETIONS = 3
+RECHECK_MIN_ADDITIONAL_DAYS = 2
+
+# Phase 5: parent responses + cups.
+RESPONSE_VALUES = ("yes_usually", "sometimes_emerging", "not_yet")
+RESPONSE_LABELS = {"yes_usually": "Yes, usually",
+                   "sometimes_emerging": "Sometimes / still emerging", "not_yet": "Not yet"}
+SUPPORTIVE_MESSAGE = ("Skills often emerge little by little. We'll keep supporting this "
+                      "milestone and check again later.")
+CUP_SCHEMA_VERSION = 1
+CUP_RULE_VERSION = "cup1"
+_SMALL_WORDS = {"a", "an", "the", "on", "her", "his", "its", "to", "for", "of", "in", "and", "or", "with"}
 
 
 def _observable_phrase(short_label: str) -> str:
@@ -480,8 +494,35 @@ def build_checkin_prompt(short_label: str) -> str:
     return f"After the practice you have done together, is your child now usually able to {phrase}?"
 
 
-def compute_checkins_ready(session_id: str, completions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Milestones ready for a parent check-in (see rule above). Deterministic + idempotent."""
+def checkin_id_for(session_id: str, milestone_id: str) -> str:
+    """Stable check-in id per (session, milestone) — deterministic → idempotent."""
+    return "chk_" + _sha256("chk1", session_id, milestone_id)[:16]
+
+
+def _title_case(s: str) -> str:
+    words = (s or "").split()
+    return " ".join(w.capitalize() if (i == 0 or w.lower() not in _SMALL_WORDS) else w.lower()
+                    for i, w in enumerate(words))
+
+
+def cup_title_for(short_label: str) -> str:
+    """Cup title — parent-friendly, never 'mastered'/clinical."""
+    return f"{_title_case(short_label)} Milestone Cup"
+
+
+def _latest_response(responses: Optional[List[Dict[str, Any]]], milestone_id: str) -> Optional[Dict[str, Any]]:
+    rs = [r for r in (responses or []) if r.get("milestone_id") == milestone_id]
+    return max(rs, key=lambda r: (r.get("created_at_utc") or ""), default=None)
+
+
+def milestone_states(
+    session_id: str, completions: List[Dict[str, Any]],
+    responses: Optional[List[Dict[str, Any]]] = None, cups: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Per-canonical-CDC-milestone state used by both readiness and the response
+    endpoint. Applies the re-check baseline (after a negative answer, more practice is
+    required) and cup suppression (a cupped milestone is never 'ready' again)."""
+    cupped_ids = {c.get("milestone_id") for c in (cups or [])}
     groups: Dict[str, List[Dict[str, Any]]] = {}
     for c in completions or []:
         if not c.get("valid_completion", True):
@@ -492,24 +533,28 @@ def compute_checkins_ready(session_id: str, completions: List[Dict[str, Any]]) -
             continue
         groups.setdefault(ms["milestone_id"], []).append(c)
 
-    out: List[Dict[str, Any]] = []
+    states: Dict[str, Dict[str, Any]] = {}
     for mid, recs in groups.items():
-        ms = (recs[0].get("milestone") or {})
+        ms = recs[0].get("milestone") or {}
         domain = (recs[0].get("snapshot") or {}).get("domain") or ""
         short_label = ms.get("short_label", "")
         observable = resolve_observable_text(domain, short_label)
-        if not observable:                              # reliable observable_text required
-            continue
+        last = _latest_response(responses, mid)
+        if last and last.get("response") in ("sometimes_emerging", "not_yet"):
+            need_count = int(last.get("practices_completed_at") or 0) + RECHECK_MIN_ADDITIONAL_COMPLETIONS
+            need_days = int(last.get("distinct_days_at") or 0) + RECHECK_MIN_ADDITIONAL_DAYS
+        else:
+            need_count, need_days = CHECKIN_READY_MIN_COMPLETIONS, CHECKIN_READY_MIN_DAYS
+
         recs = sorted(recs, key=lambda c: (c.get("completed_at_utc") or ""))
         seen: set = set()
         count = 0
         days: set = set()
         source_ids: List[str] = []
-        created_at: Optional[str] = None
-        created_local: Optional[str] = None
+        created_at = created_local = None
         for c in recs:
             k = c.get("idempotency_key") or c.get("completion_id")
-            if k in seen:                               # completions are already unique per activity/date
+            if k in seen:
                 continue
             seen.add(k)
             count += 1
@@ -517,29 +562,71 @@ def compute_checkins_ready(session_id: str, completions: List[Dict[str, Any]]) -
             d = c.get("local_completion_date")
             if d and c.get("date_confidence") != "low":
                 days.add(d)
-            if created_at is None and count >= CHECKIN_READY_MIN_COMPLETIONS and len(days) >= CHECKIN_READY_MIN_DAYS:
-                created_at = c.get("completed_at_utc")
-                created_local = d
-        if count >= CHECKIN_READY_MIN_COMPLETIONS and len(days) >= CHECKIN_READY_MIN_DAYS:
-            out.append({
-                "checkin_id": "chk_" + _sha256("chk1", session_id, mid)[:16],
-                "milestone_id": mid,
-                "domain_key": domain,
-                "domain_label": PROGRESS_DOMAIN_LABELS.get(domain, domain),
-                "short_label": short_label,
-                "observable_text": observable,
-                "prompt": build_checkin_prompt(short_label),
-                "practices_completed": min(count, PRACTICE_TARGET),
-                "practices_completed_true": count,
-                "distinct_practice_days": len(days),
-                "practices_target": PRACTICE_TARGET,
-                "source": "parent_checkin_ready",
-                "rule_version": CHECKIN_RULE_VERSION,
-                "created_at": created_at,
-                "local_event_date": created_local,
-                "source_completion_ids": source_ids,
-            })
+            if created_at is None and count >= need_count and len(days) >= need_days:
+                created_at, created_local = c.get("completed_at_utc"), d
+
+        cupped = mid in cupped_ids
+        ready = bool(observable) and count >= need_count and len(days) >= need_days and not cupped
+        states[mid] = {
+            "milestone_id": mid, "domain": domain, "short_label": short_label,
+            "observable_text": observable, "cup_eligible": bool(ms.get("cup_eligible")),
+            "count": count, "distinct_days": len(days), "source_completion_ids": source_ids,
+            "checkin_id": checkin_id_for(session_id, mid), "ready": ready, "cupped": cupped,
+            "last_response": last, "created_at": created_at, "local_event_date": created_local,
+            "need_count": need_count, "need_days": need_days,
+        }
+    return states
+
+
+def _checkin_from_state(st: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "checkin_id": st["checkin_id"], "milestone_id": st["milestone_id"],
+        "domain_key": st["domain"], "domain_label": PROGRESS_DOMAIN_LABELS.get(st["domain"], st["domain"]),
+        "short_label": st["short_label"], "observable_text": st["observable_text"],
+        "prompt": build_checkin_prompt(st["short_label"]),
+        "practices_completed": min(st["count"], PRACTICE_TARGET), "practices_completed_true": st["count"],
+        "distinct_practice_days": st["distinct_days"], "practices_target": PRACTICE_TARGET,
+        "source": "parent_checkin_ready", "rule_version": CHECKIN_RULE_VERSION,
+        "created_at": st["created_at"], "local_event_date": st["local_event_date"],
+        "source_completion_ids": st["source_completion_ids"],
+    }
+
+
+def compute_checkins_ready(
+    session_id: str, completions: List[Dict[str, Any]],
+    responses: Optional[List[Dict[str, Any]]] = None, cups: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """Active check-ins: ready milestones, cup-suppressed and re-check-aware."""
+    states = milestone_states(session_id, completions, responses, cups)
+    out = [_checkin_from_state(st) for st in states.values() if st["ready"]]
     out.sort(key=lambda x: (x["domain_key"], x["milestone_id"]))
+    return out
+
+
+def cup_public(cup: Dict[str, Any], style: str = "collection") -> Dict[str, Any]:
+    """Frontend-safe cup view. style 'collection' → cups_by_domain row; 'win' → latest_wins."""
+    if style == "win":
+        return {"type": "cup", "cup_id": cup["cup_id"], "label": cup["title"],
+                "description": "Parent-confirmed milestone", "earned_at": cup.get("local_earned_date")}
+    return {"cup_id": cup["cup_id"], "title": cup["title"], "short_label": cup.get("short_label", ""),
+            "earned_at": cup.get("local_earned_date"), "source": cup.get("source", "parent_confirmed")}
+
+
+def compute_cups_by_domain(cups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Cup collection grouped by domain."""
+    domains: Dict[str, Dict[str, Any]] = {}
+    for c in cups or []:
+        dk = c.get("domain_key", "")
+        g = domains.setdefault(dk, {"domain_key": dk,
+                                    "domain_label": c.get("domain_label") or PROGRESS_DOMAIN_LABELS.get(dk, dk),
+                                    "total": 0, "cups": []})
+        g["cups"].append(cup_public(c, "collection"))
+        g["total"] += 1
+    out = []
+    for dk in sorted(domains):
+        g = domains[dk]
+        g["cups"].sort(key=lambda x: (x.get("earned_at") or ""), reverse=True)
+        out.append(g)
     return out
 
 
@@ -604,13 +691,17 @@ def compute_badges(attempts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
-def compute_latest_wins(badges: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Recent wins = recently EARNED badges only (never plain stars, never cups)."""
+def compute_latest_wins(
+    badges: List[Dict[str, Any]], cups: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """Recent wins = recently earned BADGES and CUPS only (never plain stars, never
+    ordinary completions)."""
     wins = [
         {"type": "badge", "badge_id": b["badge_id"], "label": b["label"],
          "description": b["description"], "earned_at": b["earned_at"]}
         for b in (badges or [])
     ]
+    wins += [cup_public(c, "win") for c in (cups or [])]
     wins.sort(key=lambda w: (w.get("earned_at") or ""), reverse=True)
     return wins[:_LATEST_WINS_LIMIT]
 
@@ -665,6 +756,8 @@ def build_progress_response(
     *, session_id: str, timezone_str: str, attempts: List[Dict[str, Any]],
     completions: Optional[List[Dict[str, Any]]] = None,
     active_plan_milestones: Optional[List[Dict[str, Any]]] = None,
+    checkin_responses: Optional[List[Dict[str, Any]]] = None,
+    cups: Optional[List[Dict[str, Any]]] = None,
     now_utc: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """Full versioned Progress payload. Stars + weekly circles are effort-based
@@ -677,7 +770,8 @@ def build_progress_response(
     week_start, week_end = week_bounds(today_local)
     badges = compute_badges(attempts)                     # Phase 3 — from practice days (effort)
     comps = completions or []
-    checkins_ready = compute_checkins_ready(session_id, comps)   # Phase 4 — did_it only
+    cups = cups or []
+    checkins_ready = compute_checkins_ready(session_id, comps, checkin_responses, cups)  # Phase 4/5
     ready_map = {c["milestone_id"]: c["checkin_id"] for c in checkins_ready}
     return {
         "progress_schema_version": PROGRESS_SCHEMA_VERSION,
@@ -688,8 +782,8 @@ def build_progress_response(
         "categories_in_practice": compute_categories_in_practice(
             comps, active_plan_milestones or [], ready_checkins=ready_map),
         "badges": badges,                                 # Phase 3 (earned consistency badges)
-        "latest_wins": compute_latest_wins(badges),       # Phase 3 (recent badges only — no stars/cups)
-        "checkins_ready": checkins_ready,                 # Phase 4 (readiness only — no cups)
+        "latest_wins": compute_latest_wins(badges, cups), # Phase 3/5 (badges + cups — no stars)
+        "checkins_ready": checkins_ready,                 # Phase 4 (active check-ins; cup/re-check aware)
+        "cups_by_domain": compute_cups_by_domain(cups),   # Phase 5 (parent-confirmed cups)
         "milestones_in_practice": [],    # backward-compat placeholder (grouped view is categories_in_practice)
-        "cups_by_domain": [],            # Phase 5
     }

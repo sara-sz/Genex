@@ -87,6 +87,7 @@ from api.schemas import (
     AnswerRequest,
     FeedbackRequest,
     InterviewCompleteResponse,
+    MilestoneCheckinResponseRequest,
     NextQuestionResponse,
     ReportRequest,
     SessionStartRequest,
@@ -1506,7 +1507,135 @@ async def session_progress(
         attempts=doc.get("attempts") or [],          # stars + circles = effort
         completions=doc.get("completions") or [],    # milestone practice = did_it only
         active_plan_milestones=_active_plan_milestones(doc),
+        checkin_responses=doc.get("checkin_responses") or [],   # Phase 5 (re-check baseline)
+        cups=doc.get("cups") or [],                             # Phase 5 (parent-confirmed cups)
     )
+
+
+# ── Phase 5: parent milestone check-in RESPONSE (+ cup on yes_usually) ─────────
+
+@app.post(
+    "/api/v1/session/{session_id}/milestone-checkins/{checkin_id}/response",
+    tags=["session"],
+)
+async def session_milestone_checkin_response(
+    session_id: str,
+    checkin_id: str,
+    body: MilestoneCheckinResponseRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Record a parent's milestone check-in answer. `yes_usually` awards exactly one
+    cup for that session+milestone (parent-confirmed — NOT clinical/mastered); the
+    other answers record the response with no cup and defer the milestone until the
+    re-check rule is met. Idempotent (GCS compare-and-swap + response/cup indexes);
+    append-only responses + event ledger; never removes an awarded cup."""
+    doc = _require_session(auth.uid, session_id)
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
+    tz, tz_source = progress_lib.validate_timezone(doc.get("timezone"))
+    local_date = progress_lib.local_date_for(now_dt, tz)
+    response_value = body.response
+
+    def _mutator(d: Dict[str, Any]):
+        completions = d.get("completions") or []
+        responses = d.setdefault("checkin_responses", [])
+        resp_index = d.setdefault("checkin_response_index", {})
+        cups = d.setdefault("cups", [])
+        cup_index = d.setdefault("cup_index", {})
+        events = d.setdefault("events", [])
+
+        states = progress_lib.milestone_states(session_id, completions, responses, cups)
+        st = next((s for s in states.values() if s["checkin_id"] == checkin_id), None)
+        if st is None:
+            return False, {"__error__": (404, "unknown_or_inactive_checkin")}
+        mid = st["milestone_id"]
+        prompt = progress_lib.build_checkin_prompt(st["short_label"])
+
+        # Exact-retry idempotency: same checkin + response + current practice snapshot.
+        resp_key = progress_lib._sha256(
+            "resp1", session_id, checkin_id, response_value, st["count"], st["distinct_days"])
+        already_cup = cup_index.get(mid)
+        if resp_key in resp_index:
+            if already_cup:
+                cup = next(c for c in cups if c["cup_id"] == already_cup)
+                return False, {"ok": True, "checkin_id": checkin_id, "response": response_value,
+                               "cup_awarded": True, "cup": progress_lib.cup_public(cup, "collection"),
+                               "idempotent_replay": True}
+            return False, {"ok": True, "checkin_id": checkin_id, "response": response_value,
+                           "cup_awarded": False, "supportive_message": progress_lib.SUPPORTIVE_MESSAGE,
+                           "idempotent_replay": True}
+
+        # yes_usually requires a currently-ready milestone (unless already cupped → replay).
+        if response_value == "yes_usually" and not already_cup and not st["ready"]:
+            return False, {"__error__": (409, "milestone_not_ready_for_cup")}
+
+        # Append-only parent response (prior responses never mutated).
+        prior = st["last_response"]
+        response_id = progress_lib.new_id("resp")
+        responses.append({
+            "schema_version": 1, "response_id": response_id, "checkin_id": checkin_id,
+            "milestone_id": mid, "owner_uid": auth.uid, "response": response_value,
+            "response_label": progress_lib.RESPONSE_LABELS.get(response_value, response_value),
+            "domain_key": st["domain"], "short_label": st["short_label"],
+            "observable_text": st["observable_text"], "prompt_snapshot": prompt,
+            "practices_completed_at": st["count"], "distinct_days_at": st["distinct_days"],
+            "source_completion_ids": st["source_completion_ids"], "created_at_utc": now_iso,
+            "local_date": local_date, "tz": tz, "rule_version": progress_lib.CHECKIN_RULE_VERSION,
+            "supersedes_response_id": (prior or {}).get("response_id"),
+        })
+        resp_index[resp_key] = response_id
+        events.append(progress_lib.build_event(
+            session_id=session_id, owner_uid=auth.uid, event_type="milestone_checkin_answered",
+            source_record_id=response_id, created_at_utc=now_iso, local_event_date=local_date,
+            idempotency_key=resp_key, actor_type="parent", provenance="parent_confirmed",
+            rule_version=progress_lib.CHECKIN_RULE_VERSION,
+            metadata={"milestone_id": mid, "response": response_value, "checkin_id": checkin_id}))
+
+        if response_value == "yes_usually":
+            if already_cup:                                   # never award a second cup
+                cup = next(c for c in cups if c["cup_id"] == already_cup)
+                return True, {"ok": True, "checkin_id": checkin_id, "response": response_value,
+                              "cup_awarded": True, "cup": progress_lib.cup_public(cup, "collection"),
+                              "already_confirmed": True}
+            cup = {
+                "schema_version": progress_lib.CUP_SCHEMA_VERSION, "cup_id": progress_lib.new_id("cup"),
+                "session_id": session_id, "owner_uid": auth.uid, "milestone_id": mid,
+                "domain_key": st["domain"], "domain_label": progress_lib.PROGRESS_DOMAIN_LABELS.get(st["domain"], st["domain"]),
+                "short_label": st["short_label"], "title": progress_lib.cup_title_for(st["short_label"]),
+                "observable_text": st["observable_text"], "prompt_snapshot": prompt,
+                "parent_response": response_value, "source": "parent_confirmed",
+                "earned_at_utc": now_iso, "local_earned_date": local_date,
+                "practices_completed_at_confirmation": st["count"],
+                "distinct_practice_days_at_confirmation": st["distinct_days"],
+                "source_completion_ids": st["source_completion_ids"], "checkin_id": checkin_id,
+                "response_id": response_id, "rule_version": progress_lib.CUP_RULE_VERSION,
+            }
+            cups.append(cup)
+            cup_index[mid] = cup["cup_id"]
+            events.append(progress_lib.build_event(
+                session_id=session_id, owner_uid=auth.uid, event_type="cup_awarded",
+                source_record_id=cup["cup_id"], created_at_utc=now_iso, local_event_date=local_date,
+                idempotency_key="cup|" + mid, actor_type="system", provenance="parent_confirmed_reward",
+                rule_version=progress_lib.CUP_RULE_VERSION,
+                metadata={"milestone_id": mid, "checkin_id": checkin_id, "response_id": response_id}))
+            return True, {"ok": True, "checkin_id": checkin_id, "response": response_value,
+                          "cup_awarded": True, "cup": progress_lib.cup_public(cup, "collection")}
+
+        return True, {"ok": True, "checkin_id": checkin_id, "response": response_value,
+                      "cup_awarded": False, "supportive_message": progress_lib.SUPPORTIVE_MESSAGE}
+
+    try:
+        _doc, _changed, result = store_mutate_session(auth.uid, session_id, _mutator)
+    except SessionContentionError as exc:
+        raise HTTPException(status_code=503, detail=f"write_contention_retry: {exc}")
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save response: {exc}")
+    if result is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if "__error__" in result:
+        code, msg = result["__error__"]
+        raise HTTPException(status_code=code, detail=msg)
+    return result
 
 
 def _active_plan_milestones(doc: Dict[str, Any]) -> List[Dict[str, Any]]:

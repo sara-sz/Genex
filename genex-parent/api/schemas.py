@@ -156,6 +156,15 @@ class ReportRequest(BaseModel):
 
 # ── Beta 2.1 current-week customization request bodies ─────────────────────
 
+MilestoneResponseLiteral = Literal["yes_usually", "sometimes_emerging", "not_yet"]
+
+
+class MilestoneCheckinResponseRequest(BaseModel):
+    """Beta 2.3 Phase 5 — a parent's answer to a milestone check-in. yes_usually awards
+    one cup for that session+milestone; the others record the answer without a cup."""
+    response: MilestoneResponseLiteral
+
+
 class SwapRequest(BaseModel):
     suggestion_id: str = Field(..., min_length=1)
 
