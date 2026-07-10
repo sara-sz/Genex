@@ -13,9 +13,15 @@ Beta access (verify_beta_code):
   Access is no longer gated by an email allowlist. Any signed-in Firebase user
   may use Genex by supplying a shared beta access code on /session/start.
   - REQUIRE_BETA_CODE (default "true") toggles enforcement.
-  - BETA_ACCESS_CODE (default "genex") is the expected code.
+  - BETA_ACCESS_CODE (default "genex") is the expected code, or a COMMA-SEPARATED
+    LIST of accepted codes. A submitted code is accepted if it matches ANY of them.
   - The submitted code is normalised (trimmed + lowercased) before comparison,
     so "genex", "Genex", " GENEX " all match.
+  - Adding/removing accepted codes is env-only — no backend code change needed:
+        Beta 2.3 Production:  BETA_ACCESS_CODE="genex23,genex-family-beta-22"
+        Dev / Staging:        BETA_ACCESS_CODE="genex"
+        Future Beta 2.4 transition:  BETA_ACCESS_CODE="genex24,genex23"
+    (The frontend's immediate beta-code validation must be kept in sync separately.)
   - Only /session/start checks the code. Once a session exists it is owned by
     the Firebase uid; subsequent routes require a valid token + ownership only.
   - The beta code itself is never stored in GCS.
@@ -73,9 +79,16 @@ def _beta_code_required() -> bool:
     return os.environ.get("REQUIRE_BETA_CODE", "true").strip().lower() in _TRUE_VALUES
 
 
-def _configured_beta_code() -> str:
-    """Return the normalised expected beta code (BETA_ACCESS_CODE, default 'genex')."""
-    return os.environ.get("BETA_ACCESS_CODE", "genex").strip().lower()
+def _configured_beta_codes() -> set:
+    """Return the set of normalised accepted beta codes.
+
+    BETA_ACCESS_CODE (default 'genex') may be a single code OR a comma-separated
+    list; each entry is trimmed + lowercased. A single value yields a one-element set,
+    preserving the original single-code behaviour. Adding/removing accepted codes is
+    env-only (e.g. 'genex23,genex-family-beta-22') — no backend code change needed.
+    """
+    raw = os.environ.get("BETA_ACCESS_CODE", "genex")
+    return {c.strip().lower() for c in raw.split(",") if c.strip()}
 
 
 def _normalize_code(code: Optional[str]) -> str:
@@ -92,7 +105,7 @@ def verify_beta_code(submitted: Optional[str]) -> None:
     """
     if not _beta_code_required():
         return
-    if _normalize_code(submitted) != _configured_beta_code():
+    if _normalize_code(submitted) not in _configured_beta_codes():
         raise HTTPException(
             status_code=403,
             detail=(
