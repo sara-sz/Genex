@@ -1,0 +1,45 @@
+# Cloud Build config for the therapist service (DESIGN — not run in this phase).
+#
+# Promotion model (correction #4):
+#   1. Build ONE immutable image and record its source digest.
+#   2. Deploy that digest to Dev.
+#   3. To promote, COPY the image into the Prod Artifact Registry BY DIGEST
+#      (never rebuild) and VERIFY the destination digest matches.
+#   4. Deploy only the verified digest to Prod.
+#   5. Prod does not retain permanent read access to Dev resources.
+#
+# Substitutions are placeholders; no project/registry is created in this phase.
+substitutions:
+  _ENVIRONMENT: "dev"
+  _REGION: "us-central1"
+  _AR_REPO: "genex-therapist"          # per-project Artifact Registry repo
+  _IMAGE: "genex-api-therapist"
+  # _PROJECT_ID is provided by the triggering project (dev or prod), never mixed.
+
+steps:
+  # 1. Build the immutable image.
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:${SHORT_SHA}"
+      - -f
+      - Dockerfile
+      - .
+
+  # 2. Push to THIS project's Artifact Registry (dev builds push to dev only).
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:${SHORT_SHA}"
+
+# The resulting image digest is the promotion unit. Deploy (dev) and promote
+# (copy-by-digest to prod + verify) are performed by a separate, reviewed
+# release procedure — never as an implicit side effect of this build.
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:${SHORT_SHA}"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

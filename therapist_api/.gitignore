@@ -1,0 +1,8 @@
+# Byproducts — never commit.
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.terraform/
+*.tfstate
+*.tfstate.*

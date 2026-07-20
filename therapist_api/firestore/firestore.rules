@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// DENY-ALL client rules (correction #2).
+//
+// The therapist architecture is:  Frontend -> Cloud Run API -> Firestore.
+// Browsers and mobile clients must NEVER access Firestore directly. All reads
+// and writes go through the Cloud Run service, which uses its service-account
+// credentials (which bypass these rules) after enforcing real authorization.
+//
+// These client rules are therefore a hard backstop, NOT the therapist-child
+// authorization layer. Authorization is enforced in the API by:
+//   - Firebase ID-token verification in Cloud Run
+//   - server-side role lookup
+//   - an active TherapistChildConnection
+//   - permission scopes
+//   - the parent-child relationship
+//   - recommendation state
+//   - environment checks
+//   - service-account IAM
+//
+// If this file is ever the thing standing between a client and the data, the
+// safe answer is "no".
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,10 @@
+tests/
+infra/
+firestore/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.md
+requirements-dev.txt
+cloudbuild.therapist.yaml
