@@ -1,8 +1,12 @@
 # Therapist API — Read-Only Vertical Slice (Phase 1A)
 
-**Local, read-only, fictional data.** This service does **not** connect to the
-Parent API or any Parent data store, does **not** use Firebase/Firestore, and
-implements **no** write operations. All data is invented (emails use `.example`).
+**Local, fictional data.** This service does **not** connect to the Parent API
+or any Parent data store, and does **not** use Firebase/Firestore. All data is
+invented (emails use `.example`).
+
+> **Write operations:** the first write (idempotent weekly-plan approval) is
+> documented in [WRITE_APPROVAL.md](WRITE_APPROVAL.md). The endpoints below are
+> read-only.
 
 ## Layering
 

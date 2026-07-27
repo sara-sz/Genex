@@ -16,6 +16,7 @@ PLAN_CHANGE_PROPOSALS = "plan_change_proposals"
 PARENT_NOTES = "parent_notes"
 PRIVATE_THERAPIST_NOTES = "private_therapist_notes"
 AUDIT_EVENTS = "audit_events"
+IDEMPOTENCY_RECORDS = "idempotency_records"
 
 ALL = (
     USER_PRINCIPALS,
@@ -32,4 +33,5 @@ ALL = (
     PARENT_NOTES,
     PRIVATE_THERAPIST_NOTES,
     AUDIT_EVENTS,
+    IDEMPOTENCY_RECORDS,
 )

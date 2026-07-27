@@ -9,12 +9,13 @@ Lists use a pagination-ready envelope: {items, total, next_cursor}.
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, Request
 
 from ..auth.interface import AuthenticatedUser
 from ..constants import API_VERSION
+from ..services import approval_service
 from . import schemas as S
 from .deps import get_service, require_principal
 from ..services.read_service import ReadService
@@ -110,3 +111,35 @@ async def activity_template(activity_template_id: str,
 async def milestones(principal: AuthenticatedUser = Depends(require_principal),
                      svc: ReadService = Depends(get_service)):
     return _page(svc.list_milestones(principal))
+
+
+# ── write: approve one current, review-needed weekly-plan assignment ────────
+@router.post(
+    "/children/{child_id}/weekly-plan/assignments/{assignment_id}/approve",
+    response_model=S.ApprovalResponse,
+    responses={
+        400: {"model": S.ErrorResponse}, 403: {"model": S.ErrorResponse},
+        404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse},
+    },
+)
+async def approve_assignment(
+    child_id: str,
+    assignment_id: str,
+    body: S.ApproveAssignmentRequest,
+    request: Request,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    principal: AuthenticatedUser = Depends(require_principal),
+):
+    repo = request.app.state.repo
+    from ..logging_config import get_request_id
+
+    return approval_service.approve_assignment(
+        repo,
+        principal,
+        child_id=child_id,
+        assignment_id=assignment_id,
+        idempotency_key=idempotency_key,
+        expected_assignment_version=body.expected_assignment_version,
+        environment=principal.environment,
+        request_id=get_request_id(),
+    )

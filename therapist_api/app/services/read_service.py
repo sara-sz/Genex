@@ -166,6 +166,8 @@ class ReadService:
                     created_by_type="genex", save_scope="child_only", is_derived=False),
                 parent_feedback_summary=a.get("parent_feedback_summary", ""),
                 pending_proposal_id=a.get("pending_proposal_id"),
+                version=a.get("version", 1),
+                updated_at=a.get("updated_at", ""),
             ))
         return S.WeeklyPlanResponse(
             child_id=child_id, weekly_plan_id=plan.get("id", ""),

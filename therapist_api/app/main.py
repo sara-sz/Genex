@@ -32,6 +32,7 @@ from .fixtures import load_fixtures
 from .middleware import RequestContextMiddleware
 from .repository.memory import InMemoryRepository
 from .services.access import AccessDenied, ChildNotFound
+from .services.approval_service import ApprovalError
 from .services.read_service import ReadService
 from .settings import Settings
 
@@ -70,11 +71,16 @@ def create_app(settings: Settings) -> FastAPI:
     @app.exception_handler(ChildNotFound)
     async def _child_not_found(_: Request, exc: ChildNotFound):
         # 404 for unknown AND unauthorized ids — never reveal which.
-        return JSONResponse(status_code=404, content={"detail": "Not found."})
+        return JSONResponse(status_code=404, content={"error": "not_found", "detail": "Not found."})
 
     @app.exception_handler(AccessDenied)
     async def _access_denied(_: Request, exc: AccessDenied):
-        return JSONResponse(status_code=403, content={"detail": "Forbidden."})
+        return JSONResponse(status_code=403, content={"error": "forbidden", "detail": "Forbidden."})
+
+    @app.exception_handler(ApprovalError)
+    async def _approval_error(_: Request, exc: ApprovalError):
+        # Stable typed error envelope; no stack traces or internal names.
+        return JSONResponse(status_code=exc.http_status, content={"error": exc.code, "detail": str(exc)})
 
     app.include_router(read_router)
 

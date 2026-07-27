@@ -172,6 +172,10 @@ class PlanAssignment(BaseModel):
     assignment_status: AssignmentStatus = AssignmentStatus.CURRENT
     parent_feedback_summary: str = ""
     pending_proposal_id: Optional[str] = None
+    # Optimistic-concurrency version on the mutable assignment state. Incremented
+    # exactly once per successful write. NOT a display string.
+    version: int = 1
+    updated_at: str = ""
     environment: str = "dev"
     schema_version: str = SCHEMA_VERSION
 
@@ -238,16 +242,49 @@ class PrivateTherapistNote(BaseModel):
 
 
 class AuditEvent(BaseModel):
-    """Append-only audit record. No writes in this phase — schema only."""
+    """Append-only, immutable audit record.
+
+    Not editable or deletable through the API. Never stores bearer tokens or
+    secrets — only a safe hash of the idempotency key.
+    """
 
     id: str
-    event_type: str
+    event_type: str                 # e.g. "plan_assignment_approved"
     actor_uid: str
     actor_role: PrincipalRole
     subject_type: str
     subject_id: str
+    therapist_id: Optional[str] = None
     child_id: Optional[str] = None
+    weekly_plan_id: Optional[str] = None
+    assignment_id: Optional[str] = None
+    idempotency_key_hash: Optional[str] = None  # safe hash, never the raw key
+    before_state: Optional[str] = None
+    after_state: Optional[str] = None
     request_id: Optional[str] = None
+    occurred_at: str = ""
+    created_at: str = ""
+    environment: str = "dev"
+    schema_version: str = SCHEMA_VERSION
+
+
+class IdempotencyRecord(BaseModel):
+    """Binds an Idempotency-Key to the exact operation + its stored result.
+
+    Global key scope: a key reused with a different actor/action/child/assignment/
+    request-hash is a conflict (409). Firestore-mappable (deterministic doc id).
+    """
+
+    id: str                          # deterministic from the Idempotency-Key
+    idempotency_key_hash: str        # safe hash of the raw key (never raw)
+    actor_user_id: str
+    action: str
+    child_id: str
+    assignment_id: str
+    request_hash: str                # canonical hash of the full operation+body
+    status: str = "completed"        # completed | (future: pending/failed)
+    result: dict = Field(default_factory=dict)   # stored successful response
+    audit_event_id: Optional[str] = None
     created_at: str = ""
     environment: str = "dev"
     schema_version: str = SCHEMA_VERSION

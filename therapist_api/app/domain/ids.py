@@ -42,3 +42,26 @@ def recommendation_response_doc_id(recommendation_id: str) -> str:
     if not rec_id:
         raise ValueError("recommendation_id must be a non-empty string.")
     return "resp_" + _sha256_hex(rec_id)[:_HASH_LEN]
+
+
+def key_hash(idempotency_key: str) -> str:
+    """Safe hash of the raw Idempotency-Key (stored instead of the raw key)."""
+    return _sha256_hex((idempotency_key or "").strip())
+
+
+def canonical_request_hash(*parts: object) -> str:
+    """Collision-resistant hash over the canonical operation tuple.
+
+    The order of `parts` is fixed by the caller (actor, action, child,
+    assignment, body...). Any difference in actor/action/target/body yields a
+    different hash, so a reused key with a different request is detectable.
+    """
+    import json
+
+    payload = json.dumps(list(parts), sort_keys=True, separators=(",", ":"), default=str)
+    return _sha256_hex(payload)
+
+
+def audit_event_id(request_hash: str, key: str) -> str:
+    """Deterministic audit-event id bound to the operation + key (one per op)."""
+    return "aud_" + _sha256_hex(request_hash + "|" + (key or ""))[:_HASH_LEN]

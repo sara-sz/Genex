@@ -9,7 +9,9 @@ idempotent without SQL unique constraints.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple, TypeVar
+
+T = TypeVar("T")
 
 
 class RecordNotFound(KeyError):
@@ -17,6 +19,16 @@ class RecordNotFound(KeyError):
 
 
 class CollaborationRepository(ABC):
+    def run_in_transaction(self, fn: "Callable[[CollaborationRepository], T]") -> T:
+        """Run `fn(repo)` as one atomic critical section.
+
+        The in-memory implementation uses a re-entrant lock so concurrent callers
+        cannot interleave (e.g. approve the same assignment twice). This maps to a
+        Firestore transaction: `fn` performs all reads and writes and either
+        commits together or raises.
+        """
+        return fn(self)
+
     @abstractmethod
     def get(self, collection: str, doc_id: str) -> Dict:
         raise NotImplementedError

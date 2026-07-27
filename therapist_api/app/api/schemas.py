@@ -79,6 +79,8 @@ class PlanAssignmentView(BaseModel):
     provenance: ActivityProvenance
     parent_feedback_summary: str
     pending_proposal_id: Optional[str] = None
+    version: int = 1
+    updated_at: str = ""
 
 
 class WeeklyPlanResponse(BaseModel):
@@ -152,3 +154,41 @@ class MilestoneView(BaseModel):
     source_age_band_months: Optional[List[int]] = None
     # explicit: activities match by milestone id + domain, NOT chronological age
     age_gated: bool = False
+
+
+# ── write: weekly-plan assignment approval ──────────────────────────────────
+class ApproveAssignmentRequest(BaseModel):
+    expected_assignment_version: int
+
+
+class ApprovedAssignment(BaseModel):
+    assignment_id: str
+    child_id: str
+    weekly_plan_id: str
+    scheduled_day: int
+    plan_approval_status: str
+    practice_status: str
+    assignment_status: str
+    activity_template_id: str
+    activity_version_id: str
+    version: int
+    updated_at: str
+
+
+class ApprovalChildSummary(BaseModel):
+    child_id: str
+    plan_review_count: int
+
+
+class ApprovalResponse(BaseModel):
+    assignment: ApprovedAssignment
+    child_summary: ApprovalChildSummary
+    audit_event_id: str
+    idempotent_replay: bool
+
+
+class ErrorResponse(BaseModel):
+    """Stable typed error envelope (no stack traces / internal names)."""
+
+    error: str        # stable code, e.g. "assignment_version_conflict"
+    detail: str = ""

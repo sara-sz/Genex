@@ -4,15 +4,24 @@ from __future__ import annotations
 
 import copy
 import threading
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple, TypeVar
 
 from .interface import CollaborationRepository, RecordNotFound
+
+T = TypeVar("T")
 
 
 class InMemoryRepository(CollaborationRepository):
     def __init__(self) -> None:
         self._data: Dict[str, Dict[str, Dict]] = {}
         self._lock = threading.RLock()
+
+    def run_in_transaction(self, fn: "Callable[[CollaborationRepository], T]") -> T:
+        # Re-entrant lock: `fn` may call get/set/query/create_if_absent, which
+        # also acquire the lock. Holding it for the whole `fn` is the critical
+        # section that prevents concurrent double-approval.
+        with self._lock:
+            return fn(self)
 
     def _col(self, collection: str) -> Dict[str, Dict]:
         return self._data.setdefault(collection, {})
