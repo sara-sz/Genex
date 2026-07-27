@@ -44,6 +44,9 @@ class Settings:
     release_tag: str = ""
     image_digest: str = ""
     service_account: str = ""
+    # Local fictional dev-auth adapter. Disabled by default; only ever honored
+    # when environment is dev/test (see env_validation + dev_adapter). Never prod.
+    dev_auth_enabled: bool = False
 
     @classmethod
     def from_env(cls, environ: Optional[Mapping[str, str]] = None) -> "Settings":
@@ -61,6 +64,7 @@ class Settings:
             release_tag=(env.get("RELEASE_TAG") or "").strip(),
             image_digest=(env.get("IMAGE_DIGEST") or "").strip(),
             service_account=(env.get("SERVICE_ACCOUNT") or "").strip(),
+            dev_auth_enabled=_as_bool(env.get("DEV_AUTH_ENABLED")),
         )
 
     @property
@@ -70,6 +74,10 @@ class Settings:
     @property
     def is_dev(self) -> bool:
         return self.environment == "dev"
+
+    @property
+    def is_dev_or_test(self) -> bool:
+        return self.environment in ("dev", "test")
 
     def safe_public_config(self) -> dict:
         """Config safe to expose to unauthenticated clients (no secrets, no infra)."""

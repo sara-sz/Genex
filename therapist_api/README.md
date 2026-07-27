@@ -1,9 +1,13 @@
 # Genex Therapist API (SLP-first) — local foundation
 
 Isolated provider service for the therapist product. **Alpha / fictional data
-only.** This directory lives in a dedicated git worktree
-(`feature/therapist-alpha-0.1`) and does not modify the parent backend,
-`genex_core`, or any parent GCS data.
+only.** This directory lives in a dedicated git worktree and does not modify the
+parent backend, `genex_core`, or any parent GCS data.
+
+**Phase 1A — read-only vertical slice:** see [docs/READ_SLICE.md](docs/READ_SLICE.md)
+for the domain models, enums, endpoint table, local fictional dev-auth, and the
+authorization matrix. It is local + read-only + fictional; no Parent API, no
+Firebase/Firestore, no writes.
 
 ## Hard isolation guarantees
 

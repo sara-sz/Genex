@@ -16,16 +16,23 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from . import __version__
+from .api.routes import router as read_router
+from .auth.dev_adapter import build_verifier
 from .constants import API_VERSION, DOMAIN_TAXONOMY_VERSION, SERVICE_NAME
 from .domain.domains import DISPLAY_DOMAINS
 from .domain.provenance import ALLOWED_PROGRESS_LABELS
 from .domain.recommendation_state import RecommendationState
 from .env_validation import validate_settings
+from .fixtures import load_fixtures
 from .middleware import RequestContextMiddleware
+from .repository.memory import InMemoryRepository
+from .services.access import AccessDenied, ChildNotFound
+from .services.read_service import ReadService
 from .settings import Settings
 
 
@@ -40,6 +47,16 @@ def create_app(settings: Settings) -> FastAPI:
         redoc_url=None,
     )
 
+    # ── Shared state (in-memory repo + fictional fixtures in dev/test) ───────
+    repo = InMemoryRepository()
+    if settings.is_dev_or_test:
+        load_fixtures(repo)
+    app.state.settings = settings
+    app.state.repo = repo
+    app.state.read_service = ReadService(repo)
+    # Auth verifier: dev-auth only in dev/test with the flag on; else deny-all.
+    app.state.verifier = build_verifier(settings.environment, settings.dev_auth_enabled)
+
     app.add_middleware(RequestContextMiddleware, environment=settings.environment)
     app.add_middleware(
         CORSMiddleware,
@@ -48,6 +65,18 @@ def create_app(settings: Settings) -> FastAPI:
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
+
+    # ── Existence-blind error mapping ───────────────────────────────────────
+    @app.exception_handler(ChildNotFound)
+    async def _child_not_found(_: Request, exc: ChildNotFound):
+        # 404 for unknown AND unauthorized ids — never reveal which.
+        return JSONResponse(status_code=404, content={"detail": "Not found."})
+
+    @app.exception_handler(AccessDenied)
+    async def _access_denied(_: Request, exc: AccessDenied):
+        return JSONResponse(status_code=403, content={"detail": "Forbidden."})
+
+    app.include_router(read_router)
 
     @app.get("/health")
     async def health() -> dict:

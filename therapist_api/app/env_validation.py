@@ -87,6 +87,11 @@ def _collect_errors(s: Settings) -> List[str]:
             errors.append("Prod must not enable seeding (SEED_ENABLED must be false).")
         if s.debug_panels:
             errors.append("Prod must not enable debug bypass (DEBUG_PANELS must be false).")
+        if s.dev_auth_enabled:
+            errors.append(
+                "Prod must not enable the local dev-auth adapter "
+                "(DEV_AUTH_ENABLED must be false)."
+            )
         if has_dev_origin:
             errors.append("Prod must not allow the Dev front-end origin.")
         for origin in s.allowed_origins:

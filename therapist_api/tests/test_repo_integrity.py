@@ -58,4 +58,6 @@ def test_worktree_is_on_therapist_branch():
     if not _git_available():
         pytest.skip("git not available")
     res = _git("rev-parse", "--abbrev-ref", "HEAD")
-    assert res.stdout.strip() == "feature/therapist-alpha-0.1"
+    branch = res.stdout.strip()
+    # Any therapist alpha feature branch (0.1 foundation, 0.2 read-slice, ...).
+    assert branch.startswith("feature/therapist-alpha-"), branch

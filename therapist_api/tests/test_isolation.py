@@ -17,12 +17,30 @@ def _py_files():
 
 
 def _imported_names(path: pathlib.Path):
+    """Return module names, considering ALL imports (absolute + relative)."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     names = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             names.extend(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
+            names.append(node.module or "")
+    return names
+
+
+def _absolute_imported_names(path: pathlib.Path):
+    """Return only ABSOLUTE module names (relative imports refer to app.* itself).
+
+    A relative `from .api ...`/`from ..api ...` targets the therapist service's
+    OWN `app.api` subpackage, never the parent HTTP `api` package (which is only
+    reachable via an absolute import).
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    names = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0:
             names.append(node.module or "")
     return names
 
@@ -34,9 +52,10 @@ def test_no_genex_core_import():
 
 
 def test_no_parent_api_import():
-    # The parent HTTP layer is the top-level package `api`. Ensure we never import it.
+    # The parent HTTP layer is the top-level (absolute) package `api`. Relative
+    # `.api`/`..api` imports are the therapist service's own subpackage and are fine.
     for path in _py_files():
-        for mod in _imported_names(path):
+        for mod in _absolute_imported_names(path):
             root = mod.split(".")[0]
             assert root != "api", f"{path} imports parent 'api' package ({mod})"
 

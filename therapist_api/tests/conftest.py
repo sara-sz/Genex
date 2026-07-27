@@ -45,3 +45,19 @@ def dev_settings(**overrides: str) -> Settings:
 
 def prod_settings(**overrides: str) -> Settings:
     return Settings.from_env(prod_env(**overrides))
+
+
+def read_slice_client(**overrides: str):
+    """A TestClient for the dev app with the fictional dev-auth adapter enabled."""
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    env = dev_env(DEV_AUTH_ENABLED="true", **overrides)
+    return TestClient(create_app(Settings.from_env(env)))
+
+
+# Fictional dev-auth bearer tokens (dev/test only).
+HANNAH = {"Authorization": "Bearer dev-hannah"}
+ELENA = {"Authorization": "Bearer dev-elena"}
+UNCONNECTED = {"Authorization": "Bearer dev-unconnected-therapist"}
