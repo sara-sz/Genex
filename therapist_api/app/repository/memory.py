@@ -19,9 +19,17 @@ class InMemoryRepository(CollaborationRepository):
     def run_in_transaction(self, fn: "Callable[[CollaborationRepository], T]") -> T:
         # Re-entrant lock: `fn` may call get/set/query/create_if_absent, which
         # also acquire the lock. Holding it for the whole `fn` is the critical
-        # section that prevents concurrent double-approval.
+        # section that prevents concurrent double-writes. On ANY exception the
+        # whole store is restored from a pre-transaction snapshot, so a failed
+        # operation leaves every collection unchanged (atomic all-or-nothing,
+        # matching a future Firestore transaction).
         with self._lock:
-            return fn(self)
+            snapshot = copy.deepcopy(self._data)
+            try:
+                return fn(self)
+            except Exception:
+                self._data = snapshot
+                raise
 
     def _col(self, collection: str) -> Dict[str, Dict]:
         return self._data.setdefault(collection, {})

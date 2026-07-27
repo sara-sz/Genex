@@ -124,6 +124,7 @@ class ReadService:
             for a in self.repo.query(C.PLAN_ASSIGNMENTS, child_id=child_id)
         ]
         next_items = self._next_session_items(child_id, therapist["id"])
+        counts = self._counts_for_child(child_id)
         return S.ChildOverview(
             child_id=child_id,
             display_name=child.get("display_name", ""),
@@ -138,6 +139,8 @@ class ReadService:
                 "parent_display_name": parent.get("display_name", ""),
                 "restricted": False,
             },
+            plan_review_count=counts["plan_review"],
+            pending_proposal_count=counts["pending"],
         )
 
     # ── weekly plan (FULL) ──────────────────────────────────────────────────
@@ -166,6 +169,7 @@ class ReadService:
                     created_by_type="genex", save_scope="child_only", is_derived=False),
                 parent_feedback_summary=a.get("parent_feedback_summary", ""),
                 pending_proposal_id=a.get("pending_proposal_id"),
+                pending_proposal=self._pending_proposal_summary(a.get("pending_proposal_id")),
                 version=a.get("version", 1),
                 updated_at=a.get("updated_at", ""),
             ))
@@ -302,6 +306,47 @@ class ReadService:
             materials=t.get("materials", ""), created_by_type=t["created_by_type"],
             immutable=t.get("immutable", True), versions=versions,
         )
+
+    # ── proposals (read-only, full access) ──────────────────────────────────
+    def _pending_proposal_summary(self, proposal_id) -> Optional[dict]:
+        if not proposal_id:
+            return None
+        rows = self.repo.query(C.PLAN_CHANGE_PROPOSALS, id=proposal_id)
+        if not rows:
+            return None
+        p = rows[0]
+        return {
+            "proposal_id": p["id"], "proposal_type": p["proposal_type"],
+            "proposal_status": p["status"], "proposed_activity_version_id": p.get("proposed_activity_version_id"),
+        }
+
+    def _proposal_view(self, p: dict) -> S.ProposalView:
+        return S.ProposalView(
+            proposal_id=p["id"], proposal_type=p["proposal_type"], proposal_status=p["status"],
+            child_id=p["child_id"], weekly_plan_id=p.get("weekly_plan_id"),
+            current_assignment_id=p.get("target_assignment_id"),
+            original_activity_template_id=p.get("original_activity_template_id"),
+            original_activity_version_id=p.get("original_activity_version_id"),
+            proposed_activity_version_id=p.get("proposed_activity_version_id"),
+            change_reason=p.get("change_reason", ""), save_scope=p.get("save_scope", ""),
+            created_by_user_id=p.get("created_by_user_id"), created_at=p.get("created_at", ""),
+            version=p.get("version", 1),
+        )
+
+    def list_proposals(self, user: AuthenticatedUser, child_id: str) -> List[S.ProposalView]:
+        therapist = access.resolve_therapist(self.repo, user)
+        access.require_full_access(self.repo, therapist["id"], child_id)
+        rows = self.repo.query(C.PLAN_CHANGE_PROPOSALS, child_id=child_id)
+        rows.sort(key=lambda p: (p.get("created_at", ""), p["id"]), reverse=True)
+        return [self._proposal_view(p) for p in rows]
+
+    def get_proposal(self, user: AuthenticatedUser, child_id: str, proposal_id: str) -> S.ProposalView:
+        therapist = access.resolve_therapist(self.repo, user)
+        access.require_full_access(self.repo, therapist["id"], child_id)
+        rows = self.repo.query(C.PLAN_CHANGE_PROPOSALS, id=proposal_id)
+        if not rows or rows[0]["child_id"] != child_id:
+            raise access.ChildNotFound(proposal_id)  # existence-blind
+        return self._proposal_view(rows[0])
 
     def list_milestones(self, user: AuthenticatedUser) -> List[S.MilestoneView]:
         access.resolve_therapist(self.repo, user)

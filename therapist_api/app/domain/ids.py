@@ -65,3 +65,8 @@ def canonical_request_hash(*parts: object) -> str:
 def audit_event_id(request_hash: str, key: str) -> str:
     """Deterministic audit-event id bound to the operation + key (one per op)."""
     return "aud_" + _sha256_hex(request_hash + "|" + (key or ""))[:_HASH_LEN]
+
+
+def derived_id(prefix: str, *seed: str) -> str:
+    """Deterministic id `<prefix>_<sha>` from a stable seed (Firestore-mappable)."""
+    return f"{prefix}_" + _sha256_hex("|".join(seed))[:_HASH_LEN]

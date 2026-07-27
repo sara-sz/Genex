@@ -23,6 +23,23 @@ __all__ = [
 
 _VALID = frozenset(DISPLAY_DOMAINS)
 
+# Snake-case domain keys (frontend/request form) → versioned display labels.
+DOMAIN_KEY_TO_DISPLAY = {
+    "talking_and_communicating": "Talking & Communicating",
+    "social_and_emotional": "Social & Emotional",
+    "learning_and_thinking": "Learning & Thinking",
+    "movement_and_physical": "Movement & Physical",
+    "daily_living": "Daily Living",
+    "sensory": "Sensory",
+    "fine_motor": "Fine Motor",
+    "gross_motor": "Gross Motor",
+}
+
+
+def display_for_domain_key(key: str) -> str:
+    """Return the display label for a snake-case domain key, or '' if unknown."""
+    return DOMAIN_KEY_TO_DISPLAY.get((key or "").strip().lower(), "")
+
 
 class UnknownDomainError(ValueError):
     """Raised when a domain label is not part of the versioned taxonomy."""

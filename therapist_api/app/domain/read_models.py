@@ -138,11 +138,27 @@ class ActivityVersion(BaseModel):
 
     id: str
     activity_template_id: str
+    version_number: int = 1
     title: str
-    domain: str
+    domain: str                     # display label; NO chronological age range
+    developmental_domain_key: str = ""   # snake-case key (frontend form)
     milestone_ids: List[str] = Field(default_factory=list)
-    instructions: str = ""
-    materials: str = ""
+    milestone_id: Optional[str] = None   # primary milestone (single)
+    skill_focus: str = ""
+    instructions: str = ""           # legacy free-text (kept for older versions)
+    duration_minutes: Optional[int] = None
+    difficulty: str = ""
+    materials: List[str] = Field(default_factory=list)
+    materials_type: str = ""
+    setup: str = ""
+    parent_instructions: List[str] = Field(default_factory=list)
+    what_to_say: List[str] = Field(default_factory=list)
+    how_to_help: List[str] = Field(default_factory=list)
+    success_signals: List[str] = Field(default_factory=list)
+    variations: List[str] = Field(default_factory=list)
+    routine_tags: List[str] = Field(default_factory=list)
+    theme_tags: List[str] = Field(default_factory=list)
+    safety_risk_flags: List[str] = Field(default_factory=list)
     # Provenance
     created_by_type: CreatedByType = CreatedByType.GENEX
     created_by_user_id: Optional[str] = None
@@ -154,6 +170,7 @@ class ActivityVersion(BaseModel):
     save_scope: ActivitySaveScope = ActivitySaveScope.CHILD_ONLY
     is_derived: bool = False
     immutable: bool = True
+    created_at: str = ""
     environment: str = "dev"
     schema_version: str = SCHEMA_VERSION
 
@@ -191,19 +208,28 @@ class WeeklyPlan(BaseModel):
 class PlanChangeProposal(BaseModel):
     """A proposed add/modify/replace/remove awaiting parent acceptance.
 
-    Read-only in this phase (no writes). Present so assignments can reference a
-    pending proposal and restricted/pending counts can be derived.
+    In this phase only `modify` creation is implemented. The proposal references
+    BOTH the original and the proposed (derived) activity versions. Parent
+    acceptance/decline is NOT implemented yet.
     """
 
     id: str
     child_id: str
     therapist_id: str
+    weekly_plan_id: Optional[str] = None
     proposal_type: ProposalType
     status: ProposalStatus
-    target_assignment_id: Optional[str] = None
+    target_assignment_id: Optional[str] = None      # current_assignment_id
+    original_activity_template_id: Optional[str] = None
+    original_activity_version_id: Optional[str] = None
     proposed_activity_version_id: Optional[str] = None
     replacement_activity_version_id: Optional[str] = None
+    change_reason: str = ""
+    save_scope: str = ""
     rationale: str = ""
+    created_by_user_id: Optional[str] = None
+    created_at: str = ""
+    version: int = 1
     environment: str = "dev"
     schema_version: str = SCHEMA_VERSION
 

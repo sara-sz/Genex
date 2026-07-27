@@ -65,6 +65,8 @@ class ChildOverview(BaseModel):
     recent_home_practice: List[dict]  # informational only
     next_session_items: List[dict]
     connection_summary: dict
+    plan_review_count: int = 0
+    pending_proposal_count: int = 0
 
 
 class PlanAssignmentView(BaseModel):
@@ -79,6 +81,7 @@ class PlanAssignmentView(BaseModel):
     provenance: ActivityProvenance
     parent_feedback_summary: str
     pending_proposal_id: Optional[str] = None
+    pending_proposal: Optional[dict] = None   # summary when a pending proposal exists
     version: int = 1
     updated_at: str = ""
 
@@ -192,3 +195,73 @@ class ErrorResponse(BaseModel):
 
     error: str        # stable code, e.g. "assignment_version_conflict"
     detail: str = ""
+
+
+# ── write: modify-activity proposal creation ────────────────────────────────
+class ModifyActivityInput(BaseModel):
+    title: str
+    developmental_domain: str        # snake-case key, e.g. "talking_and_communicating"
+    milestone_id: str
+    skill_focus: str = ""
+    duration_minutes: Optional[int] = None
+    difficulty: str = ""
+    materials: List[str] = Field(default_factory=list)
+    materials_type: str = ""
+    setup: str = ""
+    parent_instructions: List[str] = Field(default_factory=list)
+    what_to_say: List[str] = Field(default_factory=list)
+    how_to_help: List[str] = Field(default_factory=list)
+    success_signals: List[str] = Field(default_factory=list)
+    variations: List[str] = Field(default_factory=list)
+    routine_tags: List[str] = Field(default_factory=list)
+    theme_tags: List[str] = Field(default_factory=list)
+    safety_risk_flags: List[str] = Field(default_factory=list)
+    # NOTE: no chronological age range by design.
+
+
+class ModifyProposalRequest(BaseModel):
+    expected_assignment_version: int
+    activity: ModifyActivityInput
+    change_reason: str = ""
+    save_scope: str = "child_only"
+
+
+class ProposalSummary(BaseModel):
+    proposal_id: str
+    proposal_type: str
+    proposal_status: str
+    child_id: str
+    weekly_plan_id: str
+    current_assignment_id: str
+    original_activity_template_id: str
+    original_activity_version_id: str
+    proposed_activity_version_id: str
+    created_by_user_id: str
+    created_at: str
+    version: int
+
+
+class ProposalCreateResponse(BaseModel):
+    proposal: ProposalSummary
+    proposed_activity_version: dict
+    current_assignment: dict
+    child_summary: dict
+    audit_event_id: str
+    idempotent_replay: bool
+
+
+class ProposalView(BaseModel):
+    proposal_id: str
+    proposal_type: str
+    proposal_status: str
+    child_id: str
+    weekly_plan_id: Optional[str] = None
+    current_assignment_id: Optional[str] = None
+    original_activity_template_id: Optional[str] = None
+    original_activity_version_id: Optional[str] = None
+    proposed_activity_version_id: Optional[str] = None
+    change_reason: str = ""
+    save_scope: str = ""
+    created_by_user_id: Optional[str] = None
+    created_at: str = ""
+    version: int = 1

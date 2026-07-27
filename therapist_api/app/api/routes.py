@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Header, Request
 
 from ..auth.interface import AuthenticatedUser
 from ..constants import API_VERSION
-from ..services import approval_service
+from ..services import approval_service, proposal_service
 from . import schemas as S
 from .deps import get_service, require_principal
 from ..services.read_service import ReadService
@@ -143,3 +143,54 @@ async def approve_assignment(
         environment=principal.environment,
         request_id=get_request_id(),
     )
+
+
+# ── write: propose a modified version of a current, approved assignment ─────
+@router.post(
+    "/children/{child_id}/weekly-plan/assignments/{assignment_id}/proposals/modify",
+    response_model=S.ProposalCreateResponse,
+    responses={
+        400: {"model": S.ErrorResponse}, 403: {"model": S.ErrorResponse},
+        404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse},
+        422: {"model": S.ErrorResponse},
+    },
+)
+async def create_modify_proposal(
+    child_id: str,
+    assignment_id: str,
+    body: S.ModifyProposalRequest,
+    request: Request,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    principal: AuthenticatedUser = Depends(require_principal),
+):
+    repo = request.app.state.repo
+    from ..logging_config import get_request_id
+
+    return proposal_service.create_modify_proposal(
+        repo,
+        principal,
+        child_id=child_id,
+        assignment_id=assignment_id,
+        idempotency_key=idempotency_key,
+        expected_assignment_version=body.expected_assignment_version,
+        activity=body.activity.model_dump(),
+        change_reason=body.change_reason,
+        save_scope=body.save_scope,
+        environment=principal.environment,
+        request_id=get_request_id(),
+    )
+
+
+# ── read-only: proposals (authorization-safe) ───────────────────────────────
+@router.get("/children/{child_id}/proposals", response_model=S.Page)
+async def list_proposals(child_id: str,
+                         principal: AuthenticatedUser = Depends(require_principal),
+                         svc: ReadService = Depends(get_service)):
+    return _page(svc.list_proposals(principal, child_id))
+
+
+@router.get("/children/{child_id}/proposals/{proposal_id}", response_model=S.ProposalView)
+async def get_proposal(child_id: str, proposal_id: str,
+                       principal: AuthenticatedUser = Depends(require_principal),
+                       svc: ReadService = Depends(get_service)):
+    return svc.get_proposal(principal, child_id, proposal_id)

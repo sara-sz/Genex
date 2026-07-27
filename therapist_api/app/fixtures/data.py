@@ -195,23 +195,23 @@ def activity_versions() -> List[ActivityVersion]:
     return [
         ActivityVersion(id=V_BUBBLES, activity_template_id=T_BUBBLES, title="Bubble requesting",
                         domain="Talking & Communicating", milestone_ids=[M_REQUEST],
-                        instructions="Pause with the bubble wand; wait for a request.", materials="bubbles",
-                        created_by_type=CreatedByType.GENEX, save_scope=ActivitySaveScope.CHILD_ONLY,
-                        is_derived=False, environment=ENV),
+                        instructions="Pause with the bubble wand; wait for a request.", materials=["bubbles"],
+                        milestone_id=M_REQUEST, created_by_type=CreatedByType.GENEX,
+                        save_scope=ActivitySaveScope.CHILD_ONLY, is_derived=False, environment=ENV),
         # A therapist-derived immutable version that preserves the original template.
         ActivityVersion(id=V_BUBBLES_DERIVED, activity_template_id=T_BUBBLES, title="Bubble requesting (simplified prompt)",
                         domain="Talking & Communicating", milestone_ids=[M_REQUEST],
                         instructions="Model the word first, then pause and wait for any approximation.",
-                        materials="bubbles", created_by_type=CreatedByType.THERAPIST,
+                        materials=["bubbles"], milestone_id=M_REQUEST, created_by_type=CreatedByType.THERAPIST,
                         created_by_user_id=THERAPIST_HANNAH, created_by_display_name="Hannah Lieberknecht",
                         original_activity_template_id=T_BUBBLES, original_activity_version_id=V_BUBBLES,
                         modified_by_user_id=THERAPIST_HANNAH, modified_by_display_name="Hannah Lieberknecht",
                         save_scope=ActivitySaveScope.CHILD_ONLY, is_derived=True, environment=ENV),
         ActivityVersion(id=V_TURNTAKE, activity_template_id=T_TURNTAKE, title="Turn-taking with a ball",
                         domain="Social & Emotional", milestone_ids=[M_TURNTAKE],
-                        instructions="Roll the ball back and forth, naming turns.", materials="soft ball",
-                        created_by_type=CreatedByType.GENEX, save_scope=ActivitySaveScope.CHILD_ONLY,
-                        is_derived=False, environment=ENV),
+                        instructions="Roll the ball back and forth, naming turns.", materials=["soft ball"],
+                        milestone_id=M_TURNTAKE, created_by_type=CreatedByType.GENEX,
+                        save_scope=ActivitySaveScope.CHILD_ONLY, is_derived=False, environment=ENV),
     ]
 
 
