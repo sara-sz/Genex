@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import threading
 
 from app.auth.interface import AuthenticatedUser
+from app.domain.audit_state import ASSIGNMENT_STATE_KEYS, assignment_unchanged_except_version
 from app.domain.roles import UserRole
 from app.fixtures import load_fixtures
 from app.repository import collections as C
@@ -241,28 +243,82 @@ def test_milestone_domain_mismatch_no_mutation():
 
 
 # 39: concurrency
-def test_concurrent_single_proposal():
+#
+# Both concurrency tests release every worker from a threading.Barrier so the
+# race is forced rather than incidental: no thread enters the service until all
+# of them are ready to.
+DEV_USER = AuthenticatedUser(uid="dev-hannah", environment="dev", role=UserRole.SLP)
+
+
+def _race(keys):
+    """Run one create_modify_proposal per key, all released simultaneously.
+
+    Returns (results_by_index, repo, baseline_activity_version_count).
+    """
     repo = InMemoryRepository(); load_fixtures(repo)
-    user = AuthenticatedUser(uid="dev-hannah", environment="dev", role=UserRole.SLP)
     baseline_versions = len(repo.query(C.ACTIVITY_VERSIONS))
     results = {}
+    barrier = threading.Barrier(len(keys))
 
-    def worker(name, key):
+    def worker(index, key):
+        barrier.wait()  # force the race
         try:
-            P.create_modify_proposal(repo, user, child_id="child_noah", assignment_id="assign_noah_turntake",
-                                     idempotency_key=key, expected_assignment_version=1, activity=act_social())
-            results[name] = "ok"
+            r = P.create_modify_proposal(
+                repo, DEV_USER, child_id="child_noah", assignment_id="assign_noah_turntake",
+                idempotency_key=key, expected_assignment_version=1, activity=act_social())
+            results[index] = {"ok": True, "replay": r["idempotent_replay"],
+                              "proposal_id": r["proposal"]["proposal_id"],
+                              "version_id": r["proposed_activity_version"]["id"]}
         except P.ApprovalError as e:
-            results[name] = e.code
+            results[index] = {"ok": False, "code": e.code}
 
-    t1 = threading.Thread(target=worker, args=("a", "cc-a")); t2 = threading.Thread(target=worker, args=("b", "cc-b"))
-    t1.start(); t2.start(); t1.join(); t2.join()
-    assert "ok" in results.values()
-    assert "pending_proposal_exists" in results.values()
+    threads = [threading.Thread(target=worker, args=(i, k)) for i, k in enumerate(keys)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return results, repo, baseline_versions
+
+
+def _assert_single_write(repo, baseline_versions):
+    """Exactly one proposal, derived version, audit event and version increment."""
     assert len(repo.query(C.PLAN_CHANGE_PROPOSALS, child_id="child_noah")) == 1
     assert len(repo.query(C.ACTIVITY_VERSIONS)) == baseline_versions + 1
     assert len(repo.query(C.AUDIT_EVENTS)) == 1
-    assert repo.query(C.PLAN_ASSIGNMENTS, id="assign_noah_turntake")[0]["version"] == 2
+    a = repo.query(C.PLAN_ASSIGNMENTS, id="assign_noah_turntake")[0]
+    assert a["version"] == 2                      # incremented exactly once
+    assert a["pending_proposal_id"] is not None   # set once
+    return a
+
+
+def test_concurrent_same_key_replays_original():
+    """Same key + actor + endpoint + child + assignment + body, raced."""
+    results, repo, baseline = _race(["same-key", "same-key"])
+
+    assert all(r["ok"] for r in results.values()), results   # no request failed
+    replays = sorted(r["replay"] for r in results.values())
+    assert replays == [False, True]                          # exactly one first execution
+    # A concurrent duplicate must replay, never collide with the pending guard.
+    assert not any(r.get("code") == "pending_proposal_exists" for r in results.values())
+    # Both responses describe the same created objects.
+    assert len({r["proposal_id"] for r in results.values()}) == 1
+    assert len({r["version_id"] for r in results.values()}) == 1
+
+    a = _assert_single_write(repo, baseline)
+    assert a["pending_proposal_id"] == next(iter(results.values()))["proposal_id"]
+
+
+def test_concurrent_different_keys_conflict():
+    """Different keys on the same assignment: one wins, the rest conflict."""
+    results, repo, baseline = _race(["cc-a", "cc-b"])
+
+    succeeded = [r for r in results.values() if r["ok"]]
+    failed = [r for r in results.values() if not r["ok"]]
+    assert len(succeeded) == 1 and succeeded[0]["replay"] is False
+    assert [r["code"] for r in failed] == ["pending_proposal_exists"]
+
+    a = _assert_single_write(repo, baseline)
+    assert a["pending_proposal_id"] == succeeded[0]["proposal_id"]
 
 
 # 40: failed op leaves collections unchanged + explicit rollback of writes
@@ -301,7 +357,65 @@ def test_raw_key_absent():
     aud = repo.query(C.AUDIT_EVENTS)[0]
     assert aud["event_type"] == "plan_change_proposal_created"
     assert aud["idempotency_key_hash"] and len(aud["idempotency_key_hash"]) == 64
-    assert aud["before_state"] == "approved" and aud["after_state"] == "approved"  # approval unchanged
+    # approval status unchanged across the structured before/after state
+    assert aud["before_state"]["plan_approval_status"] == "approved"
+    assert aud["after_state"]["plan_approval_status"] == "approved"
+
+
+# structured audit before/after state
+def test_audit_before_state_is_complete():
+    c = _c()
+    r = _post(c, NOAH_AP, HANNAH, "ab1", body())
+    before = _repo(c).query(C.AUDIT_EVENTS)[0]["before_state"]
+    assert before["assignment_version"] == 1               # original version
+    assert before["pending_proposal_id"] is None           # nothing attached yet
+    assert before["plan_approval_status"] == "approved"
+    assert before["assignment_status"] == "current"
+    assert before["current_activity_version_id"] == "ver_turn_taking_v1"
+
+
+def test_audit_after_state_is_complete():
+    c = _c()
+    r = _post(c, NOAH_AP, HANNAH, "aa1", body()).json()
+    after = _repo(c).query(C.AUDIT_EVENTS)[0]["after_state"]
+    assert after["assignment_version"] == 2                              # +1 exactly
+    assert after["pending_proposal_id"] == r["proposal"]["proposal_id"]
+    assert after["plan_approval_status"] == "approved"                   # unchanged
+    assert after["assignment_status"] == "current"                       # unchanged
+    assert after["current_activity_version_id"] == "ver_turn_taking_v1"  # NOT replaced
+    assert after["proposed_activity_version_id"] == r["proposed_activity_version"]["id"]
+    assert after["proposal_id"] == r["proposal"]["proposal_id"]
+    assert after["proposal_status"] == "pending_parent_acceptance"
+
+
+def test_audit_event_alone_reconstructs_the_change():
+    """The event must show the assignment stayed active with a proposal attached."""
+    c = _c()
+    _post(c, NOAH_AP, HANNAH, "ar1", body())
+    aud = _repo(c).query(C.AUDIT_EVENTS)[0]
+    before, after = aud["before_state"], aud["after_state"]
+    # original assignment remained active, current version unchanged, +1 version
+    assert assignment_unchanged_except_version(before, after)
+    # no replacement occurred
+    assert after["current_activity_version_id"] == before["current_activity_version_id"]
+    assert after["proposed_activity_version_id"] != after["current_activity_version_id"]
+    # a pending proposal was attached where there was none
+    assert before["pending_proposal_id"] is None
+    assert after["pending_proposal_id"] == after["proposal_id"]
+    # both sides describe the same assignment, and the event identifies it
+    assert aud["assignment_id"] == "assign_noah_turntake"
+    assert aud["subject_id"] == after["proposal_id"]
+    assert set(before) == set(ASSIGNMENT_STATE_KEYS)
+
+
+def test_audit_state_is_json_serializable():
+    """Audit state must survive a store round-trip as plain JSON."""
+    c = _c()
+    _post(c, NOAH_AP, HANNAH, "aj1", body())
+    aud = _repo(c).query(C.AUDIT_EVENTS)[0]
+    restored = json.loads(json.dumps({"before": aud["before_state"], "after": aud["after_state"]}))
+    assert restored["before"] == aud["before_state"]
+    assert restored["after"] == aud["after_state"]
 
 
 # 42: no Parent API / genex_core import in new modules

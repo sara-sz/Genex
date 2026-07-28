@@ -15,7 +15,7 @@ Design notes:
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -285,8 +285,11 @@ class AuditEvent(BaseModel):
     weekly_plan_id: Optional[str] = None
     assignment_id: Optional[str] = None
     idempotency_key_hash: Optional[str] = None  # safe hash, never the raw key
-    before_state: Optional[str] = None
-    after_state: Optional[str] = None
+    # Structured, JSON-compatible assignment state on both sides of the write —
+    # see domain/audit_state.py. Comparable key-by-key, so the event alone shows
+    # exactly what changed. NOT a status string.
+    before_state: Optional[Dict[str, Any]] = None
+    after_state: Optional[Dict[str, Any]] = None
     request_id: Optional[str] = None
     occurred_at: str = ""
     created_at: str = ""

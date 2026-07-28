@@ -67,11 +67,44 @@ or audit event, and the assignment version is not incremented again.
 Immutable, `is_derived=true`, `created_by_type=therapist`, with
 `created_by_user_id/display_name`, `original_activity_template_id`,
 `original_activity_version_id`, `modified_by_user_id/display_name`, `save_scope`,
-`created_at`, plus the full activity payload. `save_scope` ∈ {`child_only`,
-`therapist_library`, `submitted_for_genex_review`} is **provenance metadata
-only** — nothing is published to any marketplace/global library. The derived
-version links to the same canonical template. Milestone is validated to exist and
-to match the selected developmental domain.
+`created_at`, plus the full activity payload. The derived version links to the
+same canonical template. Milestone is validated to exist and to match the
+selected developmental domain.
+
+## Derived-version visibility (`save_scope`)
+
+`save_scope` is **enforced**, not merely recorded. Sharing a canonical
+`activity_template_id` never grants visibility: a derived version is filtered out
+of the generic activity-template / version-history endpoints unless the rule for
+its scope is satisfied. **No `save_scope` publishes globally** — there is no
+public, marketplace, or shared-library visibility in this phase.
+
+| `save_scope` | Visible in the generic catalog to |
+|---|---|
+| `child_only` | the creating therapist **and** only while they hold an **active** connection to the associated child |
+| `therapist_library` | the owning therapist only (`created_by_user_id`) |
+| `submitted_for_genex_review` | the submitting therapist only — private submission metadata; no Genex-review role or publication path exists yet |
+
+Ownership alone is never sufficient for `child_only`. Because `ActivityVersion`
+carries no `child_id`, the child association is resolved through the canonical
+relationships that do — the `PlanChangeProposal.proposed_activity_version_id`
+that proposed it, else a `PlanAssignment.activity_version_id` already pointing at
+it. **If no child association can be resolved, the version is hidden**, including
+from its creator.
+
+Consequently a `child_only` derived version is **not** visible through the
+generic endpoints to: an unconnected therapist; a therapist connected only to a
+different child; a therapist whose connection to the relevant child is pending,
+paused, or ended; a parent principal (403 on these routes, unchanged); or any
+other unauthorized principal. Filtering is applied in the service layer, so a
+hidden version is never loaded into any reachable view, and the response gives no
+count, placeholder, or id revealing that rows were withheld.
+
+The creating therapist continues to reach the version through the **authorized
+child routes** — the weekly plan's `pending_proposal` summary and
+`GET /children/{id}/proposals/{proposal_id}` — while the active connection lasts.
+Canonical (non-derived) Genex versions are unaffected and remain visible to every
+authorized therapist.
 
 ## Authorization matrix
 
@@ -104,13 +137,87 @@ status, created_at. Same key + same request → replay; same key + any differenc
 409 `idempotency_key_conflict`; missing/blank key → 400 `missing_idempotency_key`;
 failed authz/validation → no success record. Raw key never stored (hash only).
 
+### Concurrent requests
+
+The idempotency check runs **before** the pending-proposal guard inside the
+critical section, which decides how simultaneous requests resolve:
+
+- **Same key**, same actor/endpoint/child/assignment/body: exactly one request
+  executes; every concurrent duplicate **replays the original result** with
+  `idempotent_replay=true`, referencing the same `proposal_id` and
+  `proposed_activity_version_id`. A concurrent duplicate never returns
+  `pending_proposal_exists`.
+- **Different keys** targeting the same assignment: exactly one request creates
+  the pending proposal; the others **conflict** with 409
+  `pending_proposal_exists` once it is attached.
+
+Either way exactly one proposal, one derived activity version, one audit event,
+and one assignment-version increment result. Both cases are covered by
+barrier-based tests that force the race rather than relying on timing.
+
+### Deterministic id generation — tracked consideration
+
+Derived proposal/version document ids are seeded from the canonical request hash,
+which **excludes** the raw idempotency key. Two different keys carrying a
+byte-identical request would therefore map to the same document id. This is
+currently unreachable: `expected_assignment_version` is part of the hash and
+increments on every successful write, so a genuine second proposal always hashes
+differently. **Revisit when parent accept/decline lands** — that flow clears
+`pending_proposal_id` and so removes the guard that makes a repeat request
+reachable at the same assignment version. Not redesigned in this phase. The raw
+idempotency key is never stored anywhere, only its hash.
+
 ## Audit event
 
 Exactly one immutable `AuditEvent` `event_type=plan_change_proposal_created` with
-proposal/type, actor, therapist, child, weekly_plan, assignment, original +
-proposed version ids (via subject + fields), `idempotency_key_hash`,
-`before_state`/`after_state` (both the unchanged approval status), `occurred_at`,
-`request_id`. No raw tokens/keys/secrets. Append-only; no public audit endpoint.
+proposal/type, actor, therapist, child, weekly_plan, assignment,
+`idempotency_key_hash`, `occurred_at`, `request_id`. No raw tokens/keys/secrets.
+Append-only; no public audit endpoint (the structured state below is internal and
+is not exposed through any API path).
+
+### Structured before/after assignment state
+
+`before_state` and `after_state` are **structured JSON mappings, not status
+strings** (see `app/domain/audit_state.py`). Every plan-assignment write records
+the same canonical assignment shape on both sides, so the two are comparable
+key-by-key and the event alone shows exactly what changed:
+
+```
+assignment_version, pending_proposal_id, plan_approval_status,
+assignment_status, current_activity_version_id
+```
+
+For `plan_change_proposal_created` the after side additionally carries
+`proposed_activity_version_id`, `proposal_id`, and
+`proposal_status = pending_parent_acceptance` — facts that did not exist before
+the write:
+
+```json
+"before_state": {
+  "assignment_version": 1, "pending_proposal_id": null,
+  "plan_approval_status": "approved", "assignment_status": "current",
+  "current_activity_version_id": "ver_turn_taking_v1"
+},
+"after_state": {
+  "assignment_version": 2, "pending_proposal_id": "prop_…",
+  "plan_approval_status": "approved", "assignment_status": "current",
+  "current_activity_version_id": "ver_turn_taking_v1",
+  "proposed_activity_version_id": "ver_…", "proposal_id": "prop_…",
+  "proposal_status": "pending_parent_acceptance"
+}
+```
+
+From the event alone it is reconstructable that the original assignment **remained
+active** (`assignment_status` unchanged), the original activity version **remained
+current** (`current_activity_version_id` unchanged — no replacement occurred), a
+**pending proposal was attached** where there was none, and the assignment version
+**incremented exactly once**.
+
+`plan_assignment_approved` uses the **same** canonical representation (there is
+only one audit-state format): its before/after differ in `plan_approval_status`
+(`needs_plan_review` → `approved`) and `assignment_version` (+1), with
+`assignment_status`, `current_activity_version_id`, and `pending_proposal_id`
+unchanged.
 
 ## Read-after-write
 
@@ -121,7 +228,8 @@ proposed version ids (via subject + fields), `idempotency_key_hash`,
   unchanged approval/practice/assignment status, `pending_proposal_id`, and a
   `pending_proposal` summary; never the proposed version as the active activity.
 - `GET /activity-templates/{id}` — original template/version intact; the derived
-  version appears in version history.
+  version appears in version history **only for principals allowed to see it**
+  under the `save_scope` rules above.
 - `GET /children/{id}/proposals` and `/proposals/{proposal_id}` — read-only,
   authorization-safe, existence-blind.
 

@@ -12,6 +12,8 @@ from typing import Dict, List, Optional
 from ..api import schemas as S
 from ..auth.interface import AuthenticatedUser
 from ..domain.enums import (
+    ActivitySaveScope,
+    ChildAccessLevel,
     ConnectionStatus,
     ParentNoteReviewStatus,
     PlanApprovalStatus,
@@ -263,7 +265,6 @@ class ReadService:
     def get_connection_details(self, user: AuthenticatedUser, child_id: str) -> S.ConnectionDetails:
         therapist = access.resolve_therapist(self.repo, user)
         level, conn = access.resolve_child_access(self.repo, therapist["id"], child_id)
-        from ..domain.enums import ChildAccessLevel
         if conn is None or level == ChildAccessLevel.NONE:
             raise access.ChildNotFound(child_id)
         child = self._child(child_id) or {}
@@ -280,25 +281,75 @@ class ReadService:
         )
 
     # ── catalog: activity templates / versions / milestones ─────────────────
+    def _derived_version_child_id(self, version_id: str) -> Optional[str]:
+        """Child a derived version belongs to, via its proposal or assignment.
+
+        `ActivityVersion` carries no `child_id`, so the association is resolved
+        through the canonical relationships that do: the PlanChangeProposal that
+        proposed it, else a PlanAssignment already pointing at it (the shape a
+        future accepted proposal takes). Returns None when neither exists.
+        """
+        proposals = self.repo.query(C.PLAN_CHANGE_PROPOSALS, proposed_activity_version_id=version_id)
+        if proposals:
+            return proposals[0]["child_id"]
+        assignments = self.repo.query(C.PLAN_ASSIGNMENTS, activity_version_id=version_id)
+        if assignments:
+            return assignments[0]["child_id"]
+        return None
+
+    def _derived_version_visible(self, version: dict, therapist_id: str) -> bool:
+        """Whether a DERIVED version may appear in the generic template catalog.
+
+        Fail-closed: ownership is necessary for every scope, and `child_only`
+        additionally requires a live (active) connection to the associated child.
+        Sharing a canonical `activity_template_id` never grants visibility.
+        """
+        if version.get("created_by_user_id") != therapist_id:
+            return False
+        scope = version.get("save_scope")
+        scope = scope.value if hasattr(scope, "value") else scope
+        if scope in (ActivitySaveScope.THERAPIST_LIBRARY.value,
+                     ActivitySaveScope.SUBMITTED_FOR_GENEX_REVIEW.value):
+            # Owner-scoped. `submitted_for_genex_review` is submission metadata
+            # only — there is no Genex-review role or publication path yet, so it
+            # stays private to the submitter and is never globally published.
+            return True
+        if scope == ActivitySaveScope.CHILD_ONLY.value:
+            child_id = self._derived_version_child_id(version["id"])
+            if not child_id:
+                return False  # no resolvable child -> hide
+            level, _ = access.resolve_child_access(self.repo, therapist_id, child_id)
+            return level == ChildAccessLevel.FULL  # pending/paused/ended/none -> hidden
+        return False  # unknown scope -> fail closed
+
+    def _visible_versions(self, template_id: str, therapist_id: str) -> List[dict]:
+        """Canonical (non-derived) versions, plus derived ones this therapist may see."""
+        return [
+            v for v in self.repo.query(C.ACTIVITY_VERSIONS, activity_template_id=template_id)
+            if not v.get("is_derived", False) or self._derived_version_visible(v, therapist_id)
+        ]
+
     def list_activity_templates(self, user: AuthenticatedUser) -> List[S.ActivityTemplateView]:
-        access.resolve_therapist(self.repo, user)  # therapist-only
+        therapist = access.resolve_therapist(self.repo, user)  # therapist-only
         out = []
         for t in sorted(self.repo.query(C.ACTIVITY_TEMPLATES), key=lambda t: t["id"]):
-            out.append(self._template_view(t))
+            out.append(self._template_view(t, therapist["id"]))
         return out
 
     def get_activity_template(self, user: AuthenticatedUser, template_id: str) -> S.ActivityTemplateView:
-        access.resolve_therapist(self.repo, user)
+        therapist = access.resolve_therapist(self.repo, user)
         rows = self.repo.query(C.ACTIVITY_TEMPLATES, id=template_id)
         if not rows:
             raise access.ChildNotFound(template_id)  # existence-blind 404 for unknown ids
-        return self._template_view(rows[0])
+        return self._template_view(rows[0], therapist["id"])
 
-    def _template_view(self, t: dict) -> S.ActivityTemplateView:
+    def _template_view(self, t: dict, therapist_id: str) -> S.ActivityTemplateView:
+        # Filtering happens here in the service layer (not in the response DTO), so
+        # a hidden version is never loaded into any view a caller could reach.
         versions = [
             {"activity_version_id": v["id"], "title": v["title"], "is_derived": v.get("is_derived", False),
              "created_by_type": v["created_by_type"], "original_activity_version_id": v.get("original_activity_version_id")}
-            for v in self.repo.query(C.ACTIVITY_VERSIONS, activity_template_id=t["id"])
+            for v in self._visible_versions(t["id"], therapist_id)
         ]
         return S.ActivityTemplateView(
             activity_template_id=t["id"], title=t["title"], domain=t["domain"],

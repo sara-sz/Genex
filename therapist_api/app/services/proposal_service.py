@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from ..auth.interface import AuthenticatedUser
+from ..domain.audit_state import assignment_state
 from ..domain.domains import display_for_domain_key
 from ..domain.enums import (
     ActivitySaveScope,
@@ -222,11 +223,22 @@ def create_modify_proposal(
         tx.set(C.PLAN_CHANGE_PROPOSALS, prop_id, proposal.model_dump())
 
         # 9/10. Assignment: set pending_proposal_id + version++ + updated_at. Approval status UNCHANGED.
-        before = a["plan_approval_status"]
+        # Structured audit state captured BEFORE the mutation (`a` changes in place).
+        before_state = assignment_state(a)
         a["pending_proposal_id"] = prop_id
         a["version"] = int(a["version"]) + 1
         a["updated_at"] = _now()
         tx.set(C.PLAN_ASSIGNMENTS, a["id"], a)
+        # The proposal is recorded on the AFTER side only — it did not exist before.
+        # plan_approval_status / assignment_status / current_activity_version_id are
+        # deliberately unchanged: the original assignment stays active, nothing is
+        # replaced, and the pending proposal is merely attached.
+        after_state = assignment_state(
+            a,
+            proposed_activity_version_id=new_ver_id,
+            proposal_id=prop_id,
+            proposal_status=ProposalStatus.PENDING_PARENT_ACCEPTANCE.value,
+        )
 
         # 11. Exactly one immutable audit event.
         aud_id = audit_event_id(req_hash, key)
@@ -234,7 +246,7 @@ def create_modify_proposal(
             id=aud_id, event_type=EVENT_TYPE, actor_uid=user.uid, actor_role=PrincipalRole.THERAPIST,
             subject_type="plan_change_proposal", subject_id=prop_id, therapist_id=therapist["id"],
             child_id=child_id, weekly_plan_id=a["weekly_plan_id"], assignment_id=a["id"],
-            idempotency_key_hash=key_hash(key), before_state=before, after_state=before,  # approval status unchanged
+            idempotency_key_hash=key_hash(key), before_state=before_state, after_state=after_state,
             request_id=request_id, occurred_at=_now(), created_at=_now(), environment=environment,
         )
         tx.set(C.AUDIT_EVENTS, aud_id, audit.model_dump())

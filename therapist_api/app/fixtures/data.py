@@ -44,14 +44,17 @@ ENV = "dev"
 HANNAH_UID = "dev-hannah"
 ELENA_UID = "dev-elena"
 UNCONNECTED_THERAPIST_UID = "dev-unconnected-therapist"
+PRIYA_UID = "dev-priya"
 
 THERAPIST_HANNAH = "ther_hannah"
 THERAPIST_OTHER = "ther_other"
+THERAPIST_PRIYA = "ther_priya"   # actively connected, but to a DIFFERENT child
 PARENT_ELENA = "par_elena"
 PARENT_OMAR = "par_omar"
 PARENT_ROSA = "par_rosa"
 PARENT_DEV = "par_dev"
 PARENT_LEE = "par_lee"
+PARENT_TAMSIN = "par_tamsin"
 
 
 def principals() -> List[UserPrincipal]:
@@ -68,6 +71,10 @@ def principals() -> List[UserPrincipal]:
             id="prin_unconnected", uid=UNCONNECTED_THERAPIST_UID, role=PrincipalRole.THERAPIST,
             display_name="Unconnected Therapist", therapist_id=THERAPIST_OTHER, environment=ENV,
         ),
+        UserPrincipal(
+            id="prin_priya", uid=PRIYA_UID, role=PrincipalRole.THERAPIST,
+            display_name="Priya Raman", therapist_id=THERAPIST_PRIYA, environment=ENV,
+        ),
     ]
 
 
@@ -83,6 +90,13 @@ def therapists() -> List[TherapistProfile]:
             credentials="MA, SLP", discipline="slp", organization="Elsewhere Clinic",
             contact_email="other@elsewhere.example", environment=ENV,
         ),
+        # Actively connected to Theo only — used to prove that a therapist with a
+        # live caseload still cannot see another therapist's child_only versions.
+        TherapistProfile(
+            id=THERAPIST_PRIYA, uid=PRIYA_UID, display_name="Priya Raman",
+            credentials="MS, SLP", discipline="slp", organization="Northside Therapy",
+            contact_email="priya@northside.example", environment=ENV,
+        ),
     ]
 
 
@@ -93,6 +107,7 @@ def parents() -> List[ParentProfile]:
         ParentProfile(id=PARENT_ROSA, uid="dev-rosa", display_name="Rosa Nkemi", contact_email="rosa@family.example", environment=ENV),
         ParentProfile(id=PARENT_DEV, uid="dev-devika", display_name="Devika Rao", contact_email="devika@family.example", environment=ENV),
         ParentProfile(id=PARENT_LEE, uid="dev-lee", display_name="Lee Park", contact_email="lee@family.example", environment=ENV),
+        ParentProfile(id=PARENT_TAMSIN, uid="dev-tamsin", display_name="Tamsin Boyd", contact_email="tamsin@family.example", environment=ENV),
     ]
 
 
@@ -102,6 +117,8 @@ CHILD_ELI = "child_eli"
 CHILD_NOAH = "child_noah"
 CHILD_AMARA = "child_amara"
 CHILD_SANA = "child_sana"
+CHILD_THEO = "child_theo"   # Priya's caseload only — never Hannah's
+CHILD_RUE = "child_rue"     # Hannah's connection has ENDED
 
 
 def children() -> List[Child]:
@@ -129,6 +146,15 @@ def children() -> List[Child]:
               family_context="Connection paused by parent.",
               active_practice_domains=["Talking & Communicating"],
               home_practice_availability="", interests_and_motivators=[], environment=ENV),
+        Child(id=CHILD_THEO, parent_id=PARENT_TAMSIN, display_name="Theo",
+              family_context="Seen by a different therapist (Priya).",
+              active_practice_domains=["Talking & Communicating"],
+              home_practice_availability="after school",
+              interests_and_motivators=["trains"], environment=ENV),
+        Child(id=CHILD_RUE, parent_id=PARENT_LEE, display_name="Rue",
+              family_context="Connection ended; retained for audit history only.",
+              active_practice_domains=[], home_practice_availability="",
+              interests_and_motivators=[], environment=ENV),
     ]
 
 
@@ -149,6 +175,14 @@ def connections() -> List[TherapistChildConnection]:
         TherapistChildConnection(id="conn_sana", therapist_id=THERAPIST_HANNAH, child_id=CHILD_SANA,
                                  parent_id=PARENT_LEE, status=ConnectionStatus.PAUSED_BY_PARENT,
                                  invited_at="2026-05-10", activated_at="2026-05-11", environment=ENV),
+        # Ended: never surfaced in Hannah's caseload and grants no visibility.
+        TherapistChildConnection(id="conn_rue", therapist_id=THERAPIST_HANNAH, child_id=CHILD_RUE,
+                                 parent_id=PARENT_LEE, status=ConnectionStatus.ENDED,
+                                 invited_at="2026-03-01", activated_at="2026-03-02", environment=ENV),
+        # Priya's only connection — a live caseload that excludes Hannah's children.
+        TherapistChildConnection(id="conn_theo", therapist_id=THERAPIST_PRIYA, child_id=CHILD_THEO,
+                                 parent_id=PARENT_TAMSIN, status=ConnectionStatus.ACTIVE,
+                                 invited_at="2026-06-15", activated_at="2026-06-16", environment=ENV),
     ]
 
 
@@ -179,6 +213,16 @@ V_BUBBLES = "ver_bubbles_v1"
 V_BUBBLES_DERIVED = "ver_bubbles_hannah_v1"
 V_TURNTAKE = "ver_turn_taking_v1"
 
+# Derived versions exercising every save_scope / child-association combination.
+# All are owned by Hannah and hang off the same canonical bubbles template, so a
+# shared activity_template_id can never be mistaken for a grant of visibility.
+V_LIB_HANNAH = "ver_lib_hannah_v1"          # therapist_library -> owner only
+V_REVIEW_HANNAH = "ver_review_hannah_v1"    # submitted_for_genex_review -> submitter only
+V_ORPHAN_HANNAH = "ver_orphan_hannah_v1"    # child_only, no child association -> hidden
+V_PAUSED_HANNAH = "ver_paused_hannah_v1"    # child_only on a PAUSED connection -> hidden
+V_PENDING_HANNAH = "ver_pending_hannah_v1"  # child_only on a PENDING connection -> hidden
+V_ENDED_HANNAH = "ver_ended_hannah_v1"      # child_only on an ENDED connection -> hidden
+
 
 def activity_templates() -> List[ActivityTemplate]:
     return [
@@ -189,6 +233,20 @@ def activity_templates() -> List[ActivityTemplate]:
                          milestone_ids=[M_TURNTAKE], instructions="Roll the ball back and forth, naming turns.",
                          materials="soft ball", created_by_type=CreatedByType.GENEX, environment=ENV),
     ]
+
+
+def _hannah_derived(version_id: str, title: str, save_scope: ActivitySaveScope) -> ActivityVersion:
+    """A Hannah-authored derived version of the canonical bubbles activity."""
+    return ActivityVersion(
+        id=version_id, activity_template_id=T_BUBBLES, title=title,
+        domain="Talking & Communicating", milestone_ids=[M_REQUEST], milestone_id=M_REQUEST,
+        instructions="Model the word first, then pause and wait.", materials=["bubbles"],
+        created_by_type=CreatedByType.THERAPIST, created_by_user_id=THERAPIST_HANNAH,
+        created_by_display_name="Hannah Lieberknecht",
+        original_activity_template_id=T_BUBBLES, original_activity_version_id=V_BUBBLES,
+        modified_by_user_id=THERAPIST_HANNAH, modified_by_display_name="Hannah Lieberknecht",
+        save_scope=save_scope, is_derived=True, environment=ENV,
+    )
 
 
 def activity_versions() -> List[ActivityVersion]:
@@ -212,6 +270,15 @@ def activity_versions() -> List[ActivityVersion]:
                         instructions="Roll the ball back and forth, naming turns.", materials=["soft ball"],
                         milestone_id=M_TURNTAKE, created_by_type=CreatedByType.GENEX,
                         save_scope=ActivitySaveScope.CHILD_ONLY, is_derived=False, environment=ENV),
+        _hannah_derived(V_LIB_HANNAH, "Bubble requesting (Hannah's library copy)",
+                        ActivitySaveScope.THERAPIST_LIBRARY),
+        _hannah_derived(V_REVIEW_HANNAH, "Bubble requesting (submitted for Genex review)",
+                        ActivitySaveScope.SUBMITTED_FOR_GENEX_REVIEW),
+        _hannah_derived(V_ORPHAN_HANNAH, "Bubble requesting (draft, unattached)",
+                        ActivitySaveScope.CHILD_ONLY),
+        _hannah_derived(V_PAUSED_HANNAH, "Bubble requesting (Sana)", ActivitySaveScope.CHILD_ONLY),
+        _hannah_derived(V_PENDING_HANNAH, "Bubble requesting (Amara)", ActivitySaveScope.CHILD_ONLY),
+        _hannah_derived(V_ENDED_HANNAH, "Bubble requesting (Rue)", ActivitySaveScope.CHILD_ONLY),
     ]
 
 
@@ -262,6 +329,21 @@ def plan_change_proposals() -> List[PlanChangeProposal]:
                            target_assignment_id="assign_maya_turntake",
                            proposed_activity_version_id=V_BUBBLES_DERIVED,
                            rationale="Simplify the prompt; too difficult as-is.", environment=ENV),
+        # Historical proposals that bind a child_only version to a child whose
+        # connection is no longer active. They are what makes those versions
+        # resolvable at all — and they must still not grant catalog visibility.
+        PlanChangeProposal(id="prop_sana_modify", child_id=CHILD_SANA, therapist_id=THERAPIST_HANNAH,
+                           proposal_type=ProposalType.MODIFY, status=ProposalStatus.PENDING_PARENT_ACCEPTANCE,
+                           proposed_activity_version_id=V_PAUSED_HANNAH,
+                           rationale="Drafted before the parent paused the connection.", environment=ENV),
+        PlanChangeProposal(id="prop_amara_modify", child_id=CHILD_AMARA, therapist_id=THERAPIST_HANNAH,
+                           proposal_type=ProposalType.MODIFY, status=ProposalStatus.PENDING_PARENT_ACCEPTANCE,
+                           proposed_activity_version_id=V_PENDING_HANNAH,
+                           rationale="Drafted while the invitation is still pending.", environment=ENV),
+        PlanChangeProposal(id="prop_rue_modify", child_id=CHILD_RUE, therapist_id=THERAPIST_HANNAH,
+                           proposal_type=ProposalType.MODIFY, status=ProposalStatus.CANCELLED,
+                           proposed_activity_version_id=V_ENDED_HANNAH,
+                           rationale="Left over from an ended connection.", environment=ENV),
     ]
 
 

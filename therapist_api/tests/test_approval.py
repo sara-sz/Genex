@@ -255,6 +255,14 @@ def test_audit_event_is_safe_and_immutable_shape():
     r = _approve(c, HANNAH, "raw-secret-key", 1)
     aud = _repo(c).query(C.AUDIT_EVENTS)[0]
     assert aud["event_type"] == "plan_assignment_approved"
-    assert aud["before_state"] == "needs_plan_review" and aud["after_state"] == "approved"
+    # Structured before/after assignment state (same canonical shape as the
+    # proposal event), not a bare status string.
+    before, after = aud["before_state"], aud["after_state"]
+    assert before["plan_approval_status"] == "needs_plan_review"
+    assert after["plan_approval_status"] == "approved"
+    assert after["assignment_version"] == before["assignment_version"] + 1
+    assert before["assignment_status"] == after["assignment_status"] == "current"
+    assert before["current_activity_version_id"] == after["current_activity_version_id"]
+    assert before["pending_proposal_id"] is None and after["pending_proposal_id"] is None
     assert "raw-secret-key" not in str(aud)          # raw key never stored
     assert aud["idempotency_key_hash"] and len(aud["idempotency_key_hash"]) == 64

@@ -14,6 +14,7 @@ Fictional tokens (dev/test only):
   * "dev-hannah"                 -> Hannah (therapist principal, connected)
   * "dev-elena"                  -> Elena (parent principal)
   * "dev-unconnected-therapist"  -> a therapist with no connections
+  * "dev-priya"                  -> a therapist connected only to another child
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ _DEV_TOKENS: Dict[str, Dict[str, object]] = {
         "role": UserRole.SLP,
         "email": "other@elsewhere.example",
     },
+    "dev-priya": {"uid": "dev-priya", "role": UserRole.SLP, "email": "priya@northside.example"},
 }
 
 

@@ -61,3 +61,5 @@ def read_slice_client(**overrides: str):
 HANNAH = {"Authorization": "Bearer dev-hannah"}
 ELENA = {"Authorization": "Bearer dev-elena"}
 UNCONNECTED = {"Authorization": "Bearer dev-unconnected-therapist"}
+# Therapist with a live caseload, but connected only to Theo.
+PRIYA = {"Authorization": "Bearer dev-priya"}
