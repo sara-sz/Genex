@@ -6,8 +6,23 @@ repository untouched:
   * BOTH genex_core copies are byte-identical to the `beta-2.1-freeze` tag
       - genex-parent/genex_core
       - genex-alpha/genex_core
-  * parent files under genex-parent/ have no working-tree modifications
+  * parent files under genex-parent/ have no genuine working-tree modifications
   * the therapist feature commits touch only therapist paths
+
+Two DISTINCT protections, deliberately kept separate:
+
+  A. Committed history — `test_therapist_commits_touch_only_therapist_paths`
+     proves no therapist commit altered a Parent path. This is the guarantee
+     hosted CI actually needs.
+  B. Local working tree — `test_parent_files_unchanged` catches a developer
+     editing Parent files while working on the therapist service.
+
+(B) must tolerate git *filter* artifacts. Several Parent files match an
+`*.xlsx filter=lfs` rule in .gitattributes but were committed as raw bytes on a
+machine without git-lfs, so their blobs are real content rather than pointers.
+Wherever git-lfs IS active (e.g. GitHub runners) `git status` pipes them through
+the LFS clean filter, gets a pointer, and reports "modified" although nothing was
+written. See `_is_filter_artifact` for how that is distinguished from a real edit.
 
 Comparison is by git object hash at a revision (`<rev>:<path>`), which is the
 recursive tree hash for a directory — so any content change anywhere beneath the
@@ -24,7 +39,9 @@ freeze tag is genuinely absent from the local clone. Hosted CI checks out with
 from __future__ import annotations
 
 import pathlib
+import shlex
 import subprocess
+import sys
 from typing import Dict, List, NamedTuple, Optional, Sequence
 
 import pytest
@@ -39,6 +56,14 @@ GENEX_CORE_PATHS = ("genex-parent/genex_core", "genex-alpha/genex_core")
 
 # The only paths the therapist workstream is allowed to touch.
 THERAPIST_ALLOWED_PREFIXES = ("therapist_api/", ".github/workflows/therapist-api-ci.yml")
+
+# Working-tree protection scope.
+PARENT_PATH = "genex-parent"
+
+# Status codes that MAY turn out to be a filter round-trip rather than an edit.
+# Only plain modification qualifies; add/delete/rename/copy/typechange/unmerged
+# and untracked are always genuine.
+FILTER_ARTIFACT_CODES = frozenset("M ")
 
 
 # ── git helpers ─────────────────────────────────────────────────────────────
@@ -100,6 +125,129 @@ def _require_freeze_tag(cwd: pathlib.Path = WORKTREE) -> None:
             "not performed. Hosted CI checks out with fetch-depth: 0 so the tag "
             "is present there; locally, fetch tags to run this check."
         )
+
+
+# ── working-tree status parsing (NUL-delimited, filter-aware) ───────────────
+class MalformedStatus(RuntimeError):
+    """git status output could not be parsed — fail closed, never ignore."""
+
+
+class StatusEntry(NamedTuple):
+    """One `git status --porcelain=v1 -z` record."""
+
+    x: str                        # staged (index vs HEAD) code
+    y: str                        # unstaged (worktree vs index) code
+    path: str                     # for a rename/copy this is the NEW path
+    orig_path: Optional[str]      # rename/copy source, else None
+
+    @property
+    def code(self) -> str:
+        return f"{self.x}{self.y}"
+
+
+def parse_porcelain_z(output: str) -> List[StatusEntry]:
+    """Parse `git status --porcelain=v1 -z` output.
+
+    The -z format is used precisely because it is unambiguous: paths are NEVER
+    quoted or backslash-escaped, so names containing spaces, quotes or newlines
+    survive intact. Each record is `XY <path>` terminated by NUL. A rename/copy
+    record is followed by a SECOND NUL-terminated field holding the ORIGINAL
+    path — the new path comes first (verified directly against git).
+
+    Anything that does not match this shape raises MalformedStatus rather than
+    being skipped.
+    """
+    fields = output.split("\0")
+    if fields and fields[-1] == "":
+        fields.pop()              # trailing empty field after the final NUL
+
+    entries: List[StatusEntry] = []
+    i = 0
+    while i < len(fields):
+        record = fields[i]
+        i += 1
+        if len(record) < 4 or record[2] != " ":
+            raise MalformedStatus(f"unparseable git status record: {record!r}")
+        x, y, path = record[0], record[1], record[3:]
+        orig_path = None
+        if "R" in (x, y) or "C" in (x, y):
+            if i >= len(fields):
+                raise MalformedStatus(f"rename/copy record missing source path: {record!r}")
+            orig_path = fields[i]
+            i += 1
+        entries.append(StatusEntry(x, y, path, orig_path))
+    return entries
+
+
+def _is_filter_artifact(entry: StatusEntry, cwd: pathlib.Path) -> bool:
+    """True only when the file's REAL bytes and its index entry both match HEAD.
+
+    `git status` compares the working tree through any configured clean filter,
+    so an LFS-declared file stored as raw bytes reads as modified on a machine
+    with git-lfs active even though nothing was written. `git hash-object
+    --no-filters` hashes the bytes actually on disk, bypassing that.
+
+    Both conditions are required. Checking the index too means a genuinely
+    STAGED change is never mistaken for an artifact, even if the working-tree
+    bytes happen to match HEAD.
+    """
+    head = _git("rev-parse", f"HEAD:{entry.path}", cwd=cwd)
+    if head.returncode != 0:
+        return False                          # not in HEAD -> cannot be a round-trip
+    head_blob = head.stdout.strip()
+
+    index = _git("ls-files", "-s", "--", entry.path, cwd=cwd)
+    index_fields = index.stdout.split()
+    if index.returncode != 0 or len(index_fields) < 2 or index_fields[1] != head_blob:
+        return False                          # staged difference -> genuine
+
+    raw = _git("hash-object", "--no-filters", "--", entry.path, cwd=cwd)
+    if raw.returncode != 0:
+        return False
+    return raw.stdout.strip() == head_blob
+
+
+def classify_status_entry(entry: StatusEntry, cwd: pathlib.Path) -> Optional[str]:
+    """Reason this entry is a genuine Parent change, or None if benign.
+
+    Fail-closed: every code that is not provably a filter round-trip counts as a
+    real change, and an unrecognised code is reported rather than ignored.
+    """
+    code = entry.code
+    if entry.orig_path is not None:
+        return "renamed/copied parent path"          # fail closed, never excused
+    if "?" in code:
+        return "untracked parent file"
+    if "D" in code:
+        return "deleted parent file"
+    if "A" in code:
+        return "added parent file"
+    if "T" in code:
+        return "parent file type changed"
+    if "U" in code:
+        return "unmerged parent file"
+    if set(code) <= FILTER_ARTIFACT_CODES:
+        if not code.strip():
+            raise MalformedStatus(f"empty status code for {entry.path!r}")
+        if _is_filter_artifact(entry, cwd):
+            return None                              # LFS/filter round-trip only
+        return "parent file content differs from HEAD"
+    raise MalformedStatus(f"unrecognised git status code {code!r} for {entry.path!r}")
+
+
+def genuine_parent_changes(cwd: pathlib.Path = WORKTREE) -> List[tuple]:
+    """(entry, reason) for every REAL change under genex-parent/."""
+    res = _git(
+        "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", PARENT_PATH, cwd=cwd
+    )
+    if res.returncode != 0:
+        raise MalformedStatus(f"git status failed: {res.stderr.strip()}")
+    return [
+        (entry, reason)
+        for entry in parse_porcelain_z(res.stdout)
+        for reason in [classify_status_entry(entry, cwd)]
+        if reason is not None
+    ]
 
 
 def assert_path_frozen(result: Comparison) -> None:
@@ -166,11 +314,27 @@ def test_freeze_tag_is_present_so_checks_do_not_skip() -> None:
     _require_freeze_tag()
 
 
-def test_parent_files_unchanged() -> None:
+def test_parent_files_unchanged(request) -> None:
+    """LOCAL WORKING-TREE protection: no genuine edit to Parent files.
+
+    This is protection (B) from the module docstring. It is NOT the proof that
+    therapist commits left Parent code alone — that is
+    `test_therapist_commits_touch_only_therapist_paths`, which inspects
+    committed history and is the guarantee hosted CI relies on.
+
+    A `git status` entry is ignored ONLY when the raw on-disk bytes and the
+    index entry both still equal the committed HEAD blob, i.e. the entry is a
+    git filter round-trip (LFS-declared files stored as raw bytes) and nothing
+    was actually written. Genuine edits, staged changes, additions, deletions,
+    renames and copies all still fail, and an unparseable or unrecognised status
+    raises rather than passing quietly.
+    """
     _require_git()
-    res = _git("status", "--porcelain", "--", "genex-parent")
-    assert res.returncode == 0
-    assert res.stdout.strip() == "", f"parent worktree changed:\n{res.stdout}"
+    changes = genuine_parent_changes()
+    _report(request, f"parent worktree: {len(changes)} genuine change(s)")
+    assert not changes, "parent worktree changed:\n" + "\n".join(
+        f"  {entry.code!r} {entry.path} — {reason}" for entry, reason in changes
+    )
 
 
 def test_therapist_commits_touch_only_therapist_paths() -> None:
@@ -310,3 +474,184 @@ def test_simulation_missing_tag_skips_with_clear_reason(tmp_path: pathlib.Path) 
 def test_simulation_present_tag_does_not_skip(frozen_repo: pathlib.Path) -> None:
     assert _tag_exists(FREEZE_TAG, cwd=frozen_repo) is True
     _require_freeze_tag(cwd=frozen_repo)   # must not raise Skipped
+
+
+# ── parent working-tree protection (throwaway repos; stand-in files only) ───
+SPACED_NAME = "genex-parent/data/cdc milestones copy.xlsx"
+
+
+@pytest.fixture
+def parent_repo(tmp_path: pathlib.Path) -> pathlib.Path:
+    """Throwaway repo with Parent-like files, one declared LFS but stored raw.
+
+    Mirrors the real repository's condition: `.gitattributes` marks *.xlsx as
+    LFS-managed, but the blobs are committed as raw bytes because no clean
+    filter is configured at commit time.
+    """
+    root = tmp_path / "parent-repo"
+    (root / "genex-parent" / "data").mkdir(parents=True)
+    (root / ".gitattributes").write_text("*.xlsx filter=lfs diff=lfs merge=lfs -text\n",
+                                         encoding="utf-8")
+    (root / "genex-parent" / "app.py").write_text("# parent code\n", encoding="utf-8")
+    # Stand-in binary content — never the real protected spreadsheet.
+    (root / "genex-parent" / "data" / "sheet.xlsx").write_bytes(b"PK\x03\x04stand-in" * 64)
+    (root / SPACED_NAME).write_bytes(b"PK\x03\x04spaced" * 32)
+    _init_repo(root)
+    _commit_all(root, "parent baseline")
+    return root
+
+
+def _enable_lfs_like_filter(repo: pathlib.Path, tmp_path: pathlib.Path) -> None:
+    """Configure a clean filter that emits canonical LFS pointers.
+
+    Reproduces a git-lfs-enabled machine (such as a GitHub runner) without
+    requiring git-lfs to be installed.
+    """
+    script = tmp_path / "fake_lfs_clean.py"
+    script.write_text(
+        "import hashlib, sys\n"
+        "data = sys.stdin.buffer.read()\n"
+        "sys.stdout.write(\n"
+        "    'version https://git-lfs.github.com/spec/v1\\n'\n"
+        "    f'oid sha256:{hashlib.sha256(data).hexdigest()}\\n'\n"
+        "    f'size {len(data)}\\n'\n"
+        ")\n",
+        encoding="utf-8",
+    )
+    command = f"{shlex.quote(sys.executable)} {shlex.quote(str(script))}"
+    _git("config", "filter.lfs.clean", command, cwd=repo)
+    _git("config", "filter.lfs.smudge", "cat", cwd=repo)
+    _git("config", "filter.lfs.required", "false", cwd=repo)
+
+
+def test_parent_sim_clean_tree_passes(parent_repo: pathlib.Path) -> None:
+    assert genuine_parent_changes(cwd=parent_repo) == []
+
+
+def test_parent_sim_lfs_filter_artifact_passes(
+    parent_repo: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """git status says modified, but no byte was written -> must pass."""
+    _enable_lfs_like_filter(parent_repo, tmp_path)
+
+    status = _git("status", "--porcelain=v1", "-z", "--", PARENT_PATH, cwd=parent_repo).stdout
+    reported = parse_porcelain_z(status)
+    assert reported, "expected the filter to make git report modifications"
+    assert all(e.code == " M" for e in reported), [e.code for e in reported]
+
+    # ...and the raw bytes still equal HEAD for every reported file.
+    for entry in reported:
+        raw = _git("hash-object", "--no-filters", "--", entry.path, cwd=parent_repo).stdout.strip()
+        head = _git("rev-parse", f"HEAD:{entry.path}", cwd=parent_repo).stdout.strip()
+        assert raw == head
+
+    assert genuine_parent_changes(cwd=parent_repo) == []
+
+
+def test_parent_sim_real_modification_fails(parent_repo: pathlib.Path) -> None:
+    (parent_repo / "genex-parent" / "app.py").write_text("# edited\n", encoding="utf-8")
+    changes = genuine_parent_changes(cwd=parent_repo)
+    assert [e.path for e, _ in changes] == ["genex-parent/app.py"]
+    assert changes[0][1] == "parent file content differs from HEAD"
+
+
+def test_parent_sim_real_modification_fails_even_with_filter_active(
+    parent_repo: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """The artifact exemption must not mask a genuine edit to an LFS file."""
+    _enable_lfs_like_filter(parent_repo, tmp_path)
+    target = parent_repo / "genex-parent" / "data" / "sheet.xlsx"
+    target.write_bytes(target.read_bytes() + b"genuinely changed")
+
+    changes = genuine_parent_changes(cwd=parent_repo)
+    assert [e.path for e, _ in changes] == ["genex-parent/data/sheet.xlsx"]
+
+
+def test_parent_sim_staged_modification_fails(parent_repo: pathlib.Path) -> None:
+    (parent_repo / "genex-parent" / "app.py").write_text("# staged edit\n", encoding="utf-8")
+    _git("add", "genex-parent/app.py", cwd=parent_repo)
+    changes = genuine_parent_changes(cwd=parent_repo)
+    assert [e.path for e, _ in changes] == ["genex-parent/app.py"]
+    assert changes[0][0].x == "M"   # staged
+
+
+def test_parent_sim_staged_edit_reverted_on_disk_still_fails(
+    parent_repo: pathlib.Path,
+) -> None:
+    """Index differs from HEAD even though on-disk bytes match — still genuine."""
+    original = (parent_repo / "genex-parent" / "app.py").read_text(encoding="utf-8")
+    (parent_repo / "genex-parent" / "app.py").write_text("# staged\n", encoding="utf-8")
+    _git("add", "genex-parent/app.py", cwd=parent_repo)
+    (parent_repo / "genex-parent" / "app.py").write_text(original, encoding="utf-8")
+
+    changes = genuine_parent_changes(cwd=parent_repo)
+    assert [e.path for e, _ in changes] == ["genex-parent/app.py"]
+
+
+def test_parent_sim_deleted_file_fails(parent_repo: pathlib.Path) -> None:
+    (parent_repo / "genex-parent" / "app.py").unlink()
+    changes = genuine_parent_changes(cwd=parent_repo)
+    assert [(e.path, r) for e, r in changes] == [("genex-parent/app.py", "deleted parent file")]
+
+
+def test_parent_sim_untracked_file_fails(parent_repo: pathlib.Path) -> None:
+    (parent_repo / "genex-parent" / "new_module.py").write_text("x = 1\n", encoding="utf-8")
+    changes = genuine_parent_changes(cwd=parent_repo)
+    assert [(e.path, r) for e, r in changes] == [
+        ("genex-parent/new_module.py", "untracked parent file")
+    ]
+
+
+def test_parent_sim_rename_fails(parent_repo: pathlib.Path) -> None:
+    _git("mv", "genex-parent/app.py", "genex-parent/app_renamed.py", cwd=parent_repo)
+    changes = genuine_parent_changes(cwd=parent_repo)
+    assert changes, "a rename must be reported"
+    entry, reason = changes[0]
+    assert reason == "renamed/copied parent path"
+    # -z puts the NEW path first and the ORIGINAL in the following field.
+    assert entry.path == "genex-parent/app_renamed.py"
+    assert entry.orig_path == "genex-parent/app.py"
+
+
+def test_parent_sim_path_with_spaces_is_parsed(parent_repo: pathlib.Path) -> None:
+    target = parent_repo / SPACED_NAME
+    target.write_bytes(target.read_bytes() + b"edited")
+    changes = genuine_parent_changes(cwd=parent_repo)
+    assert [e.path for e, _ in changes] == [SPACED_NAME]   # unsplit, unquoted
+
+
+def test_parent_sim_failure_message_names_the_path(parent_repo: pathlib.Path) -> None:
+    (parent_repo / "genex-parent" / "app.py").write_text("# edited\n", encoding="utf-8")
+    changes = genuine_parent_changes(cwd=parent_repo)
+    message = "parent worktree changed:\n" + "\n".join(
+        f"  {e.code!r} {e.path} — {r}" for e, r in changes
+    )
+    assert "genex-parent/app.py" in message
+    assert "differs from HEAD" in message
+
+
+def test_parse_porcelain_z_handles_every_record_shape() -> None:
+    raw = (
+        " M genex-parent/plain.txt\0"
+        "R  genex-parent/new name.txt\0genex-parent/old name.txt\0"
+        " D genex-parent/gone.txt\0"
+        "?? genex-parent/untracked file.txt\0"
+    )
+    entries = parse_porcelain_z(raw)
+    assert [(e.code, e.path, e.orig_path) for e in entries] == [
+        (" M", "genex-parent/plain.txt", None),
+        ("R ", "genex-parent/new name.txt", "genex-parent/old name.txt"),
+        (" D", "genex-parent/gone.txt", None),
+        ("??", "genex-parent/untracked file.txt", None),
+    ]
+    assert parse_porcelain_z("") == []
+
+
+def test_malformed_status_fails_closed(parent_repo: pathlib.Path) -> None:
+    """Unparseable or unrecognised status must raise, never pass quietly."""
+    with pytest.raises(MalformedStatus):
+        parse_porcelain_z("garbage-without-status-field\0")
+    with pytest.raises(MalformedStatus):   # rename record missing its source path
+        parse_porcelain_z("R  genex-parent/only-one-field.txt\0")
+    with pytest.raises(MalformedStatus):   # unrecognised code
+        classify_status_entry(StatusEntry("X", "Z", "genex-parent/app.py", None), parent_repo)
