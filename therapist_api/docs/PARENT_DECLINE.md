@@ -5,10 +5,11 @@ Cloud Run, no frontend, no real data.** The atomic critical section is
 `repo.run_in_transaction` (snapshot/restore rollback), shaped to map onto a
 future Firestore transaction.
 
-**No parent proposal-read endpoint exists yet** — a parent can decide on a
-proposal but cannot read one over HTTP; `GET /children/{id}/proposals/…` remains
-therapist-only. Therapist cancellation, proposal expiry, add/remove/generic-replace
-proposals and note writes are also still unimplemented.
+A parent-safe **proposal detail read** is implemented in Phase 1B.2B.3 — see
+[PARENT_PROPOSAL_READ.md](PARENT_PROPOSAL_READ.md). It supplies both versions this
+endpoint requires, so a parent client needs no therapist endpoint. A parent
+proposal *list* is still absent. Therapist cancellation, proposal expiry,
+add/remove/generic-replace proposals and note writes remain unimplemented.
 
 Decline is the mirror of [acceptance](PARENT_ACCEPTANCE.md), and its defining
 property is what it does **not** do: **no replacement assignment is created**, and

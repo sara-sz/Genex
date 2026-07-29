@@ -410,6 +410,125 @@ class ReadService:
             raise access.ChildNotFound(proposal_id)  # existence-blind
         return self._proposal_view(rows[0])
 
+    # ── parent-safe proposal decision detail ────────────────────────────────
+    def _parent_activity_view(self, version: dict) -> S.ParentActivityView:
+        """Parent-facing activity content only.
+
+        Deliberately omits every provenance, ownership and visibility field that
+        exists on `ActivityVersion` — `save_scope`, `is_derived`, `created_by_*`,
+        `modified_by_*`, `original_activity_*`, `immutable`, `environment` — so a
+        parent response cannot leak how the activity was authored or who may see
+        it. Only what a parent needs to judge the change is included.
+        """
+        milestone_id = version.get("milestone_id")
+        milestone_rows = (
+            self.repo.query(C.MILESTONES, id=milestone_id) if milestone_id else []
+        )
+        return S.ParentActivityView(
+            title=version.get("title", ""),
+            developmental_domain=version.get("domain", ""),
+            milestone_id=milestone_id,
+            milestone_display_name=milestone_rows[0]["title"] if milestone_rows else "",
+            skill_focus=version.get("skill_focus", ""),
+            duration_minutes=version.get("duration_minutes"),
+            difficulty=version.get("difficulty", ""),
+            materials=list(version.get("materials", [])),
+            materials_type=version.get("materials_type", ""),
+            setup=version.get("setup", ""),
+            parent_instructions=list(version.get("parent_instructions", [])),
+            what_to_say=list(version.get("what_to_say", [])),
+            how_to_help=list(version.get("how_to_help", [])),
+            success_signals=list(version.get("success_signals", [])),
+            variations=list(version.get("variations", [])),
+            routine_tags=list(version.get("routine_tags", [])),
+            theme_tags=list(version.get("theme_tags", [])),
+            safety_risk_flags=list(version.get("safety_risk_flags", [])),
+        )
+
+    def get_parent_proposal_decision(
+        self, user: AuthenticatedUser, child_id: str, proposal_id: str
+    ) -> S.ParentProposalDecisionDetail:
+        """Parent-safe decision detail for ONE proposal about the parent's child.
+
+        Read-only: nothing is written to any collection. Authorization is
+        existence-blind — an unknown child, another family's child or proposal,
+        and a non-active connection all raise the same `ChildNotFound` (404).
+
+        Authorization to the child + proposal grants sight of exactly the TWO
+        activity versions that proposal references. It is not a catalog read: the
+        generic activity-template visibility rules are untouched, so
+        `child_only` / `therapist_library` / `submitted_for_genex_review`
+        versions gain no broader exposure from this endpoint.
+        """
+        parent = access.resolve_parent(self.repo, user)              # 403 if not a parent
+        access.require_parent_child_access(self.repo, parent["id"], child_id)  # 404-blind
+
+        rows = self.repo.query(C.PLAN_CHANGE_PROPOSALS, id=proposal_id)
+        if not rows or rows[0]["child_id"] != child_id:
+            raise access.ChildNotFound(proposal_id)                  # existence-blind
+        proposal = rows[0]
+
+        # The referenced assignment must belong to the same child; a proposal
+        # pointing elsewhere must not reveal that the other assignment exists.
+        assignment_id = proposal.get("target_assignment_id")
+        assignments = (
+            self.repo.query(C.PLAN_ASSIGNMENTS, id=assignment_id) if assignment_id else []
+        )
+        if not assignments or assignments[0]["child_id"] != child_id:
+            raise access.ChildNotFound(proposal_id)
+        assignment = assignments[0]
+
+        # Original version: the proposal's recorded original where present,
+        # otherwise whatever the assignment currently carries.
+        original_version_id = (
+            proposal.get("original_activity_version_id") or assignment["activity_version_id"]
+        )
+        proposed_version_id = proposal.get("proposed_activity_version_id")
+        original = self._version(original_version_id)
+        proposed = self._version(proposed_version_id) if proposed_version_id else None
+        if original is None or proposed is None:
+            # A dangling reference is an internal inconsistency, not a hint about
+            # what exists — stay existence-blind.
+            raise access.ChildNotFound(proposal_id)
+
+        child = self._child(child_id) or {}
+        therapist_rows = self.repo.query(C.THERAPIST_PROFILES, id=proposal.get("therapist_id"))
+        therapist = therapist_rows[0] if therapist_rows else {}
+        therapist_name = therapist.get("display_name", "")
+        if therapist.get("credentials"):
+            therapist_name = f"{therapist_name}, {therapist['credentials']}"
+
+        status = _plain(proposal["status"])
+        pending = status == ProposalStatus.PENDING_PARENT_ACCEPTANCE.value
+        decided_at = proposal.get("decided_at")
+
+        return S.ParentProposalDecisionDetail(
+            proposal=S.ParentProposalSummary(
+                proposal_id=proposal["id"],
+                proposal_type=_plain(proposal["proposal_type"]),
+                proposal_status=status,
+                proposal_version=int(proposal.get("version", 1)),
+                created_at=proposal.get("created_at", ""),
+                decided_at=decided_at,
+            ),
+            child=S.ParentChildSummary(
+                child_id=child_id, display_name=child.get("display_name", "")
+            ),
+            therapist=S.ParentTherapistSummary(display_name=therapist_name),
+            decision_context=S.ParentDecisionContext(
+                change_reason=proposal.get("change_reason", "") or proposal.get("rationale", ""),
+                expected_assignment_version=int(assignment.get("version", 1)),
+            ),
+            original_activity=self._parent_activity_view(original),
+            proposed_activity=self._parent_activity_view(proposed),
+            decision=S.ParentDecisionFlags(
+                can_accept=pending,
+                can_decline=pending,
+                accepted_or_declined_at=decided_at,
+                resulting_assignment_id=proposal.get("resulting_assignment_id"),
+            ),
+        )
+
     def list_milestones(self, user: AuthenticatedUser) -> List[S.MilestoneView]:
         access.resolve_therapist(self.repo, user)
         return [S.MilestoneView(

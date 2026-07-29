@@ -9,12 +9,14 @@ Lists use a pagination-ready envelope: {items, total, next_cursor}.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from fastapi import APIRouter, Depends, Header, Request
 
 from ..auth.interface import AuthenticatedUser
 from ..constants import API_VERSION
+from ..domain.enums import PrincipalRole
+from ..services import access
 from ..services import (
     acceptance_service,
     approval_service,
@@ -262,8 +264,25 @@ async def list_proposals(child_id: str,
     return _page(svc.list_proposals(principal, child_id))
 
 
-@router.get("/children/{child_id}/proposals/{proposal_id}", response_model=S.ProposalView)
+@router.get(
+    "/children/{child_id}/proposals/{proposal_id}",
+    response_model=Union[S.ProposalView, S.ParentProposalDecisionDetail],
+    responses={
+        403: {"model": S.ErrorResponse}, 404: {"model": S.ErrorResponse},
+        409: {"model": S.ErrorResponse},
+    },
+)
 async def get_proposal(child_id: str, proposal_id: str,
                        principal: AuthenticatedUser = Depends(require_principal),
                        svc: ReadService = Depends(get_service)):
+    """Role-aware proposal detail.
+
+    A therapist receives the existing `ProposalView` unchanged. An authorized
+    parent receives the narrower `ParentProposalDecisionDetail` — a dedicated
+    projection, not a filtered therapist model — carrying the two versions its
+    accept/decline calls need. OpenAPI documents both via `anyOf`; the two shapes
+    are disjoint on their required fields, so neither can validate as the other.
+    """
+    if access.principal_role(principal) == PrincipalRole.PARENT:
+        return svc.get_parent_proposal_decision(principal, child_id, proposal_id)
     return svc.get_proposal(principal, child_id, proposal_id)

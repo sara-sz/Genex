@@ -280,6 +280,80 @@ class AcceptProposalResponse(BaseModel):
     idempotent_replay: bool
 
 
+# ── read: parent-safe proposal decision detail ──────────────────────────────
+#
+# A DEDICATED projection, not a filtered therapist model. Every field below is
+# explicitly allowed for a parent making a decision about their own child; the
+# therapist-only `ProposalView` is untouched and never reaches a parent.
+class ParentActivityView(BaseModel):
+    """Parent-facing activity content. No provenance, ownership or save_scope."""
+
+    title: str
+    developmental_domain: str        # canonical display label, e.g. "Talking & Communicating"
+    milestone_id: Optional[str] = None
+    milestone_display_name: str = ""
+    skill_focus: str = ""
+    duration_minutes: Optional[int] = None
+    difficulty: str = ""
+    materials: List[str] = Field(default_factory=list)
+    materials_type: str = ""
+    setup: str = ""
+    parent_instructions: List[str] = Field(default_factory=list)
+    what_to_say: List[str] = Field(default_factory=list)
+    how_to_help: List[str] = Field(default_factory=list)
+    success_signals: List[str] = Field(default_factory=list)
+    variations: List[str] = Field(default_factory=list)
+    routine_tags: List[str] = Field(default_factory=list)
+    theme_tags: List[str] = Field(default_factory=list)
+    safety_risk_flags: List[str] = Field(default_factory=list)
+
+
+class ParentProposalSummary(BaseModel):
+    proposal_id: str
+    proposal_type: str
+    proposal_status: str
+    proposal_version: int            # feeds expected_proposal_version on accept/decline
+    created_at: str = ""
+    decided_at: Optional[str] = None
+
+
+class ParentChildSummary(BaseModel):
+    child_id: str
+    display_name: str = ""
+
+
+class ParentTherapistSummary(BaseModel):
+    """Only the therapist's presentable name — never their id or contact data."""
+
+    display_name: str = ""
+
+
+class ParentDecisionContext(BaseModel):
+    change_reason: str = ""
+    # feeds expected_assignment_version on accept/decline
+    expected_assignment_version: int
+
+
+class ParentDecisionFlags(BaseModel):
+    """Computed from canonical backend state, never from display labels."""
+
+    can_accept: bool
+    can_decline: bool
+    accepted_or_declined_at: Optional[str] = None
+    # Present only for an accepted proposal; null for pending and declined.
+    resulting_assignment_id: Optional[str] = None
+
+
+class ParentProposalDecisionDetail(BaseModel):
+    proposal: ParentProposalSummary
+    child: ParentChildSummary
+    therapist: ParentTherapistSummary
+    decision_context: ParentDecisionContext
+    original_activity: ParentActivityView
+    proposed_activity: ParentActivityView
+    decision: ParentDecisionFlags
+
+
 # ── write: parent decline of a modify proposal ──────────────────────────────
 class DeclineProposalRequest(BaseModel):
     """Both expected versions are REQUIRED (optimistic concurrency)."""

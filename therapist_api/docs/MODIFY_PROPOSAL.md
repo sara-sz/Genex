@@ -267,8 +267,16 @@ Decline reuses the same key-bound `operation_identity()` with
 `action = "decline_plan_change_proposal"`, so an accept and a decline presented
 with the same idempotency key cannot collide on one audit document.
 
+## Parent-safe proposal read (Phase 1B.2B.3)
+
+`GET /children/{id}/proposals/{proposal_id}` is now **role-aware** — see
+[PARENT_PROPOSAL_READ.md](PARENT_PROPOSAL_READ.md). The therapist response is
+unchanged; an authorized parent receives a narrower dedicated projection carrying
+the two versions accept/decline need. Read-only, and the generic
+activity-template visibility rules above are untouched.
+
 ## Not implemented yet (later gated phases)
 
-Parent proposal-read endpoint, therapist cancellation, proposal expiry,
+Parent proposal list/inbox, therapist cancellation, proposal expiry,
 add/remove/generic-replace proposals, note/private-note writes, Firebase Auth,
 Firestore, Cloud Run, frontend integration, production config, real users/data.
