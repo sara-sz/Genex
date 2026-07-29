@@ -241,8 +241,24 @@ unchanged.
 `milestone_domain_mismatch`(422). Envelope `{ "error", "detail" }`; no stack
 traces, internal ids, or authorization disclosure.
 
+## Parent acceptance (Phase 1B.2B.1)
+
+Parent **acceptance** of a pending modify proposal is now implemented — see
+[PARENT_ACCEPTANCE.md](PARENT_ACCEPTANCE.md). Accepting retires the original
+assignment (`current` → `replaced`, kept for history), creates exactly one
+replacement carrying the proposed activity version in the same plan slot, and
+clears `pending_proposal_id`.
+
+Because acceptance clears `pending_proposal_id`, the deterministic-id concern
+tracked above **has been addressed for that operation**: acceptance derives its
+replacement-assignment and audit-event ids from an operation identity that
+includes the SHA-256 hash of the idempotency key. Creation-time ids are
+unchanged.
+
+**Parent decline is still NOT implemented.**
+
 ## Not implemented yet (later gated phases)
 
-Parent accept/decline, atomic replacement, add/remove/generic-replace proposals,
-note/private-note writes, Firebase Auth, Firestore, Cloud Run, frontend
+Parent decline, therapist cancellation, proposal expiry, add/remove/generic-replace
+proposals, note/private-note writes, Firebase Auth, Firestore, Cloud Run, frontend
 integration, production config, real users/data.

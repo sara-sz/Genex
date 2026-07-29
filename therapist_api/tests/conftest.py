@@ -63,3 +63,5 @@ ELENA = {"Authorization": "Bearer dev-elena"}
 UNCONNECTED = {"Authorization": "Bearer dev-unconnected-therapist"}
 # Therapist with a live caseload, but connected only to Theo.
 PRIYA = {"Authorization": "Bearer dev-priya"}
+# A second parent, of a different child (Eli) — for existence-blind checks.
+OMAR = {"Authorization": "Bearer dev-omar"}

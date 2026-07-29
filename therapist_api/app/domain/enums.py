@@ -45,6 +45,10 @@ class AssignmentStatus(str, Enum):
     CURRENT = "current"
     RETIRED = "retired"
     PROPOSED = "proposed"
+    # Superseded by an accepted proposal. Kept for history: the record remains
+    # readable, but it is no longer a current plan item and a replacement
+    # assignment carries `replaces_assignment_id` back to it.
+    REPLACED = "replaced"
 
 
 class ProposalType(str, Enum):

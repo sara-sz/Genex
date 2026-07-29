@@ -12,7 +12,8 @@ Safety:
 
 Fictional tokens (dev/test only):
   * "dev-hannah"                 -> Hannah (therapist principal, connected)
-  * "dev-elena"                  -> Elena (parent principal)
+  * "dev-elena"                  -> Elena (parent principal, Maya's parent)
+  * "dev-omar"                   -> Omar (parent of a different child)
   * "dev-unconnected-therapist"  -> a therapist with no connections
   * "dev-priya"                  -> a therapist connected only to another child
 """
@@ -28,6 +29,8 @@ from .interface import AuthenticatedUser, AuthError, AuthVerifier, FailClosedAut
 _DEV_TOKENS: Dict[str, Dict[str, object]] = {
     "dev-hannah": {"uid": "dev-hannah", "role": UserRole.SLP, "email": "hannah@talkshop.example"},
     "dev-elena": {"uid": "dev-elena", "role": UserRole.PARENT, "email": "elena@family.example"},
+    # A second parent, of a DIFFERENT child — used to prove existence-blind 404s.
+    "dev-omar": {"uid": "dev-omar", "role": UserRole.PARENT, "email": "omar@family.example"},
     "dev-unconnected-therapist": {
         "uid": "dev-unconnected-therapist",
         "role": UserRole.SLP,

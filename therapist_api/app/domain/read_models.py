@@ -189,9 +189,17 @@ class PlanAssignment(BaseModel):
     assignment_status: AssignmentStatus = AssignmentStatus.CURRENT
     parent_feedback_summary: str = ""
     pending_proposal_id: Optional[str] = None
+    # ── replacement lineage (set when a parent accepts a modify proposal) ──
+    # On the RETIRED original: what superseded it, and when.
+    replaced_by_assignment_id: Optional[str] = None
+    replaced_at: Optional[str] = None
+    # On the REPLACEMENT: what it superseded and which proposal produced it.
+    replaces_assignment_id: Optional[str] = None
+    source_proposal_id: Optional[str] = None
     # Optimistic-concurrency version on the mutable assignment state. Incremented
     # exactly once per successful write. NOT a display string.
     version: int = 1
+    created_at: str = ""
     updated_at: str = ""
     environment: str = "dev"
     schema_version: str = SCHEMA_VERSION
@@ -229,6 +237,11 @@ class PlanChangeProposal(BaseModel):
     rationale: str = ""
     created_by_user_id: Optional[str] = None
     created_at: str = ""
+    # ── parent decision (set when accepted; decline not implemented yet) ──
+    decided_by_user_id: Optional[str] = None
+    decided_by_role: Optional[PrincipalRole] = None
+    decided_at: Optional[str] = None
+    resulting_assignment_id: Optional[str] = None
     version: int = 1
     environment: str = "dev"
     schema_version: str = SCHEMA_VERSION

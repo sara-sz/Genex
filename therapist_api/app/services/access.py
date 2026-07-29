@@ -55,6 +55,33 @@ def resolve_parent(repo: CollaborationRepository, user: AuthenticatedUser) -> di
     return matches[0]
 
 
+def require_parent_child_access(
+    repo: CollaborationRepository, parent_id: str, child_id: str
+) -> dict:
+    """Return the ACTIVE connection for a parent→child pair, else ChildNotFound.
+
+    Existence-blind in exactly the same way as the therapist policy: an unknown
+    child, another family's child, and a child whose therapist connection is
+    pending/paused/ended all raise the SAME `ChildNotFound` (404), so a parent
+    can never probe for the existence of a child that is not theirs.
+
+    An active connection is required because parent decisions act on a plan the
+    therapist is currently collaborating on; once the connection is paused or
+    ended there is no live collaboration to accept into.
+    """
+    children = repo.query(C.CHILDREN, id=child_id)
+    if not children or children[0].get("parent_id") != parent_id:
+        raise ChildNotFound(child_id)
+    active = [
+        c
+        for c in repo.query(C.CONNECTIONS, child_id=child_id)
+        if c["status"] == ConnectionStatus.ACTIVE.value
+    ]
+    if not active:
+        raise ChildNotFound(child_id)
+    return active[0]
+
+
 def resolve_child_access(
     repo: CollaborationRepository, therapist_id: str, child_id: str
 ) -> Tuple[ChildAccessLevel, Optional[dict]]:

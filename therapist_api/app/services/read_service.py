@@ -11,8 +11,10 @@ from typing import Dict, List, Optional
 
 from ..api import schemas as S
 from ..auth.interface import AuthenticatedUser
+from ..domain.audit_state import plain as _plain
 from ..domain.enums import (
     ActivitySaveScope,
+    AssignmentStatus,
     ChildAccessLevel,
     ConnectionStatus,
     ParentNoteReviewStatus,
@@ -76,6 +78,7 @@ class ReadService:
         plan_review = sum(
             1 for a in assignments
             if a["plan_approval_status"] == PlanApprovalStatus.NEEDS_PLAN_REVIEW.value
+            and _plain(a["assignment_status"]) == AssignmentStatus.CURRENT.value
         )
         notes = self.repo.query(C.PARENT_NOTES, child_id=child_id)
         new_notes = sum(
@@ -151,8 +154,12 @@ class ReadService:
         access.require_full_access(self.repo, therapist["id"], child_id)
         plans = self.repo.query(C.WEEKLY_PLANS, child_id=child_id)
         plan = plans[0] if plans else {"id": "", "week_start_date": ""}
+        # Only CURRENT assignments are plan items. An assignment retired by an
+        # accepted proposal stays stored for history but must never resurface
+        # here as a second active activity alongside its replacement.
         assignments = sorted(
-            self.repo.query(C.PLAN_ASSIGNMENTS, child_id=child_id),
+            (a for a in self.repo.query(C.PLAN_ASSIGNMENTS, child_id=child_id)
+             if _plain(a["assignment_status"]) == AssignmentStatus.CURRENT.value),
             key=lambda a: (a["scheduled_day"], a["id"]),
         )
         views: List[S.PlanAssignmentView] = []
@@ -381,6 +388,10 @@ class ReadService:
             proposed_activity_version_id=p.get("proposed_activity_version_id"),
             change_reason=p.get("change_reason", ""), save_scope=p.get("save_scope", ""),
             created_by_user_id=p.get("created_by_user_id"), created_at=p.get("created_at", ""),
+            decided_by_user_id=p.get("decided_by_user_id"),
+            decided_by_role=_plain(p.get("decided_by_role")),
+            decided_at=p.get("decided_at"),
+            resulting_assignment_id=p.get("resulting_assignment_id"),
             version=p.get("version", 1),
         )
 

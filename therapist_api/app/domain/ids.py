@@ -70,3 +70,52 @@ def audit_event_id(request_hash: str, key: str) -> str:
 def derived_id(prefix: str, *seed: str) -> str:
     """Deterministic id `<prefix>_<sha>` from a stable seed (Firestore-mappable)."""
     return f"{prefix}_" + _sha256_hex("|".join(seed))[:_HASH_LEN]
+
+
+def operation_identity(
+    idempotency_key: str,
+    actor_user_id: str,
+    action: str,
+    child_id: str,
+    proposal_id: str,
+    assignment_id: str,
+) -> str:
+    """Stable identity for ONE lifecycle mutation, including the key's HASH.
+
+    Why the key must participate (deterministic-ID correction, Phase 1B.2B.1):
+
+    Creation-time ids (`derived_id(prefix, request_hash)`) seed on the canonical
+    request hash, which deliberately EXCLUDES the idempotency key. That was safe
+    while `pending_proposal_id` was permanently set, because
+    `expected_assignment_version` is part of the hash and increments on every
+    successful write, so a second same-hash operation on the same assignment was
+    unreachable.
+
+    Parent acceptance REMOVES that guarantee: it clears `pending_proposal_id`.
+    Once cleared, a later lifecycle operation could present the same actor,
+    action, child, proposal and assignment — and would then derive the SAME
+    document id and silently overwrite the earlier record instead of creating a
+    new one. Binding the id to the key's hash keeps distinct client operations
+    on distinct documents, while an exact retry of the SAME key still resolves
+    to the same id and therefore replays rather than duplicating.
+
+    Only the SHA-256 hash of the key is used; the raw key never appears in an id,
+    a stored record, or a log.
+    """
+    return _sha256_hex(
+        "|".join(
+            [
+                key_hash(idempotency_key),
+                actor_user_id,
+                action,
+                child_id,
+                proposal_id,
+                assignment_id,
+            ]
+        )
+    )
+
+
+def operation_scoped_id(prefix: str, identity: str) -> str:
+    """`<prefix>_<sha>` derived from an `operation_identity` digest."""
+    return f"{prefix}_" + identity[:_HASH_LEN]
