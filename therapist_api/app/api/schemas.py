@@ -280,6 +280,36 @@ class AcceptProposalResponse(BaseModel):
     idempotent_replay: bool
 
 
+# ── write: parent decline of a modify proposal ──────────────────────────────
+class DeclineProposalRequest(BaseModel):
+    """Both expected versions are REQUIRED (optimistic concurrency)."""
+
+    expected_proposal_version: int
+    expected_assignment_version: int
+
+
+class DeclinedProposalSummary(BaseModel):
+    proposal_id: str
+    proposal_type: str
+    proposal_status: str
+    version: int
+    decided_by_user_id: Optional[str] = None
+    decided_by_role: Optional[str] = None
+    decided_at: Optional[str] = None
+    # Always null for a decline: nothing replaces the original assignment.
+    resulting_assignment_id: Optional[str] = None
+    original_activity_version_id: Optional[str] = None
+    proposed_activity_version_id: Optional[str] = None
+
+
+class DeclineProposalResponse(BaseModel):
+    proposal: DeclinedProposalSummary
+    current_assignment: dict
+    child_summary: dict
+    audit_event_id: str
+    idempotent_replay: bool
+
+
 class ProposalView(BaseModel):
     proposal_id: str
     proposal_type: str

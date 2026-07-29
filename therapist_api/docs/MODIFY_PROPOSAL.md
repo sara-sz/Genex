@@ -255,10 +255,20 @@ replacement-assignment and audit-event ids from an operation identity that
 includes the SHA-256 hash of the idempotency key. Creation-time ids are
 unchanged.
 
-**Parent decline is still NOT implemented.**
+## Parent decline (Phase 1B.2B.2)
+
+Parent **decline** is now implemented — see [PARENT_DECLINE.md](PARENT_DECLINE.md).
+Declining clears `pending_proposal_id`, leaves the original assignment `current`
+and `approved` on its original activity version, creates **no** replacement, and
+preserves the proposed derived version as inactive history. The slot is free
+again afterwards, so the therapist may propose a new change.
+
+Decline reuses the same key-bound `operation_identity()` with
+`action = "decline_plan_change_proposal"`, so an accept and a decline presented
+with the same idempotency key cannot collide on one audit document.
 
 ## Not implemented yet (later gated phases)
 
-Parent decline, therapist cancellation, proposal expiry, add/remove/generic-replace
-proposals, note/private-note writes, Firebase Auth, Firestore, Cloud Run, frontend
-integration, production config, real users/data.
+Parent proposal-read endpoint, therapist cancellation, proposal expiry,
+add/remove/generic-replace proposals, note/private-note writes, Firebase Auth,
+Firestore, Cloud Run, frontend integration, production config, real users/data.

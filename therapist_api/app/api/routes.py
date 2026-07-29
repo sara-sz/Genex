@@ -15,7 +15,12 @@ from fastapi import APIRouter, Depends, Header, Request
 
 from ..auth.interface import AuthenticatedUser
 from ..constants import API_VERSION
-from ..services import acceptance_service, approval_service, proposal_service
+from ..services import (
+    acceptance_service,
+    approval_service,
+    decline_service,
+    proposal_service,
+)
 from . import schemas as S
 from .deps import get_service, require_principal
 from ..services.read_service import ReadService
@@ -203,6 +208,40 @@ async def accept_proposal(
     from ..logging_config import get_request_id
 
     return acceptance_service.accept_proposal(
+        repo,
+        principal,
+        child_id=child_id,
+        proposal_id=proposal_id,
+        idempotency_key=idempotency_key,
+        expected_proposal_version=body.expected_proposal_version,
+        expected_assignment_version=body.expected_assignment_version,
+        environment=principal.environment,
+        request_id=get_request_id(),
+    )
+
+
+# ── write: parent declines one pending modify proposal ──────────────────────
+@router.post(
+    "/children/{child_id}/proposals/{proposal_id}/decline",
+    response_model=S.DeclineProposalResponse,
+    responses={
+        400: {"model": S.ErrorResponse}, 403: {"model": S.ErrorResponse},
+        404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse},
+        422: {"model": S.ErrorResponse},
+    },
+)
+async def decline_proposal(
+    child_id: str,
+    proposal_id: str,
+    body: S.DeclineProposalRequest,
+    request: Request,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    principal: AuthenticatedUser = Depends(require_principal),
+):
+    repo = request.app.state.repo
+    from ..logging_config import get_request_id
+
+    return decline_service.decline_proposal(
         repo,
         principal,
         child_id=child_id,

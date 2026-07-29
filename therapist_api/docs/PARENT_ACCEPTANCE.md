@@ -5,9 +5,9 @@ Cloud Run, no frontend, no real data.** The atomic critical section is
 `repo.run_in_transaction` (snapshot/restore rollback), shaped to map onto a
 future Firestore transaction.
 
-**Parent DECLINE is NOT implemented in this phase.** Nor are therapist
-cancellation, proposal expiry, add/remove/generic-replace proposals, or note
-writes.
+Parent **decline** is implemented separately in Phase 1B.2B.2 — see
+[PARENT_DECLINE.md](PARENT_DECLINE.md). Therapist cancellation, proposal expiry,
+add/remove/generic-replace proposals and note writes remain unimplemented.
 
 ## Endpoint
 
