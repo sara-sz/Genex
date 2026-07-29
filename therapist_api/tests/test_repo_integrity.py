@@ -494,6 +494,22 @@ def test_simulation_present_tag_does_not_skip(frozen_repo: pathlib.Path) -> None
 # ── parent working-tree protection (throwaway repos; stand-in files only) ───
 SPACED_NAME = "genex-parent/data/cdc milestones copy.xlsx"
 
+# Path used by the injected-status tests. Deliberately NOT an LFS-declared
+# extension: those tests supply their own filter-only status record, so they must
+# not also depend on real git-lfs. On a machine where git-lfs is globally active
+# (every GitHub runner) an *.xlsx stand-in is committed AS A POINTER, making the
+# HEAD blob differ from the raw bytes before the test even starts — which is
+# precisely why hosted run #6 failed.
+SYNTHETIC_FILTER_TRACKED = "genex-parent/data/filter-artifact-test.txt"
+
+# Belt and braces: an explicit disposable-repo attribute rule that switches off
+# every filter for that path, so no globally configured filter can reach it.
+# This lives only in tmp_path — the real repository's .gitattributes is untouched.
+DISPOSABLE_GITATTRIBUTES = (
+    "*.xlsx filter=lfs diff=lfs merge=lfs -text\n"
+    f"{SYNTHETIC_FILTER_TRACKED} -filter -diff -merge -text\n"
+)
+
 
 @pytest.fixture
 def parent_repo(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -502,26 +518,43 @@ def parent_repo(tmp_path: pathlib.Path) -> pathlib.Path:
     Mirrors the real repository's condition: `.gitattributes` marks *.xlsx as
     LFS-managed, but the blobs are committed as raw bytes because no clean
     filter is configured at commit time.
+
+    Also carries `SYNTHETIC_FILTER_TRACKED`, an ordinary un-filtered text file
+    for the injected-status tests. The fixture asserts its committed blob, index
+    entry and raw bytes are all identical before any test runs, so a stale or
+    filtered baseline fails loudly here rather than as a confusing assertion
+    later.
     """
     root = tmp_path / "parent-repo"
     (root / "genex-parent" / "data").mkdir(parents=True)
-    (root / ".gitattributes").write_text("*.xlsx filter=lfs diff=lfs merge=lfs -text\n",
-                                         encoding="utf-8")
+    (root / ".gitattributes").write_text(DISPOSABLE_GITATTRIBUTES, encoding="utf-8")
     (root / "genex-parent" / "app.py").write_text("# parent code\n", encoding="utf-8")
     # Stand-in binary content — never the real protected spreadsheet.
     (root / "genex-parent" / "data" / "sheet.xlsx").write_bytes(b"PK\x03\x04stand-in" * 64)
     (root / SPACED_NAME).write_bytes(b"PK\x03\x04spaced" * 32)
+    (root / SYNTHETIC_FILTER_TRACKED).write_text(
+        "synthetic stand-in for filter-artifact classification\n", encoding="utf-8"
+    )
     _init_repo(root)
     _commit_all(root, "parent baseline")
+
+    # No clean filter may apply to the synthetic path...
+    attr = _git("check-attr", "filter", "--", SYNTHETIC_FILTER_TRACKED, cwd=root).stdout
+    assert attr.strip().endswith("filter: unset"), (
+        f"a filter is active for {SYNTHETIC_FILTER_TRACKED}: {attr.strip()!r}"
+    )
+    # ...and its committed blob, index entry and raw bytes must start identical.
+    head, index, raw = _real_hashes(root, SYNTHETIC_FILTER_TRACKED)
+    assert head and head == index == raw, (
+        "synthetic baseline is not filter-clean: "
+        f"head={head} index={index} raw={raw}"
+    )
     return root
-
-
-LFS_TRACKED = "genex-parent/data/sheet.xlsx"
 
 
 # A filter-induced status record, exactly as `git status --porcelain=v1 -z`
 # emits it: unstaged modification, NUL-terminated, path unquoted.
-SYNTHETIC_FILTER_STATUS = f" M {LFS_TRACKED}\0"
+SYNTHETIC_FILTER_STATUS = f" M {SYNTHETIC_FILTER_TRACKED}\0"
 
 
 def _stub_status_only(monkeypatch, record: str) -> None:
@@ -570,10 +603,12 @@ def test_parent_sim_lfs_filter_artifact_passes(parent_repo: pathlib.Path, monkey
 
     # The status record the classifier will see is the real porcelain shape.
     reported = parse_porcelain_z(SYNTHETIC_FILTER_STATUS)
-    assert [(e.code, e.path, e.orig_path) for e in reported] == [(" M", LFS_TRACKED, None)]
+    assert [(e.code, e.path, e.orig_path) for e in reported] == [
+        (" M", SYNTHETIC_FILTER_TRACKED, None)
+    ]
 
     # Nothing was actually written: committed blob, index and disk all agree.
-    head, index, raw = _real_hashes(parent_repo, LFS_TRACKED)
+    head, index, raw = _real_hashes(parent_repo, SYNTHETIC_FILTER_TRACKED)
     assert head and head == index == raw
 
     assert genuine_parent_changes(cwd=parent_repo) == []
@@ -589,7 +624,7 @@ def test_parent_sim_real_modification_fails(parent_repo: pathlib.Path) -> None:
 def test_parent_sim_real_modification_fails_even_with_filter_active(
     parent_repo: pathlib.Path, monkeypatch
 ) -> None:
-    """The artifact exemption must not mask a genuine edit to an LFS file.
+    """The artifact exemption must not mask a genuine edit.
 
     The SAME synthetic status record is used throughout — only the bytes on disk
     change — so the exemption is the sole thing under test.
@@ -597,14 +632,14 @@ def test_parent_sim_real_modification_fails_even_with_filter_active(
     _stub_status_only(monkeypatch, SYNTHETIC_FILTER_STATUS)
     assert genuine_parent_changes(cwd=parent_repo) == []       # artifact only so far
 
-    target = parent_repo / LFS_TRACKED
+    target = parent_repo / SYNTHETIC_FILTER_TRACKED
     target.write_bytes(target.read_bytes() + b"genuinely changed")
 
-    head, index, raw = _real_hashes(parent_repo, LFS_TRACKED)
+    head, index, raw = _real_hashes(parent_repo, SYNTHETIC_FILTER_TRACKED)
     assert head == index and raw != head        # bytes really differ now
 
     changes = genuine_parent_changes(cwd=parent_repo)
-    assert [e.path for e, _ in changes] == [LFS_TRACKED]
+    assert [e.path for e, _ in changes] == [SYNTHETIC_FILTER_TRACKED]
     assert changes[0][1] == "parent file content differs from HEAD"
 
 
@@ -687,10 +722,11 @@ def test_parse_porcelain_z_handles_every_record_shape() -> None:
     ]
     assert parse_porcelain_z("") == []
 
-    # The exact record shape a filter round-trip produces.
-    single = parse_porcelain_z(" M genex-parent/data/sheet.xlsx\0")
-    assert [(e.x, e.y, e.path, e.orig_path) for e in single] == [
-        (" ", "M", "genex-parent/data/sheet.xlsx", None)
+    # The exact record shape a filter round-trip produces, as injected by the
+    # synthetic tests.
+    single = parse_porcelain_z(SYNTHETIC_FILTER_STATUS)
+    assert [(e.code, e.path, e.orig_path) for e in single] == [
+        (" M", SYNTHETIC_FILTER_TRACKED, None)
     ]
 
 
