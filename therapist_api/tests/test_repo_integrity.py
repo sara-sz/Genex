@@ -501,7 +501,10 @@ def parent_repo(tmp_path: pathlib.Path) -> pathlib.Path:
     return root
 
 
-def _enable_lfs_like_filter(repo: pathlib.Path, tmp_path: pathlib.Path) -> None:
+LFS_TRACKED = "genex-parent/data/sheet.xlsx"
+
+
+def _configure_lfs_like_filter(repo: pathlib.Path, tmp_path: pathlib.Path) -> None:
     """Configure a clean filter that emits canonical LFS pointers.
 
     Reproduces a git-lfs-enabled machine (such as a GitHub runner) without
@@ -524,28 +527,62 @@ def _enable_lfs_like_filter(repo: pathlib.Path, tmp_path: pathlib.Path) -> None:
     _git("config", "filter.lfs.required", "false", cwd=repo)
 
 
+@pytest.fixture
+def lfs_clone(parent_repo: pathlib.Path, tmp_path: pathlib.Path) -> pathlib.Path:
+    """Fresh clone whose tracked file reads as modified purely by filter round-trip.
+
+    This reproduces the hosted-CI condition DETERMINISTICALLY, through repository
+    state rather than timing:
+
+      1. `parent_repo` commits the file as RAW bytes — no clean filter is
+         configured at commit time, exactly like the machine that authored the
+         real Parent spreadsheets.
+      2. The repo is cloned with --no-checkout, so nothing is materialised yet.
+      3. The LFS-equivalent filter is configured in the clone BEFORE checkout.
+      4. `git checkout` materialises the working tree through smudge=cat, so the
+         bytes on disk are byte-identical to the committed blob.
+      5. `git read-tree HEAD` rebuilds the index from the tree with ctime, mtime
+         and size all ZEROED. With no stat data to trust, git cannot take its
+         stat-cache shortcut and MUST re-read the file through the clean filter.
+
+    Step 5 is what makes this deterministic. Without it git sometimes trusts the
+    stat cache, never runs the filter, and the condition silently fails to
+    materialise (the original flake: ~5% of runs). No sleeping, mtime bumping or
+    timing assumption is involved.
+    """
+    clone = tmp_path / "lfs-clone"
+    subprocess.run(
+        ["git", "clone", "--quiet", "--no-checkout", str(parent_repo), str(clone)],
+        check=True, capture_output=True,
+    )
+    _configure_lfs_like_filter(clone, tmp_path)
+    checkout = _git("checkout", "--quiet", "HEAD", "--", ".", cwd=clone)
+    assert checkout.returncode == 0, checkout.stderr
+    read_tree = _git("read-tree", "HEAD", cwd=clone)   # discard the stat cache
+    assert read_tree.returncode == 0, read_tree.stderr
+    return clone
+
+
 def test_parent_sim_clean_tree_passes(parent_repo: pathlib.Path) -> None:
     assert genuine_parent_changes(cwd=parent_repo) == []
 
 
-def test_parent_sim_lfs_filter_artifact_passes(
-    parent_repo: pathlib.Path, tmp_path: pathlib.Path
-) -> None:
+def test_parent_sim_lfs_filter_artifact_passes(lfs_clone: pathlib.Path) -> None:
     """git status says modified, but no byte was written -> must pass."""
-    _enable_lfs_like_filter(parent_repo, tmp_path)
-
-    status = _git("status", "--porcelain=v1", "-z", "--", PARENT_PATH, cwd=parent_repo).stdout
+    status = _git("status", "--porcelain=v1", "-z", "--untracked-files=all",
+                  "--", PARENT_PATH, cwd=lfs_clone).stdout
     reported = parse_porcelain_z(status)
     assert reported, "expected the filter to make git report modifications"
     assert all(e.code == " M" for e in reported), [e.code for e in reported]
+    assert LFS_TRACKED in [e.path for e in reported]
 
     # ...and the raw bytes still equal HEAD for every reported file.
     for entry in reported:
-        raw = _git("hash-object", "--no-filters", "--", entry.path, cwd=parent_repo).stdout.strip()
-        head = _git("rev-parse", f"HEAD:{entry.path}", cwd=parent_repo).stdout.strip()
-        assert raw == head
+        raw = _git("hash-object", "--no-filters", "--", entry.path, cwd=lfs_clone).stdout.strip()
+        head = _git("rev-parse", f"HEAD:{entry.path}", cwd=lfs_clone).stdout.strip()
+        assert raw == head, entry.path
 
-    assert genuine_parent_changes(cwd=parent_repo) == []
+    assert genuine_parent_changes(cwd=lfs_clone) == []
 
 
 def test_parent_sim_real_modification_fails(parent_repo: pathlib.Path) -> None:
@@ -556,15 +593,21 @@ def test_parent_sim_real_modification_fails(parent_repo: pathlib.Path) -> None:
 
 
 def test_parent_sim_real_modification_fails_even_with_filter_active(
-    parent_repo: pathlib.Path, tmp_path: pathlib.Path
+    lfs_clone: pathlib.Path,
 ) -> None:
-    """The artifact exemption must not mask a genuine edit to an LFS file."""
-    _enable_lfs_like_filter(parent_repo, tmp_path)
-    target = parent_repo / "genex-parent" / "data" / "sheet.xlsx"
+    """The artifact exemption must not mask a genuine edit to an LFS file.
+
+    Runs in the same deterministic clone: the file is confirmed to be in the
+    filter-artifact state first, then really edited.
+    """
+    assert genuine_parent_changes(cwd=lfs_clone) == []      # artifact only so far
+
+    target = lfs_clone / LFS_TRACKED
     target.write_bytes(target.read_bytes() + b"genuinely changed")
 
-    changes = genuine_parent_changes(cwd=parent_repo)
-    assert [e.path for e, _ in changes] == ["genex-parent/data/sheet.xlsx"]
+    changes = genuine_parent_changes(cwd=lfs_clone)
+    assert [e.path for e, _ in changes] == [LFS_TRACKED]
+    assert changes[0][1] == "parent file content differs from HEAD"
 
 
 def test_parent_sim_staged_modification_fails(parent_repo: pathlib.Path) -> None:
