@@ -354,6 +354,47 @@ class ParentProposalDecisionDetail(BaseModel):
     decision: ParentDecisionFlags
 
 
+# ── read: parent-safe proposal LIST (discovery only) ────────────────────────
+#
+# Deliberately lighter than ParentProposalDecisionDetail. It carries NO activity
+# instructions and NO optimistic-concurrency versions: a client must open the
+# detail endpoint before submitting a decision, so it always submits the freshest
+# proposal_version / expected_assignment_version.
+class ParentProposalActivitySummary(BaseModel):
+    """Minimal proposed-activity teaser — enough to recognise the change."""
+
+    title: str
+    developmental_domain: str
+    milestone_display_name: str = ""
+
+
+class ParentProposalDecisionSummary(BaseModel):
+    """Actionability, computed by the shared read-only eligibility evaluator."""
+
+    needs_parent_attention: bool
+    can_accept: bool
+    can_decline: bool
+
+
+class ParentProposalListItem(BaseModel):
+    proposal_id: str
+    proposal_type: str
+    proposal_status: str
+    created_at: str = ""
+    decided_at: Optional[str] = None
+    child: ParentChildSummary
+    therapist: ParentTherapistSummary
+    proposed_activity: ParentProposalActivitySummary
+    change_reason: str = ""
+    decision: ParentProposalDecisionSummary
+
+
+class ParentProposalListResponse(BaseModel):
+    items: List[ParentProposalListItem]
+    total: int
+    next_cursor: Optional[str] = None
+
+
 # ── write: parent decline of a modify proposal ──────────────────────────────
 class DeclineProposalRequest(BaseModel):
     """Both expected versions are REQUIRED (optimistic concurrency)."""

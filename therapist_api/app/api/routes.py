@@ -257,10 +257,23 @@ async def decline_proposal(
 
 
 # ── read-only: proposals (authorization-safe) ───────────────────────────────
-@router.get("/children/{child_id}/proposals", response_model=S.Page)
+@router.get(
+    "/children/{child_id}/proposals",
+    response_model=Union[S.Page, S.ParentProposalListResponse],
+    responses={403: {"model": S.ErrorResponse}, 404: {"model": S.ErrorResponse}},
+)
 async def list_proposals(child_id: str,
                          principal: AuthenticatedUser = Depends(require_principal),
                          svc: ReadService = Depends(get_service)):
+    """Role-aware proposal list for one child.
+
+    A therapist receives the existing `Page` envelope unchanged. An authorized
+    parent receives `ParentProposalListResponse` — a lighter, discovery-only
+    projection with no activity instructions and no optimistic-concurrency
+    versions, so a client must open the detail endpoint before deciding.
+    """
+    if access.principal_role(principal) == PrincipalRole.PARENT:
+        return svc.get_parent_proposal_list(principal, child_id)
     return _page(svc.list_proposals(principal, child_id))
 
 

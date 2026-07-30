@@ -3,10 +3,16 @@
 **Fictional, in-memory development behavior. No Firestore, no Firebase Auth, no
 Cloud Run, no frontend, no real data.** Read-only: this endpoint mutates nothing.
 
-**A parent proposal LIST / inbox is not implemented.** A parent must already hold
-a proposal id (in practice, delivered by a notification or deep link). Add /
-Remove Activity proposals, therapist cancellation and proposal expiry also remain
-unimplemented.
+A parent-safe **proposal list** is implemented in Phase 1B.2B.4 — see
+[PARENT_PROPOSAL_LIST.md](PARENT_PROPOSAL_LIST.md). A cross-child parent inbox is
+still absent. Add / Remove Activity proposals, therapist cancellation and proposal
+expiry also remain unimplemented.
+
+**Decision-flag alignment (Phase 1B.2B.4).** `can_accept` / `can_decline` below are
+now computed by the shared read-only evaluator in `app/services/eligibility.py`,
+not from `proposal_status == pending_parent_acceptance` alone. A pending proposal
+blocked by a write guard therefore reports `false` / `false` here, so this screen
+never offers an action that would 409 on submission.
 
 ## Route — extended, not added
 
@@ -104,10 +110,14 @@ labels:
 
 | Proposal status | `can_accept` | `can_decline` | `decided_at` | `resulting_assignment_id` |
 |---|---|---|---|---|
-| `pending_parent_acceptance` | `true` | `true` | `null` | `null` |
+| `pending_parent_acceptance`, **actionable** | `true` | `true` | `null` | `null` |
+| `pending_parent_acceptance`, **blocked by a write guard** | `false` | `false` | `null` | `null` |
 | `accepted` | `false` | `false` | set | the replacement assignment |
 | `declined` | `false` | `false` | set | `null` |
 | any other (e.g. `cancelled`) | `false` | `false` | as stored | as stored |
+
+The full guard list is documented in
+[PARENT_PROPOSAL_LIST.md](PARENT_PROPOSAL_LIST.md#actual-decision-eligibility--the-correction).
 
 A decided proposal is never returned in a write-enabled state. Original and
 proposed activity content stays readable so the family retains decision history.

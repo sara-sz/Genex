@@ -443,5 +443,8 @@ def test_read_proposal_endpoints():
     assert det["proposal_status"] == "pending_parent_acceptance" and det["proposal_type"] == "modify"
     # existence-blind unknown proposal
     assert c.get("/api/v1/children/child_noah/proposals/prop_zzz", headers=HANNAH).status_code == 404
-    # parent forbidden
-    assert c.get("/api/v1/children/child_noah/proposals", headers=ELENA).status_code == 403
+    # A parent of ANOTHER child is existence-blind on the list, not 403: Elena is
+    # Maya's parent, so Noah's proposals must be indistinguishable from a child
+    # that does not exist. (Was 403 before the list became role-aware in
+    # Phase 1B.2B.4 — a parent must never learn another family's child exists.)
+    assert c.get("/api/v1/children/child_noah/proposals", headers=ELENA).status_code == 404

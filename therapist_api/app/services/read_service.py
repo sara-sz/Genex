@@ -24,7 +24,7 @@ from ..domain.enums import (
 )
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
-from . import access
+from . import access, eligibility
 
 
 class ReadService:
@@ -410,6 +410,86 @@ class ReadService:
             raise access.ChildNotFound(proposal_id)  # existence-blind
         return self._proposal_view(rows[0])
 
+    # ── parent-safe proposal list (discovery only) ──────────────────────────
+    def _parent_therapist_name(self, therapist_id) -> str:
+        """Presentable name + credentials. Never the id, email or organization."""
+        rows = self.repo.query(C.THERAPIST_PROFILES, id=therapist_id) if therapist_id else []
+        if not rows:
+            return ""
+        name = rows[0].get("display_name", "")
+        credentials = rows[0].get("credentials")
+        return f"{name}, {credentials}" if credentials else name
+
+    def _parent_activity_summary(self, version: dict) -> S.ParentProposalActivitySummary:
+        """Teaser only — no instructions; those live in the detail endpoint."""
+        milestone_id = version.get("milestone_id")
+        rows = self.repo.query(C.MILESTONES, id=milestone_id) if milestone_id else []
+        return S.ParentProposalActivitySummary(
+            title=version.get("title", ""),
+            developmental_domain=version.get("domain", ""),
+            milestone_display_name=rows[0]["title"] if rows else "",
+        )
+
+    def get_parent_proposal_list(
+        self, user: AuthenticatedUser, child_id: str
+    ) -> S.ParentProposalListResponse:
+        """Parent-safe proposal list for ONE of the parent's own children.
+
+        Read-only, existence-blind, and single-child by design — there is no
+        cross-child parent inbox.
+
+        Items whose linked records are missing or belong to another child are
+        DROPPED rather than partially rendered, and `total` counts only the safe
+        items. Nothing in the response says how many were dropped or why.
+
+        Actionability comes from the shared `eligibility` evaluator, so the list
+        advertises only decisions that would actually succeed — a pending proposal
+        blocked by a write guard is shown with all flags false rather than
+        offering the family a button that would 409.
+        """
+        parent = access.resolve_parent(self.repo, user)                # 403 if not a parent
+        access.require_parent_child_access(self.repo, parent["id"], child_id)  # 404-blind
+
+        child = self._child(child_id) or {}
+        child_summary = S.ParentChildSummary(
+            child_id=child_id, display_name=child.get("display_name", "")
+        )
+
+        decorated = []
+        for proposal in self.repo.query(C.PLAN_CHANGE_PROPOSALS, child_id=child_id):
+            if not eligibility.proposal_is_safe_to_show(self.repo, child_id, proposal):
+                continue                                              # drop, silently
+            proposed = self._version(proposal.get("proposed_activity_version_id"))
+            if proposed is None:                                      # belt and braces
+                continue
+            flags = eligibility.evaluate_parent_decision(self.repo, child_id, proposal)
+            decorated.append((eligibility.sort_key(proposal, flags), proposal, proposed, flags))
+
+        decorated.sort(key=lambda entry: entry[0])
+
+        items = [
+            S.ParentProposalListItem(
+                proposal_id=proposal["id"],
+                proposal_type=_plain(proposal.get("proposal_type")),
+                proposal_status=_plain(proposal.get("status")),
+                created_at=proposal.get("created_at", ""),
+                decided_at=proposal.get("decided_at"),
+                child=child_summary,
+                therapist=S.ParentTherapistSummary(
+                    display_name=self._parent_therapist_name(proposal.get("therapist_id"))
+                ),
+                proposed_activity=self._parent_activity_summary(proposed),
+                change_reason=proposal.get("change_reason", "") or proposal.get("rationale", ""),
+                decision=S.ParentProposalDecisionSummary(
+                    needs_parent_attention=flags.needs_parent_attention,
+                    can_accept=flags.can_accept,
+                    can_decline=flags.can_decline,
+                ),
+            )
+            for _, proposal, proposed, flags in decorated
+        ]
+        return S.ParentProposalListResponse(items=items, total=len(items), next_cursor=None)
+
     # ── parent-safe proposal decision detail ────────────────────────────────
     def _parent_activity_view(self, version: dict) -> S.ParentActivityView:
         """Parent-facing activity content only.
@@ -499,8 +579,12 @@ class ReadService:
             therapist_name = f"{therapist_name}, {therapist['credentials']}"
 
         status = _plain(proposal["status"])
-        pending = status == ProposalStatus.PENDING_PARENT_ACCEPTANCE.value
         decided_at = proposal.get("decided_at")
+        # Aligned with the list: actionability comes from the SHARED evaluator, not
+        # from `status == pending` alone. A pending proposal blocked by a write
+        # guard therefore reports false/false here too, so the detail screen never
+        # offers an action that would 409 on submission.
+        flags = eligibility.evaluate_parent_decision(self.repo, child_id, proposal)
 
         return S.ParentProposalDecisionDetail(
             proposal=S.ParentProposalSummary(
@@ -522,8 +606,8 @@ class ReadService:
             original_activity=self._parent_activity_view(original),
             proposed_activity=self._parent_activity_view(proposed),
             decision=S.ParentDecisionFlags(
-                can_accept=pending,
-                can_decline=pending,
+                can_accept=flags.can_accept,
+                can_decline=flags.can_decline,
                 accepted_or_declined_at=decided_at,
                 resulting_assignment_id=proposal.get("resulting_assignment_id"),
             ),

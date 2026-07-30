@@ -275,8 +275,14 @@ unchanged; an authorized parent receives a narrower dedicated projection carryin
 the two versions accept/decline need. Read-only, and the generic
 activity-template visibility rules above are untouched.
 
+A parent-safe **proposal list** is implemented in Phase 1B.2B.4 — see
+[PARENT_PROPOSAL_LIST.md](PARENT_PROPOSAL_LIST.md). Both parent proposal routes are
+role-aware; the therapist contracts are unchanged. Parent decision flags on the
+list *and* the detail come from one shared read-only eligibility evaluator, so a
+pending proposal blocked by a write guard is never advertised as actionable.
+
 ## Not implemented yet (later gated phases)
 
-Parent proposal list/inbox, therapist cancellation, proposal expiry,
+Cross-child parent inbox, therapist cancellation, proposal expiry,
 add/remove/generic-replace proposals, note/private-note writes, Firebase Auth,
 Firestore, Cloud Run, frontend integration, production config, real users/data.
