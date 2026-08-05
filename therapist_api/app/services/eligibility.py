@@ -114,15 +114,21 @@ def evaluate_parent_decision(
     if proposed_already_active:
         return INELIGIBLE
 
-    # ── slot invariant: the original is the slot's only current assignment ──
-    in_slot = [
+    # ── day invariant: the target is AMONG the day's current assignments ─────
+    #     A weekday may hold several activities, so another same-day activity
+    #     must not make this proposal ineligible. What must hold is that the
+    #     target is still current, and the day's ordering is unambiguous.
+    in_day = [
         a for a in child_assignments
         if a.get("weekly_plan_id") == assignment.get("weekly_plan_id")
         and a.get("scheduled_day") == assignment.get("scheduled_day")
         and plain(a.get("assignment_status")) == AssignmentStatus.CURRENT.value
     ]
-    if [a["id"] for a in in_slot] != [assignment["id"]]:
+    if assignment["id"] not in [a["id"] for a in in_day]:
         return INELIGIBLE
+    orders = [int(a.get("display_order", 0)) for a in in_day]
+    if len(orders) != len(set(orders)):
+        return INELIGIBLE            # duplicate positions -> fail closed
 
     return ELIGIBLE
 

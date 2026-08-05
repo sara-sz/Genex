@@ -347,20 +347,47 @@ def test_missing_proposed_version_conflicts():
     assert r.status_code == 409 and r.json()["error"] == "invalid_parent_accept_transition"
 
 
-def test_duplicate_current_in_slot_fails_atomically():
-    """A pre-existing second current assignment in the slot blocks acceptance."""
+def test_duplicate_display_order_in_day_fails_atomically():
+    """A day whose current assignments share a display_order blocks acceptance.
+
+    Since Phase 1B.2C.1 a weekday may hold SEVERAL current activities, so a second
+    assignment is no longer itself a conflict — an ambiguous ORDER is. The clone
+    copies display_order=0, which is the inconsistency the guard must catch.
+    """
     c = _c()
     pid = _propose(c)["proposal"]["proposal_id"]
     repo = _repo(c)
     original = repo.query(C.PLAN_ASSIGNMENTS, id=MAYA_BUBBLES)[0]
     clone = dict(original)
     clone["id"] = "assign_maya_bubbles_duplicate"
-    clone["pending_proposal_id"] = None
+    clone["pending_proposal_id"] = None          # same day, same display_order
     repo.set(C.PLAN_ASSIGNMENTS, clone["id"], clone)
 
     r = _accept(c, ELENA, "v-10", pid)
-    assert r.status_code == 409 and r.json()["error"] == "replacement_assignment_conflict"
+    assert r.status_code == 409 and r.json()["error"] == "duplicate_assignment_display_order"
     _assert_no_mutation(c, pid)
+
+
+def test_second_current_assignment_on_the_day_does_not_block_acceptance():
+    """The replaced behavior: a distinct-order same-day activity is now fine."""
+    c = _c()
+    pid = _propose(c)["proposal"]["proposal_id"]
+    repo = _repo(c)
+    original = repo.query(C.PLAN_ASSIGNMENTS, id=MAYA_BUBBLES)[0]
+    sibling = dict(original)
+    sibling["id"] = "assign_maya_bubbles_sibling"
+    sibling["pending_proposal_id"] = None
+    sibling["display_order"] = 1                  # distinct position on the day
+    repo.set(C.PLAN_ASSIGNMENTS, sibling["id"], sibling)
+
+    r = _accept(c, ELENA, "v-10b", pid)
+    assert r.status_code == 200, r.text
+    # the sibling is untouched and the replacement took the original's position
+    after_sibling = repo.query(C.PLAN_ASSIGNMENTS, id="assign_maya_bubbles_sibling")[0]
+    assert after_sibling["display_order"] == 1
+    assert after_sibling["assignment_status"] == "current"
+    assert after_sibling["version"] == sibling["version"]
+    assert r.json()["replacement_assignment"]["display_order"] == 0
 
 
 # ── 42-54: idempotency ──────────────────────────────────────────────────────

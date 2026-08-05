@@ -79,6 +79,18 @@ class ReplacementAssignmentConflict(ApprovalError):
     http_status = 409
 
 
+class DuplicateAssignmentDisplayOrder(ApprovalError):
+    """Two CURRENT assignments on one weekday claim the same display_order.
+
+    An internal consistency failure, not a client mistake — but surfacing it as a
+    typed 409 keeps the transaction fail-closed instead of silently producing an
+    ambiguously ordered day. Discloses no other family's data.
+    """
+
+    code = "duplicate_assignment_display_order"
+    http_status = 409
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -99,13 +111,30 @@ def _plan_review_count(tx: CollaborationRepository, child_id: str) -> int:
 
 
 def _current_in_slot(tx: CollaborationRepository, assignment: dict) -> list:
-    """Assignments still CURRENT in the same weekly-plan slot as `assignment`."""
+    """CURRENT assignments sharing this assignment's (child, plan, day).
+
+    A weekday may now hold SEVERAL current activities, so this is a set rather
+    than an at-most-one lookup. Ordering within the day is `display_order`;
+    retired/replaced rows are excluded and never participate in the current-order
+    uniqueness invariant.
+    """
     return [
         a for a in tx.query(C.PLAN_ASSIGNMENTS, child_id=assignment["child_id"])
         if a["weekly_plan_id"] == assignment["weekly_plan_id"]
         and a["scheduled_day"] == assignment["scheduled_day"]
         and plain(a["assignment_status"]) == AssignmentStatus.CURRENT.value
     ]
+
+
+def _order_map(assignments: list) -> dict:
+    """Stable {assignment_id: display_order} for comparing a day before/after."""
+    return {a["id"]: int(a.get("display_order", 0)) for a in assignments}
+
+
+def _has_duplicate_display_order(assignments: list) -> bool:
+    """True when two CURRENT same-day assignments claim the same position."""
+    orders = [int(a.get("display_order", 0)) for a in assignments]
+    return len(orders) != len(set(orders))
 
 
 def _proposal_view(p: dict) -> dict:
@@ -123,6 +152,7 @@ def _assignment_view(a: dict) -> dict:
     return {
         "assignment_id": a["id"], "child_id": a["child_id"],
         "weekly_plan_id": a["weekly_plan_id"], "scheduled_day": a["scheduled_day"],
+        "display_order": int(a.get("display_order", 0)),
         "activity_template_id": a["activity_template_id"],
         "activity_version_id": a["activity_version_id"],
         "plan_approval_status": plain(a["plan_approval_status"]),
@@ -264,13 +294,20 @@ def accept_proposal(
         if tx.exists(C.PLAN_ASSIGNMENTS, replacement_id):
             raise ReplacementAssignmentConflict("Replacement assignment already exists.")
 
-        # 10. Exactly-one-current invariant, checked BEFORE mutating.
+        # 10. Day invariant BEFORE mutating: the original must be among the day's
+        #     current assignments (others may share the day), and every current
+        #     display_order on that day must be unique.
         current_before = _current_in_slot(tx, original)
-        if [a["id"] for a in current_before] != [original["id"]]:
+        orders_before = _order_map(current_before)
+        if original["id"] not in orders_before:
             raise ReplacementAssignmentConflict(
-                "Expected exactly one current assignment in this plan slot, found "
-                f"{[a['id'] for a in current_before]}."
+                "Original assignment is not among the day's current assignments."
             )
+        if _has_duplicate_display_order(current_before):
+            raise DuplicateAssignmentDisplayOrder(
+                "Current assignments on this day have duplicate display_order values."
+            )
+        original_display_order = int(original.get("display_order", 0))
 
         before_state = {
             "proposal_status": status,
@@ -304,6 +341,9 @@ def accept_proposal(
             activity_template_id=original["activity_template_id"],
             activity_version_id=proposed_version_id,
             scheduled_day=original["scheduled_day"],
+            # Same position in the day: accepting a modify must not reorder the
+            # family's day around the activity that changed.
+            display_order=original_display_order,
             plan_approval_status=PlanApprovalStatus.APPROVED,
             practice_status=PracticeStatus.NOT_TRIED,      # fresh activity, not yet tried
             assignment_status=AssignmentStatus.CURRENT,
@@ -327,12 +367,30 @@ def accept_proposal(
         proposal["version"] = int(proposal["version"]) + 1
         tx.set(C.PLAN_CHANGE_PROPOSALS, proposal_id, proposal)
 
-        # 14. Invariant re-checked AFTER mutating: exactly one current in slot.
+        # 14. Day invariant AFTER mutating. The day must be exactly what it was,
+        #     with the replacement swapped in for the original at the SAME
+        #     position — every unrelated activity untouched.
         current_after = _current_in_slot(tx, original)
-        if [a["id"] for a in current_after] != [replacement_id]:
+        orders_after = _order_map(current_after)
+        expected_ids = (set(orders_before) - {original["id"]}) | {replacement_id}
+        if set(orders_after) != expected_ids:
             raise ReplacementAssignmentConflict(
-                "Post-condition failed: expected exactly one current assignment "
-                f"({replacement_id}), found {[a['id'] for a in current_after]}."
+                "Post-condition failed: expected the day's current assignments to "
+                f"be {sorted(expected_ids)}, found {sorted(orders_after)}."
+            )
+        if orders_after.get(replacement_id) != original_display_order:
+            raise ReplacementAssignmentConflict(
+                "Post-condition failed: replacement did not inherit the original's "
+                f"display_order ({original_display_order})."
+            )
+        unrelated = set(orders_before) - {original["id"]}
+        if any(orders_after[i] != orders_before[i] for i in unrelated):
+            raise ReplacementAssignmentConflict(
+                "Post-condition failed: an unrelated same-day assignment moved."
+            )
+        if _has_duplicate_display_order(current_after):
+            raise DuplicateAssignmentDisplayOrder(
+                "Current assignments on this day have duplicate display_order values."
             )
 
         after_state = {

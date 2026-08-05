@@ -76,6 +76,7 @@ def _assignment_view(a: dict) -> dict:
         "child_id": a["child_id"],
         "weekly_plan_id": a["weekly_plan_id"],
         "scheduled_day": a["scheduled_day"],
+        "display_order": int(a.get("display_order", 0)),
         "plan_approval_status": a["plan_approval_status"],
         "practice_status": a["practice_status"],
         "assignment_status": a["assignment_status"],

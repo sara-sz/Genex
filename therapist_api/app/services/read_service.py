@@ -160,7 +160,7 @@ class ReadService:
         assignments = sorted(
             (a for a in self.repo.query(C.PLAN_ASSIGNMENTS, child_id=child_id)
              if _plain(a["assignment_status"]) == AssignmentStatus.CURRENT.value),
-            key=lambda a: (a["scheduled_day"], a["id"]),
+            key=lambda a: (a["scheduled_day"], a.get("display_order", 0), a["id"]),
         )
         views: List[S.PlanAssignmentView] = []
         for a in assignments:
@@ -168,6 +168,7 @@ class ReadService:
             views.append(S.PlanAssignmentView(
                 assignment_id=a["id"],
                 scheduled_day=a["scheduled_day"],
+                display_order=int(a.get("display_order", 0)),
                 plan_approval_status=a["plan_approval_status"],
                 practice_status=a["practice_status"],
                 assignment_status=a["assignment_status"],

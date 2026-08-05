@@ -184,6 +184,14 @@ class PlanAssignment(BaseModel):
     activity_template_id: str
     activity_version_id: str
     scheduled_day: int              # 0=Mon .. 6=Sun
+    # Presentation order WITHIN one scheduled day. Zero-based. Genex generates an
+    # activity for most days, so a therapist Add must be able to append a second
+    # activity rather than displace the first — ordering is what makes that
+    # expressible. Unique among CURRENT assignments for the same
+    # (child_id, weekly_plan_id, scheduled_day); retired/replaced rows do not
+    # participate. NOT a slot identifier and NOT immutable: a future reorder may
+    # rewrite it, and gaps left by removals are allowed and never compacted.
+    display_order: int = Field(default=0, ge=0)
     plan_approval_status: PlanApprovalStatus
     practice_status: PracticeStatus = PracticeStatus.NOT_TRIED
     assignment_status: AssignmentStatus = AssignmentStatus.CURRENT

@@ -72,6 +72,9 @@ class ChildOverview(BaseModel):
 class PlanAssignmentView(BaseModel):
     assignment_id: str
     scheduled_day: int
+    # Presentation order within the day (zero-based). A weekday may hold several
+    # current activities; they are returned sorted by this.
+    display_order: int = 0
     plan_approval_status: str
     practice_status: str
     assignment_status: str
@@ -169,6 +172,7 @@ class ApprovedAssignment(BaseModel):
     child_id: str
     weekly_plan_id: str
     scheduled_day: int
+    display_order: int = 0
     plan_approval_status: str
     practice_status: str
     assignment_status: str

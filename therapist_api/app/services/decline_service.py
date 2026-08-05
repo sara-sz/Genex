@@ -49,11 +49,14 @@ from . import access
 from .acceptance_service import (  # shared read helpers — response-shape parity
     _assignment_view as assignment_view,
     _current_in_slot as current_in_slot,
+    _has_duplicate_display_order as has_duplicate_display_order,
+    _order_map as order_map,
     _plan_review_count as plan_review_count,
     _pending_proposal_count as pending_proposal_count,
     _proposal_view as proposal_view,
 )
 from .acceptance_service import (  # shared typed errors whose meaning still holds
+    DuplicateAssignmentDisplayOrder,
     ProposalAlreadyDecided,
     ProposalAssignmentMismatch,
     ProposalVersionConflict,
@@ -220,12 +223,17 @@ def decline_proposal(
         )
         audit_id = operation_scoped_id("aud", identity)
 
-        # 10. Exactly-one-current pre-check: the original must be the only one.
+        # 10. Day pre-check: the original must be among the day's current
+        #     assignments (others may share the day), with unique display_order.
         current_before = current_in_slot(tx, original)
-        if [a["id"] for a in current_before] != [original["id"]]:
+        orders_before = order_map(current_before)
+        if original["id"] not in orders_before:
             raise CurrentAssignmentConflict(
-                "Expected exactly one current assignment in this plan slot, found "
-                f"{[a['id'] for a in current_before]}."
+                "Original assignment is not among the day's current assignments."
+            )
+        if has_duplicate_display_order(current_before):
+            raise DuplicateAssignmentDisplayOrder(
+                "Current assignments on this day have duplicate display_order values."
             )
 
         before_state = {
@@ -259,14 +267,16 @@ def decline_proposal(
         original["updated_at"] = now
         tx.set(C.PLAN_ASSIGNMENTS, original["id"], original)
 
-        # 13. Exactly-one-current post-check: still the SAME original, and no
-        #     replacement was introduced anywhere.
+        # 13. Day post-check: the ENTIRE day is unchanged — same set of current
+        #     assignments, each at the same display_order — and no replacement
+        #     was introduced anywhere.
         current_after = current_in_slot(tx, original)
-        if [a["id"] for a in current_after] != [original["id"]]:
+        orders_after = order_map(current_after)
+        if orders_after != orders_before:
             raise CurrentAssignmentConflict(
-                "Post-condition failed: expected the original "
-                f"({original['id']}) to remain the only current assignment, found "
-                f"{[a['id'] for a in current_after]}."
+                "Post-condition failed: declining must leave the day's current "
+                f"assignments untouched; before={sorted(orders_before.items())} "
+                f"after={sorted(orders_after.items())}."
             )
         replacements = [
             a for a in tx.query(C.PLAN_ASSIGNMENTS, child_id=child_id)

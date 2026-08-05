@@ -349,19 +349,38 @@ def test_missing_proposed_version_conflicts():
     assert r.status_code == 409 and r.json()["error"] == "invalid_parent_decline_transition"
 
 
-def test_duplicate_current_in_slot_fails_atomically():
+def test_duplicate_display_order_in_day_fails_atomically():
+    """Ambiguous ordering on the day blocks decline; a second activity alone does not."""
     c = _c()
     pid = _propose(c)["proposal"]["proposal_id"]
     repo = _repo(c)
     original = repo.query(C.PLAN_ASSIGNMENTS, id=MAYA_BUBBLES)[0]
     clone = dict(original)
     clone["id"] = "assign_maya_bubbles_duplicate"
-    clone["pending_proposal_id"] = None
+    clone["pending_proposal_id"] = None          # same day, same display_order
     repo.set(C.PLAN_ASSIGNMENTS, clone["id"], clone)
 
     r = _decline(c, ELENA, "v-11", pid)
-    assert r.status_code == 409 and r.json()["error"] == "current_assignment_conflict"
+    assert r.status_code == 409 and r.json()["error"] == "duplicate_assignment_display_order"
     _assert_no_mutation(c, pid)
+
+
+def test_second_current_assignment_on_the_day_does_not_block_decline():
+    c = _c()
+    pid = _propose(c)["proposal"]["proposal_id"]
+    repo = _repo(c)
+    original = repo.query(C.PLAN_ASSIGNMENTS, id=MAYA_BUBBLES)[0]
+    sibling = dict(original)
+    sibling["id"] = "assign_maya_bubbles_sibling"
+    sibling["pending_proposal_id"] = None
+    sibling["display_order"] = 1
+    repo.set(C.PLAN_ASSIGNMENTS, sibling["id"], sibling)
+
+    r = _decline(c, ELENA, "v-11b", pid)
+    assert r.status_code == 200, r.text
+    after_sibling = repo.query(C.PLAN_ASSIGNMENTS, id="assign_maya_bubbles_sibling")[0]
+    assert after_sibling["display_order"] == 1 and after_sibling["version"] == sibling["version"]
+    assert r.json()["current_assignment"]["display_order"] == 0
 
 
 # ── 41-53: idempotency ──────────────────────────────────────────────────────

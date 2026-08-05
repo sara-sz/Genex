@@ -98,7 +98,8 @@ def _plan_review_count(tx: CollaborationRepository, child_id: str) -> int:
 def _assignment_view(a: dict) -> dict:
     return {
         "assignment_id": a["id"], "child_id": a["child_id"], "weekly_plan_id": a["weekly_plan_id"],
-        "scheduled_day": a["scheduled_day"], "plan_approval_status": a["plan_approval_status"],
+        "scheduled_day": a["scheduled_day"], "display_order": int(a.get("display_order", 0)),
+        "plan_approval_status": a["plan_approval_status"],
         "practice_status": a["practice_status"], "assignment_status": a["assignment_status"],
         "activity_template_id": a["activity_template_id"], "activity_version_id": a["activity_version_id"],
         "pending_proposal_id": a.get("pending_proposal_id"), "version": a["version"],

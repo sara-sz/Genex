@@ -298,24 +298,24 @@ def plan_assignments() -> List[PlanAssignment]:
     return [
         # Maya: one approved + practiced, one needs-review with a pending modify proposal.
         PlanAssignment(id="assign_maya_bubbles", weekly_plan_id="wp_maya", child_id=CHILD_MAYA,
-                       activity_template_id=T_BUBBLES, activity_version_id=V_BUBBLES, scheduled_day=0,
+                       activity_template_id=T_BUBBLES, activity_version_id=V_BUBBLES, scheduled_day=0, display_order=0,
                        plan_approval_status=PlanApprovalStatus.APPROVED, practice_status=PracticeStatus.DID_IT,
                        assignment_status=AssignmentStatus.CURRENT,
                        parent_feedback_summary="Maya requested 'more' twice.", environment=ENV),
         PlanAssignment(id="assign_maya_turntake", weekly_plan_id="wp_maya", child_id=CHILD_MAYA,
-                       activity_template_id=T_TURNTAKE, activity_version_id=V_TURNTAKE, scheduled_day=2,
+                       activity_template_id=T_TURNTAKE, activity_version_id=V_TURNTAKE, scheduled_day=2, display_order=0,
                        plan_approval_status=PlanApprovalStatus.CHANGE_PENDING_PARENT,
                        practice_status=PracticeStatus.TRIED_WITH_HELP, assignment_status=AssignmentStatus.CURRENT,
                        parent_feedback_summary="Hard to wait for a turn.", pending_proposal_id=PROP_MAYA_MODIFY,
                        environment=ENV),
         # Eli: needs plan review (never approved).
         PlanAssignment(id="assign_eli_bubbles", weekly_plan_id="wp_eli", child_id=CHILD_ELI,
-                       activity_template_id=T_BUBBLES, activity_version_id=V_BUBBLES, scheduled_day=1,
+                       activity_template_id=T_BUBBLES, activity_version_id=V_BUBBLES, scheduled_day=1, display_order=0,
                        plan_approval_status=PlanApprovalStatus.NEEDS_PLAN_REVIEW, practice_status=PracticeStatus.NOT_TRIED,
                        assignment_status=AssignmentStatus.CURRENT, environment=ENV),
         # Noah: approved, loved it.
         PlanAssignment(id="assign_noah_turntake", weekly_plan_id="wp_noah", child_id=CHILD_NOAH,
-                       activity_template_id=T_TURNTAKE, activity_version_id=V_TURNTAKE, scheduled_day=5,
+                       activity_template_id=T_TURNTAKE, activity_version_id=V_TURNTAKE, scheduled_day=5, display_order=0,
                        plan_approval_status=PlanApprovalStatus.APPROVED, practice_status=PracticeStatus.LOVED_IT,
                        assignment_status=AssignmentStatus.CURRENT,
                        parent_feedback_summary="Noah giggled through it.", environment=ENV),

@@ -281,6 +281,16 @@ role-aware; the therapist contracts are unchanged. Parent decision flags on the
 list *and* the detail come from one shared read-only eligibility evaluator, so a
 pending proposal blocked by a write guard is never advertised as actionable.
 
+## Ordered activities within a weekday (Phase 1B.2C.1)
+
+A weekday may now hold **several** current activities, ordered by `display_order`
+— see [ASSIGNMENT_DISPLAY_ORDER.md](ASSIGNMENT_DISPLAY_ORDER.md). The old
+"at most one current assignment per day" rule is replaced by "`display_order` is
+unique among the day's current assignments". Modify acceptance now explicitly
+**inherits the original's `display_order`**, so accepting a change never reorders
+the family's day, and a second activity on the same day no longer blocks a
+Modify.
+
 ## Not implemented yet (later gated phases)
 
 Cross-child parent inbox, therapist cancellation, proposal expiry,
