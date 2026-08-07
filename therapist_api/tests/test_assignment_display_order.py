@@ -392,7 +392,14 @@ def test_target_absent_from_current_set_fails_eligibility():
 
 
 def test_add_proposal_remains_ineligible_and_invisible():
-    """(48) Add behavior is not implemented; it must not surface to parents."""
+    """(48) Add behavior is not implemented; it must not surface to parents.
+
+    Strengthened in Phase 1B.2D. At 0.5.4 an ADD proposal was merely *unactionable*
+    — it still appeared in the parent list with all three flags false. Phase 1B.2D
+    requires parent ADD invisibility outright: the list EXCLUDES ADD proposals and
+    `total` does not count them. Ineligibility is still asserted, because it is the
+    guarantee that survives if a future phase ever makes ADD visible again.
+    """
     c = _c()
     pid = _propose(c)["proposal"]["proposal_id"]
     repo = _repo(c)
@@ -403,9 +410,8 @@ def test_add_proposal_remains_ineligible_and_invisible():
     flags = eligibility.evaluate_parent_decision(repo, "child_maya", p)
     assert flags == eligibility.INELIGIBLE
     listed = c.get("/api/v1/children/child_maya/proposals", headers=ELENA).json()
-    item = next(i for i in listed["items"] if i["proposal_id"] == pid)
-    assert item["decision"] == {"needs_parent_attention": False,
-                                "can_accept": False, "can_decline": False}
+    assert [i for i in listed["items"] if i["proposal_id"] == pid] == []
+    assert listed["total"] == len(listed["items"])
 
 
 # ── 59-62: read-only and atomicity ──────────────────────────────────────────

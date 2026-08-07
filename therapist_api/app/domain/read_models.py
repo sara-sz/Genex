@@ -137,7 +137,12 @@ class ActivityVersion(BaseModel):
     """A concrete (possibly therapist-derived) immutable version of an activity."""
 
     id: str
-    activity_template_id: str
+    # Null ONLY for a therapist-authored Add-proposal activity, which is new work
+    # rather than a version of an existing catalog template. Catalog listings
+    # filter versions BY template id, so a null simply never joins one — an Add
+    # activity gains no catalog exposure. Every plan-assignment-derived version
+    # (Modify) still carries its original template id.
+    activity_template_id: Optional[str] = None
     version_number: int = 1
     title: str
     domain: str                     # display label; NO chronological age range
@@ -224,9 +229,12 @@ class WeeklyPlan(BaseModel):
 class PlanChangeProposal(BaseModel):
     """A proposed add/modify/replace/remove awaiting parent acceptance.
 
-    In this phase only `modify` creation is implemented. The proposal references
-    BOTH the original and the proposed (derived) activity versions. Parent
-    acceptance/decline is NOT implemented yet.
+    `modify` and `add` creation are implemented. A MODIFY references BOTH the
+    original and the proposed (derived) activity versions and targets one existing
+    assignment. An ADD targets a WEEKDAY instead: it has no original activity and
+    no target assignment, because it asks for an ADDITIONAL activity alongside
+    whatever that day already holds. Parent acceptance/decline exists for `modify`
+    only; `replace` and `remove` are not implemented.
     """
 
     id: str
@@ -236,6 +244,13 @@ class PlanChangeProposal(BaseModel):
     proposal_type: ProposalType
     status: ProposalStatus
     target_assignment_id: Optional[str] = None      # current_assignment_id
+    # ADD only: the weekday (0=Mon .. 6=Sun) the extra activity is proposed for.
+    # The destination day need NOT be empty and several pending ADDs may name the
+    # same day. Deliberately NOT a position: no display_order is reserved here.
+    # Acceptance will allocate max(display_order on that day) + 1 inside its own
+    # transaction, which is the only place two concurrent Adds can be ordered
+    # safely. Null for every MODIFY.
+    destination_scheduled_day: Optional[int] = None
     original_activity_template_id: Optional[str] = None
     original_activity_version_id: Optional[str] = None
     proposed_activity_version_id: Optional[str] = None

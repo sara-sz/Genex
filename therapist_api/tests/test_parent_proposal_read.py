@@ -326,6 +326,10 @@ THERAPIST_VIEW_KEYS = {
     "original_activity_version_id", "proposed_activity_version_id", "change_reason",
     "save_scope", "created_by_user_id", "created_at", "decided_by_user_id",
     "decided_by_role", "decided_at", "resulting_assignment_id", "version",
+    # Phase 1B.2D: strictly additive and optional. Carries the destination weekday
+    # of an ADD proposal; ALWAYS null for a MODIFY, which the test below pins, so
+    # no existing Modify response changed in value.
+    "destination_scheduled_day",
 }
 
 
@@ -340,6 +344,9 @@ def test_therapist_response_shape_is_unchanged():
     assert set(out.keys()) == THERAPIST_VIEW_KEYS
     assert out["proposal_id"] == pid and out["child_id"] == "child_maya"
     assert out["save_scope"] == "child_only"          # therapist-only field intact
+    # The one field added in Phase 1B.2D is null for every Modify proposal, so
+    # the frozen Modify contract is unchanged in value, not merely in shape.
+    assert out["destination_scheduled_day"] is None
     assert out["proposed_activity_version_id"] == created["proposed_activity_version"]["id"]
     assert out["version"] == 1
     # parent-safe sections must NOT appear in the therapist response

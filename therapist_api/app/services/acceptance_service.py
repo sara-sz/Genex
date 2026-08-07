@@ -49,6 +49,15 @@ from .approval_service import (  # reuse shared base + generic write errors
     IdempotencyKeyConflict,
     MissingIdempotencyKey,
 )
+# Shared read-only day-ordering invariant (promoted out of this module in
+# Phase 1B.2D once Add creation became the fourth consumer). Re-exported here so
+# `acceptance_service.DuplicateAssignmentDisplayOrder` keeps resolving.
+from .assignment_order import (  # noqa: F401  (DuplicateAssignmentDisplayOrder re-export)
+    DuplicateAssignmentDisplayOrder,
+    assignment_order_map,
+    current_assignments_sharing_day,
+    has_duplicate_display_order,
+)
 
 ACTION = "accept_plan_change_proposal"
 EVENT_TYPE = "plan_change_proposal_accepted"
@@ -79,18 +88,6 @@ class ReplacementAssignmentConflict(ApprovalError):
     http_status = 409
 
 
-class DuplicateAssignmentDisplayOrder(ApprovalError):
-    """Two CURRENT assignments on one weekday claim the same display_order.
-
-    An internal consistency failure, not a client mistake — but surfacing it as a
-    typed 409 keeps the transaction fail-closed instead of silently producing an
-    ambiguously ordered day. Discloses no other family's data.
-    """
-
-    code = "duplicate_assignment_display_order"
-    http_status = 409
-
-
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -108,33 +105,6 @@ def _plan_review_count(tx: CollaborationRepository, child_id: str) -> int:
         if a["plan_approval_status"] == PlanApprovalStatus.NEEDS_PLAN_REVIEW.value
         and a["assignment_status"] == AssignmentStatus.CURRENT.value
     )
-
-
-def _current_in_slot(tx: CollaborationRepository, assignment: dict) -> list:
-    """CURRENT assignments sharing this assignment's (child, plan, day).
-
-    A weekday may now hold SEVERAL current activities, so this is a set rather
-    than an at-most-one lookup. Ordering within the day is `display_order`;
-    retired/replaced rows are excluded and never participate in the current-order
-    uniqueness invariant.
-    """
-    return [
-        a for a in tx.query(C.PLAN_ASSIGNMENTS, child_id=assignment["child_id"])
-        if a["weekly_plan_id"] == assignment["weekly_plan_id"]
-        and a["scheduled_day"] == assignment["scheduled_day"]
-        and plain(a["assignment_status"]) == AssignmentStatus.CURRENT.value
-    ]
-
-
-def _order_map(assignments: list) -> dict:
-    """Stable {assignment_id: display_order} for comparing a day before/after."""
-    return {a["id"]: int(a.get("display_order", 0)) for a in assignments}
-
-
-def _has_duplicate_display_order(assignments: list) -> bool:
-    """True when two CURRENT same-day assignments claim the same position."""
-    orders = [int(a.get("display_order", 0)) for a in assignments]
-    return len(orders) != len(set(orders))
 
 
 def _proposal_view(p: dict) -> dict:
@@ -297,13 +267,13 @@ def accept_proposal(
         # 10. Day invariant BEFORE mutating: the original must be among the day's
         #     current assignments (others may share the day), and every current
         #     display_order on that day must be unique.
-        current_before = _current_in_slot(tx, original)
-        orders_before = _order_map(current_before)
+        current_before = current_assignments_sharing_day(tx, original)
+        orders_before = assignment_order_map(current_before)
         if original["id"] not in orders_before:
             raise ReplacementAssignmentConflict(
                 "Original assignment is not among the day's current assignments."
             )
-        if _has_duplicate_display_order(current_before):
+        if has_duplicate_display_order(current_before):
             raise DuplicateAssignmentDisplayOrder(
                 "Current assignments on this day have duplicate display_order values."
             )
@@ -370,8 +340,8 @@ def accept_proposal(
         # 14. Day invariant AFTER mutating. The day must be exactly what it was,
         #     with the replacement swapped in for the original at the SAME
         #     position — every unrelated activity untouched.
-        current_after = _current_in_slot(tx, original)
-        orders_after = _order_map(current_after)
+        current_after = current_assignments_sharing_day(tx, original)
+        orders_after = assignment_order_map(current_after)
         expected_ids = (set(orders_before) - {original["id"]}) | {replacement_id}
         if set(orders_after) != expected_ids:
             raise ReplacementAssignmentConflict(
@@ -388,7 +358,7 @@ def accept_proposal(
             raise ReplacementAssignmentConflict(
                 "Post-condition failed: an unrelated same-day assignment moved."
             )
-        if _has_duplicate_display_order(current_after):
+        if has_duplicate_display_order(current_after):
             raise DuplicateAssignmentDisplayOrder(
                 "Current assignments on this day have duplicate display_order values."
             )

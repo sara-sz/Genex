@@ -20,6 +20,7 @@ from ..domain.enums import (
     ParentNoteReviewStatus,
     PlanApprovalStatus,
     ProposalStatus,
+    ProposalType,
     SessionPreparationStatus,
 )
 from ..repository import collections as C
@@ -384,6 +385,8 @@ class ReadService:
             proposal_id=p["id"], proposal_type=p["proposal_type"], proposal_status=p["status"],
             child_id=p["child_id"], weekly_plan_id=p.get("weekly_plan_id"),
             current_assignment_id=p.get("target_assignment_id"),
+            # ADD only; null for MODIFY, so the frozen Modify view is unchanged.
+            destination_scheduled_day=p.get("destination_scheduled_day"),
             original_activity_template_id=p.get("original_activity_template_id"),
             original_activity_version_id=p.get("original_activity_version_id"),
             proposed_activity_version_id=p.get("proposed_activity_version_id"),
@@ -548,6 +551,14 @@ class ReadService:
         if not rows or rows[0]["child_id"] != child_id:
             raise access.ChildNotFound(proposal_id)                  # existence-blind
         proposal = rows[0]
+
+        # Parent-facing ADD support does not exist yet, so an ADD proposal is
+        # existence-blind to a parent exactly like another family's proposal. The
+        # assignment lookup below would already 404 (an ADD has no target
+        # assignment), but stating the rule keeps parent invisibility deliberate
+        # rather than a side effect of a null.
+        if _plain(proposal.get("proposal_type")) == ProposalType.ADD.value:
+            raise access.ChildNotFound(proposal_id)
 
         # The referenced assignment must belong to the same child; a proposal
         # pointing elsewhere must not reveal that the other assignment exists.

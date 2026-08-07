@@ -30,6 +30,10 @@ from ..domain.enums import (
 )
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
+from .assignment_order import (
+    current_assignments_sharing_day,
+    has_duplicate_display_order,
+)
 
 
 class DecisionEligibility(NamedTuple):
@@ -118,16 +122,16 @@ def evaluate_parent_decision(
     #     A weekday may hold several activities, so another same-day activity
     #     must not make this proposal ineligible. What must hold is that the
     #     target is still current, and the day's ordering is unambiguous.
-    in_day = [
-        a for a in child_assignments
-        if a.get("weekly_plan_id") == assignment.get("weekly_plan_id")
-        and a.get("scheduled_day") == assignment.get("scheduled_day")
-        and plain(a.get("assignment_status")) == AssignmentStatus.CURRENT.value
-    ]
+    #
+    #     These two helpers are the shared read-only ordering invariant. Importing
+    #     them does NOT weaken this module's independence from the write services:
+    #     they are pure data-shape functions that decide nothing, so the
+    #     authoritative accept/decline guards remain solely inside their own
+    #     transactions and cannot be influenced from here.
+    in_day = current_assignments_sharing_day(repo, assignment)
     if assignment["id"] not in [a["id"] for a in in_day]:
         return INELIGIBLE
-    orders = [int(a.get("display_order", 0)) for a in in_day]
-    if len(orders) != len(set(orders)):
+    if has_duplicate_display_order(in_day):
         return INELIGIBLE            # duplicate positions -> fail closed
 
     return ELIGIBLE
@@ -145,6 +149,13 @@ def proposal_is_safe_to_show(
     one or disclosing why.
     """
     if proposal.get("child_id") != child_id:
+        return False
+    # Parent-facing ADD support does not exist yet (Phase 1B.2D implements only
+    # therapist-side creation), so an ADD proposal is never rendered to a parent.
+    # The `target_assignment_id` check below would already drop it — an ADD
+    # proposal has none — but relying on that would leave parent invisibility
+    # resting on an incidental null rather than a stated rule.
+    if plain(proposal.get("proposal_type")) == ProposalType.ADD.value:
         return False
     proposed_version_id = proposal.get("proposed_activity_version_id")
     if not proposed_version_id:

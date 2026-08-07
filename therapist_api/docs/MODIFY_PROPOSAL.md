@@ -7,6 +7,12 @@ therapist, parent, or child data is used. Parent acceptance/decline is NOT
 implemented in this phase** — the proposal enters `pending_parent_acceptance`
 and the original assignment remains the active family activity.
 
+The sibling verb — **Add**, which proposes an ADDITIONAL activity on a weekday
+rather than changing an existing one — is documented in
+[ADD_ACTIVITY_PROPOSAL.md](ADD_ACTIVITY_PROPOSAL.md). Everything below is
+unchanged by it, apart from one strictly additive optional field on the therapist
+`ProposalView` (`destination_scheduled_day`, always **null** for a Modify).
+
 ## Endpoint
 
 ```

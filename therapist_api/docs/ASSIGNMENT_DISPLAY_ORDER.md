@@ -133,10 +133,13 @@ No extra audit event is created by this migration.
 
 ## Not implemented yet
 
-**Add Activity** proposal creation, parent-safe Add reads, and parent Add
-accept/decline. When Add acceptance arrives it will append using
-`max(display_order for that day) + 1`, allocated **inside** the transaction so
-two concurrent acceptances cannot collide.
+**Add Activity proposal creation landed in Phase 1B.2D** — see
+[ADD_ACTIVITY_PROPOSAL.md](ADD_ACTIVITY_PROPOSAL.md). It creates no assignment and
+reserves no position, so nothing on this page changed.
+
+Still missing: parent-safe Add reads and parent Add accept/decline. When Add
+acceptance arrives it will append using `max(display_order for that day) + 1`,
+allocated **inside** the transaction so two concurrent acceptances cannot collide.
 
 Firestore transactional allocation of the next position — along with a composite
 index on `(child_id, weekly_plan_id, scheduled_day, display_order)` — is deferred

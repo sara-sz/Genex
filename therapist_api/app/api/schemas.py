@@ -254,6 +254,59 @@ class ProposalCreateResponse(BaseModel):
     idempotent_replay: bool
 
 
+# ── write: ADD-activity proposal creation ───────────────────────────────────
+#
+# Add means ADD ANOTHER activity to the chosen weekday. The day does not need to
+# be empty, several current activities may already sit there, and several pending
+# Add proposals may name the same day. Nothing is positioned at creation time:
+# there is no display_order in the request or the response, and no PlanAssignment
+# exists until a parent accepts.
+class AddProposalRequest(BaseModel):
+    """Therapist request to add one extra activity to a weekday."""
+
+    # 0=Mon .. 6=Sun. Range is enforced in the service so an out-of-range day
+    # returns the project's typed `invalid_request` envelope rather than
+    # FastAPI's generic validation shape.
+    scheduled_day: int = Field(description="Destination weekday, 0=Mon .. 6=Sun.")
+    expected_weekly_plan_id: str = Field(
+        description="The weekly plan the therapist believes is current (optimistic check)."
+    )
+    # The SAME canonical, validated activity content Modify uses.
+    activity: ModifyActivityInput
+    change_reason: str = ""
+    save_scope: str = "child_only"
+
+
+class AddProposalSummary(BaseModel):
+    proposal_id: str
+    proposal_type: str                      # always "add"
+    proposal_status: str
+    child_id: str
+    weekly_plan_id: str
+    destination_scheduled_day: int
+    proposed_activity_version_id: str
+    created_by_user_id: str
+    created_at: str
+    version: int
+    # No assignment exists until a parent accepts, so this stays null here.
+    resulting_assignment_id: Optional[str] = None
+
+
+class AddProposalCreateResponse(BaseModel):
+    """Therapist-authorized view of a newly created Add proposal.
+
+    Deliberately has NO `current_assignment` block (Add targets a day, not an
+    assignment), no display_order, no reserved position, and never the internal
+    destination target token used for idempotency.
+    """
+
+    proposal: AddProposalSummary
+    proposed_activity_version: dict
+    child_summary: dict
+    audit_event_id: str
+    idempotent_replay: bool
+
+
 # ── write: parent acceptance of a modify proposal ───────────────────────────
 class AcceptProposalRequest(BaseModel):
     """Both expected versions are REQUIRED (optimistic concurrency)."""
@@ -436,6 +489,9 @@ class ProposalView(BaseModel):
     child_id: str
     weekly_plan_id: Optional[str] = None
     current_assignment_id: Optional[str] = None
+    # ADD only: destination weekday. Null for MODIFY, so this is strictly
+    # additive and the frozen Modify therapist response is unchanged in value.
+    destination_scheduled_day: Optional[int] = None
     original_activity_template_id: Optional[str] = None
     original_activity_version_id: Optional[str] = None
     proposed_activity_version_id: Optional[str] = None

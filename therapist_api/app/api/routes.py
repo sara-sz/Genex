@@ -19,6 +19,7 @@ from ..domain.enums import PrincipalRole
 from ..services import access
 from ..services import (
     acceptance_service,
+    add_proposal_service,
     approval_service,
     decline_service,
     proposal_service,
@@ -180,6 +181,48 @@ async def create_modify_proposal(
         assignment_id=assignment_id,
         idempotency_key=idempotency_key,
         expected_assignment_version=body.expected_assignment_version,
+        activity=body.activity.model_dump(),
+        change_reason=body.change_reason,
+        save_scope=body.save_scope,
+        environment=principal.environment,
+        request_id=get_request_id(),
+    )
+
+
+# ── write: propose an ADDITIONAL activity on one weekday ────────────────────
+@router.post(
+    "/children/{child_id}/weekly-plan/proposals/add",
+    response_model=S.AddProposalCreateResponse,
+    responses={
+        400: {"model": S.ErrorResponse}, 403: {"model": S.ErrorResponse},
+        404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse},
+        422: {"model": S.ErrorResponse},
+    },
+)
+async def create_add_proposal(
+    child_id: str,
+    body: S.AddProposalRequest,
+    request: Request,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    principal: AuthenticatedUser = Depends(require_principal),
+):
+    """Propose ONE additional activity on a weekday.
+
+    The route hangs off the weekly plan rather than an assignment because Add
+    targets a DAY: the destination need not be empty, and several pending Add
+    proposals may name the same day. Nothing existing is modified and no
+    PlanAssignment is created until a parent accepts.
+    """
+    repo = request.app.state.repo
+    from ..logging_config import get_request_id
+
+    return add_proposal_service.create_add_proposal(
+        repo,
+        principal,
+        child_id=child_id,
+        idempotency_key=idempotency_key,
+        scheduled_day=body.scheduled_day,
+        expected_weekly_plan_id=body.expected_weekly_plan_id,
         activity=body.activity.model_dump(),
         change_reason=body.change_reason,
         save_scope=body.save_scope,

@@ -48,18 +48,20 @@ from ..repository.interface import CollaborationRepository
 from . import access
 from .acceptance_service import (  # shared read helpers — response-shape parity
     _assignment_view as assignment_view,
-    _current_in_slot as current_in_slot,
-    _has_duplicate_display_order as has_duplicate_display_order,
-    _order_map as order_map,
     _plan_review_count as plan_review_count,
     _pending_proposal_count as pending_proposal_count,
     _proposal_view as proposal_view,
 )
 from .acceptance_service import (  # shared typed errors whose meaning still holds
-    DuplicateAssignmentDisplayOrder,
     ProposalAlreadyDecided,
     ProposalAssignmentMismatch,
     ProposalVersionConflict,
+)
+from .assignment_order import (  # shared read-only day-ordering invariant
+    DuplicateAssignmentDisplayOrder,
+    assignment_order_map as order_map,
+    current_assignments_sharing_day as current_in_slot,
+    has_duplicate_display_order,
 )
 from .approval_service import (
     ApprovalError,
