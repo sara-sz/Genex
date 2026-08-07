@@ -246,18 +246,16 @@ GET /api/v1/children/{child_id}/proposals/{proposal_id}
 **always null for a Modify**, so the frozen Modify response is unchanged in value,
 not merely in shape. An unconnected therapist stays existence-blind (404).
 
-**Parent** — Add is **invisible** in this phase:
+**Parent** — Add was **invisible** in this phase (1B.2D): excluded from the list,
+404 on detail, eligibility false/false/false.
 
-- parent list **excludes** ADD proposals and `total` does not count them;
-- parent detail for an ADD returns the canonical existence-blind **404**, byte-
-  identical to an unknown proposal;
-- eligibility for ADD is `can_accept: false`, `can_decline: false`,
-  `needs_parent_attention: false`;
-- an ADD in the store never causes a 500 in the parent list.
-
-Both parent-side guards are stated explicitly on `proposal_type == add` rather
-than relying on the incidental null `target_assignment_id` that would already have
-dropped it.
+> **Superseded by Phase 1B.2E** — see
+> [PARENT_ADD_PROPOSAL_READ.md](PARENT_ADD_PROPOSAL_READ.md). An Add is now
+> **readable** by a parent, showing the destination weekday and the activities
+> already on it. It remains **non-actionable** (`can_accept` / `can_decline` /
+> `needs_parent_attention` all false) until Add decision endpoints exist. The two
+> parent-side gates were stated explicitly on `proposal_type == add` precisely so
+> that phase could reverse them legibly.
 
 ## Errors
 
@@ -298,9 +296,11 @@ can be ordered without colliding.
 
 ## Not implemented yet
 
-Parent Add visibility · Add acceptance · Add decline · Save for Later · Replace ·
-Remove · reordering endpoint · parent cross-child inbox · note writes · therapist
-cancellation · proposal expiry.
+Parent Add visibility **landed in Phase 1B.2E** —
+[PARENT_ADD_PROPOSAL_READ.md](PARENT_ADD_PROPOSAL_READ.md). Still unimplemented:
+Add acceptance · Add decline · Save for Later · Replace · Remove · reordering
+endpoint · parent cross-child inbox · note writes · therapist cancellation ·
+proposal expiry.
 
 Firestore persistence is deferred; when it lands, acceptance will need
 transactional next-position allocation plus a composite index on

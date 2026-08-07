@@ -118,7 +118,11 @@ def test_list_item_is_lighter_than_detail():
         "proposal_id", "proposal_type", "proposal_status", "created_at",
         "decided_at", "child", "therapist", "proposed_activity", "change_reason",
         "decision",
+        # Phase 1B.2E: ADD only. Null for MODIFY, asserted just below, so this
+        # Modify item is unchanged in value.
+        "destination",
     }
+    assert item["destination"] is None
     assert set(item["proposed_activity"].keys()) == {
         "title", "developmental_domain", "milestone_display_name",
     }
@@ -137,13 +141,16 @@ def test_parent_list_schema_key_sets_are_pinned():
     assert set(S.ParentProposalListItem.model_fields) == {
         "proposal_id", "proposal_type", "proposal_status", "created_at",
         "decided_at", "child", "therapist", "proposed_activity", "change_reason",
-        "decision"}
+        "decision",
+        "destination"}                      # Phase 1B.2E: ADD only, null for MODIFY
     assert set(S.ParentProposalActivitySummary.model_fields) == {
         "title", "developmental_domain", "milestone_display_name"}
     assert set(S.ParentProposalDecisionSummary.model_fields) == {
         "needs_parent_attention", "can_accept", "can_decline"}
+    assert set(S.ParentDestinationDay.model_fields) == {"scheduled_day", "day_label"}
     for model in (S.ParentProposalListResponse, S.ParentProposalListItem,
-                  S.ParentProposalActivitySummary, S.ParentProposalDecisionSummary):
+                  S.ParentProposalActivitySummary, S.ParentProposalDecisionSummary,
+                  S.ParentDestinationDay):
         for marker in FORBIDDEN:
             assert marker not in model.model_fields, f"{model.__name__} declares {marker}"
 

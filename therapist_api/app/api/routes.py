@@ -322,7 +322,11 @@ async def list_proposals(child_id: str,
 
 @router.get(
     "/children/{child_id}/proposals/{proposal_id}",
-    response_model=Union[S.ProposalView, S.ParentProposalDecisionDetail],
+    response_model=Union[
+        S.ProposalView,
+        S.ParentProposalDecisionDetail,
+        S.ParentAddProposalDecisionDetail,
+    ],
     responses={
         403: {"model": S.ErrorResponse}, 404: {"model": S.ErrorResponse},
         409: {"model": S.ErrorResponse},
@@ -331,13 +335,21 @@ async def list_proposals(child_id: str,
 async def get_proposal(child_id: str, proposal_id: str,
                        principal: AuthenticatedUser = Depends(require_principal),
                        svc: ReadService = Depends(get_service)):
-    """Role-aware proposal detail.
+    """Role-aware, type-aware proposal detail.
 
     A therapist receives the existing `ProposalView` unchanged. An authorized
-    parent receives the narrower `ParentProposalDecisionDetail` — a dedicated
-    projection, not a filtered therapist model — carrying the two versions its
-    accept/decline calls need. OpenAPI documents both via `anyOf`; the two shapes
-    are disjoint on their required fields, so neither can validate as the other.
+    parent receives a dedicated projection — never a filtered therapist model —
+    chosen by proposal type:
+
+    * MODIFY -> `ParentProposalDecisionDetail`, the frozen original-vs-proposed
+      comparison carrying the two versions its accept/decline calls need;
+    * ADD -> `ParentAddProposalDecisionDetail`, which has no original activity and
+      instead shows the destination weekday plus what is already scheduled on it.
+
+    OpenAPI documents all three via `anyOf`. They are disjoint on required fields
+    — `original_activity`/`decision_context` versus `destination`/
+    `existing_day_activities` — so no response can validate as the wrong member
+    and be silently reshaped.
     """
     if access.principal_role(principal) == PrincipalRole.PARENT:
         return svc.get_parent_proposal_decision(principal, child_id, proposal_id)

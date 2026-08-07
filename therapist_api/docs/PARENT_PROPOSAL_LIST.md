@@ -5,8 +5,14 @@ Cloud Run, no frontend, no real data.** Read-only: this endpoint and the
 eligibility evaluator mutate nothing.
 
 **Single child only.** There is no cross-child parent inbox and no notifications.
-Add / Remove Activity proposals, therapist cancellation and proposal expiry also
-remain unimplemented.
+Remove Activity proposals, therapist cancellation and proposal expiry remain
+unimplemented.
+
+**Phase 1B.2E** made this list type-aware: ADD proposals now appear alongside
+MODIFY, carrying an extra `destination` block and always non-actionable — see
+[PARENT_ADD_PROPOSAL_READ.md](PARENT_ADD_PROPOSAL_READ.md). `destination` is
+**null for every MODIFY**, so nothing described below changed in value. REPLACE
+and REMOVE stay fail-closed.
 
 ## Route — extended, not added
 

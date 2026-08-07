@@ -259,8 +259,12 @@ def test_two_different_pending_adds_may_target_the_same_weekday():
     assert len(repo.query(C.PLAN_ASSIGNMENTS)) == assignments_before     # (28)
 
 
-def test_two_pending_adds_on_an_occupied_day_and_parent_sees_neither():
-    """(29) Tuesday-style scenario: an existing Genex activity plus two Adds."""
+def test_two_pending_adds_on_an_occupied_day_are_both_non_actionable():
+    """(29) Tuesday-style scenario: an existing Genex activity plus two Adds.
+
+    Superseded by Phase 1B.2E: the parent now SEES both, but neither is
+    actionable and neither has moved the existing activity.
+    """
     c = _c()
     # Maya's day 0 already holds assign_maya_bubbles at display_order 0.
     r1 = _post(c, ADD_MAYA, key="m-a", b=body(day=0, plan="wp_maya", activity=act_social()))
@@ -271,9 +275,12 @@ def test_two_pending_adds_on_an_occupied_day_and_parent_sees_neither():
     assert assignment_order.assignment_order_map(day0) == {"assign_maya_bubbles": 0}
 
     listed = c.get("/api/v1/children/child_maya/proposals", headers=ELENA).json()
-    ids = {i["proposal_id"] for i in listed["items"]}
-    assert r1.json()["proposal"]["proposal_id"] not in ids               # (29)
-    assert r2.json()["proposal"]["proposal_id"] not in ids
+    items = {i["proposal_id"]: i for i in listed["items"]}
+    for r in (r1, r2):                                                   # (29)
+        item = items[r.json()["proposal"]["proposal_id"]]
+        assert item["decision"] == {"needs_parent_attention": False,
+                                    "can_accept": False, "can_decline": False}
+        assert item["destination"] == {"scheduled_day": 0, "day_label": "Monday"}
 
 
 # ── 30-41: validation and authorization ─────────────────────────────────────
@@ -685,38 +692,52 @@ def test_unconnected_therapist_cannot_read_the_add_proposal():
                  headers=UNCONNECTED).status_code == 404
 
 
-# ── 73-77: parent invisibility ──────────────────────────────────────────────
+# ── 73-77: parent surface ───────────────────────────────────────────────────
+#
+# Superseded by Phase 1B.2E. At 0.6 an ADD was deliberately INVISIBLE to a parent
+# — excluded from the list and 404 on detail — because no parent-safe ADD
+# projection existed. 1B.2E adds those projections, so an ADD is now READABLE but
+# still NON-ACTIONABLE. The guarantee that survives unchanged is the one these
+# tests were really protecting: an ADD must never appear actionable, and must
+# never disturb the frozen parent Modify surface.
 def _create_maya_add(c, key="p1", day=3):
     return _post(c, ADD_MAYA, key=key, b=body(day=day, plan="wp_maya")
                  ).json()["proposal"]["proposal_id"]
 
 
-def test_parent_list_excludes_add_and_total_matches():
-    """(73)(74)"""
+def test_parent_list_includes_add_as_non_actionable():
+    """(73)(74) — 1B.2E: present in the list and counted, but not actionable."""
     c = _c()
     before = c.get("/api/v1/children/child_maya/proposals", headers=ELENA).json()
     pid = _create_maya_add(c)
     after = c.get("/api/v1/children/child_maya/proposals", headers=ELENA).json()
 
-    assert pid not in {i["proposal_id"] for i in after["items"]}          # (73)
-    assert after["total"] == before["total"]                             # (74)
+    item = next(i for i in after["items"] if i["proposal_id"] == pid)     # (73)
+    assert item["proposal_type"] == "add"
+    assert after["total"] == before["total"] + 1                         # (74)
     assert after["total"] == len(after["items"])
-    assert after["items"] == before["items"]        # existing Modify items unaffected
+    assert item["decision"] == {"needs_parent_attention": False,
+                                "can_accept": False, "can_decline": False}
 
 
-def test_parent_detail_for_an_add_is_a_canonical_404():
-    """(75)"""
+def test_parent_detail_for_an_add_returns_the_add_projection():
+    """(75) — 1B.2E: a dedicated Add projection, not a 404 and not a Modify shape."""
     c = _c()
     pid = _create_maya_add(c)
     r = c.get(f"/api/v1/children/child_maya/proposals/{pid}", headers=ELENA)
-    assert r.status_code == 404
-    # Byte-identical to an unknown proposal — nothing reveals that it exists.
+    assert r.status_code == 200
+    out = r.json()
+    assert out["proposal"]["proposal_type"] == "add"
+    assert "destination" in out and "existing_day_activities" in out
+    assert "original_activity" not in out       # nothing is being replaced
+    # An unknown proposal is still existence-blind.
     unknown = c.get("/api/v1/children/child_maya/proposals/prop_ghost", headers=ELENA)
-    assert r.json() == unknown.json() == {"error": "not_found", "detail": "Not found."}
+    assert unknown.status_code == 404
+    assert unknown.json() == {"error": "not_found", "detail": "Not found."}
 
 
 def test_add_eligibility_is_false_false_false():
-    """(76)"""
+    """(76) Unchanged guarantee: readable does NOT mean actionable."""
     c = _c()
     pid = _create_maya_add(c)
     repo = _repo(c)
@@ -725,14 +746,16 @@ def test_add_eligibility_is_false_false_false():
     assert flags == eligibility.INELIGIBLE
     assert (flags.can_accept, flags.can_decline, flags.needs_parent_attention) == (
         False, False, False)
-    assert eligibility.proposal_is_safe_to_show(repo, "child_maya", proposal) is False
+    # 1B.2E: now safe to SHOW, while still ineligible to act on.
+    assert eligibility.proposal_is_safe_to_show(repo, "child_maya", proposal) is True
 
 
-def test_existing_modify_parent_list_and_detail_are_unchanged():
+def test_existing_modify_parent_items_are_unchanged_by_an_add():
     """(77) An Add in the store must not disturb the parent Modify surface."""
     c = _c()
     listed_before = c.get("/api/v1/children/child_maya/proposals", headers=ELENA).json()
-    modify_id = listed_before["items"][0]["proposal_id"]
+    modify_ids = [i["proposal_id"] for i in listed_before["items"]]
+    modify_id = modify_ids[0]
     detail_before = c.get(f"/api/v1/children/child_maya/proposals/{modify_id}",
                           headers=ELENA).json()
 
@@ -741,7 +764,9 @@ def test_existing_modify_parent_list_and_detail_are_unchanged():
     listed_after = c.get("/api/v1/children/child_maya/proposals", headers=ELENA).json()
     detail_after = c.get(f"/api/v1/children/child_maya/proposals/{modify_id}",
                          headers=ELENA).json()
-    assert listed_after == listed_before
+    # Every pre-existing Modify item is byte-identical, in the same relative order.
+    assert [i for i in listed_after["items"] if i["proposal_id"] in modify_ids] == \
+        listed_before["items"]
     assert detail_after == detail_before
     assert listed_after["items"], "the parent Modify surface must not be emptied"
 

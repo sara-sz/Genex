@@ -23,9 +23,10 @@ from ..domain.enums import (
     ProposalType,
     SessionPreparationStatus,
 )
+from ..domain.weekdays import day_label
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
-from . import access, eligibility
+from . import access, assignment_order, eligibility
 
 
 class ReadService:
@@ -489,10 +490,62 @@ class ReadService:
                     can_accept=flags.can_accept,
                     can_decline=flags.can_decline,
                 ),
+                # ADD only. Null for MODIFY, so the frozen Modify item is
+                # unchanged in value. The day's existing activities are NOT
+                # included here — that context belongs in the detail response, so
+                # the list stays a lightweight discovery surface.
+                destination=self._parent_destination(proposal),
             )
             for _, proposal, proposed, flags in decorated
         ]
         return S.ParentProposalListResponse(items=items, total=len(items), next_cursor=None)
+
+    # ── parent-safe ADD helpers ─────────────────────────────────────────────
+    def _parent_destination(self, proposal: dict) -> Optional[S.ParentDestinationDay]:
+        """Destination weekday for an ADD, or None for any other proposal type."""
+        if _plain(proposal.get("proposal_type")) != ProposalType.ADD.value:
+            return None
+        day = proposal.get("destination_scheduled_day")
+        label = day_label(day)
+        if label is None:
+            return None                 # caller already dropped it; belt and braces
+        return S.ParentDestinationDay(scheduled_day=day, day_label=label)
+
+    def _parent_day_activities(
+        self, child_id: str, weekly_plan_id: str, scheduled_day: int
+    ) -> List[S.ParentDayActivitySummary]:
+        """Parent-safe teasers for the CURRENT activities on one weekday.
+
+        Read at request time from canonical state — never a snapshot stored on the
+        proposal. If the therapist or an acceptance changes the day after the
+        proposal was created, this reflects the change; the proposal record does
+        not, because it represents the recommendation rather than the plan.
+
+        Ordered by `display_order` ascending with the assignment id as the final
+        deterministic tie-break. The ORDER is the product signal: `display_order`
+        itself is never exposed, and neither is the assignment id, plan id,
+        version id, assignment status, approval state or pending link.
+        Retired/replaced assignments are excluded — `current_assignments_for_day`
+        returns CURRENT rows only.
+        """
+        day = assignment_order.current_assignments_for_day(
+            self.repo, child_id, weekly_plan_id, scheduled_day
+        )
+        day.sort(key=lambda a: (int(a.get("display_order", 0)), a["id"]))
+        summaries = []
+        for a in day:
+            version = self._version(a.get("activity_version_id"))
+            if version is None:
+                continue                # a dangling row is omitted, never guessed at
+            milestone_id = version.get("milestone_id")
+            rows = self.repo.query(C.MILESTONES, id=milestone_id) if milestone_id else []
+            summaries.append(S.ParentDayActivitySummary(
+                title=version.get("title", ""),
+                developmental_domain=version.get("domain", ""),
+                milestone_display_name=rows[0]["title"] if rows else "",
+                duration_minutes=version.get("duration_minutes"),
+            ))
+        return summaries
 
     # ── parent-safe proposal decision detail ────────────────────────────────
     def _parent_activity_view(self, version: dict) -> S.ParentActivityView:
@@ -552,13 +605,15 @@ class ReadService:
             raise access.ChildNotFound(proposal_id)                  # existence-blind
         proposal = rows[0]
 
-        # Parent-facing ADD support does not exist yet, so an ADD proposal is
-        # existence-blind to a parent exactly like another family's proposal. The
-        # assignment lookup below would already 404 (an ADD has no target
-        # assignment), but stating the rule keeps parent invisibility deliberate
-        # rather than a side effect of a null.
-        if _plain(proposal.get("proposal_type")) == ProposalType.ADD.value:
-            raise access.ChildNotFound(proposal_id)
+        # Type-aware dispatch. An ADD gets its own projection rather than being
+        # forced into the original-vs-proposed comparison below, which would have
+        # to fabricate an "original activity" that does not exist. Any type
+        # without a parent-safe projection stays existence-blind.
+        proposal_type = _plain(proposal.get("proposal_type"))
+        if proposal_type == ProposalType.ADD.value:
+            return self._parent_add_detail(child_id, proposal)
+        if proposal_type != ProposalType.MODIFY.value:
+            raise access.ChildNotFound(proposal_id)   # REPLACE / REMOVE / unknown
 
         # The referenced assignment must belong to the same child; a proposal
         # pointing elsewhere must not reveal that the other assignment exists.
@@ -622,6 +677,69 @@ class ReadService:
                 can_decline=flags.can_decline,
                 accepted_or_declined_at=decided_at,
                 resulting_assignment_id=proposal.get("resulting_assignment_id"),
+            ),
+        )
+
+    def _parent_add_detail(
+        self, child_id: str, proposal: dict
+    ) -> S.ParentAddProposalDecisionDetail:
+        """Parent-safe detail for ONE ADD proposal. Read-only; nothing is written.
+
+        Answers the four questions an Add actually raises for a family: which
+        weekday, what is already on it, what would be added, and why. There is no
+        `original_activity` and no `expected_assignment_version` — an Add replaces
+        nothing and touches no assignment, so fabricating either would describe a
+        change that is not being proposed.
+
+        Any inconsistency in the linked records raises the same existence-blind
+        `ChildNotFound` (404) used everywhere else, rather than a 500 or a partial
+        body that would disclose which record was broken.
+        """
+        proposal_id = proposal["id"]
+        if not eligibility.proposal_is_safe_to_show(self.repo, child_id, proposal):
+            raise access.ChildNotFound(proposal_id)
+
+        proposed = self._version(proposal.get("proposed_activity_version_id"))
+        destination = self._parent_destination(proposal)
+        if proposed is None or destination is None:
+            raise access.ChildNotFound(proposal_id)
+
+        child = self._child(child_id) or {}
+        therapist_rows = self.repo.query(C.THERAPIST_PROFILES, id=proposal.get("therapist_id"))
+        therapist = therapist_rows[0] if therapist_rows else {}
+        therapist_name = therapist.get("display_name", "")
+        if therapist.get("credentials"):
+            therapist_name = f"{therapist_name}, {therapist['credentials']}"
+
+        decided_at = proposal.get("decided_at")
+        flags = eligibility.evaluate_parent_decision(self.repo, child_id, proposal)
+
+        return S.ParentAddProposalDecisionDetail(
+            proposal=S.ParentProposalSummary(
+                proposal_id=proposal_id,
+                proposal_type=_plain(proposal["proposal_type"]),
+                proposal_status=_plain(proposal["status"]),
+                proposal_version=int(proposal.get("version", 1)),
+                created_at=proposal.get("created_at", ""),
+                decided_at=decided_at,
+            ),
+            child=S.ParentChildSummary(
+                child_id=child_id, display_name=child.get("display_name", "")
+            ),
+            therapist=S.ParentTherapistSummary(display_name=therapist_name),
+            destination=destination,
+            # CURRENT plan state, read now — not a snapshot stored on the proposal.
+            existing_day_activities=self._parent_day_activities(
+                child_id, proposal["weekly_plan_id"],
+                proposal["destination_scheduled_day"],
+            ),
+            proposed_activity=self._parent_activity_view(proposed),
+            change_reason=proposal.get("change_reason", "") or proposal.get("rationale", ""),
+            decision=S.ParentAddDecisionFlags(
+                can_accept=flags.can_accept,
+                can_decline=flags.can_decline,
+                needs_parent_attention=flags.needs_parent_attention,
+                accepted_or_declined_at=decided_at,
             ),
         )
 

@@ -28,9 +28,11 @@ from ..domain.enums import (
     ProposalStatus,
     ProposalType,
 )
+from ..domain.weekdays import is_valid_weekday
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
 from .assignment_order import (
+    current_assignments_for_day,
     current_assignments_sharing_day,
     has_duplicate_display_order,
 )
@@ -60,16 +62,65 @@ def evaluate_parent_decision(
 ) -> DecisionEligibility:
     """Whether an authorized parent could accept/decline `proposal` right now.
 
-    Mirrors the guards in `acceptance_service` / `decline_service`. Any missing or
-    inconsistent linked record yields INELIGIBLE — never an exception, so one bad
-    record cannot break a whole list.
+    Dispatches on proposal type. Each type's guards mirror the write service that
+    owns it, so they must not be shared: a MODIFY is assignment-centric (target
+    assignment, pending link, version match) while an ADD is day-centric (a
+    destination weekday, no assignment at all). Copying MODIFY's target-assignment
+    guards onto an ADD would reject every valid Add.
+
+    Any missing or inconsistent linked record yields INELIGIBLE — never an
+    exception, so one bad record cannot break a whole list. An unsupported type
+    (REPLACE / REMOVE / anything unknown) also fails closed.
     """
     if not connection_is_active:
         return INELIGIBLE
 
-    # ── proposal shape and decision state ───────────────────────────────────
-    if plain(proposal.get("proposal_type")) != ProposalType.MODIFY.value:
+    proposal_type = plain(proposal.get("proposal_type"))
+    if proposal_type == ProposalType.ADD.value:
+        return _evaluate_add(repo, child_id, proposal)
+    if proposal_type != ProposalType.MODIFY.value:
+        return INELIGIBLE                       # REPLACE / REMOVE / unknown
+    return _evaluate_modify(repo, child_id, proposal)
+
+
+def _evaluate_add(
+    repo: CollaborationRepository, child_id: str, proposal: dict
+) -> DecisionEligibility:
+    """Add is READABLE but NOT actionable in this checkpoint.
+
+    Add accept/decline endpoints do not exist yet, so this always returns
+    INELIGIBLE. The state below is still validated rather than short-circuited:
+    the checks are what a future Add decision will need, and running them now
+    means an Add that could never be acted on is already reported as such instead
+    of appearing actionable the day those endpoints land.
+    """
+    if plain(proposal.get("status")) != ProposalStatus.PENDING_PARENT_ACCEPTANCE.value:
         return INELIGIBLE
+    if not is_valid_weekday(proposal.get("destination_scheduled_day")):
+        return INELIGIBLE
+    proposed_version_id = proposal.get("proposed_activity_version_id")
+    if not proposed_version_id or not repo.query(C.ACTIVITY_VERSIONS, id=proposed_version_id):
+        return INELIGIBLE
+
+    weekly_plan_id = proposal.get("weekly_plan_id")
+    if not weekly_plan_id:
+        return INELIGIBLE
+    day = current_assignments_for_day(
+        repo, child_id, weekly_plan_id, proposal["destination_scheduled_day"]
+    )
+    if has_duplicate_display_order(day):
+        return INELIGIBLE                       # ambiguous day -> fail closed
+
+    # Every check above passed. The result is STILL ineligible: there is no
+    # endpoint a parent could submit this to. Advertising can_accept here would
+    # offer a button that 404s.
+    return INELIGIBLE
+
+
+def _evaluate_modify(
+    repo: CollaborationRepository, child_id: str, proposal: dict
+) -> DecisionEligibility:
+    """Frozen MODIFY eligibility — mirrors acceptance_service / decline_service."""
     if plain(proposal.get("status")) != ProposalStatus.PENDING_PARENT_ACCEPTANCE.value:
         return INELIGIBLE
 
@@ -143,25 +194,30 @@ def proposal_is_safe_to_show(
     """Whether a parent-safe summary can be built for `proposal` at all.
 
     Distinct from eligibility: a proposal may be perfectly safe to *show* while
-    being ineligible to act on (the common "pending but blocked" case). This is
-    only about whether the records needed to render a summary exist and belong to
-    this child — if not, the caller drops the item rather than emitting a partial
-    one or disclosing why.
+    being ineligible to act on (the common "pending but blocked" case, and every
+    ADD in this checkpoint). This is only about whether the records needed to
+    render a summary exist and belong to this child — if not, the caller drops the
+    item rather than emitting a partial one or disclosing why.
+
+    Visibility is **explicitly type-aware**, not open by default. MODIFY and ADD
+    each have their own requirements; every other type — REPLACE, REMOVE, anything
+    unrecognised — stays fail-closed until its own phase gives it a parent-safe
+    projection.
     """
     if proposal.get("child_id") != child_id:
-        return False
-    # Parent-facing ADD support does not exist yet (Phase 1B.2D implements only
-    # therapist-side creation), so an ADD proposal is never rendered to a parent.
-    # The `target_assignment_id` check below would already drop it — an ADD
-    # proposal has none — but relying on that would leave parent invisibility
-    # resting on an incidental null rather than a stated rule.
-    if plain(proposal.get("proposal_type")) == ProposalType.ADD.value:
         return False
     proposed_version_id = proposal.get("proposed_activity_version_id")
     if not proposed_version_id:
         return False
     if not repo.query(C.ACTIVITY_VERSIONS, id=proposed_version_id):
         return False
+
+    proposal_type = plain(proposal.get("proposal_type"))
+    if proposal_type == ProposalType.ADD.value:
+        return _add_is_safe_to_show(repo, child_id, proposal)
+    if proposal_type != ProposalType.MODIFY.value:
+        return False                            # REPLACE / REMOVE / unknown
+
     assignment_id = proposal.get("target_assignment_id")
     if not assignment_id:
         return False
@@ -169,6 +225,35 @@ def proposal_is_safe_to_show(
     if not rows or rows[0].get("child_id") != child_id:
         return False
     return True
+
+
+def _add_is_safe_to_show(
+    repo: CollaborationRepository, child_id: str, proposal: dict
+) -> bool:
+    """Whether an ADD can be rendered as a parent-safe summary.
+
+    Day-centric, deliberately not assignment-centric: an Add has no target
+    assignment, so requiring one would drop every valid Add.
+
+    Plan **currency** is intentionally NOT required here, matching MODIFY — an
+    old-plan proposal stays readable as history and is made non-actionable by the
+    eligibility evaluator instead of vanishing from the list. The plan must still
+    RESOLVE, because the destination day's activities are read from it.
+    """
+    if not is_valid_weekday(proposal.get("destination_scheduled_day")):
+        return False
+    weekly_plan_id = proposal.get("weekly_plan_id")
+    if not weekly_plan_id:
+        return False
+    plan = repo.query(C.WEEKLY_PLANS, id=weekly_plan_id)
+    if not plan or plan[0].get("child_id") != child_id:
+        return False
+    # An ambiguously ordered destination day cannot be presented in a meaningful
+    # order, so the item is dropped rather than shown in an arbitrary one.
+    day = current_assignments_for_day(
+        repo, child_id, weekly_plan_id, proposal["destination_scheduled_day"]
+    )
+    return not has_duplicate_display_order(day)
 
 
 def sort_key(proposal: dict, eligibility: DecisionEligibility) -> tuple:

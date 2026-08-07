@@ -402,6 +402,14 @@ class ParentDecisionFlags(BaseModel):
 
 
 class ParentProposalDecisionDetail(BaseModel):
+    """Parent decision detail for a **MODIFY** proposal — frozen contract.
+
+    Deliberately keeps its original name. An ADD proposal uses the separate
+    `ParentAddProposalDecisionDetail` below rather than being forced into this
+    shape, because an Add replaces nothing and has no original activity to
+    compare against.
+    """
+
     proposal: ParentProposalSummary
     child: ParentChildSummary
     therapist: ParentTherapistSummary
@@ -409,6 +417,71 @@ class ParentProposalDecisionDetail(BaseModel):
     original_activity: ParentActivityView
     proposed_activity: ParentActivityView
     decision: ParentDecisionFlags
+
+
+# ── read: parent-safe ADD proposal projections ──────────────────────────────
+#
+# An Add asks "put ONE MORE activity on this weekday". There is no original
+# activity, so the parent question is not "what changes?" but "what is already on
+# that day, and what would be added to it?". These models answer exactly that and
+# nothing else.
+class ParentDestinationDay(BaseModel):
+    """Which weekday the therapist wants to add an activity to."""
+
+    scheduled_day: int               # 0=Mon .. 6=Sun
+    day_label: str = ""              # presentation only, e.g. "Tuesday"
+
+
+class ParentDayActivitySummary(BaseModel):
+    """One activity already on the destination day — context, not a decision.
+
+    A teaser, not the full instructions: the parent is being shown what the day
+    holds so the addition makes sense, not being asked to re-read every activity.
+    Carries NO `display_order` — position is conveyed by array order alone — and
+    no assignment id, plan id, version id, status or approval internals.
+    """
+
+    title: str
+    developmental_domain: str
+    milestone_display_name: str = ""
+    duration_minutes: Optional[int] = None
+
+
+class ParentAddDecisionFlags(BaseModel):
+    """Actionability for an Add.
+
+    Structurally lighter than `ParentDecisionFlags`: an Add has no
+    `resulting_assignment_id` because accepting one is not implemented, and
+    inventing the field would imply a capability that does not exist.
+    """
+
+    can_accept: bool
+    can_decline: bool
+    needs_parent_attention: bool
+    accepted_or_declined_at: Optional[str] = None
+
+
+class ParentAddProposalDecisionDetail(BaseModel):
+    """Parent-safe detail for an ADD proposal.
+
+    Disjoint from `ParentProposalDecisionDetail` on required fields — this model
+    requires `destination` and `existing_day_activities`, that one requires
+    `original_activity` and `decision_context` — so the role-aware union cannot
+    validate either response as the other and silently reshape it.
+
+    `existing_day_activities` is **current plan state read at request time**, not
+    a snapshot stored on the proposal. The proposal records what the therapist
+    recommended; the day list records what the family's plan holds right now.
+    """
+
+    proposal: ParentProposalSummary
+    child: ParentChildSummary
+    therapist: ParentTherapistSummary
+    destination: ParentDestinationDay
+    existing_day_activities: List[ParentDayActivitySummary] = Field(default_factory=list)
+    proposed_activity: ParentActivityView
+    change_reason: str = ""
+    decision: ParentAddDecisionFlags
 
 
 # ── read: parent-safe proposal LIST (discovery only) ────────────────────────
@@ -444,6 +517,11 @@ class ParentProposalListItem(BaseModel):
     proposed_activity: ParentProposalActivitySummary
     change_reason: str = ""
     decision: ParentProposalDecisionSummary
+    # ADD only: which weekday the extra activity is proposed for. **Null for
+    # MODIFY**, so the frozen Modify list item is unchanged in value. The list
+    # stays lightweight — the day's existing activities appear in the DETAIL
+    # response only, never once per list item.
+    destination: Optional[ParentDestinationDay] = None
 
 
 class ParentProposalListResponse(BaseModel):

@@ -4,9 +4,16 @@
 Cloud Run, no frontend, no real data.** Read-only: this endpoint mutates nothing.
 
 A parent-safe **proposal list** is implemented in Phase 1B.2B.4 — see
-[PARENT_PROPOSAL_LIST.md](PARENT_PROPOSAL_LIST.md). A cross-child parent inbox is
-still absent. Add / Remove Activity proposals, therapist cancellation and proposal
-expiry also remain unimplemented.
+[PARENT_PROPOSAL_LIST.md](PARENT_PROPOSAL_LIST.md).
+
+**This page describes the MODIFY projection, which is unchanged.** Phase 1B.2E
+added a separate, type-aware ADD projection on the same route — see
+[PARENT_ADD_PROPOSAL_READ.md](PARENT_ADD_PROPOSAL_READ.md). An Add has no original
+activity, so it gets its own model rather than being forced into the
+original-vs-proposed comparison below; the two are disjoint on required fields.
+
+A cross-child parent inbox is still absent. Remove Activity proposals, therapist
+cancellation and proposal expiry also remain unimplemented.
 
 **Decision-flag alignment (Phase 1B.2B.4).** `can_accept` / `can_decline` below are
 now computed by the shared read-only evaluator in `app/services/eligibility.py`,
