@@ -259,11 +259,14 @@ def test_two_different_pending_adds_may_target_the_same_weekday():
     assert len(repo.query(C.PLAN_ASSIGNMENTS)) == assignments_before     # (28)
 
 
-def test_two_pending_adds_on_an_occupied_day_are_both_non_actionable():
+def test_two_pending_adds_on_an_occupied_day_are_both_actionable():
     """(29) Tuesday-style scenario: an existing Genex activity plus two Adds.
 
-    Superseded by Phase 1B.2E: the parent now SEES both, but neither is
-    actionable and neither has moved the existing activity.
+    Superseded twice. At 0.6 neither Add was visible to the parent; at 0.6.1 both
+    were visible but non-actionable; Phase 1B.2F makes a current-plan Add
+    ACTIONABLE. The guarantee that survives every revision is the one this test
+    exists for: **creating** the proposals reserves no position and moves nothing,
+    so the day still holds only the original activity at order 0.
     """
     c = _c()
     # Maya's day 0 already holds assign_maya_bubbles at display_order 0.
@@ -278,8 +281,8 @@ def test_two_pending_adds_on_an_occupied_day_are_both_non_actionable():
     items = {i["proposal_id"]: i for i in listed["items"]}
     for r in (r1, r2):                                                   # (29)
         item = items[r.json()["proposal"]["proposal_id"]]
-        assert item["decision"] == {"needs_parent_attention": False,
-                                    "can_accept": False, "can_decline": False}
+        assert item["decision"] == {"needs_parent_attention": True,
+                                    "can_accept": True, "can_decline": True}
         assert item["destination"] == {"scheduled_day": 0, "day_label": "Monday"}
 
 
@@ -705,8 +708,8 @@ def _create_maya_add(c, key="p1", day=3):
                  ).json()["proposal"]["proposal_id"]
 
 
-def test_parent_list_includes_add_as_non_actionable():
-    """(73)(74) — 1B.2E: present in the list and counted, but not actionable."""
+def test_parent_list_includes_add_as_actionable():
+    """(73)(74) — 1B.2F: a current-plan Add is present, counted AND actionable."""
     c = _c()
     before = c.get("/api/v1/children/child_maya/proposals", headers=ELENA).json()
     pid = _create_maya_add(c)
@@ -716,8 +719,8 @@ def test_parent_list_includes_add_as_non_actionable():
     assert item["proposal_type"] == "add"
     assert after["total"] == before["total"] + 1                         # (74)
     assert after["total"] == len(after["items"])
-    assert item["decision"] == {"needs_parent_attention": False,
-                                "can_accept": False, "can_decline": False}
+    assert item["decision"] == {"needs_parent_attention": True,
+                                "can_accept": True, "can_decline": True}
 
 
 def test_parent_detail_for_an_add_returns_the_add_projection():
@@ -736,17 +739,21 @@ def test_parent_detail_for_an_add_returns_the_add_projection():
     assert unknown.json() == {"error": "not_found", "detail": "Not found."}
 
 
-def test_add_eligibility_is_false_false_false():
-    """(76) Unchanged guarantee: readable does NOT mean actionable."""
+def test_add_eligibility_is_true_for_a_current_plan_proposal():
+    """(76) — 1B.2F: real eligibility. A current-plan pending Add is actionable.
+
+    The stale/decided cases that must still be false live in
+    `test_parent_add_decision.py`; this pins the positive case at the point where
+    creation hands over to the decision surface.
+    """
     c = _c()
     pid = _create_maya_add(c)
     repo = _repo(c)
     proposal = repo.query(C.PLAN_CHANGE_PROPOSALS, id=pid)[0]
     flags = eligibility.evaluate_parent_decision(repo, "child_maya", proposal)
-    assert flags == eligibility.INELIGIBLE
+    assert flags == eligibility.ELIGIBLE
     assert (flags.can_accept, flags.can_decline, flags.needs_parent_attention) == (
-        False, False, False)
-    # 1B.2E: now safe to SHOW, while still ineligible to act on.
+        True, True, True)
     assert eligibility.proposal_is_safe_to_show(repo, "child_maya", proposal) is True
 
 

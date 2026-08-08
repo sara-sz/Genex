@@ -3,8 +3,14 @@
 **Fictional, in-memory development behavior. No Firestore, no Firebase Auth, no
 Cloud Run, no frontend connected, no real data.**
 
-**Read-only phase.** Nothing here writes to any collection. Add accept/decline,
-Save for Later, Replace and Remove remain unimplemented.
+**Read-only phase.** Nothing on this page writes to any collection.
+
+**Phase 1B.2F added Add accept/decline** —
+[PARENT_ADD_DECISION.md](PARENT_ADD_DECISION.md). The reads below are unchanged,
+but the decision flags they carry are no longer always false: a pending Add
+targeting the **current** weekly plan now reports `true/true/true`. A historical
+Add stays readable and non-actionable, exactly as described here. Save for Later,
+Replace and Remove remain unimplemented.
 
 ## What a parent needs to understand about an Add
 
@@ -33,20 +39,22 @@ See [ADD_ACTIVITY_PROPOSAL.md](ADD_ACTIVITY_PROPOSAL.md) for creation, and
 [PARENT_PROPOSAL_READ.md](PARENT_PROPOSAL_READ.md) / [PARENT_PROPOSAL_LIST.md](PARENT_PROPOSAL_LIST.md)
 for the Modify equivalents.
 
-## Add is readable, not actionable
+## Add actionability
 
-Add accept/decline endpoints do not exist yet, so every Add reports:
+**Superseded by Phase 1B.2F.** While this checkpoint was current, Add
+accept/decline did not exist and every Add reported all flags false.
+
+Now the evaluator's checks — which were deliberately written and run here rather
+than short-circuited — decide real actionability:
 
 ```json
-"decision": { "can_accept": false, "can_decline": false,
-              "needs_parent_attention": false }
+"decision": { "can_accept": true, "can_decline": true,
+              "needs_parent_attention": true }
 ```
 
-Advertising `can_accept: true` would offer a button with nothing behind it. The
-eligibility evaluator still **validates** the Add's state (see below) rather than
-short-circuiting — those are the checks a future Add decision will need, and
-running them now means an Add that could never be acted on is already reported as
-such rather than becoming actionable the day the endpoints land.
+for a **pending** Add targeting the child's **current** weekly plan. A historical
+Add, a decided Add, or a malformed one still reports all flags false, so the
+family is never offered a decision the write path would reject.
 
 ## Endpoints — no new routes
 
@@ -74,10 +82,13 @@ MODIFY** — so the frozen Modify list item is unchanged in value.
   "proposed_activity": { "title": "…", "developmental_domain": "…",
                          "milestone_display_name": "…" },
   "change_reason": "…",
-  "decision": { "needs_parent_attention": false,
-                "can_accept": false, "can_decline": false }
+  "decision": { "needs_parent_attention": true,
+                "can_accept": true, "can_decline": true }
 }
 ```
+
+*(Flags shown for a pending Add on the CURRENT plan, per Phase 1B.2F. A
+historical or decided Add reports all three false.)*
 
 The list stays a **lightweight discovery surface**: a title-level teaser only, and
 deliberately **no** `existing_day_activities`. Repeating the whole day on every
@@ -99,14 +110,15 @@ item would make the list heavier than the detail it exists to preview.
   ],
   "proposed_activity": { "…full parent-safe activity content…" },
   "change_reason": "…",
-  "decision": { "can_accept": false, "can_decline": false,
-                "needs_parent_attention": false, "accepted_or_declined_at": null }
+  "decision": { "can_accept": true, "can_decline": true,
+                "needs_parent_attention": true, "accepted_or_declined_at": null }
 }
 ```
 
 Deliberately **absent**: `original_activity` (nothing is replaced),
 `decision_context` / `expected_assignment_version` (no assignment is touched), and
-`resulting_assignment_id` (accepting an Add is not implemented).
+`resulting_assignment_id` — an accepted Add's assignment id stays internal and is
+never exposed to a parent, even now that acceptance exists.
 
 `proposed_activity` reuses the already-approved `ParentActivityView`, so a
 standalone Add version whose `activity_template_id` is **null** renders exactly
@@ -146,7 +158,7 @@ Visibility is **explicitly allow-listed by type**, never open by default.
 | Proposal type | Parent list | Parent detail |
 |---|---|---|
 | `modify` | visible (frozen contract) | `ParentProposalDecisionDetail` |
-| `add` | visible, non-actionable | `ParentAddProposalDecisionDetail` |
+| `add` | visible; actionable on the current plan | `ParentAddProposalDecisionDetail` |
 | `replace`, `remove`, anything unknown | **excluded** | **404** |
 
 `REPLACE` and `REMOVE` stay fail-closed until their own phases give them a
@@ -160,8 +172,13 @@ version match) while an ADD is day-centric. Copying Modify's target-assignment
 guards onto an Add would reject every valid Add.
 
 `_evaluate_add` validates: status pending · destination day is a valid 0–6
-weekday · proposed ActivityVersion exists · weekly plan present · the destination
-day has no duplicate `display_order`. It then returns **INELIGIBLE regardless**.
+weekday · proposed ActivityVersion exists and is immutable · weekly plan present,
+belonging to the child, and **IS the canonical current plan** (added in Phase
+1B.2F) · the destination day has no duplicate `display_order`.
+
+At this checkpoint it returned INELIGIBLE regardless; since Phase 1B.2F it
+returns ELIGIBLE when every check passes — see
+[PARENT_ADD_DECISION.md](PARENT_ADD_DECISION.md).
 
 `_evaluate_modify` is the frozen logic, unchanged.
 
@@ -177,8 +194,13 @@ the list with all flags false rather than disappearing. Add follows suit:
   from it), but need not be the **current** plan;
 - an old-plan Add stays readable, with decision flags false.
 
-Fail-closing Add on a stale plan would make the two types behave differently for
-no product reason.
+Fail-closing Add *reads* on a stale plan would make the two types behave
+differently for no product reason.
+
+**Phase 1B.2F draws the line at the write.** Reading a historical Add is still
+allowed; *deciding* on one is not — accept and decline both return 409
+`weekly_plan_conflict`, because accepting would create a live assignment in a week
+the family has finished.
 
 ## Authorization
 
@@ -265,5 +287,7 @@ the proposed version id. Parent schemas never replace therapist schemas.
 
 ## Not implemented yet
 
-Add accept/decline · Save for Later · Replace · Remove · reordering endpoint ·
-parent cross-child inbox · note writes · therapist cancellation · proposal expiry.
+*(As of this checkpoint. Add accept/decline landed in Phase 1B.2F.)*
+
+Save for Later · Replace · Remove · reordering endpoint · parent cross-child inbox
+· note writes · therapist cancellation · proposal expiry.

@@ -78,6 +78,7 @@ mutates, promotes, completes or creates a plan.
 | `decline_service` (Modify decline) | 409 `invalid_parent_decline_transition` |
 | `add_proposal_service` (Add creation) | 409 `weekly_plan_conflict` |
 | `eligibility` (read) | `INELIGIBLE` — no action is offered |
+| `add_decision_service` (Add accept/decline, Phase 1B.2F) | 409 `weekly_plan_conflict` |
 | `read_service.get_weekly_plan` (read) | the existing **empty-plan** response shape |
 
 No new error code was introduced: every site already had a typed error for "not

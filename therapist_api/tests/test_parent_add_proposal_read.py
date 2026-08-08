@@ -128,8 +128,10 @@ def test_parent_sees_add_in_the_list_with_the_expected_shape():
     assert item["therapist"] == {                                        # (6)
         "display_name": "Hannah Lieberknecht, MA, SLP"}
     assert item["change_reason"] == "Extra articulation work."           # (7)
-    assert item["decision"] == {"needs_parent_attention": False,         # (8)
-                                "can_accept": False, "can_decline": False}
+    # 1B.2F: a current-plan Add is now actionable. The non-actionable cases —
+    # historical plan, decided, malformed — are pinned in test_parent_add_decision.
+    assert item["decision"] == {"needs_parent_attention": True,           # (8)
+                                "can_accept": True, "can_decline": True}
     assert item["child"] == {"child_id": "child_maya", "display_name": "Maya"}
     assert payload["total"] == len(payload["items"])                     # (9)
     assert pid in {i["proposal_id"] for i in payload["items"]}
@@ -304,27 +306,36 @@ def test_all_weekday_labels_render():
 
 
 # ── 26-30: decision state and sorting ───────────────────────────────────────
-def test_add_decision_flags_are_all_false():
-    """(26)(27)(28) Add accept/decline does not exist yet."""
+def test_add_decision_flags_are_actionable_for_the_current_plan():
+    """(26)(27)(28) — 1B.2F: Add accept/decline now exists for a current-plan Add.
+
+    List and detail must agree, and `accepted_or_declined_at` stays null while the
+    proposal is still pending.
+    """
     c = _c()
     pid = _add(c)
     detail = _detail(c, pid).json()["decision"]
-    assert detail["can_accept"] is False                                 # (26)
-    assert detail["can_decline"] is False                                # (27)
-    assert detail["needs_parent_attention"] is False                     # (28)
+    assert detail["can_accept"] is True                                  # (26)
+    assert detail["can_decline"] is True                                 # (27)
+    assert detail["needs_parent_attention"] is True                      # (28)
     assert detail["accepted_or_declined_at"] is None
     item = _item(_list(c).json(), pid)["decision"]
-    assert item == {"needs_parent_attention": False,
-                    "can_accept": False, "can_decline": False}
+    assert item == {"needs_parent_attention": True,
+                    "can_accept": True, "can_decline": True}
 
     repo = _repo(c)
     proposal = repo.query(C.PLAN_CHANGE_PROPOSALS, id=pid)[0]
     assert eligibility.evaluate_parent_decision(
-        repo, "child_maya", proposal) == eligibility.INELIGIBLE
+        repo, "child_maya", proposal) == eligibility.ELIGIBLE
 
 
-def test_add_does_not_sort_as_actionable():
-    """(29)(30) An actionable Modify must still outrank a readable Add."""
+def test_an_actionable_add_sorts_alongside_an_actionable_modify():
+    """(29)(30) — 1B.2F: a current-plan Add is actionable, so it joins group 0.
+
+    Was: "an actionable Modify must outrank a readable Add", true only while Add
+    was non-actionable. What must hold now is that BOTH are actionable and the
+    ordering within the group stays deterministic — no type is privileged.
+    """
     c = _c()
     from tests.test_parent_acceptance import MAYA_MODIFY_PATH, _talking_activity
     from tests.test_modify_proposal import body as modify_body
@@ -339,10 +350,21 @@ def test_add_does_not_sort_as_actionable():
     items = _list(c).json()["items"]
     order = [i["proposal_id"] for i in items]
     actionable = [i["proposal_id"] for i in items if i["decision"]["needs_parent_attention"]]
-    assert modify_id in actionable and add_id not in actionable          # (29)
-    assert order.index(modify_id) < order.index(add_id)                  # (30)
+    assert modify_id in actionable and add_id in actionable              # (29)
+    # Both are in the actionable group, so ordering falls to newest-first: the
+    # Add was created second and therefore leads.
+    assert order.index(add_id) < order.index(modify_id)                  # (30)
     # Determinism: repeated reads produce the identical ordering.
     assert [i["proposal_id"] for i in _list(c).json()["items"]] == order
+
+    # A DECIDED Add drops out of the actionable group entirely.
+    assert c.post(f"{LIST_URL}/{add_id}/decline",
+                  headers={**ELENA, "Idempotency-Key": "sort-dec"},
+                  json={"expected_proposal_version": 1}).status_code == 200
+    after = _list(c).json()["items"]
+    assert [i["proposal_id"] for i in after
+            if i["decision"]["needs_parent_attention"]] == [modify_id]
+    assert after[-1]["proposal_id"] == add_id, "a decided proposal sorts last"
 
 
 # ── 31-34: current-state context, not a stored snapshot ─────────────────────

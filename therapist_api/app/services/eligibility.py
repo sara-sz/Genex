@@ -87,35 +87,48 @@ def evaluate_parent_decision(
 def _evaluate_add(
     repo: CollaborationRepository, child_id: str, proposal: dict
 ) -> DecisionEligibility:
-    """Add is READABLE but NOT actionable in this checkpoint.
+    """Real ADD eligibility (Phase 1B.2F) — mirrors `add_decision_service`.
 
-    Add accept/decline endpoints do not exist yet, so this always returns
-    INELIGIBLE. The state below is still validated rather than short-circuited:
-    the checks are what a future Add decision will need, and running them now
-    means an Add that could never be acted on is already reported as such instead
-    of appearing actionable the day those endpoints land.
+    Only a PENDING Add targeting the child's canonical CURRENT weekly plan is
+    actionable. A historical Add stays readable but reports all flags false, so
+    the family is never offered a decision that `weekly_plan_conflict` would
+    reject on submission.
+
+    Pure read: allocates no `display_order`, reserves no position, creates
+    nothing, writes no audit or idempotency record.
     """
     if plain(proposal.get("status")) != ProposalStatus.PENDING_PARENT_ACCEPTANCE.value:
         return INELIGIBLE
     if not is_valid_weekday(proposal.get("destination_scheduled_day")):
         return INELIGIBLE
     proposed_version_id = proposal.get("proposed_activity_version_id")
-    if not proposed_version_id or not repo.query(C.ACTIVITY_VERSIONS, id=proposed_version_id):
+    if not proposed_version_id:
+        return INELIGIBLE
+    versions = repo.query(C.ACTIVITY_VERSIONS, id=proposed_version_id)
+    if not versions or not versions[0].get("immutable", True):
         return INELIGIBLE
 
     weekly_plan_id = proposal.get("weekly_plan_id")
     if not weekly_plan_id:
         return INELIGIBLE
+    plan = repo.query(C.WEEKLY_PLANS, id=weekly_plan_id)
+    if not plan or plan[0].get("child_id") != child_id:
+        return INELIGIBLE
+
+    # The hard current-plan guard, mirrored from the write path. The canonical
+    # resolver returns None for zero AND for several CURRENT plans, so a
+    # COMPLETED plan, a DRAFT plan and an ambiguous lifecycle all fail closed
+    # here exactly as they would on submission.
+    if weekly_plan_id != current_weekly_plan_id(repo, child_id):
+        return INELIGIBLE
+
     day = current_assignments_for_day(
         repo, child_id, weekly_plan_id, proposal["destination_scheduled_day"]
     )
     if has_duplicate_display_order(day):
         return INELIGIBLE                       # ambiguous day -> fail closed
 
-    # Every check above passed. The result is STILL ineligible: there is no
-    # endpoint a parent could submit this to. Advertising can_accept here would
-    # offer a button that 404s.
-    return INELIGIBLE
+    return ELIGIBLE
 
 
 def _evaluate_modify(

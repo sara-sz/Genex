@@ -302,11 +302,16 @@ can be ordered without colliding.
 
 ## Not implemented yet
 
-Parent Add visibility **landed in Phase 1B.2E** —
-[PARENT_ADD_PROPOSAL_READ.md](PARENT_ADD_PROPOSAL_READ.md). Still unimplemented:
-Add acceptance · Add decline · Save for Later · Replace · Remove · reordering
-endpoint · parent cross-child inbox · note writes · therapist cancellation ·
-proposal expiry.
+Parent Add visibility landed in Phase 1B.2E —
+[PARENT_ADD_PROPOSAL_READ.md](PARENT_ADD_PROPOSAL_READ.md) — and **Add acceptance
+and decline landed in Phase 1B.2F** —
+[PARENT_ADD_DECISION.md](PARENT_ADD_DECISION.md). Acceptance allocates
+`max(display_order) + 1` inside its own transaction, exactly as anticipated here,
+and refuses any Add that does not target the current weekly plan.
+
+Still unimplemented: Save for Later · Replace · Remove · reordering endpoint ·
+parent cross-child inbox · note writes · therapist cancellation · proposal
+expiry.
 
 Firestore persistence is deferred; when it lands, acceptance will need
 transactional next-position allocation plus a composite index on

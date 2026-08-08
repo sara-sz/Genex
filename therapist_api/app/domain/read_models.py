@@ -187,7 +187,13 @@ class PlanAssignment(BaseModel):
     id: str
     weekly_plan_id: str
     child_id: str
-    activity_template_id: str
+    # Null ONLY for an assignment created by accepting an ADD proposal, whose
+    # activity is therapist-authored standalone work rather than a version of a
+    # catalog template — see `ActivityVersion.activity_template_id`. Every
+    # Genex-seeded and every Modify-derived assignment still carries its template
+    # id, and a null grants no catalog exposure because catalog reads filter BY
+    # template id.
+    activity_template_id: Optional[str] = None
     activity_version_id: str
     scheduled_day: int              # 0=Mon .. 6=Sun
     # Presentation order WITHIN one scheduled day. Zero-based. Genex generates an

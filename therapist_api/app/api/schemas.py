@@ -78,7 +78,7 @@ class PlanAssignmentView(BaseModel):
     plan_approval_status: str
     practice_status: str
     assignment_status: str
-    activity_template_id: str
+    activity_template_id: Optional[str] = None   # null for an ADD-created assignment
     activity_version_id: str
     activity_title: str
     provenance: ActivityProvenance
@@ -176,7 +176,7 @@ class ApprovedAssignment(BaseModel):
     plan_approval_status: str
     practice_status: str
     assignment_status: str
-    activity_template_id: str
+    activity_template_id: Optional[str] = None   # null for an ADD-created assignment
     activity_version_id: str
     version: int
     updated_at: str
@@ -309,10 +309,20 @@ class AddProposalCreateResponse(BaseModel):
 
 # ── write: parent acceptance of a modify proposal ───────────────────────────
 class AcceptProposalRequest(BaseModel):
-    """Both expected versions are REQUIRED (optimistic concurrency)."""
+    """Parent decision request — type-aware optimistic concurrency.
+
+    `expected_proposal_version` is always required.
+
+    `expected_assignment_version` is optional **at the transport layer only**, so
+    the same route can carry both decision types. It is NOT optional in
+    behaviour: a MODIFY decision still REQUIRES it and the service rejects a
+    MODIFY that omits it with a typed `invalid_request` (422) — the same status
+    FastAPI produced when the field was declared required. An ADD touches no
+    existing assignment, so it must not be forced to invent a version number.
+    """
 
     expected_proposal_version: int
-    expected_assignment_version: int
+    expected_assignment_version: Optional[int] = None
 
 
 class AcceptedProposalSummary(BaseModel):
@@ -531,11 +541,61 @@ class ParentProposalListResponse(BaseModel):
 
 
 # ── write: parent decline of a modify proposal ──────────────────────────────
+# ── write: parent decision on an ADD proposal ───────────────────────────────
+#
+# Add decisions get their own response models rather than being forced into the
+# Modify shapes. A Modify accept reports a `retired_assignment` and a
+# `replacement_assignment`; an Add retires and replaces nothing, so reusing that
+# model would mean inventing two objects that do not exist.
+#
+# Each Add model is DISJOINT from its Modify counterpart on required fields —
+# `added_assignment` vs `retired_assignment`/`replacement_assignment`, and
+# `destination_scheduled_day` vs `current_assignment` — so the role-aware union
+# on these routes cannot validate one response as the other and reshape it.
+class AddDecisionProposalSummary(BaseModel):
+    proposal_id: str
+    proposal_type: str                     # always "add"
+    proposal_status: str                   # accepted | declined
+    version: int
+    decided_by_user_id: Optional[str] = None
+    decided_by_role: Optional[str] = None
+    decided_at: Optional[str] = None
+    # Set on accept; stays null on decline because nothing was created.
+    resulting_assignment_id: Optional[str] = None
+    proposed_activity_version_id: Optional[str] = None
+
+
+class AddAcceptResponse(BaseModel):
+    """Parent accepted an Add: exactly one activity was APPENDED to the day."""
+
+    proposal: AddDecisionProposalSummary
+    added_assignment: dict                 # required — the one new assignment
+    child_summary: dict
+    audit_event_id: str
+    idempotent_replay: bool
+
+
+class AddDeclineResponse(BaseModel):
+    """Parent declined an Add: nothing was created and the day is unchanged."""
+
+    proposal: AddDecisionProposalSummary
+    # Required, and unique to this model: which weekday the declined Add targeted.
+    destination_scheduled_day: int
+    child_summary: dict
+    audit_event_id: str
+    idempotent_replay: bool
+
+
 class DeclineProposalRequest(BaseModel):
-    """Both expected versions are REQUIRED (optimistic concurrency)."""
+    """Parent decision request — see `AcceptProposalRequest` for the contract.
+
+    `expected_assignment_version` is transport-optional so ADD can omit it;
+    MODIFY still requires it and fails with a typed `invalid_request` (422)
+    otherwise.
+    """
 
     expected_proposal_version: int
-    expected_assignment_version: int
+    expected_assignment_version: Optional[int] = None
 
 
 class DeclinedProposalSummary(BaseModel):

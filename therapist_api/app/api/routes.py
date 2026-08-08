@@ -234,7 +234,11 @@ async def create_add_proposal(
 # ── write: parent accepts one pending modify proposal ───────────────────────
 @router.post(
     "/children/{child_id}/proposals/{proposal_id}/accept",
-    response_model=S.AcceptProposalResponse,
+    # Type-aware: a MODIFY accept reports the retired original and its
+    # replacement; an ADD accept reports the single APPENDED assignment and has
+    # neither. The two are disjoint on required fields, so neither response can
+    # validate as the other.
+    response_model=Union[S.AcceptProposalResponse, S.AddAcceptResponse],
     responses={
         400: {"model": S.ErrorResponse}, 403: {"model": S.ErrorResponse},
         404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse},
@@ -268,7 +272,9 @@ async def accept_proposal(
 # ── write: parent declines one pending modify proposal ──────────────────────
 @router.post(
     "/children/{child_id}/proposals/{proposal_id}/decline",
-    response_model=S.DeclineProposalResponse,
+    # Type-aware: a MODIFY decline reports the preserved current assignment; an
+    # ADD decline created nothing and reports its destination weekday instead.
+    response_model=Union[S.DeclineProposalResponse, S.AddDeclineResponse],
     responses={
         400: {"model": S.ErrorResponse}, 403: {"model": S.ErrorResponse},
         404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse},

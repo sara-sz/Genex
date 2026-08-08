@@ -45,8 +45,9 @@ from ..domain.ids import (
 from ..domain.read_models import AuditEvent, IdempotencyRecord
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
-from . import access
+from . import access, add_decision_service
 from .weekly_plan import current_weekly_plan_id
+from .proposal_service import InvalidRequest
 from .acceptance_service import (  # shared read helpers — response-shape parity
     _assignment_view as assignment_view,
     _plan_review_count as plan_review_count,
@@ -103,11 +104,15 @@ def decline_proposal(
     proposal_id: str,
     idempotency_key: Optional[str],
     expected_proposal_version: int,
-    expected_assignment_version: int,
+    expected_assignment_version: Optional[int] = None,
     environment: str = "dev",
     request_id: Optional[str] = None,
 ) -> dict:
-    """Parent declines one pending modify proposal. Raises typed errors."""
+    """Parent declines one pending proposal — MODIFY or ADD. Raises typed errors.
+
+    `expected_assignment_version` is optional in the SIGNATURE only; MODIFY still
+    requires it, an ADD touches no assignment and must not fabricate one.
+    """
     key = (idempotency_key or "").strip()
     if not key:
         raise MissingIdempotencyKey("Idempotency-Key header is required.")
@@ -142,12 +147,36 @@ def decline_proposal(
                 return result
             raise IdempotencyKeyConflict("Idempotency-Key reused for a different request.")
 
-        # 3. Proposal shape + decision state.
-        if plain(proposal["proposal_type"]) != ProposalType.MODIFY.value:
-            raise InvalidParentDeclineTransition(
-                f"Only modify proposals can be declined here (got "
-                f"'{plain(proposal['proposal_type'])}')."
+        # 3a. Type dispatch, INSIDE the transaction so the type cannot change
+        #     between a client's earlier GET and this decision.
+        proposal_type = plain(proposal["proposal_type"])
+        if proposal_type == ProposalType.ADD.value:
+            return add_decision_service.decline_add(
+                tx, user=user, parent=parent, child_id=child_id,
+                proposal_id=proposal_id, proposal=proposal, key=key,
+                req_hash=req_hash, rec_id=rec_id,
+                expected_proposal_version=expected_proposal_version,
+                action=ACTION,
+                already_decided_error=ProposalAlreadyDecided,
+                version_conflict_error=ProposalVersionConflict,
+                invalid_transition_error=InvalidParentDeclineTransition,
+                environment=environment, request_id=request_id,
             )
+        if proposal_type != ProposalType.MODIFY.value:
+            raise InvalidParentDeclineTransition(
+                f"Only modify and add proposals can be declined (got "
+                f"'{proposal_type}')."
+            )
+
+        # 3b. MODIFY still REQUIRES expected_assignment_version — the frozen
+        #     optimistic-concurrency contract, enforced here now that the
+        #     transport schema allows ADD to omit it.
+        if expected_assignment_version is None:
+            raise InvalidRequest(
+                "expected_assignment_version is required for a modify decision."
+            )
+
+        # 3. Proposal shape + decision state.
         status = plain(proposal["status"])
         if status != ProposalStatus.PENDING_PARENT_ACCEPTANCE.value:
             raise ProposalAlreadyDecided(f"Proposal is already '{status}'.")
