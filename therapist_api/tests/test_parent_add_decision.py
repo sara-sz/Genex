@@ -1016,3 +1016,159 @@ def test_openapi_documents_type_aware_decisions_without_new_routes():
     assert "retired_assignment" in sch["AcceptProposalResponse"]["required"]
     assert "destination_scheduled_day" in sch["AddDeclineResponse"]["required"]
     assert "current_assignment" in sch["DeclineProposalResponse"]["required"]
+
+
+# ── PlanAssignment.activity_template_id invariant (Phase 1B.2F.1a) ──────────
+#
+# `PlanAssignment.activity_template_id` became Optional so that an accepted Add
+# — standalone therapist-authored work with no catalog template behind it — can
+# honestly carry null. These tests pin that the relaxation is EXACTLY that narrow.
+#
+# Coverage already existed at the ActivityVersion level; what was unpinned, and
+# is pinned here, is the ASSIGNMENT level: the field that actually changed.
+def _modify_accept(c, key="tmpl-m"):
+    """Accept a Modify and return (original_assignment, replacement_assignment)."""
+    from tests.test_modify_proposal import body as modify_body
+    from tests.test_parent_acceptance import MAYA_MODIFY_PATH, _talking_activity
+
+    repo = _repo(c)
+    original = copy.deepcopy(repo.query(C.PLAN_ASSIGNMENTS, id="assign_maya_bubbles")[0])
+    m = c.post(MAYA_MODIFY_PATH, headers={**HANNAH, "Idempotency-Key": key},
+               json={**modify_body(), "activity": _talking_activity(),
+                     "expected_assignment_version": 1})
+    assert m.status_code == 200, m.text
+    pid = m.json()["proposal"]["proposal_id"]
+    live = repo.query(C.PLAN_ASSIGNMENTS, id="assign_maya_bubbles")[0]
+    r = c.post(f"/api/v1/children/{CHILD}/proposals/{pid}/accept",
+               headers={**ELENA, "Idempotency-Key": f"{key}-acc"},
+               json={"expected_proposal_version": 1,
+                     "expected_assignment_version": live["version"]})
+    assert r.status_code == 200, r.text
+    return original, r.json()["replacement_assignment"]
+
+
+def _catalog_blob(c):
+    """Every therapist-visible catalog byte: the list plus each template detail."""
+    listing = c.get("/api/v1/activity-templates", headers=HANNAH)
+    blob = listing.text
+    for t in listing.json()["items"]:
+        blob += c.get(f"/api/v1/activity-templates/{t['activity_template_id']}",
+                      headers=HANNAH).text
+    return blob
+
+
+# A. ACCEPTED STANDALONE THERAPIST ADD
+def test_accepted_add_assignment_has_null_template_by_design():
+    """(A) Null is intentional standalone work, not missing lineage."""
+    c = _c()
+    repo = _repo(c)
+    pid = _add(c, day=THURSDAY)
+    added = _accept(c, pid).json()["added_assignment"]
+
+    stored = repo.query(C.PLAN_ASSIGNMENTS, id=added["assignment_id"])[0]
+    assert stored["activity_template_id"] is None
+    version = repo.query(C.ACTIVITY_VERSIONS, id=stored["activity_version_id"])[0]
+    assert version["activity_template_id"] is None
+    assert version["is_derived"] is False, "standalone work, not derived from a template"
+    assert version["original_activity_template_id"] is None
+
+    # Null lineage, but a COMPLETE assignment — so the null is a deliberate
+    # absence of a template, not a half-written record.
+    assert stored["activity_version_id"]
+    assert stored["assignment_status"] == "current"
+    assert stored["plan_approval_status"] == "approved"
+    assert stored["scheduled_day"] == THURSDAY
+    assert stored["source_proposal_id"] == pid
+    assert stored["version"] == 1
+
+
+def test_accepted_add_assignment_stays_out_of_the_catalog():
+    """(A)(D) A null template must not become catalog-visible."""
+    c = _c()
+    added = _accept(c, _add(c, day=THURSDAY)).json()["added_assignment"]
+    blob = _catalog_blob(c)
+    assert added["assignment_id"] not in blob
+    assert added["activity_version_id"] not in blob
+    # And no template listing gained an entry.
+    assert len(c.get("/api/v1/activity-templates", headers=HANNAH).json()["items"]) == \
+        len(_c().get("/api/v1/activity-templates", headers=HANNAH).json()["items"])
+
+
+# B. EXISTING TEMPLATE-BACKED ASSIGNMENTS
+def test_seeded_assignments_are_template_backed_and_survive_an_add():
+    """(B)(D) Accepting a standalone Add must not null out anything else."""
+    c = _c()
+    repo = _repo(c)
+    seeded = {a["id"]: copy.deepcopy(a) for a in repo.query(C.PLAN_ASSIGNMENTS)}
+    assert seeded, "precondition: fixtures seed assignments"
+    assert all(a["activity_template_id"] is not None for a in seeded.values())
+    # Each seeded assignment's version belongs to the SAME template — real lineage.
+    for a in seeded.values():
+        version = repo.query(C.ACTIVITY_VERSIONS, id=a["activity_version_id"])[0]
+        assert version["activity_template_id"] == a["activity_template_id"], a["id"]
+
+    _accept(c, _add(c, day=THURSDAY))
+
+    after = {a["id"]: a for a in repo.query(C.PLAN_ASSIGNMENTS)}
+    for aid, row in seeded.items():
+        assert after[aid] == row, f"{aid} changed"
+        assert after[aid]["activity_template_id"] is not None
+
+
+# C. MODIFY-DERIVED ASSIGNMENT
+def test_modify_replacement_assignment_keeps_the_original_template():
+    """(C)(D) Modify preserves template lineage — it never becomes standalone."""
+    c = _c()
+    original, replacement = _modify_accept(c)
+    assert original["activity_template_id"] is not None, "precondition"
+    assert replacement["activity_template_id"] is not None
+    assert replacement["activity_template_id"] == original["activity_template_id"]
+
+    stored = _repo(c).query(C.PLAN_ASSIGNMENTS, id=replacement["assignment_id"])[0]
+    assert stored["activity_template_id"] == original["activity_template_id"]
+    # The derived version carries the same lineage on the version record too.
+    version = _repo(c).query(C.ACTIVITY_VERSIONS, id=stored["activity_version_id"])[0]
+    assert version["activity_template_id"] == original["activity_template_id"]
+    assert version["original_activity_template_id"] == original["activity_template_id"]
+    assert version["is_derived"] is True
+
+
+# D. NO GENERAL NULLABILITY REGRESSION
+def test_only_add_created_assignments_may_have_a_null_template():
+    """(D) The relaxation is exactly as narrow as approved.
+
+    With a seeded plan, an accepted Add and an accepted Modify all present, the
+    ONLY null-template assignment is the Add-created one.
+    """
+    c = _c()
+    repo = _repo(c)
+    add_id = _accept(c, _add(c, day=THURSDAY, key="d-add"),
+                     key="d-add-acc").json()["added_assignment"]["assignment_id"]
+    _, replacement = _modify_accept(c, key="d-mod")
+
+    nulls = [a["id"] for a in repo.query(C.PLAN_ASSIGNMENTS)
+             if a["activity_template_id"] is None]
+    assert nulls == [add_id]
+    assert replacement["assignment_id"] not in nulls
+
+    # Every non-null assignment is genuinely template-backed, and every null one
+    # is genuinely Add-sourced — the two populations do not overlap.
+    for a in repo.query(C.PLAN_ASSIGNMENTS):
+        if a["activity_template_id"] is None:
+            assert a["source_proposal_id"], f"{a['id']} is null but not Add-sourced"
+            proposal = repo.query(C.PLAN_CHANGE_PROPOSALS, id=a["source_proposal_id"])[0]
+            assert proposal["proposal_type"] == "add"
+        else:
+            assert a["activity_template_id"].startswith("tmpl_"), a["id"]
+
+
+def test_declining_an_add_creates_no_null_template_assignment():
+    """(D) A decline adds nothing at all, so it adds no null-template row."""
+    c = _c()
+    repo = _repo(c)
+    before = [a["id"] for a in repo.query(C.PLAN_ASSIGNMENTS)
+              if a["activity_template_id"] is None]
+    _decline(c, _add(c, day=THURSDAY, key="d-dec"), key="d-dec-acc")
+    after = [a["id"] for a in repo.query(C.PLAN_ASSIGNMENTS)
+             if a["activity_template_id"] is None]
+    assert after == before == []
