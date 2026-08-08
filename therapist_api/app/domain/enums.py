@@ -58,6 +58,30 @@ class ProposalType(str, Enum):
     REMOVE = "remove"
 
 
+class WeeklyPlanStatus(str, Enum):
+    """Lifecycle of a weekly plan — the ONLY thing that makes a plan current.
+
+    Currency is an explicit domain fact, never derived. In particular it is NOT
+    computed from `week_start_date` against the wall clock (which would make
+    behavior time-varying and would classify every fictional plan as historical),
+    NOT `max(week_start_date)` (which would make a drafted future week current the
+    moment it exists), and NOT query/insertion order (which returns the
+    FIRST-SEEDED plan, so a newer plan could never become current).
+
+    Exactly one CURRENT plan per child is the invariant. Zero or several is an
+    ambiguous lifecycle that every caller must fail closed on rather than resolve
+    by guessing — see `services/weekly_plan.current_weekly_plan`.
+    """
+
+    #: The family's presently active weekly plan.
+    CURRENT = "current"
+    #: A past week, retained for history. Never selectable as current.
+    COMPLETED = "completed"
+    #: Prepared but not yet active. Never selectable as current, however recent
+    #: or future its `week_start_date` is.
+    DRAFT = "draft"
+
+
 class ProposalStatus(str, Enum):
     PENDING_PARENT_ACCEPTANCE = "pending_parent_acceptance"
     ACCEPTED = "accepted"

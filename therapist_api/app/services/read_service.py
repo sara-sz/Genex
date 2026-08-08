@@ -27,6 +27,7 @@ from ..domain.weekdays import day_label
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
 from . import access, assignment_order, eligibility
+from .weekly_plan import current_weekly_plan
 
 
 class ReadService:
@@ -154,8 +155,10 @@ class ReadService:
     def get_weekly_plan(self, user: AuthenticatedUser, child_id: str) -> S.WeeklyPlanResponse:
         therapist = access.resolve_therapist(self.repo, user)
         access.require_full_access(self.repo, therapist["id"], child_id)
-        plans = self.repo.query(C.WEEKLY_PLANS, child_id=child_id)
-        plan = plans[0] if plans else {"id": "", "week_start_date": ""}
+        # Canonical resolver. With no unambiguous current plan the response keeps
+        # its existing empty-plan shape — the same body a child with no plan has
+        # always produced — so nothing discloses that several plans claim CURRENT.
+        plan = current_weekly_plan(self.repo, child_id) or {"id": "", "week_start_date": ""}
         # Only CURRENT assignments are plan items. An assignment retired by an
         # accepted proposal stays stored for history but must never resurface
         # here as a second active activity alongside its replacement.

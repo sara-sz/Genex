@@ -32,6 +32,7 @@ from .enums import (
     ProposalStatus,
     ProposalType,
     SessionPreparationStatus,
+    WeeklyPlanStatus,
 )
 
 SCHEMA_VERSION = "therapist-read-0.2"
@@ -219,9 +220,24 @@ class PlanAssignment(BaseModel):
 
 
 class WeeklyPlan(BaseModel):
+    """One week of a child's plan.
+
+    `status` is the ONLY thing that makes a plan current — see
+    `services/weekly_plan.current_weekly_plan`. `week_start_date` stays display
+    metadata and never determines lifecycle.
+
+    INTERNAL lifecycle field: deliberately not exposed through `WeeklyPlanResponse`
+    or any parent-safe schema. It exists for write-path correctness, not for
+    presentation.
+    """
+
     id: str
     child_id: str
-    week_start_date: str            # fictional ISO date
+    week_start_date: str            # fictional ISO date; display metadata only
+    # Defaulted for backward compatibility: every previously constructed plan and
+    # every stored record without the key reads as CURRENT, which is what the
+    # single-plan-per-child fixtures already meant.
+    status: WeeklyPlanStatus = WeeklyPlanStatus.CURRENT
     environment: str = "dev"
     schema_version: str = SCHEMA_VERSION
 

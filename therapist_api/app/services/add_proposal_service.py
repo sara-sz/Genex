@@ -60,6 +60,7 @@ from ..domain.read_models import (
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
 from . import access
+from .weekly_plan import current_weekly_plan_id
 from .approval_service import (  # shared base + generic write errors
     ApprovalError,
     IdempotencyKeyConflict,
@@ -199,9 +200,9 @@ def create_add_proposal(
                 return result
             raise IdempotencyKeyConflict("Idempotency-Key reused for a different request.")
 
-        # 2. Current-plan validation.
-        plans = tx.query(C.WEEKLY_PLANS, child_id=child_id)
-        current_plan_id = plans[0]["id"] if plans else None
+        # 2. Current-plan validation via the canonical resolver. An ambiguous
+        #    lifecycle (zero or several CURRENT plans) yields None and conflicts.
+        current_plan_id = current_weekly_plan_id(tx, child_id)
         if not current_plan_id or expected_weekly_plan_id != current_plan_id:
             raise WeeklyPlanConflict(
                 "expected_weekly_plan_id is not the child's current weekly plan."

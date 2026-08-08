@@ -31,6 +31,7 @@ from ..domain.enums import (
 from ..domain.weekdays import is_valid_weekday
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
+from .weekly_plan import current_weekly_plan_id
 from .assignment_order import (
     current_assignments_for_day,
     current_assignments_sharing_day,
@@ -140,8 +141,9 @@ def _evaluate_modify(
     if assignment.get("weekly_plan_id") != proposal.get("weekly_plan_id"):
         return INELIGIBLE
 
-    plans = repo.query(C.WEEKLY_PLANS, child_id=child_id)
-    current_plan_id = plans[0]["id"] if plans else None
+    # Canonical resolver: an ambiguous plan lifecycle yields None, so the
+    # comparison below fails and the proposal reports INELIGIBLE — fail closed.
+    current_plan_id = current_weekly_plan_id(repo, child_id)
     if assignment.get("weekly_plan_id") != current_plan_id:
         return INELIGIBLE
 

@@ -31,6 +31,7 @@ from ..domain.ids import (
 from ..domain.read_models import AuditEvent, IdempotencyRecord
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
+from .weekly_plan import current_weekly_plan_id
 from . import access
 
 ACTION = "approve_plan_assignment"
@@ -144,8 +145,9 @@ def approve_assignment(
             raise IdempotencyKeyConflict("Idempotency-Key reused for a different request.")
 
         # 3. Current-plan validation (in the child's current weekly plan + current).
-        plans = tx.query(C.WEEKLY_PLANS, child_id=child_id)
-        current_plan_id = plans[0]["id"] if plans else None
+        #    Canonical resolver: None for zero OR several CURRENT plans, which
+        #    falls through to the same typed error below rather than guessing.
+        current_plan_id = current_weekly_plan_id(tx, child_id)
         if a["weekly_plan_id"] != current_plan_id or a["assignment_status"] != AssignmentStatus.CURRENT.value:
             raise InvalidPlanApprovalTransition("Assignment is not a current weekly-plan item.")
 

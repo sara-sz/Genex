@@ -31,6 +31,12 @@ See [ASSIGNMENT_DISPLAY_ORDER.md](ASSIGNMENT_DISPLAY_ORDER.md) for the ordering
 foundation this builds on, and [MODIFY_PROPOSAL.md](MODIFY_PROPOSAL.md) for the
 sibling verb.
 
+**Phase 1B.2F.0** replaced this service's ambiguous current-plan lookup with the
+canonical resolver — see [CURRENT_WEEKLY_PLAN.md](CURRENT_WEEKLY_PLAN.md).
+`weekly_plan_conflict` now also fires when a child's plan lifecycle is ambiguous
+(zero or several `CURRENT` plans), instead of silently selecting the first-seeded
+plan. Behavior with one current plan is unchanged.
+
 ## Endpoint
 
 ```

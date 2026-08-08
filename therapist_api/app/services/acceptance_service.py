@@ -43,6 +43,7 @@ from ..domain.read_models import AuditEvent, IdempotencyRecord, PlanAssignment
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
 from . import access
+from .weekly_plan import current_weekly_plan_id
 from .approval_service import (  # reuse shared base + generic write errors
     ApprovalError,
     AssignmentVersionConflict,
@@ -218,9 +219,9 @@ def accept_proposal(
                 "Assignment activity version no longer matches the proposal."
             )
 
-        # 6. Current-plan + approval state.
-        plans = tx.query(C.WEEKLY_PLANS, child_id=child_id)
-        current_plan_id = plans[0]["id"] if plans else None
+        # 6. Current-plan + approval state. Canonical resolver: zero or several
+        #    CURRENT plans both yield None and raise below — never a guess.
+        current_plan_id = current_weekly_plan_id(tx, child_id)
         if original["weekly_plan_id"] != current_plan_id:
             raise InvalidParentAcceptTransition("Assignment is not in the current weekly plan.")
         if plain(original["assignment_status"]) != AssignmentStatus.CURRENT.value:

@@ -21,6 +21,7 @@ from ..domain.enums import (
     ProposalStatus,
     ProposalType,
     SessionPreparationStatus,
+    WeeklyPlanStatus,
 )
 from ..domain.read_models import (
     ActivityTemplate,
@@ -285,9 +286,19 @@ def activity_versions() -> List[ActivityVersion]:
 # ── Weekly plans + assignments ──────────────────────────────────────────────
 def weekly_plans() -> List[WeeklyPlan]:
     return [
-        WeeklyPlan(id="wp_maya", child_id=CHILD_MAYA, week_start_date="2026-07-27", environment=ENV),
-        WeeklyPlan(id="wp_eli", child_id=CHILD_ELI, week_start_date="2026-07-27", environment=ENV),
-        WeeklyPlan(id="wp_noah", child_id=CHILD_NOAH, week_start_date="2026-07-27", environment=ENV),
+        # Seeded BEFORE the current plan on purpose: a completed week that is
+        # both older and stored first would be selected by a positional
+        # `plans[0]` lookup, so its presence proves the canonical resolver keys
+        # off lifecycle status rather than insertion order. It holds no
+        # assignments — it exists to make "current" a real choice.
+        WeeklyPlan(id="wp_maya_prev", child_id=CHILD_MAYA, week_start_date="2026-07-20",
+                   status=WeeklyPlanStatus.COMPLETED, environment=ENV),
+        WeeklyPlan(id="wp_maya", child_id=CHILD_MAYA, week_start_date="2026-07-27",
+                   status=WeeklyPlanStatus.CURRENT, environment=ENV),
+        WeeklyPlan(id="wp_eli", child_id=CHILD_ELI, week_start_date="2026-07-27",
+                   status=WeeklyPlanStatus.CURRENT, environment=ENV),
+        WeeklyPlan(id="wp_noah", child_id=CHILD_NOAH, week_start_date="2026-07-27",
+                   status=WeeklyPlanStatus.CURRENT, environment=ENV),
     ]
 
 

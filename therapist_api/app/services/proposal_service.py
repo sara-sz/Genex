@@ -45,6 +45,7 @@ from ..domain.read_models import (
 from ..repository import collections as C
 from ..repository.interface import CollaborationRepository
 from . import access
+from .weekly_plan import current_weekly_plan_id
 from .approval_service import (  # reuse shared base + generic write errors
     ApprovalError,
     AssignmentVersionConflict,
@@ -155,9 +156,9 @@ def create_modify_proposal(
                 return result
             raise IdempotencyKeyConflict("Idempotency-Key reused for a different request.")
 
-        # 3. Current-plan validation.
-        plans = tx.query(C.WEEKLY_PLANS, child_id=child_id)
-        current_plan_id = plans[0]["id"] if plans else None
+        # 3. Current-plan validation via the canonical resolver (fails closed
+        #    on an ambiguous lifecycle instead of selecting the first-seeded plan).
+        current_plan_id = current_weekly_plan_id(tx, child_id)
         if a["weekly_plan_id"] != current_plan_id or a["assignment_status"] != AssignmentStatus.CURRENT.value:
             raise InvalidModifyProposalTransition("Assignment is not a current weekly-plan item.")
 
