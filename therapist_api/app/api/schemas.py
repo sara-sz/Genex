@@ -115,6 +115,48 @@ class ParentNoteView(BaseModel):
     created_at: str
 
 
+# ── write: parent Question / Note / Update (Phase 1B.3A) ────────────────────
+#
+# One-way parent -> therapist. NOT a chat message: there is deliberately no
+# reply_to_note_id, thread_id, conversation_id, message status, read receipt or
+# therapist reply anywhere in this contract, and none may be added.
+class ParentNoteCreateRequest(BaseModel):
+    """Everything a parent may supply. Everything else is system-owned.
+
+    `review_status` and `session_preparation_status` are absent BY DESIGN — they
+    describe what the therapist has done, and at creation the therapist has done
+    nothing. A client sending them is simply ignored by this model; a test pins
+    that they cannot be injected.
+    """
+
+    note_type: str                          # question | note | update
+    body: str                               # the canonical ParentNote text field
+    # Optional activity context. Must be one of this child's CURRENT activities.
+    linked_assignment_id: Optional[str] = None
+
+
+class ParentNoteCreated(BaseModel):
+    """Parent-safe view of the note just submitted.
+
+    Carries the activity TITLE the parent already sees — never the assignment,
+    weekly-plan, activity-version or template id.
+    """
+
+    note_id: str
+    note_type: str
+    body: str
+    created_at: str
+    # Shown so the parent UI can say "your therapist has not read this yet".
+    review_status: str
+    session_preparation_status: str
+    linked_activity_title: Optional[str] = None
+
+
+class ParentNoteCreateResponse(BaseModel):
+    note: ParentNoteCreated
+    idempotent_replay: bool
+
+
 class PrivateNoteView(BaseModel):
     note_id: str
     child_id: str

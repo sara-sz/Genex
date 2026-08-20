@@ -22,6 +22,7 @@ from ..services import (
     add_proposal_service,
     approval_service,
     decline_service,
+    parent_note_service,
     proposal_service,
 )
 from . import schemas as S
@@ -79,6 +80,48 @@ async def child_notes(child_id: str,
                       principal: AuthenticatedUser = Depends(require_principal),
                       svc: ReadService = Depends(get_service)):
     return _page(svc.get_child_notes(principal, child_id))
+
+
+# ── write: a parent submits a Question, Note or Update ──────────────────────
+#
+# POST shares the EXISTING notes path rather than adding /questions, /updates or
+# a messages resource: the three types differ by parent intent, not by routing.
+# OpenAPI therefore gains an operation, not a path.
+@router.post(
+    "/children/{child_id}/notes",
+    response_model=S.ParentNoteCreateResponse,
+    responses={
+        400: {"model": S.ErrorResponse}, 403: {"model": S.ErrorResponse},
+        404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse},
+        422: {"model": S.ErrorResponse},
+    },
+)
+async def create_parent_note(
+    child_id: str,
+    body: S.ParentNoteCreateRequest,
+    request: Request,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    principal: AuthenticatedUser = Depends(require_principal),
+):
+    """One-way parent -> therapist submission. Not a message; there is no reply.
+
+    The therapist reads it through the existing GET on this same path; no second
+    inbox route exists and no therapist write is implemented here.
+    """
+    repo = request.app.state.repo
+    from ..logging_config import get_request_id
+
+    return parent_note_service.create_parent_note(
+        repo,
+        principal,
+        child_id=child_id,
+        idempotency_key=idempotency_key,
+        note_type=body.note_type,
+        body=body.body,
+        linked_assignment_id=body.linked_assignment_id,
+        environment=principal.environment,
+        request_id=get_request_id(),
+    )
 
 
 @router.get("/children/{child_id}/private-notes", response_model=S.Page)
