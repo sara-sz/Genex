@@ -5,7 +5,8 @@ Cloud Run, no frontend connected, no real data.** The atomic critical section is
 `repo.run_in_transaction` (snapshot/restore rollback), shaped to map onto a
 future Firestore transaction.
 
-First slice of the **collaboration workflow**.
+First two slices of the **collaboration workflow**: the parent **write**
+(Phase 1B.3A) and the parent's **read of their own submissions** (Phase 1B.3B).
 
 ## One-way, not a conversation
 
@@ -246,11 +247,140 @@ The three fictional seed notes (`pn_maya_1`, `pn_maya_2`, `pn_noah_1`) are
 unchanged, and a test pins that a parent write leaves them byte-identical. New
 test data is fictional.
 
-## Sequence — only step 1 exists
+# Parent-safe read of the parent's own notes (Phase 1B.3B)
 
-1. **Parent Question / Note / Update** ← this checkpoint
-2. Therapist Reviewed
-3. Therapist Discuss Next Session
-4. Therapist private notes
+A parent who has submitted items can read back **their own**. This closes the
+loop the write phase deliberately left half-open.
+
+## Authorship isolation — the substantive guarantee
+
+```
+GET /api/v1/children/{child_id}/notes
+```
+
+The **same** route, now role-aware. OpenAPI stays at **22 paths and 23
+operations** — no new path, no new operation.
+
+| Role | Response |
+|---|---|
+| therapist | `Page` of `ParentNoteView` — **unchanged**, every parent note for the child |
+| parent | `ParentNoteHistoryResponse` — only the items **that parent** submitted |
+
+The parent filter is on the note's **stored `parent_id`**, applied in the query
+itself so another author's note never enters the result to be filtered out
+afterwards. Authorship is never inferred from child ownership, the connection,
+audit events, ordering, ids or the session.
+
+**Why not child ownership?** Because the two are not the same thing. Today
+`Child.parent_id` is a single value and `require_parent_child_access` gates on
+it, so a child has exactly one authorized parent and the distinction is
+invisible. When multi-caregiver access arrives, two people will be authorized for
+one child while still owning only their own submissions — and filtering on the
+stored author is already correct for that. A note authored by a different parent
+for the same child is verified invisible.
+
+The two response models are **disjoint on required fields**: only the parent
+envelope requires `child_id`, so the role-aware union cannot validate one
+response as the other.
+
+### Parent response
+
+```json
+{
+  "child_id": "child_maya",
+  "items": [
+    { "note_id": "pn_…", "note_type": "question",
+      "body": "Is it ok if she signs instead of saying the word?",
+      "created_at": "…", "review_status": "new",
+      "session_preparation_status": "none",
+      "linked_activity_title": "Bubble requesting" }
+  ],
+  "total": 1, "next_cursor": null
+}
+```
+
+`ParentNoteHistoryItem` has the **same field set as `ParentNoteCreated`**, so a
+client renders a just-submitted item and a historical one with one component.
+`parent_id` is absent by design: every item is the caller's own, so echoing
+author identity would add nothing and only widen the surface.
+
+Never exposed: `parent_id`, `therapist_id`, `linked_assignment_id`,
+`assignment_id`, `weekly_plan_id`, `display_order`, `activity_version_id`,
+`activity_template_id`, audit, idempotency, `request_hash`, operation identity,
+`environment`, `schema_version`, provenance, another author's data, or
+therapist-private data.
+
+## Status visibility
+
+The **stored** `review_status` and `session_preparation_status` are shown
+verbatim, using canonical enum values. No synthesized labels — no *Seen*, *Read*,
+*Replied* or *Answered*. All four `new`/`reviewed` × `none`/`discuss…`
+combinations round-trip independently, because the two dimensions remain
+independent.
+
+This lets a future parent UI show that an item is submitted, reviewed, or flagged
+for discussion **once those therapist actions exist**. No transition logic is
+implemented here.
+
+## Point-in-time linked activity
+
+The read uses the note's **stored** `linked_activity_title`. It is never
+re-resolved from the current plan.
+
+If the linked activity is later modified, replaced or retired — verified through
+the real frozen Modify-accept workflow — the note still appears, still shows the
+title captured at submission, never relinks to the replacement, and never exposes
+`linked_assignment_id`. A retired link must not make a valid note disappear.
+
+## Ordering
+
+`created_at` descending with the note id as a deterministic tie-break — the
+**same key** the frozen therapist reads use, so the two surfaces agree. The
+therapist helper itself is untouched. Repeated reads are byte-identical, and the
+tie-break does not depend on insertion order.
+
+## Empty state
+
+An authorized parent with zero submitted notes receives **200** and an empty
+list. Authorization is about the child relationship; absence of content is a
+successful empty state, never a 404.
+
+## Read-only
+
+The GET writes nothing. Ten collections are deep-compared across repeated reads.
+There is no `viewed_at`, no `read_at`, no read receipt, no view count, and **no
+implicit status change** — reading a `new` note never marks it `reviewed`. Only a
+future therapist action may do that.
+
+## Authorization
+
+| Principal / state | Result |
+|---|---|
+| Parent of the child, active connection | 200 + own items |
+| Parent of the child, no items | 200 + empty list |
+| Therapist | existing therapist `Page` (unchanged) |
+| Parent of a different child | 404 (existence-blind) |
+| Unknown child | 404 |
+| Connection pending / paused / ended | 404 |
+| Unauthenticated | 401 |
+| Parent calling `GET /notes` (therapist inbox) | **403** — unchanged |
+
+`GET /api/v1/notes` remains the therapist cross-child inbox. Parents gain no
+cross-child aggregation.
+
+## Still append-only, still one-way
+
+This phase adds **GET only**. The API still contains **zero** `PUT`, `PATCH` or
+`DELETE` operations, so there is no edit, delete, withdraw or retract for a
+`ParentNote` from any principal. The read introduces no reply, thread,
+conversation, message state, therapist response or notification.
+
+# Sequence
+
+1. **Parent Question / Note / Update write** ✅ Phase 1B.3A
+2. **Parent reads own submitted notes** ✅ Phase 1B.3B
+3. Therapist Reviewed ← next
+4. Therapist Discuss Next Session
+5. Therapist private notes
 
 Save for Later, Replace and Remove remain deferred.

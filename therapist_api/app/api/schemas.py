@@ -157,6 +157,45 @@ class ParentNoteCreateResponse(BaseModel):
     idempotent_replay: bool
 
 
+# ── read: a parent's OWN submitted collaboration notes (Phase 1B.3B) ────────
+#
+# History of what THIS parent submitted for THIS child. Filtered by the stored
+# author identity, never by child ownership — another caregiver's submissions
+# are not this parent's to read.
+class ParentNoteHistoryItem(BaseModel):
+    """One item the parent submitted. Identical field set to `ParentNoteCreated`.
+
+    Deliberately the same shape as the create response so a parent client renders
+    a just-submitted item and a historical one with one component. `parent_id` is
+    absent BY DESIGN: every item in the response is the caller's own, so echoing
+    author identity would add no information and only widen the surface.
+    """
+
+    note_id: str
+    note_type: str
+    body: str
+    created_at: str
+    review_status: str
+    session_preparation_status: str
+    # Point-in-time context captured at submission — NOT re-resolved on read, so
+    # a later Modify/Add never rewrites what the parent originally saw.
+    linked_activity_title: Optional[str] = None
+
+
+class ParentNoteHistoryResponse(BaseModel):
+    """Parent-safe note history envelope.
+
+    Carries `child_id` — route context the caller already supplied — which also
+    makes this model structurally DISJOINT from the therapist `Page`, so the
+    role-aware union on this route cannot validate one response as the other.
+    """
+
+    child_id: str
+    items: List[ParentNoteHistoryItem] = Field(default_factory=list)
+    total: int
+    next_cursor: Optional[str] = None
+
+
 class PrivateNoteView(BaseModel):
     note_id: str
     child_id: str

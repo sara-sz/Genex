@@ -75,10 +75,31 @@ async def notes(principal: AuthenticatedUser = Depends(require_principal),
     return _page(svc.list_notes(principal))
 
 
-@router.get("/children/{child_id}/notes", response_model=S.Page)
+@router.get(
+    "/children/{child_id}/notes",
+    response_model=Union[S.Page, S.ParentNoteHistoryResponse],
+    responses={403: {"model": S.ErrorResponse}, 404: {"model": S.ErrorResponse}},
+)
 async def child_notes(child_id: str,
                       principal: AuthenticatedUser = Depends(require_principal),
                       svc: ReadService = Depends(get_service)):
+    """Role-aware collaboration-note read for one child.
+
+    A therapist receives the existing `Page` envelope unchanged — every parent
+    note for the child, per the frozen therapist policy.
+
+    An authorized parent receives `ParentNoteHistoryResponse`: only the items
+    THAT parent submitted, in a dedicated allow-list projection. Another
+    caregiver's submissions are never theirs to read, so the filter is on the
+    note's stored author, not on child ownership.
+
+    The two shapes are disjoint on required fields — only the parent envelope
+    requires `child_id` — so neither response can validate as the other.
+
+    Read-only for both roles: reading a NEW note never marks it REVIEWED.
+    """
+    if access.principal_role(principal) == PrincipalRole.PARENT:
+        return svc.get_parent_own_notes(principal, child_id)
     return _page(svc.get_child_notes(principal, child_id))
 
 

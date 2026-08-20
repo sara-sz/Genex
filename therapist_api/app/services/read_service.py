@@ -238,6 +238,69 @@ class ReadService:
         notes.sort(key=lambda n: (n.get("created_at", ""), n["id"]), reverse=True)
         return [self._parent_note_view(n) for n in notes]
 
+    # ── parent-safe OWN-note history (Phase 1B.3B) ──────────────────────────
+    def get_parent_own_notes(
+        self, user: AuthenticatedUser, child_id: str
+    ) -> S.ParentNoteHistoryResponse:
+        """The items THIS parent submitted for THIS child. Read-only.
+
+        Two filters, both required and both applied to authoritative stored data
+        BEFORE anything is projected:
+
+          * `child_id`  — the route's child, via the existing existence-blind
+            parent policy (unknown child, another family's child, and a
+            pending/paused/ended connection all raise the same 404);
+          * `parent_id` — the note's STORED author, compared against the
+            authenticated parent's resolved profile id.
+
+        The author filter is the substantive one. Child ownership is NOT a proxy
+        for authorship: when multi-caregiver access arrives, two people will be
+        authorized for one child while still owning only their own submissions.
+        Filtering on the stored author is already correct for that world, and
+        nothing here infers authorship from the child, the connection, audit
+        events, ordering, ids or the session.
+
+        `linked_activity_title` is read from the note as stored — never
+        re-resolved from the current plan — so a note whose activity was later
+        modified, replaced or retired still shows the title captured when the
+        parent wrote it, and never disappears.
+
+        Nothing is written. Reading a NEW note does not make it REVIEWED; only a
+        future therapist action may change either status.
+        """
+        parent = access.resolve_parent(self.repo, user)                  # 403 if not a parent
+        access.require_parent_child_access(self.repo, parent["id"], child_id)  # 404-blind
+
+        # Authoritative filter — the query is scoped by child AND author, so a
+        # note belonging to anyone else never enters the result to be filtered
+        # out later.
+        notes = self.repo.query(
+            C.PARENT_NOTES, child_id=child_id, parent_id=parent["id"]
+        )
+        # Same ordering key the frozen therapist reads use: newest first, with
+        # the note id as a deterministic tie-break when timestamps collide.
+        # Reused rather than reinvented so the two surfaces agree; the therapist
+        # helper itself is untouched.
+        notes.sort(key=lambda n: (n.get("created_at", ""), n["id"]), reverse=True)
+
+        items = [
+            S.ParentNoteHistoryItem(
+                note_id=n["id"],
+                note_type=_plain(n["note_type"]),
+                body=n["body"],
+                created_at=n.get("created_at", ""),
+                review_status=_plain(n["review_status"]),
+                session_preparation_status=_plain(n["session_preparation_status"]),
+                linked_activity_title=n.get("linked_activity_title"),
+            )
+            for n in notes
+        ]
+        # Zero submitted notes is a successful empty history, not a 404 —
+        # authorization is about the child relationship, not about content.
+        return S.ParentNoteHistoryResponse(
+            child_id=child_id, items=items, total=len(items), next_cursor=None
+        )
+
     # ── private notes (FULL + own only) ─────────────────────────────────────
     def get_private_notes(self, user: AuthenticatedUser, child_id: str) -> List[S.PrivateNoteView]:
         therapist = access.resolve_therapist(self.repo, user)  # therapist role required
