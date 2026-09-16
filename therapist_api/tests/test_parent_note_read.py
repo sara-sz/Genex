@@ -115,7 +115,7 @@ def test_same_path_serves_both_roles_without_new_routes():
     operations = sum(
         len([m for m in v if m in ("get", "post", "put", "patch", "delete")])
         for v in schema["paths"].values())
-    assert operations == 25, "24 frozen operations + the Phase 1B.3D discuss-next-session action"
+    assert operations == 26, "25 frozen operations + the Phase 1B.3E private-note write"
     notes = schema["paths"]["/api/v1/children/{child_id}/notes"]
     assert {m for m in notes if m in ("get", "post", "put", "patch", "delete")} == {"get", "post"}
     refs = {m["$ref"].rsplit("/", 1)[-1] for m in

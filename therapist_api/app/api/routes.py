@@ -25,6 +25,7 @@ from ..services import (
     note_review_service,
     note_session_service,
     parent_note_service,
+    private_note_service,
     proposal_service,
 )
 from . import schemas as S
@@ -238,6 +239,52 @@ async def private_notes(child_id: str,
                         principal: AuthenticatedUser = Depends(require_principal),
                         svc: ReadService = Depends(get_service)):
     return _page(svc.get_private_notes(principal, child_id))
+
+
+# ── write: a therapist's OWN private note ───────────────────────────────────
+#
+# POST shares the EXISTING private-notes path rather than adding a new one: this
+# is the same resource the therapist already reads. OpenAPI gains an operation,
+# not a path.
+@router.post(
+    "/children/{child_id}/private-notes",
+    response_model=S.PrivateNoteCreateResponse,
+    responses={
+        400: {"model": S.ErrorResponse}, 401: {"model": S.ErrorResponse},
+        403: {"model": S.ErrorResponse}, 404: {"model": S.ErrorResponse},
+        409: {"model": S.ErrorResponse}, 422: {"model": S.ErrorResponse},
+    },
+)
+async def create_private_note(
+    child_id: str,
+    body: S.PrivateNoteCreateRequest,
+    request: Request,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    principal: AuthenticatedUser = Depends(require_principal),
+):
+    """A therapist's own clinical/workflow note. Visible only to its author.
+
+    Not a parent message, chat, reply or response to a ParentNote: writing one
+    notifies nobody and changes no ParentNote state. The author is the
+    authenticated therapist and the child is the authorized path segment —
+    neither can be supplied by the client.
+
+    Append-only for the pilot: no edit, delete or withdraw, and
+    `marked_for_next_session` is chosen here at creation with no later toggle.
+    """
+    repo = request.app.state.repo
+    from ..logging_config import get_request_id
+
+    return private_note_service.create_private_note(
+        repo,
+        principal,
+        child_id=child_id,
+        idempotency_key=idempotency_key,
+        body=body.body,
+        marked_for_next_session=body.marked_for_next_session,
+        environment=principal.environment,
+        request_id=get_request_id(),
+    )
 
 
 @router.get("/children/{child_id}/next-session", response_model=S.NextSessionResponse)

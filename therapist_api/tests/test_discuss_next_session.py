@@ -734,7 +734,8 @@ def test_no_propagation_endpoint_was_added():
     s = c.app.openapi()
     assert len(s["paths"]) == 24
     verbs = ("get", "post", "put", "patch", "delete")
-    assert sum(len([m for m in v if m in verbs]) for v in s["paths"].values()) == 25
+    assert sum(len([m for m in v if m in verbs]) for v in s["paths"].values()) == 26, \
+        "25 frozen operations + the Phase 1B.3E private-note write"
     notes = s["paths"]["/api/v1/children/{child_id}/notes"]
     assert {m for m in notes if m in verbs} == {"get", "post"}
 

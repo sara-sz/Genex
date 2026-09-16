@@ -247,6 +247,43 @@ class PrivateNoteView(BaseModel):
     created_at: str
 
 
+# ── write: a therapist's own private note (Phase 1B.3E) ─────────────────────
+#
+# POST shares the EXISTING private-notes path, so OpenAPI gains an operation,
+# not a path.
+class PrivateNoteCreateRequest(BaseModel):
+    """Everything a therapist may supply. Everything else is system-owned.
+
+    `id`, `child_id`, `therapist_id`, `created_at`, `environment` and
+    `schema_version` are absent BY DESIGN. The child comes from the authorized
+    path and the author from the authenticated principal, so a client sending
+    any of them is simply ignored by this model; tests pin that they cannot be
+    injected and that a therapist cannot author a note attributed to another
+    therapist.
+
+    `marked_for_next_session` is chosen HERE, at creation, and never afterwards:
+    this checkpoint has no toggle in either direction.
+    """
+
+    body: str
+    marked_for_next_session: bool = False
+
+
+class PrivateNoteCreated(BaseModel):
+    """The private note just written, echoed to its own author."""
+
+    note_id: str
+    child_id: str
+    body: str
+    marked_for_next_session: bool
+    created_at: str
+
+
+class PrivateNoteCreateResponse(BaseModel):
+    note: PrivateNoteCreated
+    idempotent_replay: bool
+
+
 class NextSessionResponse(BaseModel):
     child_id: str
     parent_note_items: List[ParentNoteView]

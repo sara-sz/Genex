@@ -585,7 +585,7 @@ def test_openapi_gains_an_operation_not_a_path():
     operations = sum(
         len([m for m in v if m in ("get", "post", "put", "patch", "delete")])
         for v in schema["paths"].values())
-    assert operations == 25, "24 frozen operations + the Phase 1B.3D discuss-next-session action"
+    assert operations == 26, "25 frozen operations + the Phase 1B.3E private-note write"
 
     sch = schema["components"]["schemas"]
     assert set(sch["ParentNoteCreateRequest"]["required"]) == {"note_type", "body"}
