@@ -218,6 +218,27 @@ class NoteReviewResponse(BaseModel):
     idempotent_replay: bool
 
 
+# ── action: therapist marks a parent note DISCUSS NEXT SESSION (Phase 1B.3D) ─
+#
+# As with the review action there is deliberately no request model. The command
+# carries no parent-authored content and no parameters: the child and note are
+# path segments and the only other input is the Idempotency-Key header. With no
+# model at all there is nothing for a client to inject
+# `session_preparation_status`, `review_status`, `body` or an author id into.
+class NoteSessionPreparationResponse(BaseModel):
+    """Therapist-safe confirmation that the note is marked for the next session.
+
+    `review_status` is echoed precisely so a therapist UI can see that flagging
+    did NOT disturb the other workflow dimension. No audit id, no idempotency
+    internals, no operation identity, no parent-authored content.
+    """
+
+    note_id: str
+    session_preparation_status: str
+    review_status: str
+    idempotent_replay: bool
+
+
 class PrivateNoteView(BaseModel):
     note_id: str
     child_id: str

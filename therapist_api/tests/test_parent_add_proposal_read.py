@@ -778,7 +778,7 @@ def test_openapi_documents_both_parent_detail_shapes_without_new_routes():
     c = _c()
     schema = c.app.openapi()
     assert schema["openapi"] == "3.1.0"
-    assert len(schema["paths"]) == 23, "22 frozen paths + the Phase 1B.3C review action"
+    assert len(schema["paths"]) == 24, "23 frozen paths + the Phase 1B.3D discuss-next-session action"
 
     detail = schema["paths"]["/api/v1/children/{child_id}/proposals/{proposal_id}"]
     body = detail["get"]["responses"]["200"]["content"]["application/json"]["schema"]

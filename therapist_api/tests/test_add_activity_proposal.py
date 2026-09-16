@@ -907,7 +907,7 @@ def test_openapi_documents_the_add_route_and_preserves_modify():
     c = _c()
     schema = c.app.openapi()
     assert schema["openapi"] == "3.1.0"
-    assert len(schema["paths"]) == 23, "22 frozen paths + the Phase 1B.3C review action"
+    assert len(schema["paths"]) == 24, "23 frozen paths + the Phase 1B.3D discuss-next-session action"
     path = "/api/v1/children/{child_id}/weekly-plan/proposals/add"
     assert path in schema["paths"] and "post" in schema["paths"][path]
     # The frozen Modify route is untouched.

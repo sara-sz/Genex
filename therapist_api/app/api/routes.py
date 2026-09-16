@@ -23,6 +23,7 @@ from ..services import (
     approval_service,
     decline_service,
     note_review_service,
+    note_session_service,
     parent_note_service,
     proposal_service,
 )
@@ -177,6 +178,51 @@ async def review_parent_note(
     from ..logging_config import get_request_id
 
     return note_review_service.mark_note_reviewed(
+        repo,
+        principal,
+        child_id=child_id,
+        note_id=note_id,
+        idempotency_key=idempotency_key,
+        environment=principal.environment,
+        request_id=get_request_id(),
+    )
+
+
+# ── action: therapist marks a parent note DISCUSS NEXT SESSION ──────────────
+@router.post(
+    "/children/{child_id}/notes/{note_id}/discuss-next-session",
+    response_model=S.NoteSessionPreparationResponse,
+    responses={
+        400: {"model": S.ErrorResponse}, 401: {"model": S.ErrorResponse},
+        403: {"model": S.ErrorResponse}, 404: {"model": S.ErrorResponse},
+        409: {"model": S.ErrorResponse},
+    },
+)
+async def mark_note_for_next_session(
+    child_id: str,
+    note_id: str,
+    request: Request,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    principal: AuthenticatedUser = Depends(require_principal),
+):
+    """Surface one parent-submitted item for a future session.
+
+    `session_preparation_status` none -> discuss_at_next_session. A POST action
+    command like `/approve`, `/accept`, `/decline` and `/review` — not a PATCH,
+    and deliberately not a generic note-update endpoint: this API expresses
+    lifecycle transitions as explicit named commands rather than field edits.
+
+    Takes no request body. `review_status` is untouched — Reviewed is a separate
+    action, and marking for discussion never implies the therapist reviewed,
+    replied, answered or resolved the item, nor that the parent was notified, a
+    session was scheduled, or the discussion happened.
+
+    One-way: there is no unflag, no clear, and no transition into `discussed`.
+    """
+    repo = request.app.state.repo
+    from ..logging_config import get_request_id
+
+    return note_session_service.mark_note_for_next_session(
         repo,
         principal,
         child_id=child_id,

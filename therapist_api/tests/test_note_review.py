@@ -782,19 +782,38 @@ def test_reviewing_touches_no_plan_state():
     assert weekly_plan.current_weekly_plan_id(_repo(c), CHILD) == "wp_maya"
 
 
-# ── 93-95: Discuss Next Session must remain unimplemented ───────────────────
-def test_no_route_can_change_session_preparation_status():
-    """(93)(95) Hard scope boundary."""
+# ── 93-95: REVIEWING must not reach the session dimension ───────────────────
+#
+# NARROWED IN PHASE 1B.3D, NOT WEAKENED. Through 1B.3C this asserted that
+# NOTHING could change `session_preparation_status`, because Discuss Next Session
+# did not exist. It now does, as exactly one named action, so a blanket "zero
+# writers" assertion would be asserting something false.
+#
+# The permanent invariant this file owns is narrower and is what is pinned here:
+# REVIEWING must never reach the session dimension, and the only code permitted
+# to write it is the one dedicated service. Naming the sole allowed writer is
+# STRICTER than the old count-based check — a writer appearing in any other
+# module (including the review service) now fails, and so does a second
+# session-dimension service.
+def test_only_the_named_discuss_action_can_change_session_preparation_status():
+    """(93)(95) Hard scope boundary, re-pointed at the 1B.3D surface."""
     c = _c()
     paths = c.app.openapi()["paths"]
     for p in paths:
         last = p.rsplit("/", 1)[-1]
-        assert last not in ("discuss", "discuss-next-session", "discussed",
-                            "session-preparation", "mark-for-next-session"), p
+        # `discuss-next-session` is the ONE intentional action. Everything else
+        # in this family remains forbidden: `discussed` (the terminal state has
+        # no writer), a bare `discuss`, a generic field-edit surface, and any
+        # reverse/unflag route.
+        assert last not in ("discuss", "discussed", "session-preparation",
+                            "mark-for-next-session", "undiscuss", "unflag",
+                            "clear-session-preparation", "reopen"), p
+    discuss = [p for p in paths if p.rsplit("/", 1)[-1] == "discuss-next-session"]
+    assert len(discuss) == 1, discuss
 
-    # No production code ASSIGNS the session dimension. Checked by AST, because
-    # a substring scan cannot tell `x["session_preparation_status"] = ...` from
-    # the far more common `x["session_preparation_status"] == ...` comparison —
+    # Which production code ASSIGNS the session dimension. Checked by AST,
+    # because a substring scan cannot tell `x["session_preparation_status"] = `
+    # from the far more common `x["session_preparation_status"] == ` comparison —
     # `] =` is a prefix of `] ==`, so the naive version reports every read.
     sources = sorted(APP_DIR.rglob("*.py"))
     # Fail loudly rather than vacuously: an empty tree would satisfy every
@@ -811,9 +830,15 @@ def test_no_route_can_change_session_preparation_status():
                 if (isinstance(t, ast.Subscript)
                         and isinstance(t.slice, ast.Constant)
                         and t.slice.value == "session_preparation_status"):
-                    writers.append(f"{f}:{n.lineno}")
-    assert writers == [], writers
-    # ...and no service exposes an action that would.
+                    writers.append(f"{f.relative_to(APP_DIR).as_posix()}:{n.lineno}")
+    assert [w.split(":")[0] for w in writers] == ["services/note_session_service.py"], writers
+    # Stated separately and redundantly, because it is the invariant THIS file
+    # owns: whatever else grows, reviewing must never assign the session field.
+    assert not [w for w in writers if "note_review_service" in w], writers
+
+    # ...and no service exposes a DISCUSSED or field-edit action. These four
+    # names stay banned verbatim from 1B.3C: the 1B.3D entry point is
+    # `mark_note_for_next_session`, which matches none of them.
     service_files = sorted((APP_DIR / "services").rglob("*.py"))
     assert service_files, f"no services found under {APP_DIR / 'services'}"
     services = "\n".join(p.read_text() for p in service_files)

@@ -453,7 +453,7 @@ def test_no_parent_or_therapist_response_exposes_plan_lifecycle():
 def test_openapi_does_not_document_plan_lifecycle():
     c = _c()
     schema = c.app.openapi()
-    assert len(schema["paths"]) == 23, "22 frozen paths + the Phase 1B.3C review action"
+    assert len(schema["paths"]) == 24, "23 frozen paths + the Phase 1B.3D discuss-next-session action"
     assert not any(p.endswith("/weekly-plan/activate") or p.endswith("/complete")
                    for p in schema["paths"]), "this phase adds no route"
     assert "WeeklyPlanStatus" not in schema["components"]["schemas"]

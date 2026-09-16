@@ -581,11 +581,11 @@ def test_openapi_gains_an_operation_not_a_path():
     c = _c()
     schema = c.app.openapi()
     assert schema["openapi"] == "3.1.0"
-    assert len(schema["paths"]) == 23, "22 frozen paths + the Phase 1B.3C review action"
+    assert len(schema["paths"]) == 24, "23 frozen paths + the Phase 1B.3D discuss-next-session action"
     operations = sum(
         len([m for m in v if m in ("get", "post", "put", "patch", "delete")])
         for v in schema["paths"].values())
-    assert operations == 24, "23 frozen operations + the Phase 1B.3C review action"
+    assert operations == 25, "24 frozen operations + the Phase 1B.3D discuss-next-session action"
 
     sch = schema["components"]["schemas"]
     assert set(sch["ParentNoteCreateRequest"]["required"]) == {"note_type", "body"}
