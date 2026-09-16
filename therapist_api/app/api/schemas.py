@@ -196,6 +196,28 @@ class ParentNoteHistoryResponse(BaseModel):
     next_cursor: Optional[str] = None
 
 
+# ── action: therapist marks a parent note REVIEWED (Phase 1B.3C) ────────────
+#
+# There is deliberately no request model. The command carries no parent-authored
+# content and no parameters: the child and note are path segments and the only
+# other input is the Idempotency-Key header. An empty body model would add a
+# schema component that means nothing — and with no model at all there is
+# literally nothing for a client to inject `review_status`,
+# `session_preparation_status`, `body` or an author id into.
+class NoteReviewResponse(BaseModel):
+    """Therapist-safe confirmation that the note is reviewed.
+
+    `session_preparation_status` is echoed precisely so a therapist UI can see
+    that reviewing did NOT disturb the other workflow dimension. No audit id, no
+    idempotency internals, no operation identity, no parent-authored content.
+    """
+
+    note_id: str
+    review_status: str
+    session_preparation_status: str
+    idempotent_replay: bool
+
+
 class PrivateNoteView(BaseModel):
     note_id: str
     child_id: str

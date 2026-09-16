@@ -22,6 +22,7 @@ from ..services import (
     add_proposal_service,
     approval_service,
     decline_service,
+    note_review_service,
     parent_note_service,
     proposal_service,
 )
@@ -140,6 +141,47 @@ async def create_parent_note(
         note_type=body.note_type,
         body=body.body,
         linked_assignment_id=body.linked_assignment_id,
+        environment=principal.environment,
+        request_id=get_request_id(),
+    )
+
+
+# ── action: therapist marks a parent-submitted note REVIEWED ────────────────
+@router.post(
+    "/children/{child_id}/notes/{note_id}/review",
+    response_model=S.NoteReviewResponse,
+    responses={
+        400: {"model": S.ErrorResponse}, 401: {"model": S.ErrorResponse},
+        403: {"model": S.ErrorResponse}, 404: {"model": S.ErrorResponse},
+        409: {"model": S.ErrorResponse},
+    },
+)
+async def review_parent_note(
+    child_id: str,
+    note_id: str,
+    request: Request,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    principal: AuthenticatedUser = Depends(require_principal),
+):
+    """Mark one parent-submitted item reviewed: review_status new -> reviewed.
+
+    A POST action command, matching `/approve`, `/accept` and `/decline` — not a
+    PATCH, because this API expresses lifecycle transitions as explicit named
+    commands rather than field edits. Deliberately not `/reply`, `/respond`,
+    `/answer`, `/resolve`, `/read` or `/seen`: none of those is what happened.
+
+    Takes no request body. `session_preparation_status` is untouched — Discuss
+    Next Session is a separate action that does not exist yet.
+    """
+    repo = request.app.state.repo
+    from ..logging_config import get_request_id
+
+    return note_review_service.mark_note_reviewed(
+        repo,
+        principal,
+        child_id=child_id,
+        note_id=note_id,
+        idempotency_key=idempotency_key,
         environment=principal.environment,
         request_id=get_request_id(),
     )

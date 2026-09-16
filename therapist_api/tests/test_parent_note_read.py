@@ -111,11 +111,11 @@ def test_same_path_serves_both_roles_without_new_routes():
     """(5)(6)(8)(9)"""
     c = _c()
     schema = c.app.openapi()
-    assert len(schema["paths"]) == 22
+    assert len(schema["paths"]) == 23, "22 frozen paths + the Phase 1B.3C review action"
     operations = sum(
         len([m for m in v if m in ("get", "post", "put", "patch", "delete")])
         for v in schema["paths"].values())
-    assert operations == 23, "role-aware GET adds no operation"
+    assert operations == 24, "23 frozen operations + the Phase 1B.3C review action"
     notes = schema["paths"]["/api/v1/children/{child_id}/notes"]
     assert {m for m in notes if m in ("get", "post", "put", "patch", "delete")} == {"get", "post"}
     refs = {m["$ref"].rsplit("/", 1)[-1] for m in

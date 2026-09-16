@@ -995,7 +995,7 @@ def test_openapi_documents_type_aware_decisions_without_new_routes():
     c = _c()
     schema = c.app.openapi()
     assert schema["openapi"] == "3.1.0"
-    assert len(schema["paths"]) == 22, "this phase adds no route"
+    assert len(schema["paths"]) == 23, "22 frozen paths + the Phase 1B.3C review action"
     for verb, add_model, modify_model in (
         ("accept", "AddAcceptResponse", "AcceptProposalResponse"),
         ("decline", "AddDeclineResponse", "DeclineProposalResponse"),
