@@ -34,28 +34,75 @@ V22_MAX_MILESTONES_PER_DOMAIN = 5
 V22_MIN_MILESTONES_PER_DOMAIN = 1
 
 # ------------------------------------------------------------------
-# Domain config
+# Domain config — PARENT 2.4 SEVEN-DOMAIN NATIVE (Phase 0.3B)
 # ------------------------------------------------------------------
+#
+# The Parent 2.4 Brain reasons natively in the seven canonical developmental
+# domains. This is NOT a display rename: DOMAIN_CONFIG is iterated in 13 places
+# across the Brain (focus ranking, scheduling, support tiers, progress,
+# summaries, delay estimation), so widening it here makes those structures
+# seven-domain-native at the point they are built.
+#
+# Definitions are IMPORTED from the single authority rather than restated. The
+# dependency direction genex_core -> parent_taxonomy is acyclic: parent_taxonomy
+# imports nothing from genex_core.
+#
+# Fine Motor, Gross Motor and Daily Living are now first-class domains. The
+# legacy four-key bundle is retained for RECOGNITION ONLY, below.
+from parent_taxonomy.domains import (  # noqa: E402
+    CONTENT_PENDING_KEYS as _CONTENT_PENDING_KEYS,
+    DOMAINS as _CANONICAL_DOMAINS,
+)
+
 DOMAIN_CONFIG = {
-    "movement_and_physical": {
-        "display": "Movement / Physical",
-        "short": "motor",
-    },
-    "social_and_emotional": {
-        "display": "Social / Emotional",
-        "short": "social_emotional",
-    },
-    "language_and_communication": {
-        "display": "Language / Communication",
-        "short": "language_communication",
-    },
-    "cognitive": {
-        "display": "Cognitive / Adaptive",
-        "short": "cognitive",
-    },
+    d.key: {
+        "display": d.display,
+        "short": d.key,
+        # Sensory exists structurally but has no validated Gold Standard rows.
+        # Consumers needing content MUST check this rather than assuming every
+        # domain can produce milestones or activities.
+        "content_status": d.content_status.value,
+        "has_content": d.has_content,
+    }
+    for d in _CANONICAL_DOMAINS
 }
 
-ALIAS_TO_CATEGORY = {
+#: Domains that currently have validated content. Sensory is excluded.
+CONTENT_READY_DOMAIN_KEYS = tuple(
+    k for k, cfg in DOMAIN_CONFIG.items() if cfg["has_content"]
+)
+CONTENT_PENDING_DOMAIN_KEYS = tuple(_CONTENT_PENDING_KEYS)
+
+# ------------------------------------------------------------------
+# LEGACY four-domain vocabulary — RECOGNITION ONLY (Beta 2.3 and earlier).
+#
+# These keys are NOT Parent 2.4 native domains and must never be produced by new
+# Brain code. They exist so historical state can be IDENTIFIED as legacy.
+#
+# Deliberately NOT a projection: full legacy read compatibility belongs to
+# PARENT-0.3C. `movement_and_physical` spanned Fine Motor, Gross Motor AND Daily
+# Living, and legacy `cognitive` additionally contained Daily Living rows, so
+# neither maps onto a single canonical domain. Guessing here would fabricate
+# precision the historical state never had.
+# ------------------------------------------------------------------
+LEGACY_DOMAIN_KEYS = (
+    "language_and_communication",
+    "social_and_emotional",
+    "cognitive",
+    "movement_and_physical",
+)
+
+
+def is_legacy_domain_key(key: str) -> bool:
+    """True when `key` is a pre-2.4 four-domain key that is not 2.4-native."""
+    return key in LEGACY_DOMAIN_KEYS and key not in DOMAIN_CONFIG
+
+
+#: Legacy display aliases -> legacy key. Used only to RECOGNISE old values.
+#: `ALIAS_TO_CATEGORY` keeps the historical name and points here, so any caller
+#: not yet migrated retains legacy recognition rather than silently resolving a
+#: Parent 2.4 canonical key.
+LEGACY_ALIAS_TO_CATEGORY = {
     "movement and physical": "movement_and_physical",
     "movement/physical": "movement_and_physical",
     "physical": "movement_and_physical",
@@ -76,6 +123,9 @@ ALIAS_TO_CATEGORY = {
     "cognitive/adaptive": "cognitive",
     "adaptive": "cognitive",
 }
+
+#: Historical name, preserved so un-migrated callers keep legacy recognition.
+ALIAS_TO_CATEGORY = LEGACY_ALIAS_TO_CATEGORY
 
 # ------------------------------------------------------------------
 # Answer scoring

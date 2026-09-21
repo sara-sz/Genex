@@ -6,9 +6,38 @@ Extracted from genex_interview_activity_v11.ipynb — logic unchanged.
 """
 
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, FrozenSet, List
 
 from genex_core.config import SAFETY_KEYWORD_MAP, SAFETY_CONSTRAINT_TEMPLATES
+from parent_taxonomy.domains import BY_KEY as _CANONICAL_DOMAINS
+
+
+# ---------------------------------------------------------------------------
+# Which canonical domain carries locomotor fall risk
+# ---------------------------------------------------------------------------
+#
+# Parent 2.4. Both movement-safety rules below were keyed on the legacy domain
+# `movement_and_physical`, which the seven-domain Brain never emits — so the
+# jump/stomp/climb hard-block and the stable-support marker silently stopped
+# firing for every high-fall, mobility and seizure profile.
+#
+# The replacement is deliberately NOT "every domain that descended from the
+# legacy movement bucket". Legacy `movement_and_physical` split into Fine Motor,
+# Gross Motor and Daily Living, but these two rules are about LOCOMOTOR risk —
+# jumping, hopping, climbing, racing, unsupported balance. That is Gross Motor.
+# Widening to Fine Motor (table-top hand use) or Daily Living (self-help
+# routines) would attach fall-risk language to activities the rule was never
+# written for.
+#
+# Consequence worth stating plainly: relative to Beta 2.3 this NARROWS the
+# stable-support marker, which previously also reached the self-help rows that
+# are now Daily Living. Flagged for founder review rather than decided silently.
+_FALL_RISK_DOMAINS: FrozenSet[str] = frozenset({"gross_motor"})
+
+assert _FALL_RISK_DOMAINS <= set(_CANONICAL_DOMAINS), (
+    f"non-canonical domain in _FALL_RISK_DOMAINS: "
+    f"{_FALL_RISK_DOMAINS - set(_CANONICAL_DOMAINS)}"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -385,7 +414,7 @@ def apply_safety_constraints_to_activities(
         duration_min = int(a.get("duration_min", 5))
         lower_text = f"{title} {instructions}".lower()
 
-        if high_fall_or_mobility and category_key == "movement_and_physical" and re.search(
+        if high_fall_or_mobility and category_key in _FALL_RISK_DOMAINS and re.search(
             r'\b(jump|jumping|trampoline|hop|hopping|frog|climb|climbing|playground|race|racing|stomp|stomping)\b'
             r'|squat\s+and\s+reach',
             lower_text,
@@ -416,7 +445,7 @@ def apply_safety_constraints_to_activities(
             duration_min = a["duration_min"]
             lower_text = f"{title} {instructions}".lower()
 
-        if high_fall_or_mobility and category_key == "movement_and_physical":
+        if high_fall_or_mobility and category_key in _FALL_RISK_DOMAINS:
             support_note = " Use stable support and close adult supervision throughout."
             if ("close adult support" not in instructions.lower()
                     and "stable support" not in instructions.lower()

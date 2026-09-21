@@ -21,6 +21,14 @@ from genex_core.config import (
     LANGUAGE_SCORING_TRACKS,
 )
 from genex_core.interview_engine import ensure_concern_profile
+from parent_taxonomy.domains import resolve_legacy_domain
+
+# Parent 2.4 vocabulary repair. The language split-scoring path below was keyed
+# on the legacy spelling, which the seven-domain Brain never emits — so
+# `talking_and_communicating` silently received no split scoring at all.
+# Derived from parent_taxonomy rather than restated so it cannot drift.
+# Scoring mathematics, weights and thresholds are unchanged by this.
+_TALKING_DOMAIN = resolve_legacy_domain("language_and_communication")
 
 
 def _band_has_motor_emphasis(items: List[Dict[str, Any]]) -> bool:
@@ -218,9 +226,9 @@ def compute_language_scoring_profile(
     Separates expressive/speech, receptive, and gestural tracks to avoid
     strong comprehension or gesture masking expressive/speech weakness.
     """
-    raw_dev_age = state.get("dev_age", {}).get("language_and_communication")
+    raw_dev_age = state.get("dev_age", {}).get(_TALKING_DOMAIN)
     qna_answers = [
-        a for a in state.get("qna", {}).get("language_and_communication", [])
+        a for a in state.get("qna", {}).get(_TALKING_DOMAIN, [])
         if a.get("answer_status", "ok") != "api_error"
     ]
 
@@ -309,7 +317,7 @@ def get_effective_dev_age(state: Dict[str, Any], category_key: str) -> Optional[
     raw = state.get("dev_age", {}).get(category_key)
     if raw is None:
         return None
-    if category_key != "language_and_communication":
+    if category_key != _TALKING_DOMAIN:
         return int(raw)
     profile = compute_language_scoring_profile(state)
     eff = profile.get("effective_dev_age_months", raw)

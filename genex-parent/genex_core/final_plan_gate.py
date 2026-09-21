@@ -33,7 +33,7 @@ WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     {
         "title": "Pick Your Toy",
-        "category_key": "language_and_communication",
+        "category_key": "talking_and_communicating",
         "activity_family": "expressive_first_words",
         "duration_min": 5,
         "materials": "2–3 favourite small toys",
@@ -52,7 +52,7 @@ SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Help Me Open It",
-        "category_key": "language_and_communication",
+        "category_key": "talking_and_communicating",
         "activity_family": "gesture_communication",
         "duration_min": 5,
         "materials": "a small jar, box, or bag that is slightly tight to open",
@@ -72,7 +72,7 @@ SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Show Me What You Want",
-        "category_key": "language_and_communication",
+        "category_key": "talking_and_communicating",
         "activity_family": "gesture_communication",
         "duration_min": 5,
         "materials": "2 snack options or 2 small toys on a tray",
@@ -92,7 +92,7 @@ SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Family Photo Names",
-        "category_key": "language_and_communication",
+        "category_key": "talking_and_communicating",
         "activity_family": "object_naming",
         "duration_min": 5,
         "materials": "3–4 printed or phone photos of familiar family members",
@@ -111,7 +111,7 @@ SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Snack Choice Words",
-        "category_key": "language_and_communication",
+        "category_key": "talking_and_communicating",
         "activity_family": "expressive_vocabulary_growth",
         "duration_min": 5,
         "materials": "2 small snack options (e.g. crackers and raisins)",
@@ -131,7 +131,7 @@ SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Routine Pause Point",
-        "category_key": "language_and_communication",
+        "category_key": "talking_and_communicating",
         "activity_family": "receptive_directions_one_step",
         "duration_min": 5,
         "materials": "no materials — use any familiar daily routine",
@@ -151,7 +151,7 @@ SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Big Bead Threading",
-        "category_key": "movement_and_physical",
+        "category_key": "fine_motor",
         "activity_family": "beading_threading",
         "duration_min": 5,
         "materials": "5–6 large wooden beads and a pipe cleaner or thick shoelace",
@@ -171,7 +171,7 @@ SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Sticker Peel and Place",
-        "category_key": "movement_and_physical",
+        "category_key": "fine_motor",
         "activity_family": "pincer_grasp",
         "duration_min": 5,
         "materials": "sheet of large round stickers, plain paper",
@@ -190,7 +190,7 @@ SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Spoon Scoop Practice",
-        "category_key": "movement_and_physical",
+        "category_key": "daily_living",
         "activity_family": "fork_spoon_use",
         "duration_min": 5,
         "materials": "a large spoon, a small bowl, and soft food pieces (e.g. cereal, peas)",
@@ -210,7 +210,7 @@ SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Paint Choice Words",
-        "category_key": "language_and_communication",
+        "category_key": "talking_and_communicating",
         "activity_family": "expressive_vocabulary_growth",
         "duration_min": 5,
         "materials": "2 colours of washable paint or 2 crayons, plain paper",
@@ -230,7 +230,7 @@ SAFE_FILLER_CARDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Cleanup Request Game",
-        "category_key": "language_and_communication",
+        "category_key": "talking_and_communicating",
         "activity_family": "receptive_directions_one_step",
         "duration_min": 5,
         "materials": "toys or objects on the floor, a bin or basket",

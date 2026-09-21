@@ -95,7 +95,9 @@ def compute_support_metrics(state: Dict[str, Any], category_key: str) -> Dict[st
         "tier": tier,
     }
 
-    if category_key == "language_and_communication":
+    # Parent 2.4: keyed on the canonical domain. Left as the legacy spelling
+    # this rule would silently never fire.
+    if category_key == "talking_and_communicating":
         result["language_scoring_profile"] = compute_language_scoring_profile(state)
 
     return result
@@ -139,7 +141,7 @@ def determine_family_guidance_floor(state: Dict[str, Any]) -> Dict[str, Any]:
         ),
         reverse=True,
     )
-    category_key = ranked[0] if ranked else "language_and_communication"
+    category_key = ranked[0] if ranked else "talking_and_communicating"
     category_display = DOMAIN_CONFIG[category_key]["display"]
     daily_time_min = int(child.get("daily_time_min", 10))
     # Always honour the parent's full daily time budget — never cap below weekly_minutes.

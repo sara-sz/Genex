@@ -853,6 +853,26 @@ def build_weekly_schedule(state: Dict[str, Any]) -> Dict[str, Any]:
                     used_families=week_fam_blocked,
                     used_roots=root_blocked,
                 )
+            if activity is None and not strict and cycle_week == 1:
+                # Parent 2.4: before ever repeating a title, widen Week 1 beyond
+                # the core-only pool to the full bank.
+                #
+                # Week 1 prefers core cards, but the easier/harder variants are
+                # real, distinct, safety-processed cards with their own titles.
+                # A seven-domain bank is narrower than the old four-domain one —
+                # Gross Motor alone can yield a single activity_family — so the
+                # core pool can run out where legacy Movement never did. An
+                # exact duplicate title is the most visible failure to a parent,
+                # so it must be the LAST thing relaxed, after the variants.
+                activity = _pick_activity_that_fits(
+                    activities=bank.get("activities", []),
+                    used_indices=set(),
+                    remaining_minutes=remaining,
+                    used_keys=blocked,            # title dedup still enforced
+                    hard_block_families=set(),
+                    used_families=set(),
+                    used_roots=root_blocked,
+                )
             if activity is None and not strict:
                 # Absolute last resort: allow cross-day title repeats only when the
                 # bank cannot provide any unique title for this day.

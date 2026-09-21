@@ -10,7 +10,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from genex_core.config import DOMAIN_CONFIG
+from genex_core.config import CONTENT_READY_DOMAIN_KEYS, DOMAIN_CONFIG
 
 # Lazy client initialization
 _openai_client = None
@@ -32,14 +32,33 @@ def _get_openai_client():
     return _openai_client
 
 
-# Domain keyword signals for heuristic fallback
+# Domain keyword signals for heuristic fallback — PARENT 2.4 seven-domain.
+#
+# The legacy `movement_and_physical` list bundled three different concerns, so
+# it is SPLIT here rather than renamed: hand/grasp/writing terms are Fine Motor,
+# walking/balance/posture terms are Gross Motor, and the self-care terms that
+# used to sit under `cognitive` ("toilet", "dressing", "self-care") move to
+# Daily Living where they belong.
+#
+# Had these simply kept their legacy keys they would never match a Parent 2.4
+# domain, and Fine Motor / Gross Motor / Daily Living would silently receive no
+# keyword signal at all — a failure that looks like "no concern detected".
 DOMAIN_KEYWORDS = {
-    "movement_and_physical": [
-        "motor", "movement", "walk", "run", "jump", "balance", "coordination",
-        "fine motor", "gross motor", "grasp", "hand", "writing", "stairs", "falls",
-        "hypotonia", "sitting", "rolling", "crawling",
+    "fine_motor": [
+        "fine motor", "grasp", "hand", "hands", "fingers", "pincer", "writing",
+        "drawing", "scribble", "cutting", "buttons", "manipulation",
     ],
-    "language_and_communication": [
+    "gross_motor": [
+        "motor", "movement", "walk", "run", "jump", "balance", "coordination",
+        "gross motor", "stairs", "falls", "hypotonia", "sitting", "rolling",
+        "crawling", "posture", "standing", "clumsy",
+    ],
+    "daily_living": [
+        "adaptive", "toilet", "toileting", "potty", "dressing", "self-care",
+        "self care", "feeding", "mealtime", "independent", "routine",
+        "safety", "washing",
+    ],
+    "talking_and_communicating": [
         "speech", "language", "talk", "communication", "words", "sentence",
         "understand", "expressive", "receptive", "verbal", "babbling", "no words",
     ],
@@ -48,18 +67,23 @@ DOMAIN_KEYWORDS = {
         "behavior", "anger", "meltdown", "interaction", "turn taking",
         "regulation", "eye contact", "transitions",
     ],
-    "cognitive": [
-        "attention", "focus", "concentration", "school", "learning", "routine",
-        "executive", "task", "independent", "adaptive", "toilet", "dressing",
-        "self-care", "directions",
+    "learning_and_thinking": [
+        "attention", "focus", "concentration", "school", "learning",
+        "executive", "task", "directions", "problem solving", "memory",
     ],
+    # Sensory deliberately has NO keyword list. The domain exists but has no
+    # validated content, so producing a delay anchor for it would imply a plan
+    # Genex cannot build. Fail closed instead — see estimate_all_delays.
 }
 
 FALLBACK_DELAY = {
-    "movement_and_physical": 3,
-    "language_and_communication": 3,
+    "fine_motor": 3,
+    "gross_motor": 3,
+    "daily_living": 6,
+    "talking_and_communicating": 3,
     "social_and_emotional": 6,
-    "cognitive": 6,
+    "learning_and_thinking": 6,
+    # No entry for sensory — see above.
 }
 
 
@@ -168,7 +192,11 @@ def estimate_all_delays(
     if not state.get("child"):
         raise ValueError("Child profile missing. Fill the profile form first.")
 
-    categories = categories or list(DOMAIN_CONFIG.keys())
+    # Parent 2.4: only content-ready domains get a delay anchor. Sensory is a
+    # canonical domain with no validated rows, so estimating a delay for it
+    # would promise a plan Genex cannot build. Fail closed by skipping it.
+    categories = categories or list(CONTENT_READY_DOMAIN_KEYS)
+    categories = [c for c in categories if c in CONTENT_READY_DOMAIN_KEYS]
     child = state["child"]
 
     for category_key in categories:

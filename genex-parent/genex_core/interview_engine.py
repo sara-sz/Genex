@@ -38,6 +38,27 @@ from genex_core.milestones import (
     get_subdomain_to_category,
 )
 from genex_core.safety import build_safety_profile
+from parent_taxonomy.domains import BY_KEY as _CANONICAL_DOMAINS
+
+
+# ---------------------------------------------------------------------------
+# Focus-slot diversity
+# ---------------------------------------------------------------------------
+#
+# Fine Motor and Gross Motor are canonical SIBLING domains for focus-slot
+# diversity only — see the rule in choose_focus_domains. They remain two
+# distinct developmental domains everywhere else in the Brain; this constant
+# never merges them.
+#
+# Daily Living is intentionally absent. It descended from the same legacy
+# Movement bucket, but it is an independent developmental domain and competes
+# for slot 2 on its own merit.
+MOTOR_SIBLING_DOMAINS = frozenset({"fine_motor", "gross_motor"})
+
+assert MOTOR_SIBLING_DOMAINS <= set(_CANONICAL_DOMAINS), (
+    f"non-canonical domain in MOTOR_SIBLING_DOMAINS: "
+    f"{MOTOR_SIBLING_DOMAINS - set(_CANONICAL_DOMAINS)}"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -302,10 +323,12 @@ def concern_router(child: Dict[str, Any]) -> Dict[str, Any]:
         if cat_key in domain_weights:
             domain_weights[cat_key] = max(domain_weights[cat_key], float(weight))
 
-    # V22: suppress cognitive domain when parent explicitly says it's a strength
+    # V22: suppress the learning domain when the parent explicitly says it is a
+    # strength. Parent 2.4: keyed on the canonical `learning_and_thinking`;
+    # left as legacy `cognitive` this suppression would silently never apply.
     if _has_cognitive_strength_signal(combined_text):
-        domain_weights["cognitive"] = min(
-            domain_weights.get("cognitive", 0.0), 0.20
+        domain_weights["learning_and_thinking"] = min(
+            domain_weights.get("learning_and_thinking", 0.0), 0.20
         )
 
     top_subdomains = [
@@ -415,11 +438,51 @@ def choose_focus_domains(
         # This is the primary path for "speech delay + PT delay", "ADHD + social", etc.
         selected = [r["category_key"] for r in explicit[:max_domains]]
 
-        # Store any further explicit concerns as noted_concerns (not yet addressed).
-        if len(explicit) > max_domains:
+        # ---- Parent 2.4 second-slot diversity -----------------------------
+        #
+        # Splitting legacy Movement into Fine + Gross Motor created a crowd-out
+        # the four-domain Brain could not produce: a parent reporting "speech
+        # delay, OT delay, PT delay" scored gross_motor 1.00, fine_motor 0.70
+        # and talking 0.35, so the two motor siblings took BOTH slots and an
+        # explicit speech concern was silently dropped.
+        #
+        # This is SELECTION DIVERSITY ONLY. It does not merge Fine and Gross
+        # into one domain, does not change the seven-domain taxonomy, does not
+        # touch any score, weight, delay value or concern calculation, and never
+        # produces a third domain. The primary domain is always still the
+        # top-ranked one, so the founder-locked rule that initial setup starts
+        # with ONE primary developmental area is untouched.
+        #
+        # Daily Living is deliberately NOT in the sibling pair: it is an
+        # independent developmental domain and may take slot 2 on its own merit.
+        if max_domains >= 2 and len(selected) >= 2:
+            primary, second = selected[0], selected[1]
+            if (
+                primary in MOTOR_SIBLING_DOMAINS
+                and second in MOTOR_SIBLING_DOMAINS
+                and primary != second
+            ):
+                outside = next(
+                    (
+                        r["category_key"]
+                        for r in explicit
+                        if r["category_key"] not in MOTOR_SIBLING_DOMAINS
+                    ),
+                    None,
+                )
+                # Rule 4: with no explicit concern outside the pair, Fine and
+                # Gross may legitimately occupy both slots.
+                if outside is not None:
+                    selected[1] = outside
+
+        # Store any further explicit concerns as noted_concerns (not yet
+        # addressed). Derived from what was actually selected so the sibling
+        # displaced by the diversity rule is recorded rather than lost.
+        remaining = [r for r in explicit if r["category_key"] not in selected]
+        if remaining:
             state["noted_concerns"] = [
                 {"domain": r["category_key"], "concern_signal": r["concern_signal"]}
-                for r in explicit[max_domains:]
+                for r in remaining
             ]
         else:
             state.pop("noted_concerns", None)

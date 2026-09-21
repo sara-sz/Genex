@@ -24,76 +24,57 @@ Hard-block rules (from V22 spec):
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
+
+from parent_taxonomy.domains import LEGACY_AMBIGUOUS, resolve_legacy_domain
 
 
 # ---------------------------------------------------------------------------
-# Family → category mapping (hard guardrail)
+# Family → allowed domains (hard guardrail)
 # ---------------------------------------------------------------------------
+#
+# Parent 2.4: the hard-coded `FAMILY_TO_CATEGORY` dict is RETIRED. It pinned each
+# activity family to exactly ONE legacy domain, which was wrong twice over:
+#
+#   1. It could not express families that legitimately serve more than one
+#      domain — `buttoning_fasteners` is Daily Living *and* Fine Motor;
+#      `conversation_turn_taking` is Talking & Communicating *and* Social &
+#      Emotional. 27 of 56 families carry a secondary domain.
+#   2. Its values were legacy spellings. Once the Brain became seven-domain
+#      native, 45 of 56 families raised a CRITICAL
+#      `activity_family_category_mismatch` and blocked every card using them.
+#
+# The founder-reviewed workbook is now the single source of truth and the
+# allowed set is DERIVED there ({primary} ∪ secondaries) — see
+# parent_taxonomy/activity_families.py. No replacement dict lives here; a second
+# copy is exactly what drifted.
+#
+# The check below is therefore a MEMBERSHIP test, not an equality test.
 
-FAMILY_TO_CATEGORY = {
-    # Movement / Physical
-    "hop_prep": "movement_and_physical",
-    "jump_prep": "movement_and_physical",
-    "catch_ball": "movement_and_physical",
-    "bilateral_body_movement": "movement_and_physical",
-    "safe_squat_balance": "movement_and_physical",
-    "stair_step_prep": "movement_and_physical",
-    "walking_coordination": "movement_and_physical",
-    "postural_transitions": "movement_and_physical",
-    # Fine motor (also movement)
-    "beading_threading": "movement_and_physical",
-    "buttoning_fasteners": "movement_and_physical",
-    "book_page_turning": "movement_and_physical",
-    "fork_spoon_use": "movement_and_physical",
-    "dressing_on": "movement_and_physical",
-    "dressing_off": "movement_and_physical",
-    "prewriting_scribble": "movement_and_physical",
-    "block_stacking": "movement_and_physical",
-    "pincer_grasp": "movement_and_physical",
-    # Language / Communication
-    "expressive_first_words": "language_and_communication",
-    "expressive_vocabulary_growth": "language_and_communication",
-    "two_word_phrases": "language_and_communication",
-    "sentence_building": "language_and_communication",
-    "object_naming": "language_and_communication",
-    "book_object_naming": "language_and_communication",
-    "action_picture_labeling": "language_and_communication",
-    "book_picture_receptive": "language_and_communication",
-    "receptive_directions_one_step": "language_and_communication",
-    "receptive_directions_two_step": "language_and_communication",
-    "body_part_identification": "language_and_communication",
-    "gesture_communication": "language_and_communication",
-    "social_caregiver_attention": "language_and_communication",
-    "early_vocalizations": "language_and_communication",
-    "function_question_answering": "language_and_communication",
-    "conversation_turn_taking": "language_and_communication",
-    "time_words_routine": "language_and_communication",
-    "narration_storytelling": "language_and_communication",
-    # Social / Emotional
-    "peer_turn_taking": "social_and_emotional",
-    "sharing_parallel_play": "social_and_emotional",
-    "social_referencing": "social_and_emotional",
-    "imitation_social": "social_and_emotional",
-    "pretend_play_social": "social_and_emotional",
-    "emotion_recognition": "social_and_emotional",
-    "helper_context": "social_and_emotional",
-    "caregiver_affection": "social_and_emotional",
-    "face_recognition": "social_and_emotional",
-    "laughter_joy": "social_and_emotional",
-    "peekaboo_social": "social_and_emotional",
-    # Cognitive / Adaptive
-    "visual_attention_tracking": "cognitive",
-    "object_permanence": "cognitive",
-    "matching_sorting": "cognitive",
-    "color_shape_sorting": "cognitive",
-    "counting_one_to_one": "cognitive",
-    "letter_recognition": "cognitive",
-    "cause_effect": "cognitive",
-    "routine_following": "cognitive",
-    "attention_focus": "cognitive",
-    "problem_solving": "cognitive",
-}
+
+def _allowed_domains_for_family(fam: str) -> Optional[FrozenSet[str]]:
+    """Canonical domains `fam` may serve, or None when the family is unknown.
+
+    Imported lazily: the workbook read is deferred until a card is actually
+    validated, so importing this module stays cheap.
+    """
+    from parent_taxonomy.activity_families import allowed_domains
+
+    return allowed_domains(fam)
+
+
+# Derived from the legacy vocabulary rather than restated, so these rules cannot
+# drift from parent_taxonomy.
+#
+# Rules 5 and 6 below were still keyed on legacy spellings after PARENT-0.3B.
+# Left that way they were silent-failure bugs: rule 5 (a CRITICAL check) would
+# never fire again, and rule 6 would fire on every card including genuine motor
+# ones, since no category_key equals "movement_and_physical" any more.
+_TALKING_DOMAIN = resolve_legacy_domain("language_and_communication")
+
+#: Domains for which motor content in the instructions is expected, not a smell.
+#: Legacy `movement_and_physical` split into exactly these three.
+_MOTOR_DOMAINS: FrozenSet[str] = frozenset(LEGACY_AMBIGUOUS["movement_and_physical"])
 
 # Gross motor patterns that should NOT appear in non-movement activity instructions
 _MOTOR_GAME_PATTERN = re.compile(
@@ -214,16 +195,23 @@ def validate_activity(
     if _GENERIC_TITLE_PATTERN.match(title):
         warnings.append(f"title_generic:{title}")
 
-    # 4. activity_family mismatch
+    # 4. activity_family / domain mismatch
+    #
+    # Membership, not equality: a family may legitimately serve several domains.
+    # An UNKNOWN family yields None and is PERMISSIVE — the same behaviour as the
+    # retired dict's .get() returning None. This taxonomy covers the 56 families
+    # the old dict knew, not every family the Gold Standard or activity_engine
+    # can emit, so blocking unknowns would be a new and much wider rule.
     fam = str(activity.get("activity_family", "") or "").strip().lower()
-    expected_cat = FAMILY_TO_CATEGORY.get(fam)
-    if expected_cat and expected_cat != category_key:
+    allowed = _allowed_domains_for_family(fam)
+    if allowed is not None and category_key not in allowed:
         warnings.append(
-            f"activity_family_category_mismatch:{fam}->{expected_cat} not {category_key}"
+            f"activity_family_category_mismatch:{fam}->"
+            f"{'|'.join(sorted(allowed))} not {category_key}"
         )
 
     # 5. Language goal using gross motor activity
-    if category_key == "language_and_communication":
+    if category_key == _TALKING_DOMAIN:
         motor_match = _MOTOR_GAME_PATTERN.search(
             str(activity.get("instructions", "") or "")
         )
@@ -231,7 +219,7 @@ def validate_activity(
             warnings.append(f"language_card_contains_motor_game:{motor_match.group()}")
 
     # 6. Non-movement card contains motor activity in main instructions
-    if category_key != "movement_and_physical":
+    if category_key not in _MOTOR_DOMAINS:
         motor_match = _MOTOR_GAME_PATTERN.search(
             str(activity.get("instructions", "") or "")
         )

@@ -77,28 +77,54 @@ from genex_core.scheduler import allocate_weekly_slots, build_weekly_schedule
 
 
 # ---------------------------------------------------------------------------
+# Parent 2.4 canonical vocabulary
+# ---------------------------------------------------------------------------
+#
+# Legacy `movement_and_physical` split into three canonical domains, so an
+# assertion that used to read "movement is in focus" has no single successor.
+# The faithful translation is membership: at least one of its three successors.
+# That is EXACTLY equivalent to the old assertion, not a relaxation of it —
+# and the negative form ("movement must NOT be in focus") becomes strictly
+# stronger, since all three must be absent.
+#
+# Where a test's intent is specifically locomotor (jumping, balance, walking) or
+# specifically hand use, the concrete domain is used directly instead.
+MOTOR_DOMAINS = {"fine_motor", "gross_motor", "daily_living"}
+
+
+def _motor_in(focus) -> bool:
+    """True when any canonical successor of legacy Movement is present."""
+    return bool(MOTOR_DOMAINS & set(focus))
+
+
+def _count_motor(category_keys) -> int:
+    """Count slots in any canonical successor of legacy Movement."""
+    return sum(1 for c in category_keys if c in MOTOR_DOMAINS)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _make_state_with_lang_delay(chrono=24, dev_age=12):
     """State with language delay: chrono=24m, dev_age=12m."""
     state = init_state_from_profile("your child", chrono, "None", "not speaking many words", 10)
-    state["qna"]["language_and_communication"] = [
+    state["qna"]["talking_and_communicating"] = [
         {"months": 6,  "milestone": "babbles",         "norm_answer": "yes",  "scoring_norm_answer": "yes",  "subdomain": "early_vocalization_and_babbling"},
         {"months": 12, "milestone": "says mama/dada",  "norm_answer": "yes",  "scoring_norm_answer": "yes",  "subdomain": "expressive_language"},
         {"months": 18, "milestone": "uses 5-10 words", "norm_answer": "no",   "scoring_norm_answer": "no",   "subdomain": "expressive_language"},
         {"months": 24, "milestone": "2-word phrases",  "norm_answer": "no",   "scoring_norm_answer": "no",   "subdomain": "expressive_language"},
     ]
-    state["dev_age"]["language_and_communication"] = dev_age
-    state["delay_estimates"]["language_and_communication"] = {"delay_months": chrono - dev_age}
-    state["concern_profile"]["domain_weights"]["language_and_communication"] = 0.75
+    state["dev_age"]["talking_and_communicating"] = dev_age
+    state["delay_estimates"]["talking_and_communicating"] = {"delay_months": chrono - dev_age}
+    state["concern_profile"]["domain_weights"]["talking_and_communicating"] = 0.75
     return state
 
 
 def _make_state_at_ceiling(chrono=36):
     """State where child is at ceiling — all milestones answered yes."""
     state = init_state_from_profile("your child", chrono, "None", "speech sounds unclear", 10)
-    state["qna"]["language_and_communication"] = [
+    state["qna"]["talking_and_communicating"] = [
         {"months": 6,  "milestone": "babbles",         "norm_answer": "yes", "scoring_norm_answer": "yes", "subdomain": "early_vocalization_and_babbling"},
         {"months": 12, "milestone": "says mama/dada",  "norm_answer": "yes", "scoring_norm_answer": "yes", "subdomain": "expressive_language"},
         {"months": 18, "milestone": "uses 5-10 words", "norm_answer": "yes", "scoring_norm_answer": "yes", "subdomain": "expressive_language"},
@@ -106,9 +132,9 @@ def _make_state_at_ceiling(chrono=36):
         {"months": 30, "milestone": "uses pronouns",   "norm_answer": "yes", "scoring_norm_answer": "yes", "subdomain": "expressive_language"},
         {"months": 36, "milestone": "3-word sentences","norm_answer": "yes", "scoring_norm_answer": "yes", "subdomain": "expressive_language"},
     ]
-    state["dev_age"]["language_and_communication"] = chrono
-    state["delay_estimates"]["language_and_communication"] = {"delay_months": 0}
-    state["concern_profile"]["domain_weights"]["language_and_communication"] = 0.55
+    state["dev_age"]["talking_and_communicating"] = chrono
+    state["delay_estimates"]["talking_and_communicating"] = {"delay_months": 0}
+    state["concern_profile"]["domain_weights"]["talking_and_communicating"] = 0.55
     return state
 
 
@@ -121,7 +147,7 @@ def test_case1_language_delay_bridge_plan():
     state = _make_state_with_lang_delay(chrono=24, dev_age=12)
 
     # Bridge plan via support_tiers
-    plan = build_v22_plan_for_category(state, "language_and_communication")
+    plan = build_v22_plan_for_category(state, "talking_and_communicating")
     bridges = plan.get("active_bridge_steps", [])
 
     assert not plan["skipped"], "Plan should not be skipped for a 12m delay"
@@ -138,7 +164,7 @@ def test_case1_language_delay_bridge_plan():
         assert b.get("initial_plan") == True, "initial_plan flag missing"
 
     # Activity bank
-    bank = generate_category_activity_bank(state, "language_and_communication")
+    bank = generate_category_activity_bank(state, "talking_and_communicating")
     activities = bank.get("activities", [])
     assert len(activities) >= 1, f"Expected activities, got {len(activities)}"
 
@@ -176,7 +202,7 @@ def test_case2_no_clear_gap():
     state = _make_state_at_ceiling(chrono=36)
 
     from genex_core.bridge_selector import select_next_milestones
-    result = select_next_milestones(state, "language_and_communication")
+    result = select_next_milestones(state, "talking_and_communicating")
 
     # Should find milestones (concern-support path) because parent has concern
     # Even if no gap, parent expressed concern → concern-support mode or standard
@@ -184,7 +210,7 @@ def test_case2_no_clear_gap():
     mode = result.get("mode", "")
 
     # The key invariant: if parent has concern weight ≥ 0.10, must not return empty milestones
-    concern_weight = state["concern_profile"]["domain_weights"].get("language_and_communication", 0)
+    concern_weight = state["concern_profile"]["domain_weights"].get("talking_and_communicating", 0)
     if float(concern_weight) >= 0.10:
         # Either standard or concern-support mode — neither should be "no_targets" with empty milestones
         # (unless the table genuinely has no rows, which won't happen for language_and_communication)
@@ -257,7 +283,7 @@ def test_case4_validation_hard_block():
         "materials": "Materials that match the bridge step",
         "activity_family": "expressive_first_words",
     }
-    valid, warnings = validate_activity(placeholder, "language_and_communication")
+    valid, warnings = validate_activity(placeholder, "talking_and_communicating")
     assert not valid, f"Placeholder should be blocked, warnings: {warnings}"
     assert any("placeholder_wording" in w for w in warnings), f"Expected placeholder_wording warning: {warnings}"
     print(f"  ✓ placeholder blocked: {[w[:50] for w in warnings if 'placeholder' in w]}")
@@ -269,7 +295,7 @@ def test_case4_validation_hard_block():
         "materials": "Colored stickers",
         "activity_family": "expressive_first_words",
     }
-    valid2, warnings2 = validate_activity(motor_lang, "language_and_communication")
+    valid2, warnings2 = validate_activity(motor_lang, "talking_and_communicating")
     assert not valid2, f"Motor-in-language should be blocked, warnings: {warnings2}"
     assert any("language_card_contains_motor_game" in w for w in warnings2), (
         f"Expected language_card_contains_motor_game warning: {warnings2}"
@@ -283,7 +309,7 @@ def test_case4_validation_hard_block():
         "materials": "3 familiar toys",
         "activity_family": "expressive_first_words",
     }
-    valid3, warnings3 = validate_activity(good, "language_and_communication")
+    valid3, warnings3 = validate_activity(good, "talking_and_communicating")
     assert valid3, f"Valid activity should pass, warnings: {warnings3}"
     print(f"  ✓ valid activity passes: no critical warnings")
 
@@ -294,7 +320,7 @@ def test_case4_validation_hard_block():
         "materials": "Toys",
         "activity_family": "expressive_first_words",
     }
-    valid4, warnings4 = validate_activity(debug_title, "language_and_communication")
+    valid4, warnings4 = validate_activity(debug_title, "talking_and_communicating")
     assert not valid4, f"Debug suffix in title should be blocked, warnings: {warnings4}"
     print(f"  ✓ debug suffix in title blocked: {[w[:50] for w in warnings4 if 'debug' in w]}")
 
@@ -308,7 +334,7 @@ def test_case5_feedback_signals():
 
     state = _make_state_with_lang_delay()
     state["bridge_plans"] = {
-        "language_and_communication": {
+        "talking_and_communicating": {
             "active_bridge_steps": [
                 {
                     "milestone": "uses 5-10 words",
@@ -326,26 +352,26 @@ def test_case5_feedback_signals():
     # 5a: 3x done_independently → advance signal
     for _ in range(3):
         record_activity_feedback(
-            state, "language_and_communication", "Word Practice",
+            state, "talking_and_communicating", "Word Practice",
             "just_right", "done_independently", "enjoyed_it", cycle_week=1
         )
     sig = detect_mastery_signal(
-        state["activity_feedback"]["language_and_communication"]["Word Practice"]
+        state["activity_feedback"]["talking_and_communicating"]["Word Practice"]
     )
     assert sig == "advance", f"Expected advance, got {sig}"
     print(f"  ✓ 3x done_independently → advance signal")
 
     # 5b: advance_milestone removes from active bridges
-    result = advance_milestone(state, "language_and_communication", "uses 5-10 words")
+    result = advance_milestone(state, "talking_and_communicating", "uses 5-10 words")
     assert result["advanced"]
-    remaining = len(state["bridge_plans"]["language_and_communication"]["active_bridge_steps"])
+    remaining = len(state["bridge_plans"]["talking_and_communicating"]["active_bridge_steps"])
     assert remaining == 0, f"Expected 0 remaining, got {remaining}"
     print(f"  ✓ advance_milestone removes bridge step (remaining: {remaining})")
 
     # 5c: Reset + 2x too_hard → fallback signal
     state2 = _make_state_with_lang_delay()
     state2["bridge_plans"] = {
-        "language_and_communication": {
+        "talking_and_communicating": {
             "active_bridge_steps": [
                 {
                     "milestone": "2-word phrases",
@@ -361,19 +387,19 @@ def test_case5_feedback_signals():
     }
     for _ in range(2):
         record_activity_feedback(
-            state2, "language_and_communication", "Two-Word Activity",
+            state2, "talking_and_communicating", "Two-Word Activity",
             "too_hard", "couldnt_do_it", "resisted_it", cycle_week=1
         )
     sig2 = detect_mastery_signal(
-        state2["activity_feedback"]["language_and_communication"]["Two-Word Activity"]
+        state2["activity_feedback"]["talking_and_communicating"]["Two-Word Activity"]
     )
     assert sig2 == "fallback", f"Expected fallback, got {sig2}"
     print(f"  ✓ 2x too_hard + couldnt_do_it → fallback signal")
 
     # 5d: apply_fallback swaps bridge step
-    fb_result = apply_fallback(state2, "language_and_communication", "2-word phrases")
+    fb_result = apply_fallback(state2, "talking_and_communicating", "2-word phrases")
     assert fb_result["applied"], f"Fallback not applied: {fb_result}"
-    active_step = state2["bridge_plans"]["language_and_communication"]["active_bridge_steps"][0]["bridge_step"]
+    active_step = state2["bridge_plans"]["talking_and_communicating"]["active_bridge_steps"][0]["bridge_step"]
     assert active_step == "practice single target words", (
         f"Expected previous bridge step, got: {active_step}"
     )
@@ -383,14 +409,14 @@ def test_case5_feedback_signals():
     state3 = _make_state_with_lang_delay()
     for _ in range(2):
         record_activity_feedback(
-            state3, "language_and_communication", "Activity X",
+            state3, "talking_and_communicating", "Activity X",
             "just_right", "done_with_help", "resisted_it", cycle_week=1
         )
     sig3 = detect_mastery_signal(
-        state3["activity_feedback"]["language_and_communication"]["Activity X"]
+        state3["activity_feedback"]["talking_and_communicating"]["Activity X"]
     )
     assert sig3 == "rotate", f"Expected rotate, got {sig3}"
-    rot = apply_theme_rotation(state3, "language_and_communication")
+    rot = apply_theme_rotation(state3, "talking_and_communicating")
     assert rot["rotated"]
     print(f"  ✓ 2x resisted → rotate signal → theme rotation applied (week {rot['from_week']}→{rot['to_week']})")
 
@@ -404,7 +430,7 @@ def test_case5_feedback_signals():
 def test_case6_parent_explanation_in_questions():
     print("\n─── Case 6: parent_explanation in question dicts ───")
     state = _make_state_with_lang_delay(chrono=24, dev_age=12)
-    qs = build_milestone_questions(state, "language_and_communication", max_questions_total=9)
+    qs = build_milestone_questions(state, "talking_and_communicating", max_questions_total=9)
     assert len(qs) >= 1, "Expected at least 1 question"
     missing = [q for q in qs if not q.get("parent_explanation", "").strip()]
     present = len(qs) - len(missing)
@@ -424,7 +450,7 @@ def test_case7_no_variation_labels_no_duplicate_instructions():
     print("\n─── Case 7: No variation labels, no duplicate instructions ───")
     state = _make_state_with_lang_delay(chrono=54, dev_age=36)
     state["concern_profile"]["domain_weights"]["social_and_emotional"] = 0.70
-    state["concern_profile"]["domain_weights"]["language_and_communication"] = 0.65
+    state["concern_profile"]["domain_weights"]["talking_and_communicating"] = 0.65
     state["dev_age"]["social_and_emotional"] = 36
     state["delay_estimates"]["social_and_emotional"] = {"delay_months": 18}
 
@@ -432,7 +458,7 @@ def test_case7_no_variation_labels_no_duplicate_instructions():
     variation_violations = []
     instr_duplicates = []
 
-    for dk in ["social_and_emotional", "language_and_communication"]:
+    for dk in ["social_and_emotional", "talking_and_communicating"]:
         bank = generate_category_activity_bank(state, dk)
         acts = bank.get("activities", [])
         for a in acts:
@@ -473,7 +499,7 @@ _INTERNAL_TERMS = [
 def test_case8_no_internal_language_in_parent_fields():
     print("\n─── Case 8: No internal language in parent-facing fields ───")
     state = _make_state_with_lang_delay(chrono=24, dev_age=12)
-    bank  = generate_category_activity_bank(state, "language_and_communication")
+    bank  = generate_category_activity_bank(state, "talking_and_communicating")
     acts  = bank.get("activities", [])
     PARENT_FIELDS = ["title", "instructions", "why", "success", "materials",
                      "easier", "harder", "avoid", "group_play"]
@@ -498,11 +524,11 @@ def test_case8_no_internal_language_in_parent_fields():
 def _make_maya_state():
     """Approximate Maya test case: 54m chrono, speech delay + social concern, 10m/day."""
     state = init_state_from_profile("your child", 54, "None", "speech delay and social concern", 10)
-    state["dev_age"]["language_and_communication"] = 36
+    state["dev_age"]["talking_and_communicating"] = 36
     state["dev_age"]["social_and_emotional"] = 36
-    state["delay_estimates"]["language_and_communication"] = {"delay_months": 18}
+    state["delay_estimates"]["talking_and_communicating"] = {"delay_months": 18}
     state["delay_estimates"]["social_and_emotional"] = {"delay_months": 18}
-    state["concern_profile"]["domain_weights"]["language_and_communication"] = 0.70
+    state["concern_profile"]["domain_weights"]["talking_and_communicating"] = 0.70
     state["concern_profile"]["domain_weights"]["social_and_emotional"] = 0.70
     state["child"]["daily_time_min"] = 10
     return state
@@ -520,7 +546,7 @@ def test_case9_week1_schedule_uniqueness():
         if state["concern_profile"]["domain_weights"].get(dk, 0) >= 0.5
     ]
     if not focus_domains:
-        focus_domains = ["language_and_communication"]
+        focus_domains = ["talking_and_communicating"]
 
     for dk in focus_domains:
         plan = build_v22_plan_for_category(state, dk)
@@ -602,7 +628,7 @@ def test_case10_activity_bank_no_per_bridge_core_duplicates():
     print("\n─── Case 10: Activity bank — no per-bridge core duplicate titles ───")
     state = _make_maya_state()
 
-    for dk in ["social_and_emotional", "language_and_communication"]:
+    for dk in ["social_and_emotional", "talking_and_communicating"]:
         bank = generate_category_activity_bank(state, dk)
         acts = bank.get("activities", [])
 
@@ -668,9 +694,9 @@ def _make_adhd_state():
         "your child", 60, "ADHD",
         "hyperactivity, trouble focusing, difficulty finishing tasks", 10,
     )
-    state["dev_age"]["cognitive"] = 48
+    state["dev_age"]["learning_and_thinking"] = 48
     state["dev_age"]["social_and_emotional"] = 48
-    state["delay_estimates"]["cognitive"] = {"delay_months": 12}
+    state["delay_estimates"]["learning_and_thinking"] = {"delay_months": 12}
     state["delay_estimates"]["social_and_emotional"] = {"delay_months": 12}
     ensure_concern_profile(state)
     return state
@@ -731,19 +757,19 @@ def test_case11_dravet_safety():
 
     # ── 2. Focus domains ─────────────────────────────────────────────────────
     focus = choose_focus_domains(state)
-    assert "movement_and_physical" in focus, (
-        f"Expected movement_and_physical in focus domains: {focus}"
+    assert _motor_in(focus), (
+        f"Expected a motor domain in focus domains: {focus}"
     )
-    assert "language_and_communication" in focus, (
+    assert "talking_and_communicating" in focus, (
         f"Expected language_and_communication in focus domains: {focus}"
     )
     print(f"  ✓ Focus domains: {focus}")
 
     # ── 3. Activity bank — no risky movement language ─────────────────────────
     # Build the movement bank (safety pass is now wired into generate_category_activity_bank)
-    plan = build_v22_plan_for_category(state, "movement_and_physical")
-    state.setdefault("bridge_plans", {})["movement_and_physical"] = plan
-    bank = generate_category_activity_bank(state, "movement_and_physical")
+    plan = build_v22_plan_for_category(state, "gross_motor")
+    state.setdefault("bridge_plans", {})["gross_motor"] = plan
+    bank = generate_category_activity_bank(state, "gross_motor")
     acts = bank.get("activities", [])
     assert acts, "Movement bank must have at least one valid activity"
 
@@ -798,7 +824,7 @@ def test_case11_dravet_safety():
             "avoid": "",
             "duration_min": 5,
             "activity_family": "jump_prep",
-            "category_key": "movement_and_physical",
+            "category_key": "gross_motor",
             "_debug": {"activity_type": "core", "llm_used": True},
         },
         {
@@ -808,12 +834,12 @@ def test_case11_dravet_safety():
             "avoid": "",
             "duration_min": 5,
             "activity_family": "jump_prep",
-            "category_key": "movement_and_physical",
+            "category_key": "gross_motor",
             "_debug": {"activity_type": "core", "llm_used": True},
         },
     ]
     safe_llm = apply_safety_constraints_to_activities(
-        state, "movement_and_physical", llm_like_activities
+        state, "gross_motor", llm_like_activities
     )
     llm_risky = [
         a["title"] for a in safe_llm
@@ -853,12 +879,12 @@ def test_case12_adhd_exact_profile():
 
     # ── 1. Focus domains ─────────────────────────────────────────────────────
     focus = choose_focus_domains(state)
-    assert "cognitive" in focus, f"Expected cognitive in ADHD focus domains: {focus}"
+    assert "learning_and_thinking" in focus, f"Expected cognitive in ADHD focus domains: {focus}"
     assert "social_and_emotional" in focus, (
         f"Expected social_and_emotional in ADHD focus domains: {focus}"
     )
-    assert "movement_and_physical" not in focus, (
-        f"movement_and_physical should NOT be in focus for ADHD without motor concern: {focus}"
+    assert not _motor_in(focus), (
+        f"no motor domain should be in focus for ADHD without motor concern: {focus}"
     )
     print(f"  ✓ Focus domains: {focus}")
 
@@ -872,7 +898,7 @@ def test_case12_adhd_exact_profile():
     # ── 3. Build banks ────────────────────────────────────────────────────────
     all_core_titles: dict = {}
     all_instructions: dict = {}
-    for dk in ["social_and_emotional", "cognitive"]:
+    for dk in ["social_and_emotional", "learning_and_thinking"]:
         plan = build_v22_plan_for_category(state, dk)
         state.setdefault("bridge_plans", {})[dk] = plan
         bank = generate_category_activity_bank(state, dk)
@@ -958,7 +984,7 @@ def test_case12_adhd_exact_profile():
     cognitive_items = [
         item for d in WEEKDAYS
         for item in days.get(d, {}).get("items", [])
-        if item.get("category_key") == "cognitive"
+        if item.get("category_key") == "learning_and_thinking"
     ]
     why_failures = []
     for item in cognitive_items:
@@ -996,7 +1022,7 @@ def test_case13_speech_delay_only():
 
     # ── 1. Routing: language only ─────────────────────────────────────────────
     domain_weights = state["concern_profile"]["domain_weights"]
-    lang_w = domain_weights.get("language_and_communication", 0)
+    lang_w = domain_weights.get("talking_and_communicating", 0)
     social_w = domain_weights.get("social_and_emotional", 0)
 
     assert lang_w >= 0.30, f"Expected language weight >= 0.30, got {lang_w}"
@@ -1009,20 +1035,20 @@ def test_case13_speech_delay_only():
 
     # Delay signal alone must NOT pull in social_and_emotional
     state["delay_estimates"]["social_and_emotional"] = {"delay_months": 6}
-    state["delay_estimates"]["language_and_communication"] = {"delay_months": 10}
+    state["delay_estimates"]["talking_and_communicating"] = {"delay_months": 10}
     focus = choose_focus_domains(state)
 
-    assert focus == ["language_and_communication"], (
+    assert focus == ["talking_and_communicating"], (
         f"Speech-delay-only should select ONLY language domain, got: {focus}"
     )
     print(f"  ✓ choose_focus_domains = {focus}")
     print(f"  ✓ Delay signal alone did NOT pull in social_and_emotional")
 
     # ── 2. Build plan + bank ─────────────────────────────────────────────────
-    plan = build_v22_plan_for_category(state, "language_and_communication")
-    state.setdefault("bridge_plans", {})["language_and_communication"] = plan
-    bank = generate_category_activity_bank(state, "language_and_communication")
-    state.setdefault("activity_banks", {})["language_and_communication"] = bank
+    plan = build_v22_plan_for_category(state, "talking_and_communicating")
+    state.setdefault("bridge_plans", {})["talking_and_communicating"] = plan
+    bank = generate_category_activity_bank(state, "talking_and_communicating")
+    state.setdefault("activity_banks", {})["talking_and_communicating"] = bank
     acts = bank.get("activities", [])
     assert acts, "Language bank must have activities"
     print(f"  ✓ Language bank: {len(acts)} activities")
@@ -1030,7 +1056,7 @@ def test_case13_speech_delay_only():
     # All activities must carry category_key = language_and_communication
     wrong_cat = [
         a["title"] for a in acts
-        if a.get("category_key") != "language_and_communication"
+        if a.get("category_key") != "talking_and_communicating"
     ]
     assert not wrong_cat, (
         f"Activities with wrong category_key in language bank: {wrong_cat}"
@@ -1056,7 +1082,7 @@ def test_case13_speech_delay_only():
         (d, item.get("title"), item.get("category_key"))
         for d in WEEKDAYS
         for item in days.get(d, {}).get("items", [])
-        if item.get("category_key") != "language_and_communication"
+        if item.get("category_key") != "talking_and_communicating"
     ]
     assert not wrong_domain_items, (
         f"Non-language activities in speech-delay-only schedule: {wrong_domain_items}"
@@ -1065,7 +1091,7 @@ def test_case13_speech_delay_only():
 
     # ── 4. Parent-facing label ───────────────────────────────────────────────
     from genex_core.config import DOMAIN_CONFIG
-    lang_display = DOMAIN_CONFIG["language_and_communication"]["display"]
+    lang_display = DOMAIN_CONFIG["talking_and_communicating"]["display"]
     # In app.py this is mapped through DOMAIN_LABELS to "Talking and Communicating"
     # Here we just verify the category field on each scheduled item
     for d in WEEKDAYS:
@@ -1076,7 +1102,7 @@ def test_case13_speech_delay_only():
             )
     print(f"  ✓ All scheduled items carry category = {lang_display!r}")
     print(f"  ✓ (maps to 'Talking and Communicating' via DOMAIN_LABELS in app.py)")
-    lang_w = domain_weights.get("language_and_communication", 0)
+    lang_w = domain_weights.get("talking_and_communicating", 0)
     social_w = domain_weights.get("social_and_emotional", 0)
     assert lang_w >= 0.30, f"Expected language weight >= 0.30, got {lang_w}"
     print(f"  ✓ language_and_communication weight = {round(lang_w, 2)}")
@@ -1084,10 +1110,10 @@ def test_case13_speech_delay_only():
 
     # Delay estimates: even if social has some delay, concern_signal guard should prevent selection
     state["delay_estimates"]["social_and_emotional"] = {"delay_months": 6}
-    state["delay_estimates"]["language_and_communication"] = {"delay_months": 10}
+    state["delay_estimates"]["talking_and_communicating"] = {"delay_months": 10}
 
     focus = choose_focus_domains(state)
-    assert focus == ["language_and_communication"], (
+    assert focus == ["talking_and_communicating"], (
         f"Speech-delay-only concern should select only language domain, got: {focus}"
     )
     print(f"  ✓ choose_focus_domains = {focus}")
@@ -1219,9 +1245,9 @@ def test_case16_speech_delay_bridge_spread():
     state["child"]["daily_time_min"] = 15
     ensure_concern_profile(state)
     from genex_core.support_tiers import build_v22_plan_for_category
-    plan = build_v22_plan_for_category(state, "language_and_communication")
-    state.setdefault("bridge_plans", {})["language_and_communication"] = plan
-    bank = generate_category_activity_bank(state, "language_and_communication")
+    plan = build_v22_plan_for_category(state, "talking_and_communicating")
+    state.setdefault("bridge_plans", {})["talking_and_communicating"] = plan
+    bank = generate_category_activity_bank(state, "talking_and_communicating")
     acts = bank.get("activities", [])
     core = [a for a in acts if a.get("_debug", {}).get("activity_type") == "core"]
 
@@ -1269,9 +1295,9 @@ def test_case17_near_duplicate_detection():
     from genex_core.support_tiers import build_v22_plan_for_category
     from genex_core.scheduler import allocate_weekly_slots as _alloc
     _alloc(dravet_state)
-    plan = build_v22_plan_for_category(dravet_state, "movement_and_physical")
-    dravet_state.setdefault("bridge_plans", {})["movement_and_physical"] = plan
-    bank = generate_category_activity_bank(dravet_state, "movement_and_physical")
+    plan = build_v22_plan_for_category(dravet_state, "gross_motor")
+    dravet_state.setdefault("bridge_plans", {})["gross_motor"] = plan
+    bank = generate_category_activity_bank(dravet_state, "gross_motor")
     acts = bank.get("activities", [])
     titles = [a.get("title", "") for a in acts if a.get("_debug", {}).get("activity_type") == "core"]
     from collections import Counter
@@ -1313,7 +1339,7 @@ def test_case17_near_duplicate_detection():
         "what_to_avoid": "Don't rush.",
         "group_play_line": "Two children can take turns.",
     }
-    _valid, warnings = validate_activity(bad_activity, "language_and_communication")
+    _valid, warnings = validate_activity(bad_activity, "talking_and_communicating")
     mismatch_warns = [w for w in warnings if "mismatch" in w or "body_part" in w]
     assert mismatch_warns, (
         f"Expected body-part mismatch warning for 'Touch Your Nose' + give-me instructions, got: {warnings}"
@@ -1336,10 +1362,16 @@ def test_case18_dravet_stomp_squat_blocked():
 
     dravet_state = _make_dravet_state()
     ensure_concern_profile(dravet_state)
-    plan = build_v22_plan_for_category(dravet_state, "movement_and_physical")
-    dravet_state.setdefault("bridge_plans", {})["movement_and_physical"] = plan
-    bank = generate_category_activity_bank(dravet_state, "movement_and_physical")
+    plan = build_v22_plan_for_category(dravet_state, "gross_motor")
+    dravet_state.setdefault("bridge_plans", {})["gross_motor"] = plan
+    bank = generate_category_activity_bank(dravet_state, "gross_motor")
     acts = bank.get("activities", [])
+
+    # NON-VACUITY GUARD. This test previously passed while asserting NOTHING:
+    # it built the bank with the legacy key `movement_and_physical`, which the
+    # seven-domain Brain never emits, so `acts` was empty and the safety loop
+    # below never executed. An empty bank must fail loudly, not report success.
+    assert acts, "Dravet gross_motor bank is empty — safety assertions would be vacuous"
 
     _RISKY_EXT = re.compile(
         r"\b(jump(ing)?|hop(ping)?|race|racing|obstacle|climb(ing)?|"
@@ -1403,7 +1435,7 @@ def test_case19_adhd_age_appropriate():
     cognitive_items = [
         item for d in WEEKDAYS
         for item in days.get(d, {}).get("items", [])
-        if item.get("category_key") == "cognitive"
+        if item.get("category_key") == "learning_and_thinking"
     ]
     matches = [
         item for item in cognitive_items
@@ -1566,12 +1598,12 @@ def test_case22_ot_pt_routing():
     focus = choose_focus_domains(chao_state)
     print(f"  Focus domains: {focus}")
 
-    assert "language_and_communication" in focus, (
+    assert "talking_and_communicating" in focus, (
         f"Expected language in focus, got {focus}"
     )
     # Should route to movement (PT/gross motor) OR movement (OT/fine motor) — both map to movement_and_physical
-    assert "movement_and_physical" in focus, (
-        f"Expected movement_and_physical in focus (OT/PT keywords), got {focus}"
+    assert _motor_in(focus), (
+        f"Expected a motor domain in focus (OT/PT keywords), got {focus}"
     )
     # Social is stated as good — should NOT be a focus domain
     assert "social_and_emotional" not in focus, (
@@ -1909,11 +1941,11 @@ def test_case27_ot_pt_speech_routing():
     ensure_concern_profile(state)
     allocate_weekly_slots(state)
     focus = choose_focus_domains(state)
-    assert "language_and_communication" in focus, (
+    assert "talking_and_communicating" in focus, (
         f"'speech delay, OT delay, PT delay' should include language domain; got {focus}"
     )
-    assert "movement_and_physical" in focus, (
-        f"'speech delay, OT delay, PT delay' should include movement domain; got {focus}"
+    assert _motor_in(focus), (
+        f"'speech delay, OT delay, PT delay' should include a motor domain; got {focus}"
     )
     assert "social_and_emotional" not in focus, (
         f"social should NOT be selected for speech+OT+PT profile; got {focus}"
@@ -1989,7 +2021,7 @@ def test_case29_success_domain_mismatch_blocked():
         "make_easier": "Sit closer together.",
         "make_harder": "Add a name call before each roll.",
     }
-    is_valid, warnings = validate_activity(ball_bad, "movement_and_physical")
+    is_valid, warnings = validate_activity(ball_bad, "gross_motor")
     assert not is_valid, "Ball activity with foot/balance success must be blocked"
     assert any("success_domain_mismatch" in w for w in warnings), (
         f"Expected success_domain_mismatch warning, got: {warnings}"
@@ -2006,7 +2038,7 @@ def test_case29_success_domain_mismatch_blocked():
         "make_easier": "Sit closer together.",
         "make_harder": "Add a name call before each roll.",
     }
-    is_valid, warnings = validate_activity(ball_good, "movement_and_physical")
+    is_valid, warnings = validate_activity(ball_good, "gross_motor")
     critical = [w for w in warnings if "success_domain_mismatch" in w]
     assert not critical, f"Correct ball activity should not have mismatch warning, got: {warnings}"
     print("  ✓ Ball activity with correct success criteria: passes")
@@ -2021,7 +2053,7 @@ def test_case29_success_domain_mismatch_blocked():
         "make_easier": "Hold the pipe cleaner steady.",
         "make_harder": "Use beads of two different colours.",
     }
-    is_valid, warnings = validate_activity(bead_bad, "movement_and_physical")
+    is_valid, warnings = validate_activity(bead_bad, "fine_motor")
     assert not is_valid, "Bead activity with crayon success must be blocked"
     assert any("success_domain_mismatch" in w for w in warnings), (
         f"Expected success_domain_mismatch warning, got: {warnings}"
@@ -2038,7 +2070,7 @@ def test_case29_success_domain_mismatch_blocked():
         "make_easier": "Hold the pipe cleaner steady.",
         "make_harder": "Use beads of two different colours.",
     }
-    is_valid, warnings = validate_activity(bead_good, "movement_and_physical")
+    is_valid, warnings = validate_activity(bead_good, "fine_motor")
     critical = [w for w in warnings if "success_domain_mismatch" in w]
     assert not critical, f"Correct bead activity should not have mismatch warning, got: {warnings}"
     print("  ✓ Bead activity with correct success criteria: passes")
@@ -2253,11 +2285,11 @@ def test_case33_multi_concern_routing():
     assert len(focus) == 2, (
         f"speech + OT + PT should produce 2 focus domains, got {len(focus)}: {focus}"
     )
-    assert "language_and_communication" in focus, (
+    assert "talking_and_communicating" in focus, (
         f"language_and_communication must be in focus for speech delay; got {focus}"
     )
-    assert "movement_and_physical" in focus, (
-        f"movement_and_physical must be in focus for OT/PT delay; got {focus}"
+    assert _motor_in(focus), (
+        f"a motor domain must be in focus for OT/PT delay; got {focus}"
     )
     print(f"  ✓ focus = {focus} (language + movement, max 2)")
 
@@ -2283,8 +2315,8 @@ def test_case33_multi_concern_routing():
         for day in WEEKDAYS
         for item in days.get(day, {}).get("items", [])
     ]
-    lang_count = all_cats.count("language_and_communication")
-    move_count = all_cats.count("movement_and_physical")
+    lang_count = all_cats.count("talking_and_communicating")
+    move_count = _count_motor(all_cats)
     total = len(all_cats)
 
     assert total == 10, f"Expected 10 weekday slots, got {total}"
@@ -2296,7 +2328,7 @@ def test_case33_multi_concern_routing():
     state2 = init_state_from_profile("K", 36, "", "speech delay, not talking much", 5)
     ensure_concern_profile(state2)
     focus2 = choose_focus_domains(state2)
-    assert focus2 == ["language_and_communication"], (
+    assert focus2 == ["talking_and_communicating"], (
         f"Speech-only concern must produce only language domain; got {focus2}"
     )
     print(f"  ✓ speech-only guard: {focus2} (single domain, no inflation)")
@@ -2308,7 +2340,7 @@ def test_case33_multi_concern_routing():
     focus3 = choose_focus_domains(state3)
     assert len(focus3) == 2, f"ADHD + social should give 2 domains; got {focus3}"
     assert "social_and_emotional" in focus3, f"social_and_emotional missing from {focus3}"
-    assert "cognitive" in focus3, f"cognitive missing from {focus3}"
+    assert "learning_and_thinking" in focus3, f"cognitive missing from {focus3}"
     print(f"  ✓ ADHD + social → {focus3}")
 
     # ── Extra: 3+ domains → max 2 selected, remainder noted ─────────────────
@@ -2484,7 +2516,7 @@ def test_case35_gate_b_maya_ds_speech():
         for day in _GATE_WEEKDAYS
         for item in days.get(day, {}).get("items", [])
     ]
-    lang_count = all_cats.count("language_and_communication")
+    lang_count = all_cats.count("talking_and_communicating")
     assert lang_count >= 6, (
         f"Language-focused plan expected ≥6 language slots, got {lang_count} "
         f"(categories: {all_cats})"
@@ -2541,8 +2573,8 @@ def test_case36_gate_c_multi_concern_48m():
 
     assert len(focus) <= 2, f"Must cap at 2 domains; got {focus}"
     assert len(focus) == 2, f"speech+OT+PT must yield 2 domains; got {focus}"
-    assert "language_and_communication" in focus, f"language missing from {focus}"
-    assert "movement_and_physical" in focus, f"movement missing from {focus}"
+    assert "talking_and_communicating" in focus, f"language missing from {focus}"
+    assert _motor_in(focus), f"motor domain missing from {focus}"
     print(f"  ✓ focus = {focus}")
 
     repaired, gate_report, days, all_titles = _build_and_gate(state)
@@ -2556,8 +2588,8 @@ def test_case36_gate_c_multi_concern_48m():
         for day in _GATE_WEEKDAYS
         for item in days.get(day, {}).get("items", [])
     ]
-    lang_count = all_cats.count("language_and_communication")
-    move_count = all_cats.count("movement_and_physical")
+    lang_count = all_cats.count("talking_and_communicating")
+    move_count = _count_motor(all_cats)
     assert lang_count >= 2, f"Expected ≥2 language slots, got {lang_count}"
     assert move_count >= 2, f"Expected ≥2 movement slots, got {move_count}"
     print(f"  ✓ Both domains covered: language={lang_count}, movement={move_count}")
@@ -2624,7 +2656,7 @@ def test_case37_gate_d_adhd_60m():
     cognitive_items = [
         item for day in _GATE_WEEKDAYS
         for item in days.get(day, {}).get("items", [])
-        if item.get("category_key") == "cognitive"
+        if item.get("category_key") == "learning_and_thinking"
     ]
     matches = [
         item for item in cognitive_items
@@ -2699,7 +2731,7 @@ def test_case38_gate_e_dravet_40m():
         movement_items = [
             item for day in _GATE_WEEKDAYS
             for item in days.get(day, {}).get("items", [])
-            if item.get("category_key") == "movement_and_physical"
+            if item.get("category_key") in MOTOR_DOMAINS
         ]
         seated_count = sum(
             1 for item in movement_items
@@ -2747,9 +2779,9 @@ def test_case39_gate_f_terry_all_yes():
     ensure_concern_profile(state)
 
     # Simulate all milestone answers as 'yes' for language domain
-    qs = build_domain_questions(state, "language_and_communication", max_questions_total=20)
+    qs = build_domain_questions(state, "talking_and_communicating", max_questions_total=20)
     for q in qs:
-        state.setdefault("qna", {}).setdefault("language_and_communication", []).append({
+        state.setdefault("qna", {}).setdefault("talking_and_communicating", []).append({
             **q,
             "norm_answer": "yes",
             "scoring_norm_answer": "yes",
@@ -2795,7 +2827,7 @@ def test_case39_gate_f_terry_all_yes():
     lang_count = sum(
         1 for day in _GATE_WEEKDAYS
         for item in days.get(day, {}).get("items", [])
-        if item.get("category_key") == "language_and_communication"
+        if item.get("category_key") == "talking_and_communicating"
     )
     assert lang_count >= 1, (
         f"Terry all-yes: expected ≥1 language card, got {lang_count}"
@@ -2932,28 +2964,33 @@ def test_case41_explicit_concern_domain_routing():
     print("\n─── Case 41: Explicit concern-domain routing (A–D) ───")
     from genex_core.interview_engine import choose_focus_domains
 
-    LANG = "language_and_communication"
-    SOCIAL = "social_and_emotional"
-    MOVE = "movement_and_physical"
+    LANG = {"talking_and_communicating"}
+    SOCIAL = {"social_and_emotional"}
+    # Legacy Movement has three canonical successors; "movement represented"
+    # means any one of them. Each entry below is a REQUIREMENT GROUP that focus
+    # must intersect — equivalent to the old subset test, not weaker.
+    MOVE = MOTOR_DOMAINS
 
     cases = [
         ("A 30mo autism", "Autism spectrum",
          "speech delay, social interaction difficulty, sensory problem", 30,
-         {LANG, SOCIAL}),
+         [LANG, SOCIAL]),
         ("B 54mo speech+gross+fine", "",
-         "speech delay, gross motor delay, fine motor delay", 54, {LANG, MOVE}),
+         "speech delay, gross motor delay, fine motor delay", 54, [LANG, MOVE]),
         ("C 48mo speech+gross (bare)", "",
-         "speech delay, gross motor", 48, {LANG, MOVE}),
-        ("D 36mo speech-only", "", "speech delay", 36, {LANG}),
+         "speech delay, gross motor", 48, [LANG, MOVE]),
+        ("D 36mo speech-only", "", "speech delay", 36, [LANG]),
     ]
 
     for label, dx, concern, age, expected in cases:
         state = init_state_from_profile("your child", age, dx, concern, 20)
         ensure_concern_profile(state)
         focus = set(choose_focus_domains(state))
-        assert expected.issubset(focus), (
-            f"[{label}] expected {sorted(expected)} represented, got {sorted(focus)}"
-        )
+        for group in expected:
+            assert group & focus, (
+                f"[{label}] expected one of {sorted(group)} represented, "
+                f"got {sorted(focus)}"
+            )
         assert len(focus) <= 2, f"[{label}] focus must cap at 2 domains, got {sorted(focus)}"
         print(f"  ✓ {label}: {sorted(focus)}")
 
@@ -2961,7 +2998,14 @@ def test_case41_explicit_concern_domain_routing():
     state = init_state_from_profile("c", 40, "", "coordination", 20)
     ensure_concern_profile(state)
     focus = choose_focus_domains(state)
-    assert focus == [MOVE], f"'coordination' should route to movement only, got {focus}"
+    # Same invariant as before: exactly one domain, and it is a motor domain —
+    # specifically NOT language. Expressed as membership because legacy
+    # Movement now has three canonical successors.
+    assert len(focus) == 1, f"'coordination' should route to one domain, got {focus}"
+    assert focus[0] in MOVE, f"'coordination' should route to movement only, got {focus}"
+    assert "talking_and_communicating" not in focus, (
+        f"'coordination' must not produce a language false positive: {focus}"
+    )
     print(f"  ✓ 'coordination' → {focus} (no language false positive)")
 
 

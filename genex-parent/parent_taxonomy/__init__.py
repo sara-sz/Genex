@@ -10,8 +10,23 @@ package outside that path lets the Parent 2.4 lineage evolve without weakening
 or rewriting a single historical integrity assertion.
 
 No runtime consumer is switched in this phase.
+
+Importing this package stays stdlib-only. `activity_families` reads a workbook,
+but pandas/openpyxl are imported inside its loader function, so the import below
+costs nothing until a family is actually looked up.
 """
 
+from .activity_families import (  # noqa: F401
+    ACTIVITY_TAXONOMY_VERSION,
+    ActivityFamily,
+    ActivityTaxonomy,
+    ActivityTaxonomyError,
+    allowed_domains,
+    get_taxonomy,
+    is_known_family,
+    reload_cache,
+    resolve_family_key,
+)
 from .domains import (  # noqa: F401
     CONTENT_PENDING_KEYS,
     CONTENT_READY_KEYS,

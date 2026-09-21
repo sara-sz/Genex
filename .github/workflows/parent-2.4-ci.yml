@@ -58,11 +58,17 @@ jobs:
           pip install -r requirements-parent24-ci.txt
           pip list
 
-      - name: Python compilation (taxonomy package + Parent 2.4 tests)
+      - name: Python compilation (taxonomy package + Brain + Parent 2.4 tests)
         run: |
-          python -m compileall -q parent_taxonomy \
+          python -m compileall -q parent_taxonomy genex_core \
             tests/test_parent_24_taxonomy.py \
-            tests/test_parent_24_integrity.py
+            tests/test_parent_24_integrity.py \
+            tests/test_parent_24_seven_domain_brain.py \
+            tests/test_parent_24_activity_families.py \
+            tests/test_parent_24_repair_pass1.py \
+            tests/test_parent_24_repair_pass2.py \
+            tests/test_parent_24_regression_nonvacuity.py \
+            tests/test_regression.py
 
       - name: Taxonomy package imports with stdlib only
         # The canonical vocabulary must stay usable by consumers that must not
@@ -78,10 +84,14 @@ jobs:
                   raise ImportError(f"BLOCKED: {name}")
           sys.meta_path.insert(0, Blocker())
           sys.path.insert(0, ".")
-          from parent_taxonomy import domains, subdomain_map
+          import parent_taxonomy
+          from parent_taxonomy import activity_families, domains, subdomain_map
           assert len(domains.DOMAINS) == 7, domains.DOMAIN_KEYS
           assert len(subdomain_map.SUBDOMAIN_TO_DOMAIN) == 24
-          print("stdlib-only import OK: 7 domains, 24 subdomains")
+          # activity_families reads a workbook, so it must keep pandas/openpyxl
+          # function-local. Importing it here under the blocker proves that.
+          assert activity_families.EXPECTED_FAMILY_COUNT == 56
+          print("stdlib-only import OK: 7 domains, 24 subdomains, activity_families")
           PY
 
       - name: Frozen Gold Standard provenance
@@ -100,6 +110,79 @@ jobs:
 
       - name: Parent 2.4 workstream integrity
         run: python -m pytest tests/test_parent_24_integrity.py -q
+
+      - name: Parent 2.4 seven-domain Brain (Phase 0.3B)
+        run: python -m pytest tests/test_parent_24_seven_domain_brain.py -q
+
+      - name: Parent 2.4 activity-family taxonomy + validator (Phase 0.3B)
+        run: python -m pytest tests/test_parent_24_activity_families.py -q
+
+      - name: Parent 2.4 runtime repair pass 1 (canonical safety + legacy keys)
+        run: python -m pytest tests/test_parent_24_repair_pass1.py -q
+
+      - name: Parent 2.4 runtime repair pass 2 (founder decisions)
+        run: python -m pytest tests/test_parent_24_repair_pass2.py -q
+
+      - name: Parent 2.4 regression non-vacuity guard
+        # A legacy domain key yields zero questions and zero activities, so a
+        # test that feeds one and iterates asserts NOTHING and still reports
+        # success. Ten regression tests were green for exactly that reason.
+        # This guard fails loudly instead of going quiet.
+        run: python -m pytest tests/test_parent_24_regression_nonvacuity.py -q
+
+      - name: Parent regression suite (seven-domain vocabulary)
+        # Now part of the hosted gate. It exercises the Brain end to end —
+        # focus selection, bridge plans, activity banks, safety and the weekly
+        # schedule — and is what caught the 0.3B runtime regressions.
+        run: python -m pytest tests/test_regression.py -q
+
+      - name: Activity-family taxonomy provenance
+        # The founder-reviewed workbook is the source of truth for activity
+        # family -> allowed domain. Pinned so a silent content edit fails the
+        # gate rather than quietly changing which activity cards are blocked.
+        run: |
+          python - <<'PY'
+          import hashlib, pathlib, sys
+          sys.path.insert(0, ".")
+          EXPECTED = "9165c653be075c560bfb957beba29c5780fc358737740d3558ab64b6451be30e"
+          p = pathlib.Path("data/parent_2_4/activity_family_taxonomy_v1.xlsx")
+          got = hashlib.sha256(p.read_bytes()).hexdigest()
+          assert got == EXPECTED, f"activity-family taxonomy changed: {got}"
+
+          from parent_taxonomy.activity_families import get_taxonomy
+          from parent_taxonomy.domains import BY_KEY
+          t = get_taxonomy()
+          assert len(t.families) == 56, len(t.families)
+
+          counts = {}
+          for e in t.families.values():
+              counts[e.primary_domain] = counts.get(e.primary_domain, 0) + 1
+          assert counts == {
+              "talking_and_communicating": 17,
+              "social_and_emotional": 12,
+              "learning_and_thinking": 9,
+              "gross_motor": 7,
+              "fine_motor": 6,
+              "daily_living": 5,
+          }, counts
+          assert "sensory" not in counts, "sensory is content-pending"
+
+          # Allowed domains must stay DERIVED, and every domain canonical.
+          for e in t.families.values():
+              assert e.allowed_domains == frozenset(
+                  (e.primary_domain, *e.secondary_domains)
+              ), e.key
+              assert e.allowed_domains <= set(BY_KEY), e.key
+          assert sum(1 for e in t.families.values() if e.secondary_domains) == 27
+
+          # The retired dict must not come back.
+          from genex_core import activity_validator
+          assert not hasattr(activity_validator, "FAMILY_TO_CATEGORY"), \
+              "FAMILY_TO_CATEGORY was re-created"
+
+          print("activity-family taxonomy OK:", got)
+          print("  56 families,", counts, "| 27 with secondary domains")
+          PY
 
       - name: Frozen PARENT-0.2 contract summary
         # Derives the canonical counts from the workbook and asserts the frozen

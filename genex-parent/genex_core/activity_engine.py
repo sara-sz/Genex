@@ -49,8 +49,14 @@ from genex_core.safety import (
     apply_safety_constraints_to_activities,
 )
 from genex_core.table_loader import get_family_description
+from parent_taxonomy.domains import resolve_legacy_domain
 
 logger = logging.getLogger(__name__)
+
+# Parent 2.4 vocabulary repair. Derived from parent_taxonomy rather than
+# restated, so the 1:1 legacy renames cannot drift from the canonical taxonomy.
+_TALKING_DOMAIN = resolve_legacy_domain("language_and_communication")
+_LEARNING_DOMAIN = resolve_legacy_domain("cognitive")
 
 # ---------------------------------------------------------------------------
 # OpenAI client (lazy)
@@ -128,14 +134,37 @@ def _family_bucket(fam: str, category_key: str = "") -> str:
     for bucket, pat in patterns:
         if re.search(pat, fam):
             return bucket
-    if category_key == "language_and_communication":
+
+    # ---- Domain fallback: reached only when the family string matched no
+    # pattern above. Parent 2.4 made this seven-domain native.
+    #
+    # Provenance of every entry, asserted by
+    # tests/test_parent_24_repair_pass1.py so none can drift:
+    #
+    #   talking / social / learning  the legacy domain renamed 1:1, so the
+    #       legacy bucket is preserved EXACTLY. Derived via resolve_legacy_domain
+    #       rather than restated.
+    #   fine_motor   taxonomy majority - 4 of its 6 primary families bucket as
+    #       'beading'. Agrees with the legacy movement fallback.
+    #   gross_motor  taxonomy majority - 5 of its 7 primary families bucket as
+    #       'jump_prep'. This CHANGES legacy behaviour, which sent all movement
+    #       to 'beading', a fine-motor bucket that never suited gross motor.
+    #   daily_living NOT derivable: its 5 primary families bucket 5 different
+    #       ways (buttoning / dressing_on / dressing_off / fork_spoon / routine),
+    #       a five-way tie with no majority. Falls through to 'general' rather
+    #       than inventing a winner.
+    #   sensory      content-pending, zero activity families. Stays 'general';
+    #       no content is invented for it.
+    if category_key == _TALKING_DOMAIN:
         return "expressive_word"
     if category_key == "social_and_emotional":
         return "social_turn"
-    if category_key == "movement_and_physical":
-        return "beading"
-    if category_key == "cognitive":
+    if category_key == _LEARNING_DOMAIN:
         return "attention"
+    if category_key == "fine_motor":
+        return "beading"
+    if category_key == "gross_motor":
+        return "jump_prep"
     return "general"
 
 
@@ -2122,12 +2151,24 @@ def _v22_fallback_instructions(
 # Parent-facing "why this helps" text — no bridge/clinical language
 # ---------------------------------------------------------------------------
 
+# Parent 2.4, six of seven domains.
+#
+# Talking / Social / Learning renamed 1:1 from the legacy taxonomy and carry
+# their EXISTING approved copy verbatim — no wording changed, only the key.
+#
+# Fine Motor, Gross Motor and Daily Living are FOUNDER-APPROVED copy written for
+# this taxonomy. The single legacy Movement paragraph was deliberately not
+# reused for all three: it spanned them ("strength, coordination" is Gross
+# Motor, "dressing independently" is Daily Living), so triplicating it would
+# have put identical, partly-wrong text on three distinct domains.
+#
+# Sensory is absent because it is content-pending; no copy is invented for it,
+# and it falls through to the generic string at the lookup site.
+#
+# `_SUBDOMAIN_WHY` still takes precedence over everything here — that ordering
+# is unchanged.
 _DOMAIN_WHY: Dict[str, str] = {
-    "movement_and_physical": (
-        "Physical play builds strength, coordination, and body confidence — "
-        "skills that support everything from dressing independently to playing with friends."
-    ),
-    "language_and_communication": (
+    _TALKING_DOMAIN: (
         "Practising communication in small, playful moments builds the connection between "
         "hearing, understanding, and expressing — the foundation of language."
     ),
@@ -2135,9 +2176,23 @@ _DOMAIN_WHY: Dict[str, str] = {
         "Small social moments teach your child how to connect, trust, and feel safe — "
         "building emotional skills one shared turn at a time."
     ),
-    "cognitive": (
+    _LEARNING_DOMAIN: (
         "Play that involves thinking and exploring helps your child build attention, "
         "curiosity, and the ability to learn new things."
+    ),
+    "fine_motor": (
+        "Small hand and finger movements build coordination and control for everyday "
+        "skills like picking up small objects, drawing and pre-writing, using utensils, "
+        "and fastening clothes."
+    ),
+    "gross_motor": (
+        "Big-body movement builds strength, balance, and coordination for everyday "
+        "movement and play, like running, climbing stairs, jumping, and moving safely "
+        "through the environment."
+    ),
+    "daily_living": (
+        "Everyday routines build independence and confidence with skills like dressing, "
+        "eating, cleaning up, and helping with simple tasks at home."
     ),
 }
 

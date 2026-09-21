@@ -32,6 +32,11 @@ from genex_core.table_loader import (
     get_bridge_df,
     get_family_description,
 )
+from parent_taxonomy.domains import resolve_legacy_domain
+
+# Parent 2.4 vocabulary repair — see _has_regression_concern below. Derived
+# rather than restated so it cannot drift from the canonical taxonomy.
+_TALKING_DOMAIN = resolve_legacy_domain("language_and_communication")
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +123,12 @@ def _has_regression_concern(state: Dict[str, Any], category_key: str) -> bool:
         str(child.get(k, ""))
         for k in ["diagnosis", "condition", "concern", "parent_concern", "concerns"]
     ).lower()
-    if category_key == "language_and_communication":
+    # Parent 2.4: canonical Talking & Communicating. Left on the legacy spelling
+    # this branch could never be taken, so a language-specific regression
+    # ("stopped talking", "lost words") silently fell through to the generic
+    # pattern below and lost its language-specific wording. Semantics of both
+    # patterns are unchanged.
+    if category_key == _TALKING_DOMAIN:
         return bool(re.search(
             r"\b(regress|lost words|lost speech|stopped talking|language loss|speech loss)\b",
             txt,
