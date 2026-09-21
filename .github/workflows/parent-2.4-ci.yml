@@ -1,0 +1,173 @@
+name: Parent 2.4 CI
+
+# Hosted gate for the Parent 2.4 taxonomy lineage.
+#
+# Test-only. No GCP/Firebase auth, no secrets, no deploy, no Terraform, no Cloud
+# Run, no therapist-service access, no real data. Reads the frozen Gold Standard
+# workbook and writes only to a temporary directory.
+#
+# Scope note: this workflow deliberately does NOT run
+# therapist_api/tests/test_repo_integrity.py. Two of its tests
+# (test_worktree_is_on_therapist_branch, test_therapist_commits_touch_only_
+# therapist_paths) are scoped to the therapist workstream and fail on a Parent
+# branch by construction. They are correct as written and remain unmodified;
+# genex-parent/tests/test_parent_24_integrity.py is the Parent-scoped
+# equivalent. The therapist workflow is untouched and still gates its own
+# branches.
+
+on:
+  push:
+    branches:
+      - "feature/parent-2.4-*"
+  pull_request:
+    paths:
+      - "genex-parent/**"
+      - ".github/workflows/parent-2.4-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  taxonomy:
+    name: Parent 2.4 taxonomy + integrity
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: genex-parent
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history + tags: the Parent integrity checks compare object
+          # hashes against beta-2.1-freeze and diff against
+          # parent-2.4-0.2-taxonomy-foundation. A shallow checkout would make
+          # those tests SKIP instead of run. Read-only; no credentials persisted.
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CI-only dependencies
+        # Exact pins — see requirements-parent24-ci.txt for why the application
+        # requirements.txt is deliberately NOT used here.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-parent24-ci.txt
+          pip list
+
+      - name: Python compilation (taxonomy package + Parent 2.4 tests)
+        run: |
+          python -m compileall -q parent_taxonomy \
+            tests/test_parent_24_taxonomy.py \
+            tests/test_parent_24_integrity.py
+
+      - name: Taxonomy package imports with stdlib only
+        # The canonical vocabulary must stay usable by consumers that must not
+        # drag pandas in. Proven by blocking the third-party modules outright.
+        run: |
+          python - <<'PY'
+          import sys
+          BLOCKED = {"pandas", "numpy", "openpyxl"}
+          class Blocker:
+              def find_module(self, name, path=None):
+                  return self if name.split(".")[0] in BLOCKED else None
+              def load_module(self, name):
+                  raise ImportError(f"BLOCKED: {name}")
+          sys.meta_path.insert(0, Blocker())
+          sys.path.insert(0, ".")
+          from parent_taxonomy import domains, subdomain_map
+          assert len(domains.DOMAINS) == 7, domains.DOMAIN_KEYS
+          assert len(subdomain_map.SUBDOMAIN_TO_DOMAIN) == 24
+          print("stdlib-only import OK: 7 domains, 24 subdomains")
+          PY
+
+      - name: Frozen Gold Standard provenance
+        run: |
+          python - <<'PY'
+          import hashlib, pathlib
+          EXPECTED = "c2b6735d9f099c916973c98c1953e7eb1f2ca8e1a60430011f805a3bf9c3487c"
+          p = pathlib.Path("data/cdc_milestones_with_bridges_family_cleaned_final_app_ready.xlsx")
+          got = hashlib.sha256(p.read_bytes()).hexdigest()
+          assert got == EXPECTED, f"Gold Standard changed: {got}"
+          print("Gold Standard SHA OK:", got)
+          PY
+
+      - name: Parent 2.4 taxonomy tests
+        run: python -m pytest tests/test_parent_24_taxonomy.py -q
+
+      - name: Parent 2.4 workstream integrity
+        run: python -m pytest tests/test_parent_24_integrity.py -q
+
+      - name: Frozen PARENT-0.2 contract summary
+        # Derives the canonical counts from the workbook and asserts the frozen
+        # contract. Independent of the test suite so the gate still fails loudly
+        # if a test were ever removed.
+        run: |
+          python - <<'PY'
+          import sys, pathlib
+          sys.path.insert(0, ".")
+          from parent_taxonomy import domains as D, migrate as M, subdomain_map as S
+          import pandas as pd
+
+          SRC = pathlib.Path(
+              "data/cdc_milestones_with_bridges_family_cleaned_final_app_ready.xlsx"
+          )
+          EXPECTED = {
+              "talking_and_communicating": 83,
+              "social_and_emotional": 89,
+              "learning_and_thinking": 84,
+              "fine_motor": 29,
+              "gross_motor": 49,
+              "daily_living": 35,
+              "sensory": 0,
+          }
+
+          assert D.DOMAIN_KEYS == tuple(EXPECTED), D.DOMAIN_KEYS
+          assert "movement_and_physical" not in D.DOMAIN_KEYS
+          assert D.is_legacy("movement_and_physical")
+          assert D.resolve_legacy_domain("movement_and_physical") is None
+          assert D.get("sensory").content_status is D.ContentStatus.PENDING
+
+          df = pd.read_excel(SRC, sheet_name=M.MAIN_SHEET, dtype=str)
+          assert len(df) == 369, len(df)
+          assert set(df["subdomain"]) == S.mapped_subdomains()
+          assert len(S.SUBDOMAIN_TO_DOMAIN) == 24
+
+          counts = M.domain_counts(SRC)
+          assert counts == EXPECTED, counts
+          assert sum(counts.values()) == 369
+
+          for bad in ("", "   ", "not_a_subdomain"):
+              try:
+                  S.resolve(bad)
+              except S.SubdomainMappingError:
+                  pass
+              else:
+                  raise AssertionError(f"did not fail closed on {bad!r}")
+
+          print("PARENT-0.2 contract OK:", counts, "total", sum(counts.values()))
+          PY
+
+      - name: Migration determinism + protected columns
+        run: |
+          python - <<'PY'
+          import sys, pathlib, tempfile
+          sys.path.insert(0, ".")
+          from parent_taxonomy import migrate as M
+
+          SRC = pathlib.Path(
+              "data/cdc_milestones_with_bridges_family_cleaned_final_app_ready.xlsx"
+          )
+          before = M.sha256_of(SRC)
+          with tempfile.TemporaryDirectory() as td:
+              cand = pathlib.Path(td) / "candidate.xlsx"
+              report = M.migrate(SRC, cand)
+              assert report.source_rows == report.candidate_rows == 369
+              assert report.protected_columns_identical is True
+              assert M.verify_candidate(SRC, cand) is True
+          assert M.sha256_of(SRC) == before == M.SOURCE_SHA256, "source mutated"
+          print("migration OK: 369 -> 369, 10 protected columns identical, source intact")
+          PY

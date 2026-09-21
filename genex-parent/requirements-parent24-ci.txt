@@ -1,0 +1,32 @@
+# Parent 2.4 CI-ONLY dependencies — exact pins, hosted-CI reproducibility.
+#
+# WHY THIS FILE EXISTS (rather than reusing genex-parent/requirements.txt):
+#
+#   * `requirements.txt` is the APPLICATION dependency policy. It uses broad
+#     lower bounds (`pandas>=2.0.0`, `openpyxl>=3.1.0`) and carries streamlit,
+#     openai, firebase-admin, google-cloud-storage and requests — none of which
+#     the Parent 2.4 taxonomy suite imports. Installing it in CI would be slow,
+#     would pull firebase-admin into a checkpoint that explicitly implements no
+#     Firebase, and would still not be reproducible.
+#
+#   * The unbounded lower bounds are not theoretical: during PARENT-0.2C a local
+#     environment silently resolved pandas 2.x -> 3.0.3 between runs. A hosted
+#     gate whose dependency set can move underneath it is not a gate.
+#
+# The APPLICATION policy is deliberately NOT modified by this phase. This file
+# is additive and CI-only.
+#
+# MINIMUM SET, derived from the actual import surface:
+#
+#   parent_taxonomy/domains.py        stdlib only (dataclasses, enum, typing)
+#   parent_taxonomy/subdomain_map.py  stdlib only (typing)
+#   parent_taxonomy/migrate.py        stdlib + pandas, imported INSIDE functions
+#                                     so the package imports without it
+#   tests/test_parent_24_taxonomy.py  pytest + pandas + openpyxl
+#
+# Nothing else is required. openpyxl is the xlsx engine pandas uses for the
+# workbook read/write.
+
+pytest==9.1.1
+pandas==3.0.3
+openpyxl==3.1.5
