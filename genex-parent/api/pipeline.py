@@ -27,6 +27,7 @@ from genex_core.interview_engine import (
     score_answer,
     normalize_answer,
 )
+from api.domain_compat import assert_canonical_write, resolve_focus_for_brain
 from api.focus_selector import build_focus_block, select_focus
 from genex_core.scoring import finalize_domain_dev_age
 from genex_core.support_tiers import (
@@ -94,11 +95,38 @@ def run_session_start(
     primary_key, detected = select_focus(diagnosis_for_brain, sanitized_concern)
     if not primary_key:
         fallback = choose_focus_domains(brain_state, max_domains=1)
-        primary_key = fallback[0] if fallback else "language_and_communication"
-    domain_keys = [primary_key]
-    # Persist the selected focus so the plan pipeline builds ONLY the primary domain.
-    brain_state["selected_domain_keys"] = list(domain_keys)
-    brain_state["focus"] = build_focus_block(primary_key, detected)
+        primary_key = fallback[0] if fallback else "talking_and_communicating"
+
+    # PARENT-0.3C compatibility boundary.
+    #
+    # `primary_key` comes from the API-layer four-area focus selector, kept for
+    # API compatibility and still speaking the legacy vocabulary. The Brain is
+    # seven-domain native and returns NOTHING for a legacy key — no questions,
+    # no activities, silently — so the key is resolved to a canonical domain
+    # here, at the single point where the API hands work to the Brain.
+    #
+    # The earliest-mentioned-concern product rule is preserved: this CONVERTS
+    # the focus the selector already chose, it does not re-choose it.
+    #
+    # The four-area key stays the PUBLIC surface (focus.primary_focus_key,
+    # all_focus_areas). The canonical domain is what enters new Parent 2.4
+    # state — selected_domain_keys, questions, plans, cards — so the
+    # movement_and_physical umbrella is never persisted as a domain.
+    canonical_primary = resolve_focus_for_brain(primary_key, brain_state)
+    domain_keys = [canonical_primary]
+
+    # Persist the selected focus so the plan pipeline builds ONLY the primary
+    # domain. Asserted canonical, so a legacy key cannot reach new state.
+    brain_state["selected_domain_keys"] = [
+        assert_canonical_write(canonical_primary, context="selected_domain_keys")
+    ]
+
+    focus_block = build_focus_block(primary_key, detected)
+    # Additive, not a rename: records which canonical domain the legacy focus
+    # area resolved to, so downstream consumers compare canonical-to-canonical
+    # rather than re-deriving it. No existing public field changes shape.
+    focus_block["primary_focus_domain"] = canonical_primary
+    brain_state["focus"] = focus_block
 
     # Stage 3: question building (shared with add-on focus intake, Beta 2.2 Slice 2b).
     interview = _build_interview_for_domains(brain_state, domain_keys)

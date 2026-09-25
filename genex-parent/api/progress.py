@@ -348,12 +348,66 @@ def _observable_lookup() -> Dict[Tuple[str, str], str]:
     return _OBSERVABLE_LOOKUP
 
 
+def _milestone_text_domain(norm_label: str) -> Optional[str]:
+    """Canonical domain for a milestone TEXT, when that text identifies one uniquely.
+
+    Built from the same CDC read as `_observable_lookup`, so it is not a second
+    source of truth. Every one of the 163 milestone texts belongs to exactly one
+    canonical domain, which makes the text deterministic evidence — but the
+    uniqueness is verified here rather than assumed: a text appearing in more
+    than one domain resolves to None instead of picking a winner.
+    """
+    index: Dict[str, Optional[str]] = {}
+    for (category_key, text) in _observable_lookup():
+        if text in index:
+            if index[text] != category_key:
+                index[text] = None          # ambiguous — refuse to choose
+        else:
+            index[text] = category_key
+    return index.get(norm_label)
+
+
 def resolve_observable_text(domain: str, short_label: str) -> Optional[str]:
     """Parent-friendly observable sentence for a milestone, or None if not resolvable.
-    Never fabricated."""
+    Never fabricated.
+
+    PARENT-0.3C read compatibility. Stored completions from Beta 2.3 carry legacy
+    four-domain keys, while the CDC table this lookup is built from is now keyed
+    by canonical `category_key`. Without projection every historical completion
+    missed, `observable_text` went null, and check-ins silently never became
+    ready — a quiet loss of a parent's progress history, not an error.
+
+    Resolution order, all deterministic:
+      1. the stored domain, projected through the compatibility shim;
+      2. for legacy `movement_and_physical` with no other evidence, the
+         milestone TEXT itself — explicitly permitted evidence, and unique
+         across domains.
+
+    Unresolvable input still degrades to None rather than guessing.
+    """
     if not domain or not short_label:
         return None
-    return _observable_lookup().get((domain, _norm_text(short_label)))
+
+    norm_label = _norm_text(short_label)
+    lookup = _observable_lookup()
+
+    from api.domain_compat import UnknownStoredDomain, project_domain
+
+    try:
+        projected = project_domain(domain).domain
+    except UnknownStoredDomain:
+        projected = None
+
+    if projected:
+        hit = lookup.get((projected, norm_label))
+        if hit:
+            return hit
+
+    # Ambiguous legacy Movement: let the milestone identify its own domain.
+    resolved = _milestone_text_domain(norm_label)
+    if resolved:
+        return lookup.get((resolved, norm_label))
+    return None
 
 
 def _milestone_reliable(milestone: Dict[str, Any], domain: str) -> bool:

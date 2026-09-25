@@ -68,6 +68,7 @@ jobs:
             tests/test_parent_24_repair_pass1.py \
             tests/test_parent_24_repair_pass2.py \
             tests/test_parent_24_regression_nonvacuity.py \
+            tests/test_parent_24_domain_compat.py \
             tests/test_regression.py
 
       - name: Taxonomy package imports with stdlib only
@@ -129,6 +130,25 @@ jobs:
         # success. Ten regression tests were green for exactly that reason.
         # This guard fails loudly instead of going quiet.
         run: python -m pytest tests/test_parent_24_regression_nonvacuity.py -q
+
+      - name: Parent 2.4 API consumer + legacy read compatibility (Phase 0.3C)
+        # The four-area API focus surface is kept for compatibility, so a legacy
+        # key can still reach the Brain — which returns NOTHING for one, without
+        # raising. These gate the projection at that boundary, and in particular
+        # that an ambiguous legacy movement_and_physical record is never guessed.
+        run: python -m pytest tests/test_parent_24_domain_compat.py -q
+
+      - name: Parent app-level consumers (previously failing on legacy keys)
+        # SEPARATE pytest invocations, deliberately. Both modules reassign the
+        # global firebase_admin.auth.verify_id_token at IMPORT time with
+        # incompatible fake-token maps, so whichever is imported last wins and
+        # the other gets 401. That collision is pre-existing test-harness
+        # hygiene, unrelated to domain vocabulary, and neither file is modified
+        # by 0.3C — running them in one process would gate this workflow on an
+        # unrelated defect.
+        run: |
+          python -m pytest tests/test_beta_access.py -q
+          python -m pytest tests/test_checkin_readiness.py -q
 
       - name: Parent regression suite (seven-domain vocabulary)
         # Now part of the hosted gate. It exercises the Brain end to end —

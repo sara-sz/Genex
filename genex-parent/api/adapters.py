@@ -146,13 +146,30 @@ _WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 # Full seven-day week names
 _ALL_DAYS = WEEK_DAY_NAMES  # ["Monday", ..., "Sunday"]
 
-# Domain label mapping — brain key → parent-friendly label
-DOMAIN_LABELS: Dict[str, str] = {
-    "language_and_communication": "Talking and Communicating",
-    "movement_and_physical": "Movement & Physical",
-    "social_and_emotional": "Social & Emotional",
-    "cognitive": "Learning & Cognitive",
-}
+# Domain label mapping — domain key → parent-friendly label.
+#
+# PARENT-0.3C: the canonical entries are DERIVED from parent_taxonomy, the single
+# display authority, so they cannot drift. Left as the legacy-only map, every
+# canonical domain fell through to `DOMAIN_LABELS.get(domain, domain)` and the
+# raw key (e.g. "talking_and_communicating") reached the parent-facing
+# `domain_label`.
+#
+# The four legacy entries are RETAINED deliberately: historical Beta 2.3 cards
+# still carry legacy domains and must keep rendering their original wording.
+# This is one map spanning both vocabularies, not a second independent mapping.
+def _build_domain_labels() -> Dict[str, str]:
+    from parent_taxonomy.domains import DOMAINS
+
+    labels = {d.key: d.display for d in DOMAINS}          # canonical (derived)
+    labels.update({                                        # historical reads
+        "language_and_communication": "Talking and Communicating",
+        "movement_and_physical": "Movement & Physical",
+        "cognitive": "Learning & Cognitive",
+    })
+    return labels
+
+
+DOMAIN_LABELS: Dict[str, str] = _build_domain_labels()
 
 
 def _daily_card_count(daily_time_minutes: int) -> int:
@@ -584,14 +601,42 @@ def apply_integrated_provenance(
     "added"). source stays "primary" — this is one integrated weekly plan under
     doc["plans"], not an add-on module. Mutates and returns the same plan_response.
     """
-    from api.focus_selector import FOCUS_LABELS  # local import avoids any import cycle
+    # PARENT-0.3C: compare canonical-to-canonical.
+    #
+    # `card["domain"]` is the Brain's canonical category_key, while
+    # `primary_focus_key` is the legacy four-area focus key kept for API
+    # compatibility. Comparing them directly made the equality ALWAYS false for
+    # every renamed domain, so every primary card was mislabelled "added" and
+    # focus_label resolved blank (FOCUS_LABELS has no canonical keys).
+    #
+    # Both sides go through the single compatibility shim — no second mapping is
+    # introduced. Historical legacy card domains still project correctly, and an
+    # unresolvable legacy value simply fails to match, which is the safe
+    # direction: a card is called "primary" only when it provably is.
+    from api.domain_compat import canonical_display, project_domain
+
+    def _canonical_or_none(value: Any) -> Optional[str]:
+        try:
+            return project_domain(value).domain
+        except Exception:
+            return None
+
+    primary_canonical = _canonical_or_none(primary_focus_key)
+
     for day in plan_response.get("week", []):
         for card in day.get("activities", []):
             domain = card.get("domain", "")
+            card_canonical = _canonical_or_none(domain)
             card["source"] = "primary"
             card["focus_key"] = domain
-            card["focus_label"] = FOCUS_LABELS.get(domain, card.get("domain_label", ""))
-            card["focus_origin"] = "primary" if domain == primary_focus_key else "added"
+            card["focus_label"] = (
+                canonical_display(card_canonical) or card.get("domain_label", "")
+            )
+            card["focus_origin"] = (
+                "primary"
+                if card_canonical is not None and card_canonical == primary_canonical
+                else "added"
+            )
     return plan_response
 
 
