@@ -69,6 +69,7 @@ jobs:
             tests/test_parent_24_repair_pass2.py \
             tests/test_parent_24_regression_nonvacuity.py \
             tests/test_parent_24_domain_compat.py \
+            tests/test_parent_24_daily_living.py \
             tests/test_regression.py
 
       - name: Taxonomy package imports with stdlib only
@@ -137,6 +138,16 @@ jobs:
         # raising. These gate the projection at that boundary, and in particular
         # that an ambiguous legacy movement_and_physical record is never guessed.
         run: python -m pytest tests/test_parent_24_domain_compat.py -q
+
+      - name: Parent 2.4 Daily Living activity generation
+        # Daily Living planned correctly but produced ZERO usable activities:
+        # its buckets had no curated cards, so every card fell through to the
+        # generic template the validator blocks. Repaired with content, not by
+        # relaxing validation — this suite pins BOTH halves, so it fails if the
+        # skills stop generating cards AND if anyone softens the placeholder
+        # rule to make them pass. It also holds cup_drinking and
+        # feeding_self_regulation closed pending clinical review.
+        run: python -m pytest tests/test_parent_24_daily_living.py -q
 
       - name: Parent regression suite (seven-domain vocabulary)
         # Now part of the hosted gate. It exercises the Brain end to end —
