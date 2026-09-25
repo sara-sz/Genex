@@ -138,18 +138,6 @@ jobs:
         # that an ambiguous legacy movement_and_physical record is never guessed.
         run: python -m pytest tests/test_parent_24_domain_compat.py -q
 
-      - name: Parent app-level consumers (previously failing on legacy keys)
-        # SEPARATE pytest invocations, deliberately. Both modules reassign the
-        # global firebase_admin.auth.verify_id_token at IMPORT time with
-        # incompatible fake-token maps, so whichever is imported last wins and
-        # the other gets 401. That collision is pre-existing test-harness
-        # hygiene, unrelated to domain vocabulary, and neither file is modified
-        # by 0.3C — running them in one process would gate this workflow on an
-        # unrelated defect.
-        run: |
-          python -m pytest tests/test_beta_access.py -q
-          python -m pytest tests/test_checkin_readiness.py -q
-
       - name: Parent regression suite (seven-domain vocabulary)
         # Now part of the hosted gate. It exercises the Brain end to end —
         # focus selection, bridge plans, activity banks, safety and the weekly
@@ -274,3 +262,63 @@ jobs:
           assert M.sha256_of(SRC) == before == M.SOURCE_SHA256, "source mutated"
           print("migration OK: 369 -> 369, 10 protected columns identical, source intact")
           PY
+
+  app-consumers:
+    name: Parent 2.4 app-consumer gate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: genex-parent
+
+    # Deliberately a SEPARATE job, not extra steps on `taxonomy`.
+    #
+    # `taxonomy` gates the Brain and installs only pytest/pandas/openpyxl. These
+    # tests exercise the FastAPI app, so they need fastapi/firebase-admin/httpx —
+    # which must never enter that job. Bolting them on is exactly what broke the
+    # first PARENT-0.3C freeze run: the app step failed on a missing import and,
+    # being sequential, SKIPPED the regression and provenance gates behind it.
+    #
+    # Isolating them means a FastAPI/Firebase environment problem can no longer
+    # prevent the pure Brain and regression gates from running. Both jobs must be
+    # green for the freeze; neither can mask the other.
+    #
+    # Test-only. No GCP/Firebase auth, no secrets, no deploy, no real data —
+    # firebase_admin token verification is monkeypatched by the tests themselves.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install app-consumer CI dependencies
+        # Exact pins with documented provenance — see the header of
+        # requirements-parent24-app-ci.txt. The production manifests
+        # (requirements.txt, requirements.api.txt) are NOT modified.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-parent24-app-ci.txt
+          pip list
+
+      - name: Python compilation (api package + app-consumer tests)
+        run: |
+          python -m compileall -q api \
+            tests/test_beta_access.py \
+            tests/test_checkin_readiness.py
+
+      - name: Beta access consumer (own pytest process)
+        # SEPARATE INVOCATION, deliberately. This suite and
+        # test_checkin_readiness both reassign the global
+        # firebase_admin.auth.verify_id_token at IMPORT time with incompatible
+        # fake-token maps, so whichever is imported last wins and the other gets
+        # 401. Pre-existing test-harness debt, unrelated to domain vocabulary and
+        # untouched by 0.3C. Running one suite per process CONTAINS it; it is not
+        # a fix, and the collision stays recorded as debt.
+        run: python -m pytest tests/test_beta_access.py -q
+
+      - name: Check-in readiness consumer (own pytest process)
+        # Second, independent process — see the note above.
+        run: python -m pytest tests/test_checkin_readiness.py -q

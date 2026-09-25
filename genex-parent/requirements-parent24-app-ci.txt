@@ -1,0 +1,55 @@
+# Parent 2.4 APP-CONSUMER CI dependencies — exact pins, hosted-CI reproducibility.
+#
+# WHY A SECOND CI REQUIREMENTS FILE
+#
+# `requirements-parent24-ci.txt` deliberately installs only pytest/pandas/openpyxl
+# and must STAY that way: the taxonomy/integrity job gates the Brain, and pulling
+# firebase-admin into it would put a Firebase dependency inside a checkpoint that
+# implements no Firebase. That decision is unchanged.
+#
+# But `tests/test_beta_access.py` and `tests/test_checkin_readiness.py` exercise
+# the FastAPI app, so they cannot run in that environment at all. Adding them to
+# the pure job is what broke the PARENT-0.3C freeze run: the app step failed on a
+# missing import and, being sequential, SKIPPED the regression and provenance
+# gates behind it.
+#
+# So this file serves one isolated job. firebase-admin appears here as a TEST
+# dependency of the app-consumer gate only — never in the taxonomy gate.
+#
+# PIN PROVENANCE
+#
+#   fastapi, pydantic, firebase-admin, google-cloud-storage
+#       Policy (lower bounds) comes from genex-parent/requirements.api.txt, the
+#       authoritative API manifest used by Dockerfile.api. Exact versions are the
+#       ones currently resolving in the working development environment, which is
+#       the only place these have actually been exercised together. Each pin
+#       satisfies its manifest floor:
+#           fastapi 0.135.3          >= 0.111.0
+#           pydantic 2.13.0          >= 2.7.0
+#           firebase-admin 7.5.0     >= 6.2.0
+#           google-cloud-storage 3.10.1 >= 2.10.0
+#
+#   httpx
+#       NO authoritative pin exists anywhere in the repository. It is not an
+#       application dependency — it is required by fastapi.testclient.TestClient,
+#       which only the tests use. Pinned to the working development version.
+#
+#   pytest, pandas, openpyxl
+#       Reused verbatim from requirements-parent24-ci.txt so the two CI jobs
+#       cannot drift apart on shared tooling.
+#
+# MINIMUM SET — verified, not assumed. Installed into a clean Python 3.11 venv
+# and both suites run green (6/6 and 8/8). openai, requests, python-dotenv and
+# uvicorn are NOT required: the OpenAI client is lazy, and nothing in the tested
+# import path needs the others. The production manifests are deliberately NOT
+# modified by this file; it is additive and CI-only.
+
+pytest==9.1.1
+pandas==3.0.3
+openpyxl==3.1.5
+
+fastapi==0.135.3
+pydantic==2.13.0
+httpx==0.28.1
+firebase-admin==7.5.0
+google-cloud-storage==3.10.1
