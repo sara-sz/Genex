@@ -27,7 +27,7 @@ import logging
 import math
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 from genex_core.activity_validator import filter_valid_activities
 from genex_core.bridge_selector import build_bridge_plan_for_category, select_next_milestones
@@ -1985,6 +1985,481 @@ _BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Daily Living curated cards
+# ---------------------------------------------------------------------------
+#
+# WHY THESE EXIST
+#
+# `_BUCKET_VARIANTS` above covers twelve buckets, all of them serving Talking,
+# Social, Learning, Fine Motor and Gross Motor. The buckets Daily Living
+# families land in — fork_spoon, dressing_on, dressing_off, buttoning — had no
+# curated cards at all, so every Daily Living card fell through to the generic
+# template in `_v22_fallback_instructions`. That template carries three strings
+# the validator blocks as placeholders ("Your child tries at least once: …",
+# the "sibling or friend … each person tries one step" group line, and for
+# unbucketed families "Set up a quick … Show your child one small step"), so
+# Daily Living produced ZERO usable activities at every age.
+#
+# The bug predates Parent 2.4. It was invisible while these rows sat inside
+# legacy movement_and_physical, because gross-motor families kept that bank
+# non-empty; giving Daily Living its own domain removed the cover.
+#
+# The repair is content, not validation. The validator is unchanged — the
+# generic template is still blocked, and deliberately vague success wording
+# still fails. These cards simply give the real skills real, observable
+# criteria, following the exact schema and house style of the curated cards
+# above: what the child does, how much help, and how many times.
+#
+# Success criteria name a concrete, parent-observable action. No card asks a
+# parent to judge quality, and none implies a developmental claim.
+_DAILY_LIVING_BUCKET_VARIANTS: Dict[str, List[Dict[str, str]]] = {
+    "fork_spoon": [
+        {
+            "title": "Scoop and Eat",
+            "activity_family": "spoon_use",
+            "theme": "snack time",
+            "materials": "a child-sized spoon, a bowl with a thick food such as yoghurt or mashed potato",
+            "instructions": (
+                "Sit your child upright at the table with the bowl close to them. "
+                "Put your hand over theirs and scoop one spoonful together, then let go "
+                "just before the spoon reaches their mouth. "
+                "Next turn, hand them the loaded spoon and let them take it the whole way. "
+                "Stop after 4–5 spoonfuls or when your child turns away."
+            ),
+            "success_criteria": "Your child brings a loaded spoon to their mouth at least once, with or without your hand guiding the start.",
+            "make_easier": "Load the spoon yourself each time and steady their elbow so they only travel the last few inches.",
+            "make_harder": "Let your child scoop from the bowl themselves before lifting the spoon.",
+            "group_play_line": "At a family meal, each person takes their own first spoonful at the same time.",
+            "what_to_avoid": "Avoid thin runny foods that slide off the spoon, and never practise while your child is lying back, walking, or upset. Stay within arm's reach.",
+        },
+        {
+            "title": "Fork the Soft Bites",
+            "activity_family": "fork_use",
+            "theme": "mealtime",
+            "materials": "a child-safe fork with short blunt tines, soft food cut into pea-sized pieces (banana, cooked carrot, soft pasta)",
+            "instructions": (
+                "Seat your child at the table with 4–5 soft pieces on a plate. "
+                "Show one slow press: hold the fork, press straight down onto a piece, lift. "
+                "Hand your child the fork and steady the plate for them. "
+                "Let them press and lift on their own, and help only if the fork slips."
+            ),
+            "success_criteria": "Your child spears or lifts at least one piece of food on the fork and brings it towards their mouth.",
+            "make_easier": "Hold the plate still and pre-press the fork into the food so your child only has to lift.",
+            "make_harder": "Offer slightly firmer pieces so your child has to press a little harder to spear them.",
+            "group_play_line": "Two people at the table each spear one piece and count them out loud together.",
+            "what_to_avoid": "Avoid sharp or long-tined forks, hard round foods such as whole grapes or raw carrot, and any practice away from a seated position. Always supervise.",
+        },
+        {
+            "title": "Teddy's Dinner",
+            "activity_family": "spoon_use",
+            "theme": "teddy feeding",
+            "materials": "a soft toy, a child-sized spoon, an empty bowl (no real food)",
+            "instructions": (
+                "Sit on the floor with the toy in front of you and the empty bowl between you. "
+                "Say 'teddy is hungry!' and scoop pretend food, then feed the toy. "
+                "Pass the spoon to your child and let them scoop and feed the toy. "
+                "Take 4–5 turns each."
+            ),
+            "success_criteria": "Your child holds the spoon and moves it to the toy's mouth at least twice.",
+            "make_easier": "Guide their hand for the first turn, then let go halfway through the second.",
+            "make_harder": "Ask your child to scoop, feed the toy, then put the spoon back in the bowl each round.",
+            "group_play_line": "Two children each feed their own toy, taking turns with one spoon.",
+            "what_to_avoid": "Avoid using real food in this pretend version — keep it a dry game so there is nothing to swallow while playing on the floor.",
+        },
+    ],
+    "dressing_on": [
+        {
+            "title": "Arm Through the Sleeve",
+            "activity_family": "dressing_on",
+            "theme": "morning routine",
+            "materials": "a loose t-shirt or jacket one size too big",
+            "instructions": (
+                "Sit your child on the floor or a low chair so they are steady. "
+                "Hold one sleeve open wide and bunch the fabric so the opening is close to their hand. "
+                "Say 'arm in' and wait five seconds before helping. "
+                "Once the arm is through, pull the shirt down together."
+            ),
+            "success_criteria": "Your child pushes one arm into the held-open sleeve with no more than a light hand on the elbow.",
+            "make_easier": "Start the arm in the sleeve yourself and let your child push it the last part of the way.",
+            "make_harder": "Hold the shirt still without bunching the sleeve, so your child finds the opening themselves.",
+            "group_play_line": "A sibling puts on their own jacket alongside, one arm at a time.",
+            "what_to_avoid": "Avoid tight necklines or standing while dressing if your child's balance is still wobbly — sitting is safer and easier.",
+        },
+        {
+            "title": "Step Into Pants",
+            "activity_family": "dressing_on",
+            "theme": "morning routine",
+            "materials": "loose elastic-waist pants",
+            "instructions": (
+                "Have your child sit down with their back supported. "
+                "Hold the waistband open in a wide circle right at their foot. "
+                "Say 'foot in' and wait. "
+                "When both feet are through, let your child pull the pants up from the knee while you steady them."
+            ),
+            "success_criteria": "Your child puts at least one foot through the held-open waistband and helps pull the pants up from the knee.",
+            "make_easier": "Guide the foot in yourself and let your child do only the pulling-up part.",
+            "make_harder": "Let your child hold the waistband open themselves while sitting.",
+            "group_play_line": "Two children sit side by side and each get one leg in before the other.",
+            "what_to_avoid": "Avoid dressing while standing unsupported, and avoid rushing — a hurried pull can unbalance your child.",
+        },
+        {
+            "title": "Hat On in the Mirror",
+            "activity_family": "dressing_on",
+            "theme": "mirror routine",
+            "materials": "a soft hat and a mirror your child can see into",
+            "instructions": (
+                "Stand or sit with your child in front of the mirror. "
+                "Put the hat on your own head first and say 'hat on!' "
+                "Hand the hat to your child and let them try to place it on their head. "
+                "Cheer when they see themselves wearing it. Repeat 3–4 times."
+            ),
+            "success_criteria": "Your child places the hat on or near their own head at least once without hand-over-hand help.",
+            "make_easier": "Rest the hat on the back of their head so they only need to pull it forward.",
+            "make_harder": "Ask your child to take the hat off and put it on again by themselves.",
+            "group_play_line": "Two children take turns putting the same hat on in front of the mirror.",
+            "what_to_avoid": "Avoid hats with cords or ties around the neck, and keep the mirror secure so it cannot tip.",
+        },
+    ],
+    "dressing_off": [
+        {
+            "title": "Socks Off First",
+            "activity_family": "dressing_off",
+            "theme": "bath routine",
+            "materials": "a loose sock",
+            "instructions": (
+                "Sit your child down and pull one sock halfway off so the heel is already free. "
+                "Say 'pull!' and tap the loose end. "
+                "Wait five seconds for your child to pull it the rest of the way. "
+                "Do the second sock the same way."
+            ),
+            "success_criteria": "Your child pulls a half-off sock the rest of the way off at least once.",
+            "make_easier": "Pull the sock down to the toes first so only a small tug is needed.",
+            "make_harder": "Start the sock only at the ankle so your child does more of the pulling.",
+            "group_play_line": "A sibling takes their own socks off at the same time, one each.",
+            "what_to_avoid": "Avoid pulling on your child's toes or foot, and keep this seated so nobody overbalances.",
+        },
+        {
+            "title": "Sleeve Pull-Off",
+            "activity_family": "dressing_off",
+            "theme": "bedtime routine",
+            "materials": "a loose shirt or jacket your child is already wearing",
+            "instructions": (
+                "Sit with your child and slip one arm most of the way out of its sleeve. "
+                "Hold the cuff and say 'pull your arm out'. "
+                "Wait for your child to pull the arm free before helping. "
+                "Do the other sleeve the same way, then lift the shirt off together."
+            ),
+            "success_criteria": "Your child pulls one arm out of its sleeve when you hold the cuff.",
+            "make_easier": "Free the elbow first so only the hand is left inside the sleeve.",
+            "make_harder": "Let your child start the sleeve themselves while you hold the shirt steady.",
+            "group_play_line": "A sibling takes their own jacket off alongside, one sleeve at a time.",
+            "what_to_avoid": "Avoid pulling a shirt over the face quickly — go slowly and keep the neckline wide.",
+        },
+        {
+            "title": "Undress the Teddy",
+            "activity_family": "dressing_off",
+            "theme": "teddy dressing",
+            "materials": "a soft toy wearing a loose doll shirt or a sock as clothing",
+            "instructions": (
+                "Sit on the floor with the dressed toy between you. "
+                "Say 'teddy is getting ready for bed' and pull one sleeve half off. "
+                "Hand the toy to your child and let them pull the rest off. "
+                "Swap and repeat 3–4 times."
+            ),
+            "success_criteria": "Your child removes one item of the toy's clothing with at most a starting tug from you.",
+            "make_easier": "Loosen the clothing almost all the way so one gentle pull finishes it.",
+            "make_harder": "Ask your child to take the clothing off and put it back on the toy.",
+            "group_play_line": "Two children undress one toy together — one holds, the other pulls.",
+            "what_to_avoid": "Avoid doll clothes with small buttons or beads that could come loose near a young child.",
+        },
+    ],
+    "buttoning": [
+        {
+            "title": "Big Button Push-Through",
+            "activity_family": "buttoning_fasteners",
+            "theme": "button board",
+            "materials": "a coat or cardigan with buttons at least 3 cm wide, laid flat on a table",
+            "instructions": (
+                "Lay the coat flat so your child can see the button and the hole. "
+                "Push the button halfway through one hole and stop. "
+                "Say 'pull it through' and let your child finish the button. "
+                "Work on one button at a time, 3–4 buttons in total."
+            ),
+            "success_criteria": "Your child pulls a half-pushed button the rest of the way through the hole at least once.",
+            "make_easier": "Use a bigger button and a looser hole, and hold the fabric taut for your child.",
+            "make_harder": "Let your child push the button in from the start while you only hold the fabric.",
+            "group_play_line": "Two children work on opposite ends of the same coat, one button each.",
+            "what_to_avoid": "Avoid small buttons with a young child — anything under about 3 cm is a choking risk if it comes loose.",
+        },
+        {
+            "title": "Velcro Pull-Apart",
+            "activity_family": "buttoning_fasteners",
+            "theme": "dress-up fasteners",
+            "materials": "a shoe, bag or jacket with a wide velcro strap",
+            "instructions": (
+                "Put the item flat in front of your child with the velcro fastened. "
+                "Lift one corner of the strap so there is something to grip. "
+                "Say 'pull it open' and wait. "
+                "Once it is open, press it closed together and go again 3–4 times."
+            ),
+            "success_criteria": "Your child pulls the velcro strap apart at least twice when you lift the corner.",
+            "make_easier": "Peel the strap most of the way open so only a small pull remains.",
+            "make_harder": "Leave the strap flat so your child has to find and lift the edge themselves.",
+            "group_play_line": "Two children each open one strap on the same pair of shoes.",
+            "what_to_avoid": "Avoid stiff industrial velcro that needs adult strength — it turns practice into frustration.",
+        },
+        {
+            "title": "Zip Up the Jacket",
+            "activity_family": "buttoning_fasteners",
+            "theme": "dress-up fasteners",
+            "materials": "a jacket with a large chunky zip pull",
+            "instructions": (
+                "Lay the jacket flat or hold it steady on your child's lap. "
+                "Join the bottom of the zip yourself and pull it up a few centimetres. "
+                "Put your child's fingers on the zip pull and say 'up!' "
+                "Let them pull it the rest of the way. Repeat 3–4 times."
+            ),
+            "success_criteria": "Your child pulls the zip upward at least halfway once you have started it.",
+            "make_easier": "Thread a small loop of ribbon through the zip pull to make it easier to grip.",
+            "make_harder": "Let your child pull the zip all the way from just above the join.",
+            "group_play_line": "A sibling zips their own jacket at the same time.",
+            "what_to_avoid": "Avoid zips near the chin — stop the pull at chest height so the zip never catches skin.",
+        },
+    ],
+}
+
+# Family-level Daily Living cards. Resolved BEFORE buckets in
+# `_v22_fallback_instructions`, which matters for two reasons:
+#
+#   * spoon_use and fork_use share the fork_spoon bucket, so bucket rotation
+#     could hand a child working on fork skills a spoon activity. Each utensil
+#     gets its own cards so the practice matches the actual skill.
+#   * finger_feeding, safety_hot_warning and serving_pouring_transfer resolve to
+#     the `general` bucket, which no bucket entry can reach.
+_DAILY_LIVING_FAMILY_VARIANTS: Dict[str, List[Dict[str, str]]] = {
+    "spoon_use": [
+        {
+            "title": "Scoop and Eat",
+            "activity_family": "spoon_use",
+            "theme": "snack time",
+            "materials": "a child-sized spoon, a bowl with a thick food such as yoghurt or mashed potato",
+            "instructions": (
+                "Sit your child upright at the table with the bowl close to them. "
+                "Put your hand over theirs and scoop one spoonful together, then let go "
+                "just before the spoon reaches their mouth. "
+                "Next turn, hand them the loaded spoon and let them take it the whole way. "
+                "Stop after 4–5 spoonfuls or when your child turns away."
+            ),
+            "success_criteria": "Your child brings a loaded spoon to their mouth at least once, with or without your hand guiding the start.",
+            "make_easier": "Load the spoon yourself each time and steady their elbow so they only travel the last few inches.",
+            "make_harder": "Let your child scoop from the bowl themselves before lifting the spoon.",
+            "group_play_line": "At a family meal, each person takes their own first spoonful at the same time.",
+            "what_to_avoid": "Avoid thin runny foods that slide off the spoon, and never practise while your child is lying back, walking, or upset. Stay within arm's reach.",
+        },
+        {
+            "title": "Teddy's Dinner",
+            "activity_family": "spoon_use",
+            "theme": "teddy feeding",
+            "materials": "a soft toy, a child-sized spoon, an empty bowl (no real food)",
+            "instructions": (
+                "Sit on the floor with the toy in front of you and the empty bowl between you. "
+                "Say 'teddy is hungry!' and scoop pretend food, then feed the toy. "
+                "Pass the spoon to your child and let them scoop and feed the toy. "
+                "Take 4–5 turns each."
+            ),
+            "success_criteria": "Your child holds the spoon and moves it to the toy's mouth at least twice.",
+            "make_easier": "Guide their hand for the first turn, then let go halfway through the second.",
+            "make_harder": "Ask your child to scoop, feed the toy, then put the spoon back in the bowl each round.",
+            "group_play_line": "Two children each feed their own toy, taking turns with one spoon.",
+            "what_to_avoid": "Avoid using real food in this pretend version — keep it a dry game so there is nothing to swallow while playing on the floor.",
+        },
+    ],
+    "fork_use": [
+        {
+            "title": "Fork the Soft Bites",
+            "activity_family": "fork_use",
+            "theme": "mealtime",
+            "materials": "a child-safe fork with short blunt tines, soft food cut into pea-sized pieces (banana, cooked carrot, soft pasta)",
+            "instructions": (
+                "Seat your child at the table with 4–5 soft pieces on a plate. "
+                "Show one slow press: hold the fork, press straight down onto a piece, lift. "
+                "Hand your child the fork and steady the plate for them. "
+                "Let them press and lift on their own, and help only if the fork slips."
+            ),
+            "success_criteria": "Your child spears or lifts at least one piece of food on the fork and brings it towards their mouth.",
+            "make_easier": "Hold the plate still and pre-press the fork into the food so your child only has to lift.",
+            "make_harder": "Offer slightly firmer pieces so your child has to press a little harder to spear them.",
+            "group_play_line": "Two people at the table each spear one piece and count them out loud together.",
+            "what_to_avoid": "Avoid sharp or long-tined forks, hard round foods such as whole grapes or raw carrot, and any practice away from a seated position. Always supervise.",
+        },
+        {
+            "title": "Fork the Pasta Pieces",
+            "activity_family": "fork_use",
+            "theme": "mealtime",
+            "materials": "a child-safe fork and a few pieces of cooked pasta on a plate with a raised rim",
+            "instructions": (
+                "Seat your child at the table with 4–5 pasta pieces against the rim of the plate. "
+                "Show how the rim helps: press the fork down where the pasta meets the edge. "
+                "Hand your child the fork and let them press against the rim themselves. "
+                "Stop after a few tries or when your child has had enough."
+            ),
+            "success_criteria": "Your child presses the fork onto a piece of pasta and lifts it off the plate at least once.",
+            "make_easier": "Push the pasta right up against the rim so it cannot slide away from the fork.",
+            "make_harder": "Place the pasta in the middle of the plate so there is no rim to press against.",
+            "group_play_line": "Two people each fork one piece and hold them up to compare.",
+            "what_to_avoid": "Avoid long strands of pasta, hard round foods, and any practice while your child is moving around. Always supervise.",
+        },
+    ],
+    "finger_feeding": [
+        {
+            "title": "Pick Up the Soft Pieces",
+            "activity_family": "finger_feeding",
+            "theme": "snack time",
+            "materials": "soft finger food cut into pea-sized pieces (banana, cooked carrot, soft cheese) on a flat plate",
+            "instructions": (
+                "Seat your child upright at the table with 4–5 soft pieces spread out on the plate. "
+                "Point to one piece and wait — give your child five seconds before helping. "
+                "If they need a start, nudge one piece to the edge of the plate so it is easier to pick up. "
+                "Stop when your child turns away or the plate is empty."
+            ),
+            "success_criteria": "Your child picks up at least one piece of food with their fingers and brings it to their mouth.",
+            "make_easier": "Offer larger strips your child can grip in a whole fist rather than small pieces.",
+            "make_harder": "Spread the pieces further apart so your child reaches across the plate for each one.",
+            "group_play_line": "At a family snack, everyone picks up their own first piece at the same time.",
+            "what_to_avoid": "Avoid hard, round or sticky foods such as whole grapes, nuts, popcorn or raw carrot. Keep your child seated and stay with them the whole time.",
+        },
+        {
+            "title": "One Piece at a Time",
+            "activity_family": "finger_feeding",
+            "theme": "mealtime",
+            "materials": "a small bowl with a few soft pieces of your child's usual food",
+            "instructions": (
+                "Put only two or three soft pieces in the bowl at once so it does not feel crowded. "
+                "Sit facing your child and take one piece yourself, slowly. "
+                "Wait for your child to reach in. "
+                "Refill with two or three more pieces when the bowl is empty."
+            ),
+            "success_criteria": "Your child reaches into the bowl and takes out a piece of food on their own at least twice.",
+            "make_easier": "Hold the bowl at chest height and tilt it slightly towards your child.",
+            "make_harder": "Use a deeper bowl so your child has to reach further in.",
+            "group_play_line": "Two children share one bowl, taking one piece each in turn.",
+            "what_to_avoid": "Avoid filling the bowl so full that your child grabs a handful, and never leave your child alone with food.",
+        },
+    ],
+    "safety_hot_warning": [
+        {
+            "title": "Stop and Look",
+            "activity_family": "safety_hot_warning",
+            "theme": "listening practice",
+            "materials": "no materials needed",
+            "instructions": (
+                "While your child is playing calmly, say 'stop' in a clear, steady voice. "
+                "The moment they pause or look at you, smile and say 'you stopped — thank you!' "
+                "Carry on playing and try again a few minutes later. "
+                "Do this 3–4 times across the day, not all at once."
+            ),
+            "success_criteria": "Your child pauses what they are doing or looks towards you when you say 'stop'.",
+            "make_easier": "Say 'stop' while also gently touching their shoulder so there are two signals.",
+            "make_harder": "Say 'stop' from across the room instead of right beside your child.",
+            "group_play_line": "Two children play a walk-and-stop game where everyone freezes on the word 'stop'.",
+            "what_to_avoid": "Avoid using a frightening or angry tone — a calm clear voice is what you want your child to respond to in a real moment.",
+        },
+        {
+            "title": "Hot Means Wait",
+            "activity_family": "safety_hot_warning",
+            "theme": "kitchen routine",
+            "materials": "a warm (not hot) mug of drink placed well out of reach",
+            "instructions": (
+                "With the mug safely across the counter, point to it and say 'hot — we wait'. "
+                "Hold your child's hand and step back together one step. "
+                "Say 'we waited!' and offer something they can touch instead. "
+                "Repeat once or twice during the week when a warm drink is around."
+            ),
+            "success_criteria": "Your child steps back or holds your hand when you say 'hot — we wait' at least once.",
+            "make_easier": "Say the words while already holding your child's hand and stepping back together.",
+            "make_harder": "Say only 'hot' and wait to see whether your child steps back on their own.",
+            "group_play_line": "An older sibling models stepping back and saying 'hot — we wait' first.",
+            "what_to_avoid": "Never let your child touch anything actually hot to teach this. Keep the mug out of reach at all times — this is a words-and-distance routine only.",
+        },
+    ],
+    "serving_pouring_transfer": [
+        {
+            "title": "Pour the Little Jug",
+            "activity_family": "serving_pouring_transfer",
+            "theme": "kitchen helper",
+            "materials": "a small jug with a few centimetres of water and an open cup, on a tray or towel",
+            "instructions": (
+                "Put the tray on a low table and sit beside your child. "
+                "Hold the cup steady and guide the jug with them for the first pour. "
+                "Let go and let your child tip the jug themselves on the next turn. "
+                "Empty the cup back into the jug and repeat 3–4 times."
+            ),
+            "success_criteria": "Your child tips the jug and gets some water into the cup at least once.",
+            "make_easier": "Use only a tablespoon of water so the jug is light and spills stay tiny.",
+            "make_harder": "Let your child hold both the jug and the cup without your hands on either.",
+            "group_play_line": "Two children take turns — one holds the cup, the other pours, then they swap.",
+            "what_to_avoid": "Avoid hot liquids and glass containers, and expect spills — use a tray so a spill is part of the activity rather than a problem.",
+        },
+        {
+            "title": "Scoop It Across",
+            "activity_family": "serving_pouring_transfer",
+            "theme": "kitchen helper",
+            "materials": "two bowls and a large spoon, with a cup of dry oats or rice in one bowl",
+            "instructions": (
+                "Set the two bowls side by side with the dry oats in the left one. "
+                "Scoop one spoonful across to the empty bowl and say 'across it goes'. "
+                "Hand your child the spoon and let them move the next spoonful. "
+                "Keep going until the first bowl is empty."
+            ),
+            "success_criteria": "Your child moves at least two spoonfuls from one bowl to the other.",
+            "make_easier": "Move the bowls right next to each other so the spoon travels a short distance.",
+            "make_harder": "Move the bowls further apart, or use a smaller spoon.",
+            "group_play_line": "Two children each have a spoon and move the oats across together.",
+            "what_to_avoid": "Avoid dry rice or small grains with a child who still mouths objects — use large oats and stay alongside throughout.",
+        },
+    ],
+}
+
+# Merge into the curated pools. Kept as separate literals above so the Daily
+# Living repair stays reviewable, and asserted here so a key can never silently
+# overwrite existing curated content.
+assert not (set(_DAILY_LIVING_BUCKET_VARIANTS) & set(_BUCKET_VARIANTS)), (
+    "Daily Living bucket cards would overwrite existing curated buckets: "
+    f"{sorted(set(_DAILY_LIVING_BUCKET_VARIANTS) & set(_BUCKET_VARIANTS))}"
+)
+assert not (set(_DAILY_LIVING_FAMILY_VARIANTS) & set(_FAMILY_VARIANTS)), (
+    "Daily Living family cards would overwrite existing curated families: "
+    f"{sorted(set(_DAILY_LIVING_FAMILY_VARIANTS) & set(_FAMILY_VARIANTS))}"
+)
+_BUCKET_VARIANTS.update(_DAILY_LIVING_BUCKET_VARIANTS)
+_FAMILY_VARIANTS.update(_DAILY_LIVING_FAMILY_VARIANTS)
+
+
+#: Daily Living families deliberately left WITHOUT curated content.
+#:
+#: Both sit on the feeding/swallowing side of self-help rather than the motor
+#: side, and writing home practice for them would be improvising clinical
+#: guidance:
+#:
+#:   cup_drinking            — open-cup drinking is oral-motor and carries
+#:                             aspiration risk; its milestone ("closes lips
+#:                             around the cup edge") is a swallowing-mechanics
+#:                             observation, not a routine a parent should drill.
+#:   feeding_self_regulation — "shows different responses during feeding" is a
+#:                             feeding-evaluation observation, not a skill with
+#:                             a home practice target.
+#:
+#: They therefore produce no cards and fail closed at the validator, which is
+#: the intended outcome — not an oversight. Any future content here needs
+#: clinical review, and the test suite asserts the hold so it cannot be filled
+#: in silently.
+DAILY_LIVING_CLINICAL_HOLD: FrozenSet[str] = frozenset({
+    "cup_drinking",
+    "feeding_self_regulation",
+})
+
+
 # Deterministic fallback text  (V22)
 # ---------------------------------------------------------------------------
 
@@ -2001,7 +2476,18 @@ def _v22_fallback_instructions(
         return dict(fam_cards[(variant - 1) % len(fam_cards)])
 
     # 2. Bucket-level variants — fallback for families not in _FAMILY_VARIANTS
-    bucket_cards = _BUCKET_VARIANTS.get(bucket)
+    #
+    # Families on the Daily Living clinical hold must NOT pick up a bucket card.
+    # feeding_self_regulation shares the fork_spoon bucket with spoon_use and
+    # fork_use, so without this guard it would silently inherit utensil cards —
+    # turning a feeding-evaluation observation into home practice we never wrote
+    # for it. Skipping the bucket lookup drops it to the generic template below,
+    # which the validator blocks, so the family yields no card. That is the
+    # intended fail-closed outcome and it is decided HERE, deliberately, rather
+    # than happening to fall out of placeholder wording.
+    bucket_cards = (
+        None if fam in DAILY_LIVING_CLINICAL_HOLD else _BUCKET_VARIANTS.get(bucket)
+    )
     if bucket_cards:
         return dict(bucket_cards[(variant - 1) % len(bucket_cards)])
 

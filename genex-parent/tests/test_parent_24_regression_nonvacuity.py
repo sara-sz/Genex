@@ -78,21 +78,21 @@ DOMAIN_CONCERN = {
     "daily_living": "cannot dress himself, self care delay, trouble feeding himself",
 }
 
-# Daily Living produces bridges and milestones but zero activities: the
-# deterministic fallback wording for the self-help families (spoon_use,
-# dressing_on/off, fork_use) trips the validator's generic_success_criteria
-# rule, so every card is blocked.
-#
-# This PREDATES Parent 2.4 — verified at tag parent-2.4-0.3a-hosted-ci, where
+# RESOLVED. Daily Living used to plan correctly but yield zero activities: its
+# families fell through to the generic fallback template, whose wording trips
+# the validator's generic_success_criteria rule, so every card was blocked. The
+# bug predated Parent 2.4 — verified at tag parent-2.4-0.3a-hosted-ci, where
 # dressing_off and spoon_use were already 100% blocked inside the legacy
-# movement bank. Gross-motor families (kick_ball, running,
-# safe_climbing_transition) masked it by keeping that bank non-empty; giving
-# Daily Living its own domain simply removed the mask.
+# movement bank, masked by gross-motor families keeping that bank non-empty.
 #
-# It is NOT a seven-domain regression and is tracked as content debt, so this
-# module records it rather than asserting a behaviour the system cannot yet
-# deliver.
-KNOWN_EMPTY_ACTIVITY_DOMAINS = {"daily_living"}
+# Fixed by the Daily Living repair with CURATED CONTENT, not by relaxing the
+# validator — see tests/test_parent_24_daily_living.py, which pins both that the
+# skills now generate real cards and that the generic wording still fails.
+#
+# The set is deliberately kept (empty) rather than deleted: it is the mechanism
+# that forced this entry to be revisited instead of quietly staying broken, and
+# it is where a future content gap should be recorded.
+KNOWN_EMPTY_ACTIVITY_DOMAINS: set = set()
 
 
 def _concern_state(domain: str):
