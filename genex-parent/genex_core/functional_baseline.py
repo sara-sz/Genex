@@ -134,6 +134,21 @@ class BaselineArea:
     #: a structural guarantee rather than a happy accident of which rows the
     #: workbook currently carries at each age.
     track_subdomains: Tuple[str, ...] = ()
+    #: When True, "Not sure" calibrates NOTHING and resolves straight to
+    #: UNRESOLVED instead of walking the area track.
+    #:
+    #: Set for Daily Living only. Its declared subdomain still contains several
+    #: INDEPENDENT routines — self-feeding and dressing/fastening — which the
+    #: descriptors disambiguate via track_families. "Not sure" supplies no
+    #: descriptor, so there is no routine to bracket within, and walking the
+    #: whole subdomain would reintroduce exactly the cross-routine bracketing
+    #: the track restriction removed. The other three areas are a single chain
+    #: end to end, so "Not sure" there can safely calibrate from the age band.
+    #:
+    #: Picking a routine on the parent's behalf — by default or by age — is the
+    #: one thing this must not do. Resolving a routine needs a second structured
+    #: question, which is a later UX phase.
+    not_sure_requires_a_routine: bool = False
 
     def choice(self, choice_id: str) -> EntryChoice:
         for c in self.choices:
@@ -241,6 +256,7 @@ AREAS: Tuple[BaselineArea, ...] = (
         # ask a four-year-old's parent a newborn feeding-cue question.
         # safety_awareness is excluded as a different kind of skill again.
         track_subdomains=("self_help_motor_skills",),
+        not_sure_requires_a_routine=True,
         choices=(
             EntryChoice("needs_help_most", "Needs help with most routines", 15,
                         "15m 'uses fingers to feed herself some food'",
@@ -532,8 +548,14 @@ def _track_for(record: "BaselineRecord") -> Tuple[Tuple[str, ...], Tuple[str, ..
 
 def first_question(record: BaselineRecord) -> Optional[Dict[str, Any]]:
     """The first validated question, at the anchor the entry choice selected."""
+    area = get_area(record.area_id)
     start = record.entry_anchor_months
     if start is None:
+        if area.not_sure_requires_a_routine:
+            # No descriptor means no routine, and this area's subdomain spans
+            # several. Ask nothing rather than pick one — the baseline resolves
+            # to UNRESOLVED and calibration continues elsewhere.
+            return None
         # "Not sure" — no anchor is assumed. Start at the child's own age band,
         # which is neutral rather than a guess about ability.
         start = record.chronological_months
@@ -541,7 +563,7 @@ def first_question(record: BaselineRecord) -> Optional[Dict[str, Any]]:
     rung = _nearest_rung(record.domain, start, subdomains, families)
     if rung is None:
         return None
-    prefer = get_area(record.area_id).choice(record.entry_choice_id).prefer_milestone
+    prefer = area.choice(record.entry_choice_id).prefer_milestone
     return question_at(record.domain, rung, prefer, subdomains, families)
 
 

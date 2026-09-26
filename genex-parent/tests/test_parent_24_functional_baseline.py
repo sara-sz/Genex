@@ -694,3 +694,92 @@ def test_track_restriction_preserves_unknown_handling():
         record = run_baseline(area.area_id, "not_sure", 48, ["not_sure"] * MAX_QUESTIONS)
         assert record.routing_anchor_months is None
         assert record.routing_anchor_months != LEGACY_NO_ANSWER_DEV_AGE
+
+
+# ===========================================================================
+# Daily Living + "Not sure" — no routine is chosen on the parent's behalf
+# ===========================================================================
+#
+# self_help_motor_skills still contains several INDEPENDENT routines
+# (self-feeding, dressing/fastening) that the descriptors disambiguate via
+# track_families. "Not sure" supplies no descriptor, so walking the whole
+# subdomain would reintroduce the cross-routine bracketing the track
+# restriction just removed. It therefore calibrates nothing.
+
+DL_FEEDING = {"finger_feeding", "spoon_use", "fork_use", "serving_pouring_transfer"}
+DL_DRESSING = {"dressing_off", "dressing_on", "buttoning_fasteners"}
+
+
+def test_daily_living_not_sure_asks_nothing():
+    for answers in ([], ["not_sure"], ["yes", "no"], ["yes", "no", "yes", "no"]):
+        record = run_baseline("daily_skills", "not_sure", 48, answers)
+        assert record.asked == [], (answers, record.asked)
+
+
+def test_daily_living_not_sure_is_unresolved():
+    record = run_baseline("daily_skills", "not_sure", 48, ["yes", "no"])
+    assert record.status == BaselineStatus.UNRESOLVED
+    assert record.routing_anchor_months is None
+
+
+def test_daily_living_not_sure_writes_no_dev_age():
+    state = {"dev_age": {}}
+    apply_baseline_to_state(state, run_baseline("daily_skills", "not_sure", 48, ["yes"]))
+    assert "daily_living" not in state["dev_age"]
+    assert state["dev_age"] == {}
+
+
+def test_daily_living_not_sure_infers_no_routine():
+    """Neither feeding nor dressing may be selected for the parent."""
+    for age in (18, 24, 36, 48, 60):
+        record = run_baseline("daily_skills", "not_sure", age, ["yes", "no"])
+        families = {a.get("activity_family") for a in record.asked}
+        assert not families & DL_FEEDING, families
+        assert not families & DL_DRESSING, families
+    choice = get_area("daily_skills").choice("not_sure")
+    assert choice.track_families == (), choice.track_families
+
+
+def test_daily_living_not_sure_does_not_vary_with_age():
+    """Chronological age must not be used to pick a routine."""
+    results = {run_baseline("daily_skills", "not_sure", age, ["yes", "no"]).to_state()["status"]
+               for age in (12, 24, 36, 48, 60)}
+    assert results == {BaselineStatus.UNRESOLVED}
+
+
+def test_daily_living_not_sure_reaches_no_held_family():
+    for age in (18, 36, 60):
+        for asked in _reachable("daily_skills", "not_sure", age):
+            assert asked.get("activity_family") not in DAILY_LIVING_CLINICAL_HOLD
+
+
+def test_daily_living_not_sure_is_still_recorded_for_provenance():
+    """Unresolved is a real outcome, not a missing record."""
+    stored = run_baseline("daily_skills", "not_sure", 48, ["yes"]).to_state()
+    assert stored["entry_choice_id"] == "not_sure"
+    assert stored["domain"] == "daily_living"
+    assert stored["status"] == BaselineStatus.UNRESOLVED
+    assert stored["routing_anchor_months"] is None
+    assert stored["asked"] == []
+
+
+def test_only_daily_living_suppresses_not_sure_calibration():
+    """The other three areas are one chain end to end, so they still calibrate."""
+    for area in AREAS:
+        record = run_baseline(area.area_id, "not_sure", 48, ["yes", "no"])
+        if area.area_id == "daily_skills":
+            assert record.asked == []
+            assert area.not_sure_requires_a_routine is True
+        else:
+            assert record.asked, area.area_id
+            assert area.not_sure_requires_a_routine is False
+
+
+def test_descriptor_choices_still_calibrate_in_daily_living():
+    """The suppression must apply to 'Not sure' only."""
+    for choice in get_area("daily_skills").choices:
+        if choice.choice_id == "not_sure":
+            continue
+        record = run_baseline("daily_skills", choice.choice_id, 48, ["yes", "no"])
+        assert record.asked, choice.choice_id
+        assert record.routing_anchor_months is not None, choice.choice_id
