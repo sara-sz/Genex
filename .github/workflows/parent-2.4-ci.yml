@@ -70,6 +70,7 @@ jobs:
             tests/test_parent_24_regression_nonvacuity.py \
             tests/test_parent_24_domain_compat.py \
             tests/test_parent_24_daily_living.py \
+            tests/test_parent_24_functional_baseline.py \
             tests/test_regression.py
 
       - name: Taxonomy package imports with stdlib only
@@ -148,6 +149,15 @@ jobs:
         # rule to make them pass. It also holds cup_drinking and
         # feeding_self_regulation closed pending clinical review.
         run: python -m pytest tests/test_parent_24_daily_living.py -q
+
+      - name: Parent 2.4 deterministic functional baseline
+        # A structured entry step before the estimator. Gated because the suite
+        # pins properties that fail silently if broken: the baseline must stay
+        # LLM-free and deterministic, "Not sure" and a missing answer must never
+        # become the legacy six-month dev_age, and calibration must stay on one
+        # coherent skill track so an uneven-but-normal profile is never read as
+        # a contradiction. It also holds Daily Living "Not sure" to UNRESOLVED.
+        run: python -m pytest tests/test_parent_24_functional_baseline.py -q
 
       - name: Parent regression suite (seven-domain vocabulary)
         # Now part of the hosted gate. It exercises the Brain end to end —
