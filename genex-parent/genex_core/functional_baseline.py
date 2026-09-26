@@ -41,6 +41,7 @@ months" default here: unknown stays unknown.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 from genex_core.activity_engine import DAILY_LIVING_CLINICAL_HOLD
@@ -106,6 +107,14 @@ class EntryChoice:
     #: a parent choosing "Has trouble holding toys" is asked about bringing
     #: hands to mouth, purely because that sorts first alphabetically.
     prefer_milestone: str = ""
+    #: Activity families this descriptor calibrates within, when a domain spans
+    #: several unrelated ROUTINES. Empty means "the whole area track".
+    #:
+    #: Daily Living needs this and the other three do not. Eating, dressing and
+    #: fastening are different routines that merely happen to increase in age;
+    #: a child can eat with a spoon and not undress. Bracketing across them
+    #: would compare skills that are not on one chain.
+    track_families: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -118,6 +127,13 @@ class BaselineArea:
     subtitle: str
     question: str
     choices: Tuple[EntryChoice, ...]
+    #: The COHERENT SKILL TRACK this area calibrates on — declared, not inferred.
+    #:
+    #: Stepping one rung by month is only safe when neighbouring rungs are on one
+    #: developmental chain. Restricting the ladder to these subdomains makes that
+    #: a structural guarantee rather than a happy accident of which rows the
+    #: workbook currently carries at each age.
+    track_subdomains: Tuple[str, ...] = ()
 
     def choice(self, choice_id: str) -> EntryChoice:
         for c in self.choices:
@@ -135,6 +151,13 @@ AREAS: Tuple[BaselineArea, ...] = (
         title="Talking & Communicating",
         subtitle="Words, understanding, conversation",
         question="Which best describes your child now?",
+        # Expressive communication track. The descriptors are all about spoken
+        # output, so calibration stays on babble -> first words -> word
+        # combinations -> sentences. Receptive language, gestures, conversation
+        # and intelligibility are deliberately OUT: a child with strong
+        # comprehension and little speech is an uneven profile, not a
+        # contradiction, and must not be bracketed against a receptive row.
+        track_subdomains=("expressive_language", "early_vocalization_and_babbling"),
         choices=(
             EntryChoice("no_words_yet", "No words yet", 9,
                         "9m 'makes a lot of different sounds like mamamamama'; first words appear at 12m"),
@@ -156,6 +179,9 @@ AREAS: Tuple[BaselineArea, ...] = (
         title="Hand & Finger Skills",
         subtitle="Grasping, picking up, drawing",
         question="Which best describes your child now?",
+        # Fine Motor has exactly one subdomain, so hand use cannot drift into
+        # Daily Living tasks that merely also involve hands.
+        track_subdomains=("fine_motor_hand_use",),
         choices=(
             EntryChoice("trouble_holding", "Has trouble holding toys", 4,
                         "4m 'holds a toy when you put it in his hand'",
@@ -178,6 +204,16 @@ AREAS: Tuple[BaselineArea, ...] = (
         title="Movement Skills",
         subtitle="Sitting, walking, running, jumping",
         question="Which best describes your child now?",
+        # Postural control and mobility are ONE prerequisite chain, not two
+        # adjacent lists: postural rows run 2-12m (head control, rolling,
+        # sitting, pulling to stand) and mobility rows run 12-60m (cruising,
+        # steps, walking, running, jumping). They partition cleanly with a
+        # single handoff at 12m, where pulling to stand meets walking while
+        # holding on — a genuine progression, verified against the workbook.
+        track_subdomains=(
+            "postural_control_and_transitions",
+            "gross_motor_mobility_and_coordination",
+        ),
         choices=(
             EntryChoice("needs_help_sitting", "Needs help sitting or standing", 6,
                         "6m 'leans on hands to support herself when sitting'; 9m 'sits without support'"),
@@ -199,18 +235,29 @@ AREAS: Tuple[BaselineArea, ...] = (
         title="Daily Skills",
         subtitle="Dressing, eating, simple routines",
         question="Which best describes your child now?",
+        # Self-help skills only. adaptive_feeding_cues is excluded: with the held
+        # families removed its 4m row ("opens mouth when she sees breast or
+        # bottle") became the next rung below 15m, so stepping easier once could
+        # ask a four-year-old's parent a newborn feeding-cue question.
+        # safety_awareness is excluded as a different kind of skill again.
+        track_subdomains=("self_help_motor_skills",),
         choices=(
             EntryChoice("needs_help_most", "Needs help with most routines", 15,
-                        "15m 'uses fingers to feed herself some food'"),
+                        "15m 'uses fingers to feed herself some food'",
+                        track_families=("finger_feeding", "spoon_use", "fork_use", "serving_pouring_transfer")),
             EntryChoice("helps_with_parts", "Helps with parts of routines", 18,
                         "18m 'tries to use a spoon'; 'feeds himself with his fingers'",
-                        prefer_milestone="tries to use a spoon"),
+                        prefer_milestone="tries to use a spoon",
+                        track_families=("finger_feeding", "spoon_use", "fork_use", "serving_pouring_transfer")),
             EntryChoice("some_steps_independent", "Does some steps independently", 24,
-                        "24m 'eats with a spoon'"),
+                        "24m 'eats with a spoon'",
+                        track_families=("finger_feeding", "spoon_use", "fork_use", "serving_pouring_transfer")),
             EntryChoice("many_routines_with_help", "Does many routines with help", 30,
-                        "30m 'takes some clothes off by himself'; 36m 'puts on some clothes by himself'"),
+                        "30m 'takes some clothes off by himself'; 36m 'puts on some clothes by himself'",
+                        track_families=("dressing_off", "dressing_on", "buttoning_fasteners")),
             EntryChoice("mostly_independent", "Mostly independent", 48,
-                        "48m 'serves herself food or pours water'; 'unbuttons some buttons'"),
+                        "48m 'unbuttons some buttons'; 60m 'buttons some buttons'",
+                        track_families=("dressing_off", "dressing_on", "buttoning_fasteners")),
             _NOT_SURE,
         ),
     ),
@@ -256,7 +303,12 @@ def entry_screen(area_id: str) -> Dict[str, Any]:
 # The validated ladder
 # ---------------------------------------------------------------------------
 
-def _rows_for_domain(domain: str) -> List[Dict[str, Any]]:
+@lru_cache(maxsize=64)
+def _rows_for_domain(
+    domain: str,
+    subdomains: Tuple[str, ...] = (),
+    families: Tuple[str, ...] = (),
+) -> Tuple[Dict[str, Any], ...]:
     """Gold Standard rows for a domain, held activity families removed.
 
     Daily Living's `cup_drinking` and `feeding_self_regulation` families are on
@@ -272,6 +324,13 @@ def _rows_for_domain(domain: str) -> List[Dict[str, Any]]:
     for record in frame[frame["category_key"] == domain].to_dict(orient="records"):
         family = str(record.get("activity_family", "") or "")
         if family in DAILY_LIVING_CLINICAL_HOLD:
+            continue
+        subdomain = str(record.get("subdomain", "") or "")
+        # Restrict to the declared coherent track, so a rung is only reachable
+        # when it sits on the same developmental chain as its neighbours.
+        if subdomains and subdomain not in subdomains:
+            continue
+        if families and family not in families:
             continue
         months = record.get("months")
         milestone = str(record.get("milestone", "") or "").strip()
@@ -289,13 +348,19 @@ def _rows_for_domain(domain: str) -> List[Dict[str, Any]]:
             "parent_explanation": str(record.get("parent_explanation", "") or ""),
         })
     # Deterministic order: by month, then milestone text.
+    #
+    # Cached because the routing walks the ladder repeatedly and each call
+    # otherwise re-reads the workbook. A tuple is returned so the cached value
+    # cannot be mutated by a caller.
     rows.sort(key=lambda r: (r["months"], r["milestone"]))
-    return rows
+    return tuple(rows)
 
 
-def ladder_months(domain: str) -> List[int]:
-    """Ordered distinct months that carry usable questions for `domain`."""
-    return sorted({r["months"] for r in _rows_for_domain(domain)})
+def ladder_months(
+    domain: str, subdomains: Tuple[str, ...] = (), families: Tuple[str, ...] = ()
+) -> List[int]:
+    """Ordered distinct months that carry usable questions on the track."""
+    return sorted({r["months"] for r in _rows_for_domain(domain, subdomains, families)})
 
 
 #: Which subdomain to ask about when several share a rung.
@@ -333,14 +398,19 @@ def _preference_rank(domain: str, subdomain: str) -> int:
 
 
 def question_at(
-    domain: str, months: int, prefer_milestone: str = ""
+    domain: str,
+    months: int,
+    prefer_milestone: str = "",
+    subdomains: Tuple[str, ...] = (),
+    families: Tuple[str, ...] = (),
 ) -> Optional[Dict[str, Any]]:
     """The single deterministic question for a domain at a rung.
 
     Several rows can share a month. The preferred subdomain wins, then
     milestone text, so the same rung always yields the same question.
     """
-    candidates = [r for r in _rows_for_domain(domain) if r["months"] == months]
+    candidates = [r for r in _rows_for_domain(domain, subdomains, families)
+                  if r["months"] == months]
     if not candidates:
         return None
     hint = (prefer_milestone or "").strip().lower()
@@ -361,20 +431,25 @@ def question_at(
     }
 
 
-def _nearest_rung(domain: str, months: int) -> Optional[int]:
+def _nearest_rung(
+    domain: str, months: int, subdomains: Tuple[str, ...] = (), families: Tuple[str, ...] = ()
+) -> Optional[int]:
     """The ladder rung at or nearest below `months`, else the lowest rung."""
-    rungs = ladder_months(domain)
+    rungs = ladder_months(domain, subdomains, families)
     if not rungs:
         return None
     at_or_below = [m for m in rungs if m <= months]
     return at_or_below[-1] if at_or_below else rungs[0]
 
 
-def _step(domain: str, months: int, direction: int) -> Optional[int]:
-    """One rung harder (+1) or easier (-1). None at the end of the ladder."""
-    rungs = ladder_months(domain)
+def _step(
+    domain: str, months: int, direction: int,
+    subdomains: Tuple[str, ...] = (), families: Tuple[str, ...] = (),
+) -> Optional[int]:
+    """One rung harder (+1) or easier (-1). None at the end of the track."""
+    rungs = ladder_months(domain, subdomains, families)
     if months not in rungs:
-        months = _nearest_rung(domain, months)
+        months = _nearest_rung(domain, months, subdomains, families)
         if months is None:
             return None
     index = rungs.index(months) + direction
@@ -443,6 +518,18 @@ def start_baseline(area_id: str, choice_id: str, chronological_months: int) -> B
     )
 
 
+def _track_for(record: "BaselineRecord") -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    """The (subdomains, families) track this baseline calibrates within.
+
+    Resolved from the area and the chosen descriptor, so every question in one
+    baseline comes from one coherent chain. That is also what makes the
+    contradiction rule safe: it can only ever compare comparable skills.
+    """
+    area = get_area(record.area_id)
+    choice = area.choice(record.entry_choice_id)
+    return area.track_subdomains, choice.track_families
+
+
 def first_question(record: BaselineRecord) -> Optional[Dict[str, Any]]:
     """The first validated question, at the anchor the entry choice selected."""
     start = record.entry_anchor_months
@@ -450,12 +537,12 @@ def first_question(record: BaselineRecord) -> Optional[Dict[str, Any]]:
         # "Not sure" — no anchor is assumed. Start at the child's own age band,
         # which is neutral rather than a guess about ability.
         start = record.chronological_months
-    rung = _nearest_rung(record.domain, start)
+    subdomains, families = _track_for(record)
+    rung = _nearest_rung(record.domain, start, subdomains, families)
     if rung is None:
         return None
-    area = get_area(record.area_id)
-    prefer = area.choice(record.entry_choice_id).prefer_milestone
-    return question_at(record.domain, rung, prefer_milestone=prefer)
+    prefer = get_area(record.area_id).choice(record.entry_choice_id).prefer_milestone
+    return question_at(record.domain, rung, prefer, subdomains, families)
 
 
 def _classify(answer: str) -> str:
@@ -522,14 +609,15 @@ def next_question(record: BaselineRecord) -> Optional[Dict[str, Any]]:
         "unknown": -1,
     }[last["classification"]]
 
+    subdomains, families = _track_for(record)
     asked_months = {a["months"] for a in record.asked}
-    rung = _step(record.domain, last["months"], direction)
+    rung = _step(record.domain, last["months"], direction, subdomains, families)
     # Never re-ask a rung; keep stepping the same way until a new one appears.
     while rung is not None and rung in asked_months:
-        rung = _step(record.domain, rung, direction)
+        rung = _step(record.domain, rung, direction, subdomains, families)
     if rung is None:
         return None
-    return question_at(record.domain, rung)
+    return question_at(record.domain, rung, "", subdomains, families)
 
 
 def _floor_months(record: BaselineRecord) -> Optional[int]:
@@ -559,6 +647,13 @@ def finalize(record: BaselineRecord) -> BaselineRecord:
 
     # Contradiction: a harder skill demonstrated while an easier one is not.
     # Reported, never averaged away.
+    #
+    # Safe because every question in a baseline comes from ONE declared track
+    # (see _track_for), so the two rungs being compared are always on the same
+    # developmental chain. Without that restriction this rule would fire on
+    # ordinary uneven profiles — strong receptive with weak expressive speech,
+    # or independent eating with dependent dressing — which are not
+    # contradictions at all.
     if demonstrated and not_demo and max(demonstrated) > min(not_demo):
         record.status = BaselineStatus.CONTRADICTORY
         record.routing_anchor_months = None

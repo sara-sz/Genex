@@ -529,3 +529,168 @@ def test_unsupported_answer_raises():
 def test_every_supported_answer_is_accepted(answer):
     record = run_baseline("talking", "many_single_words", 48, [answer])
     assert len(record.asked) == 1
+
+
+# ===========================================================================
+# Skill-track coherence (founder review)
+# ===========================================================================
+#
+# Stepping one rung by month is only safe when neighbouring rungs sit on one
+# developmental chain. Two defects were found by enumerating every reachable
+# route and are pinned here:
+#
+#   * Daily Living could ask a 48-month-old's parent a NEWBORN feeding-cue
+#     question. With the held families removed, the 4m adaptive_feeding_cues row
+#     became the next rung below 15m, so one "easier" step reached it.
+#   * Daily Living bracketed ACROSS routines — eating against dressing against
+#     fasteners — which are not one chain, so an uneven-but-normal profile could
+#     be read as evidence of a level.
+
+import itertools
+
+ALL_ANSWERS = ("yes", "sometimes", "no", "not_sure")
+
+
+def _reachable(area_id, choice_id, age=48):
+    """Every question reachable from a descriptor, over all answer paths."""
+    seen = []
+    for combo in itertools.product(ALL_ANSWERS, repeat=MAX_QUESTIONS):
+        for asked in run_baseline(area_id, choice_id, age, list(combo)).asked:
+            seen.append(asked)
+    return seen
+
+
+@pytest.mark.parametrize("area", AREAS, ids=lambda a: a.area_id)
+def test_every_area_declares_a_skill_track(area):
+    assert area.track_subdomains, f"{area.area_id} has no declared track"
+
+
+@pytest.mark.parametrize("area", AREAS, ids=lambda a: a.area_id)
+def test_routing_never_leaves_the_declared_track(area):
+    for choice in area.choices:
+        for asked in _reachable(area.area_id, choice.choice_id):
+            assert asked["subdomain"] in area.track_subdomains, (choice.choice_id, asked)
+
+
+def test_talking_stays_on_the_expressive_track():
+    """Descriptors are about spoken output, so routing must not jump elsewhere."""
+    allowed = {"expressive_language", "early_vocalization_and_babbling"}
+    for choice in get_area("talking").choices:
+        for asked in _reachable("talking", choice.choice_id):
+            assert asked["subdomain"] in allowed, asked
+
+
+def test_talking_never_asks_receptive_or_conversation_questions():
+    """A strong-receptive / weak-expressive child must not be bracketed on it."""
+    excluded = {"receptive_language", "gestural_communication",
+                "conversation_narrative", "speech_intelligibility"}
+    for choice in get_area("talking").choices:
+        for asked in _reachable("talking", choice.choice_id):
+            assert asked["subdomain"] not in excluded, asked
+
+
+def test_strong_receptive_weak_expressive_is_not_contradictory():
+    """The uneven profile the founder flagged. Expressive-only evidence brackets."""
+    record = run_baseline("talking", "many_single_words", 48, ["no", "yes"])
+    assert record.status != BaselineStatus.CONTRADICTORY, record.asked
+    assert all(a["subdomain"] in {"expressive_language",
+                                  "early_vocalization_and_babbling"} for a in record.asked)
+
+
+def test_fine_motor_never_enters_daily_living():
+    """Dressing and utensils use hands but are Daily Living, not Fine Motor."""
+    for choice in get_area("hand_finger").choices:
+        for asked in _reachable("hand_finger", choice.choice_id):
+            assert asked["subdomain"] == "fine_motor_hand_use", asked
+
+
+def test_gross_motor_transition_is_a_prerequisite_chain_not_month_adjacency():
+    """Postural control and mobility partition cleanly and hand off once."""
+    from genex_core.functional_baseline import _rows_for_domain
+
+    area = get_area("movement")
+    postural, mobility = set(), set()
+    for row in _rows_for_domain("gross_motor", area.track_subdomains):
+        if row["subdomain"] == "postural_control_and_transitions":
+            postural.add(row["months"])
+        else:
+            mobility.add(row["months"])
+    # Postural precedes mobility, overlapping only at the 12m handoff where
+    # pulling to stand meets walking while holding on.
+    assert max(postural) <= min(mobility), (sorted(postural), sorted(mobility))
+    assert postural & mobility == {12}
+
+
+def test_daily_living_never_asks_a_newborn_feeding_cue():
+    """The defect: one easier step from 15m used to reach the 4m cue row."""
+    for choice in get_area("daily_skills").choices:
+        for asked in _reachable("daily_skills", choice.choice_id):
+            assert "breast or bottle" not in asked["milestone"], asked
+            assert asked["months"] >= 15, asked
+
+
+def test_daily_living_excludes_feeding_cue_and_safety_subdomains():
+    area = get_area("daily_skills")
+    assert area.track_subdomains == ("self_help_motor_skills",)
+    assert 4 not in ladder_months("daily_living", area.track_subdomains)
+
+
+@pytest.mark.parametrize("choice_id,families", [
+    ("needs_help_most", {"finger_feeding", "spoon_use", "fork_use", "serving_pouring_transfer"}),
+    ("helps_with_parts", {"finger_feeding", "spoon_use", "fork_use", "serving_pouring_transfer"}),
+    ("some_steps_independent", {"finger_feeding", "spoon_use", "fork_use", "serving_pouring_transfer"}),
+    ("many_routines_with_help", {"dressing_off", "dressing_on", "buttoning_fasteners"}),
+    ("mostly_independent", {"dressing_off", "dressing_on", "buttoning_fasteners"}),
+])
+def test_daily_living_brackets_within_one_routine(choice_id, families):
+    """Eating, dressing and fastening are different routines, not one ladder."""
+    area = get_area("daily_skills")
+    choice = area.choice(choice_id)
+    assert set(choice.track_families) == families
+    for month in ladder_months("daily_living", area.track_subdomains, choice.track_families):
+        question = question_at("daily_living", month, "", area.track_subdomains,
+                               choice.track_families)
+        assert question["activity_family"] in families, question
+
+
+def test_daily_living_uneven_routines_are_not_contradictory():
+    """Independent eating with dependent dressing is uneven, not contradictory."""
+    eating = run_baseline("daily_skills", "some_steps_independent", 48, ["yes", "no"])
+    dressing = run_baseline("daily_skills", "many_routines_with_help", 48, ["no", "no"])
+    for record in (eating, dressing):
+        assert record.status != BaselineStatus.CONTRADICTORY, record.asked
+
+
+def test_contradiction_can_only_compare_same_track_rungs():
+    """Every question in one baseline comes from one declared track."""
+    for area in AREAS:
+        for choice in area.choices:
+            for combo in itertools.product(ALL_ANSWERS, repeat=3):
+                record = run_baseline(area.area_id, choice.choice_id, 48, list(combo))
+                subdomains = {a["subdomain"] for a in record.asked}
+                assert subdomains <= set(area.track_subdomains), (choice.choice_id, subdomains)
+
+
+def test_track_restriction_keeps_every_anchor_reachable():
+    """The fix must not strand a descriptor off its own ladder."""
+    for area in AREAS:
+        for choice in area.choices:
+            if choice.anchor_months is None:
+                continue
+            rungs = ladder_months(area.domain, area.track_subdomains, choice.track_families)
+            assert choice.anchor_months in rungs, (choice.choice_id, rungs)
+
+
+def test_track_restriction_preserves_determinism():
+    for area in AREAS:
+        answers = ["yes", "no", "sometimes"]
+        runs = [run_baseline(area.area_id, area.choices[0].choice_id, 40, answers).to_state()
+                for _ in range(3)]
+        assert all(r == runs[0] for r in runs)
+
+
+def test_track_restriction_preserves_unknown_handling():
+    for area in AREAS:
+        record = run_baseline(area.area_id, "not_sure", 48, ["not_sure"] * MAX_QUESTIONS)
+        assert record.routing_anchor_months is None
+        assert record.routing_anchor_months != LEGACY_NO_ANSWER_DEV_AGE
