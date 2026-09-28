@@ -32,6 +32,11 @@ CAREGIVER_PREFIX = "cgvr"
 CHILD_PREFIX = "chld"
 CAREGIVER_CHILD_CONNECTION_PREFIX = "ccxn"
 PROVIDER_CHILD_CONNECTION_PREFIX = "pcxn"
+#: BACKEND 0.2. Audit events and record revisions are identified the same way
+#: as entities — generated, opaque, never derived from their content. An audit
+#: event id derived from what it describes would leak the description.
+AUDIT_EVENT_PREFIX = "audt"
+REVISION_PREFIX = "revn"
 
 ALL_PREFIXES = (
     PRACTICE_PREFIX,
@@ -40,6 +45,8 @@ ALL_PREFIXES = (
     CHILD_PREFIX,
     CAREGIVER_CHILD_CONNECTION_PREFIX,
     PROVIDER_CHILD_CONNECTION_PREFIX,
+    AUDIT_EVENT_PREFIX,
+    REVISION_PREFIX,
 )
 
 
@@ -73,6 +80,14 @@ def new_caregiver_child_connection_id() -> str:
 
 def new_provider_child_connection_id() -> str:
     return new_id(PROVIDER_CHILD_CONNECTION_PREFIX)
+
+
+def new_audit_event_id() -> str:
+    return new_id(AUDIT_EVENT_PREFIX)
+
+
+def new_revision_id() -> str:
+    return new_id(REVISION_PREFIX)
 
 
 def entity_type_of(identifier: str) -> Optional[str]:
