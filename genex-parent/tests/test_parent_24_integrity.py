@@ -123,11 +123,52 @@ def test_original_gold_standard_is_byte_identical() -> None:
 
 
 def test_gold_standard_is_tracked_and_unmodified_in_git() -> None:
+    """The workbook is tracked, and the COMMITTED BYTES are the frozen ones.
+
+    This used to ask `git status` whether the file was modified. That is a
+    proxy, and a filter-sensitive one: `.gitattributes` declares
+    `*.xlsx filter=lfs`, but these workbooks were committed as real files and
+    no xlsx in this repository is stored as an LFS pointer. On a machine
+    without git-lfs the filter is a no-op and status is clean; on a runner that
+    HAS git-lfs, `git status` pipes the worktree file through the LFS clean
+    filter, gets a pointer, compares it against a blob that is a real xlsx, and
+    reports ` M` — while the bytes on disk are still byte-for-byte the frozen
+    Gold Standard. Hosted CI failed on exactly that phantom modification with
+    the file provably untouched.
+
+    So the proxy is replaced with the thing it was standing in for. This
+    compares the committed blob and the working-tree file directly against the
+    frozen digest, which is STRICTER than the old assertion: `git status` only
+    says "matches the index", and would stay silent if the index and the
+    worktree had drifted to the same wrong value together. It is also immune to
+    checkout filters, because `git cat-file` reads the blob unfiltered.
+
+    The `.gitattributes` LFS declaration is left alone — changing it would
+    alter repository-wide binary-asset policy for every workstream, which is
+    far beyond this phase.
+    """
     _require_git()
     rel = f"genex-parent/{GOLD_STANDARD_RELPATH}"
-    res = _git("status", "--porcelain=v1", "--untracked-files=all", "--", rel)
-    assert res.returncode == 0, res.stderr
-    assert res.stdout.strip() == "", f"Gold Standard has working-tree changes:\n{res.stdout}"
+
+    tracked = _git("ls-files", "--error-unmatch", "--", rel)
+    assert tracked.returncode == 0, f"Gold Standard is not tracked by git:\n{tracked.stderr}"
+
+    blob = subprocess.run(
+        ["git", "cat-file", "-p", f"HEAD:{rel}"],
+        cwd=str(REPO_ROOT), capture_output=True,
+    )
+    assert blob.returncode == 0, blob.stderr.decode("utf-8", "replace")
+    committed_digest = hashlib.sha256(blob.stdout).hexdigest()
+    assert committed_digest == GOLD_STANDARD_SHA256, (
+        f"the COMMITTED Gold Standard blob changed: {committed_digest}"
+    )
+
+    worktree_digest = hashlib.sha256(
+        (PARENT_ROOT / GOLD_STANDARD_RELPATH).read_bytes()
+    ).hexdigest()
+    assert worktree_digest == GOLD_STANDARD_SHA256, (
+        f"the working-tree Gold Standard changed: {worktree_digest}"
+    )
 
 
 # ── 2. genex-alpha/genex_core stays frozen ──────────────────────────────────

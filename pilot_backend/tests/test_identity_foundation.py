@@ -328,14 +328,22 @@ def test_case_i_listings_are_deterministically_ordered():
         repos.caregiver_child.connect(
             CaregiverChildConnection.create(topo.caregiver.caregiver_id, child.child_id,
                                             now=T0 + timedelta(minutes=index)))
-    runs = [[c.connection_id for c in
-             repos.caregiver_child.list_children_for_caregiver(topo.caregiver.caregiver_id)]
-            for _ in range(5)]
-    assert all(r == runs[0] for r in runs)
-    assert runs[0] == sorted(runs[0], key=lambda cid: [
-        (c.created_at, c.connection_id) for c in
-        repos.caregiver_child.list_children_for_caregiver(topo.caregiver.caregiver_id)
-        if c.connection_id == cid][0])
+    listings = [repos.caregiver_child.list_children_for_caregiver(topo.caregiver.caregiver_id)
+                for _ in range(5)]
+    ids = [[c.connection_id for c in listing] for listing in listings]
+    assert all(run == ids[0] for run in ids), "repeated listings disagreed"
+
+    # Stronger than repeat-stability: the order must be the DECLARED one,
+    # (created_at, own id). Repeat-stability alone would pass on insertion
+    # order, which is what the `_id_of` foreign-key bug was hiding behind —
+    # the fixture connection and the first loop connection share a timestamp,
+    # so this is the tie that must resolve on connection_id.
+    expected = [c.connection_id for c in
+                sorted(listings[0], key=lambda c: (c.created_at, c.connection_id))]
+    assert ids[0] == expected, "listing order is not (created_at, connection_id)"
+
+    timestamps = [c.created_at for c in listings[0]]
+    assert len(set(timestamps)) < len(timestamps), "fixture no longer exercises a tie"
 
 
 def test_case_i_duplicate_create_is_rejected():

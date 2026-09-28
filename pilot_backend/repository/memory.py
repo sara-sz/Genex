@@ -36,7 +36,17 @@ def _sorted(records: List[T]) -> List[T]:
 
 
 def _id_of(record: object) -> str:
-    for attr in ("practice_id", "provider_id", "caregiver_id", "child_id", "connection_id"):
+    """The record's OWN identifier, for use as a deterministic sort tiebreak.
+
+    `connection_id` is checked first, and that ordering is load-bearing. A
+    connection also carries `caregiver_id`/`provider_id`/`child_id`, so looking
+    those up first returned a FOREIGN key — and every connection belonging to
+    one caregiver then produced the same tiebreak value. Records created in the
+    same instant tied, the sort fell back to insertion order, and listings were
+    only accidentally stable. The determinism test caught it intermittently,
+    which is exactly the failure mode that survives a green suite.
+    """
+    for attr in ("connection_id", "practice_id", "provider_id", "caregiver_id", "child_id"):
         value = getattr(record, attr, None)
         if value:
             return str(value)
