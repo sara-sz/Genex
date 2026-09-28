@@ -35,6 +35,25 @@ No real PHI may be processed by this system until every
 | Generic audit events with key-allowlisted, non-PHI metadata | `audit/` |
 | Finalize-then-amend record integrity foundation | `revision/` |
 | Public route allowlist (`/health` only); no debug or admin endpoint | `apisurface/surface.py` |
+| HTTP composition proof over a real socket; stdlib WSGI, no new dependency | `transport/wsgi_app.py` |
+| Authorization proven to precede repository access (counting repository) | `tests/test_http_composition.py` |
+
+---
+
+## PRE-PHI INTEGRATION BLOCKERS
+
+Deferred by the HIPAA/security review as class **B** — permitted to follow the
+BACKEND 0.2 freeze, but **required before any real PHI**. These are carried
+debt, not closed items.
+
+| # | Blocker | Why it is deferrable now |
+|---|---|---|
+| 1 | **Real Firebase Admin / Identity Platform adapter** — a `TokenDecoder` implementation over `firebase_admin.auth.verify_id_token(..., check_revoked=True)` | The port and all production rules (revocation, verified-email, claim translation, fail-closed selection) exist and are tested. Only the SDK call is missing, and there is no Identity Platform project to call. Production currently resolves to `FailClosedAuthVerifier`, so the gap denies rather than admits. |
+| 2 | **Real Firestore adapter + emulator tests** — a `DocumentStore` implementation over `google.cloud.firestore.Client`, exercised against the Firestore emulator | Repositories, codecs, collections and ordering are complete and tested against the port. The adapter is a five-method translation. No production database exists to connect to. |
+
+Both must be implemented, reviewed and tested **before** the first real patient
+record. Neither may be satisfied by pointing the pilot at Parent 2.3
+infrastructure.
 
 ---
 
@@ -79,10 +98,11 @@ verified independently before any real patient data is processed.
 
 ## NOT_IMPLEMENTED in 0.2 (deliberate)
 
-- A real Firestore client binding. The `DocumentStore` port is implemented only
-  by `FakeDocumentStore`; a production adapter is written at a composition root
-  outside this package once provisioning is approved.
-- A web framework or HTTP transport. `RouteGuard` is the integration contract.
+- A real Firestore client binding, and a real Identity Platform token decoder.
+  See PRE-PHI INTEGRATION BLOCKERS above — deferred deliberately, not forgotten.
+- A product API. `transport/wsgi_app.py` serves exactly two routes and exists
+  to prove the security chain composes over HTTP; it returns no clinical
+  content and must not grow product endpoints.
 - Any business/clinical workflow, and therefore any clinical record. The audit
   actions and revision machinery exist; nothing emits them yet.
 - RTM in every form — no episode, monitoring event, review, clinical action,

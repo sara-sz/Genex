@@ -46,7 +46,27 @@ from .decisions import AccessDecision, Denial
 
 
 def authorize_child_access(principal: Principal, child_id: str, repos) -> AccessDecision:
-    """Deny-by-default child access check for an already-authenticated caller."""
+    """Deny-by-default child access check for an already-authenticated caller.
+
+    ## The relationship is checked BEFORE the child is read
+
+    An earlier revision looked the child up first, to reject an unknown id
+    before considering relationships. That ordering was wrong in a way worth
+    recording, because it reads as the more defensive option.
+
+    Relationship rows are keyed by (actor, child). Testing them first means a
+    caller with no relationship to the requested id causes NO read of the child
+    record at all — the system never discloses, even internally, whether that
+    child exists. Reading the child first inverts this: every caller, related
+    or not, triggers an existence lookup, and the distinction between
+    "no such child" and "not yours" then exists in the process and has to be
+    kept out of the response, the audit metadata, the logs and the timing
+    envelope by convention alone.
+
+    So the child read now happens only AFTER an active relationship is proven,
+    where it is no longer an existence probe but a status check on a record the
+    caller is already entitled to see.
+    """
     requested = (child_id or "").strip()
     if not requested:
         return AccessDecision.deny(Denial.UNKNOWN_CHILD, principal=principal)
@@ -54,16 +74,6 @@ def authorize_child_access(principal: Principal, child_id: str, repos) -> Access
     if principal.role not in CHILD_RELATED_ROLES:
         return AccessDecision.deny(
             Denial.ROLE_NOT_PERMITTED, principal=principal, child_id=requested)
-
-    # The child must exist and be active before any relationship is considered.
-    try:
-        child = repos.children.get_by_id(requested)
-    except RecordNotFound:
-        return AccessDecision.deny(
-            Denial.UNKNOWN_CHILD, principal=principal, child_id=requested)
-    if child.status is not EntityStatus.ACTIVE:
-        return AccessDecision.deny(
-            Denial.INACTIVE_CHILD, principal=principal, child_id=requested)
 
     if principal.role is ActorRole.CAREGIVER:
         connections = repos.caregiver_child.list_caregivers_for_child(
@@ -88,6 +98,18 @@ def authorize_child_access(principal: Principal, child_id: str, repos) -> Access
         # in the same request cycle stops granting access on the next read.
         return AccessDecision.deny(
             Denial.INACTIVE_RELATIONSHIP, principal=principal, child_id=requested)
+
+    # Only now — with an active relationship proven — is the child record read.
+    # A dangling relationship row pointing at a retired or absent child still
+    # refuses; this is a status check, not an existence probe.
+    try:
+        child = repos.children.get_by_id(requested)
+    except RecordNotFound:
+        return AccessDecision.deny(
+            Denial.UNKNOWN_CHILD, principal=principal, child_id=requested)
+    if child.status is not EntityStatus.ACTIVE:
+        return AccessDecision.deny(
+            Denial.INACTIVE_CHILD, principal=principal, child_id=requested)
 
     return AccessDecision.allow(principal, requested)
 
