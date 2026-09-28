@@ -19,9 +19,14 @@ on:
   push:
     branches:
       - "feature/parent-2.4-*"
+      # October pilot lineage. Branches from the Parent 2.4 freeze and carries
+      # the shared pilot_backend/ namespace, so it must run the SAME Parent
+      # gates — a shared identity model that breaks the Brain is still broken.
+      - "feature/october-pilot-*"
   pull_request:
     paths:
       - "genex-parent/**"
+      - "pilot_backend/**"
       - ".github/workflows/parent-2.4-ci.yml"
 
 permissions:
@@ -158,6 +163,22 @@ jobs:
         # coherent skill track so an uneven-but-normal profile is never read as
         # a contradiction. It also holds Daily Living "Not sure" to UNRESOLVED.
         run: python -m pytest tests/test_parent_24_functional_baseline.py -q
+
+      - name: October pilot backend — identity foundation
+        # Runs from the repository root, not genex-parent/, because
+        # pilot_backend/ is a top-level shared namespace (Parent + Therapist +
+        # later RTM). Needs only pytest and the standard library — no new
+        # dependency, and deliberately no database driver or auth SDK.
+        #
+        # Skipped automatically on branches that predate the pilot so the
+        # existing Parent 2.4 branches keep passing unchanged.
+        working-directory: .
+        run: |
+          if [ -d pilot_backend ]; then
+            python -m pytest pilot_backend/tests -q
+          else
+            echo "pilot_backend/ not present on this branch — nothing to run"
+          fi
 
       - name: Parent regression suite (seven-domain vocabulary)
         # Now part of the hosted gate. It exercises the Brain end to end —

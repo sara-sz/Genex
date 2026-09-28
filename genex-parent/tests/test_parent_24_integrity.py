@@ -49,9 +49,23 @@ ALPHA_CORE_PATH = "genex-alpha/genex_core"
 
 #: The only paths the Parent 2.4 workstream may touch. `genex-parent/` includes
 #: `genex_core`, which policy permits the Parent lineage to evolve later.
+#:
+#: `pilot_backend/` is the APPROVED SHARED OCTOBER PILOT BACKEND NAMESPACE.
+#:
+#: It is deliberately top-level because Parent, Therapist and later RTM all
+#: depend on it — putting a shared identity model inside `genex-parent/` would
+#: make the Parent package the owner of therapist and practice records. The
+#: founder approved this exact namespace as a new workstream boundary.
+#:
+#: This is a scope EXTENSION, not a relaxation. It names one directory, and
+#: `test_guard_still_rejects_unrelated_top_level_paths` proves every other
+#: top-level path is still refused — the guard has not become permissive.
+PILOT_BACKEND_PREFIX = "pilot_backend/"
+
 PARENT_ALLOWED_PREFIXES = (
     "genex-parent/",
     ".github/workflows/parent-2.4-ci.yml",
+    PILOT_BACKEND_PREFIX,
 )
 
 #: The immutable Gold Standard input snapshot (PARENT-0.2).
@@ -179,6 +193,52 @@ def test_parent_commits_touch_only_parent_paths() -> None:
         "(therapist service, genex-alpha, frontend or deploy config):\n  "
         + "\n  ".join(outside)
     )
+
+
+def test_guard_still_rejects_unrelated_top_level_paths() -> None:
+    """Negative control for the approved `pilot_backend/` extension.
+
+    Adding a namespace to an allow-list is exactly the kind of change that can
+    quietly turn a guard into a rubber stamp — a stray `""` or a `"/"` prefix
+    would match everything and nothing would ever fail again. This asserts the
+    predicate directly: the one approved namespace passes, and paths that must
+    still be refused are still refused.
+    """
+    assert PILOT_BACKEND_PREFIX in PARENT_ALLOWED_PREFIXES
+    assert "pilot_backend/domain/entities.py".startswith(PARENT_ALLOWED_PREFIXES)
+
+    must_still_fail = (
+        "therapist_api/app/domain/models.py",
+        "genex-alpha/genex_core/config.py",
+        "webapp/src/index.tsx",
+        "requirements.txt",
+        "Dockerfile",
+        ".github/workflows/therapist-api-ci.yml",
+        "deploy/cloudbuild.yaml",
+        "pilot_backend_extra/thing.py",   # near-miss: not the approved namespace
+        "docs/plan.md",
+    )
+    leaked = [p for p in must_still_fail if p.startswith(PARENT_ALLOWED_PREFIXES)]
+    assert not leaked, f"guard became permissive for: {leaked}"
+
+    # And no prefix may be empty or bare-root, which would match everything.
+    for prefix in PARENT_ALLOWED_PREFIXES:
+        assert prefix.strip() not in ("", "/", "."), prefix
+
+
+def test_pilot_backend_contains_no_therapist_or_alpha_code() -> None:
+    """The shared namespace must not become a place to fork frozen services."""
+    pilot = REPO_ROOT / "pilot_backend"
+    if not pilot.exists():
+        pytest.skip("pilot_backend not present on this branch")
+    offenders = []
+    for path in sorted(pilot.rglob("*.py")):
+        text = path.read_text()
+        for banned in ("from therapist_api", "import therapist_api",
+                       "from genex_alpha", "genex-alpha"):
+            if banned in text:
+                offenders.append(f"{path.name}: {banned}")
+    assert offenders == [], offenders
 
 
 def test_parent_work_did_not_touch_the_therapist_service() -> None:
