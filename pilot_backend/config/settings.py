@@ -164,6 +164,13 @@ class PilotSettings:
     #: and again in `auth.build_verifier`.
     dev_auth_enabled: bool = False
 
+    #: PRE-PHI 0.3. Firestore emulator endpoint, dev/test ONLY. Held as
+    #: configuration rather than read from the ambient FIRESTORE_EMULATOR_HOST
+    #: so that pointing at an emulator is something a deployment must ASK for,
+    #: and so production can refuse it at startup instead of discovering it
+    #: when a write silently lands nowhere real.
+    firestore_emulator_host: str = ""
+
     def __post_init__(self) -> None:
         self._validate()
 
@@ -205,6 +212,11 @@ class PilotSettings:
 
         if self.dev_auth_enabled:
             raise ConfigError("prod must not enable dev auth (PILOT_DEV_AUTH_ENABLED)")
+
+        if self.firestore_emulator_host.strip():
+            raise ConfigError(
+                "prod must not configure a Firestore emulator "
+                "(PILOT_FIRESTORE_EMULATOR_HOST)")
 
         # A dev-looking resource in prod means a dev value was promoted.
         for label, value in (
@@ -260,6 +272,8 @@ class PilotSettings:
             ai_phi_baa_reference=(env.get("PILOT_AI_PHI_BAA_REFERENCE") or "").strip(),
             dev_auth_enabled=_as_bool(
                 env.get("PILOT_DEV_AUTH_ENABLED", ""), "PILOT_DEV_AUTH_ENABLED"),
+            firestore_emulator_host=(
+                env.get("PILOT_FIRESTORE_EMULATOR_HOST") or "").strip(),
         )
 
     # -- safe projection ----------------------------------------------------

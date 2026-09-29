@@ -26,7 +26,7 @@ from typing import Dict, List, Optional, TypeVar
 from ..domain.connections import CaregiverChildConnection, ProviderChildConnection
 from ..domain.entities import Caregiver, Child, Practice, Provider
 from ..domain.enums import ConnectionStatus, EntityStatus
-from .interface import DuplicateRecord, RecordNotFound
+from .interface import AmbiguousAuthSubject, DuplicateRecord, RecordNotFound
 
 T = TypeVar("T")
 
@@ -123,10 +123,14 @@ class InMemoryProviderRepository:
         subject = (auth_subject or "").strip()
         if not subject:
             return None
-        for provider in _sorted(list(self._store.providers.values())):
-            if provider.auth_subject == subject:
-                return provider
-        return None
+        matches = [p for p in _sorted(list(self._store.providers.values()))
+                   if p.auth_subject == subject]
+        if len(matches) > 1:
+            # Two records bound to one identity is a data fault. Returning the
+            # first would make identity depend on sort order — see
+            # AmbiguousAuthSubject.
+            raise AmbiguousAuthSubject("auth subject matches more than one provider")
+        return matches[0] if matches else None
 
 
 class InMemoryCaregiverRepository:
@@ -149,10 +153,11 @@ class InMemoryCaregiverRepository:
         subject = (auth_subject or "").strip()
         if not subject:
             return None
-        for caregiver in _sorted(list(self._store.caregivers.values())):
-            if caregiver.auth_subject == subject:
-                return caregiver
-        return None
+        matches = [c for c in _sorted(list(self._store.caregivers.values()))
+                   if c.auth_subject == subject]
+        if len(matches) > 1:
+            raise AmbiguousAuthSubject("auth subject matches more than one caregiver")
+        return matches[0] if matches else None
 
 
 class InMemoryChildRepository:

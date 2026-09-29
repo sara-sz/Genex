@@ -68,15 +68,24 @@ class SecureTopology:
     link_gamma_provider_pending: ProviderChildConnection
 
 
-def build_secure_topology(repos, *, now: Optional[datetime] = None) -> SecureTopology:
+def build_secure_topology(repos, *, now: Optional[datetime] = None,
+                          subject_suffix: str = "") -> SecureTopology:
     """Build the two-family topology into ANY repository set.
 
     `repos` is duck-typed: `InMemoryRepositories` and `FirestoreRepositories`
     both satisfy the BACKEND 0.1 protocols, so the identical fixture — and
     therefore the identical security test — runs against both backends. That
     is the practical proof that the domain layer is storage-agnostic.
+
+    `subject_suffix` makes the auth subjects unique per call. It exists for
+    the Firestore emulator suite, where the database is deliberately NOT reset
+    between tests: two topologies in one store would otherwise bind two
+    caregiver records to one auth subject, which is a data-integrity fault the
+    resolver now refuses outright. Defaults to empty, so single-topology
+    callers see the documented subject strings unchanged.
     """
     stamp = now or T0
+    suffix = subject_suffix
 
     practice = repos.practices.create(Practice.create("Practice-Alpha", now=stamp))
 
@@ -89,13 +98,13 @@ def build_secure_topology(repos, *, now: Optional[datetime] = None) -> SecureTop
         return repos.caregivers.create(Caregiver.create(
             name, auth_subject=subject, now=stamp))
 
-    provider_alpha = _provider("Provider-Alpha", PROVIDER_ALPHA_SUBJECT)
-    provider_beta = _provider("Provider-Beta", PROVIDER_BETA_SUBJECT)
-    provider_gamma = _provider("Provider-Gamma", PROVIDER_GAMMA_SUBJECT)
+    provider_alpha = _provider("Provider-Alpha", PROVIDER_ALPHA_SUBJECT + suffix)
+    provider_beta = _provider("Provider-Beta", PROVIDER_BETA_SUBJECT + suffix)
+    provider_gamma = _provider("Provider-Gamma", PROVIDER_GAMMA_SUBJECT + suffix)
 
-    caregiver_alpha = _caregiver("Caregiver-Alpha", CAREGIVER_ALPHA_SUBJECT)
-    caregiver_beta = _caregiver("Caregiver-Beta", CAREGIVER_BETA_SUBJECT)
-    caregiver_gamma = _caregiver("Caregiver-Gamma", CAREGIVER_GAMMA_SUBJECT)
+    caregiver_alpha = _caregiver("Caregiver-Alpha", CAREGIVER_ALPHA_SUBJECT + suffix)
+    caregiver_beta = _caregiver("Caregiver-Beta", CAREGIVER_BETA_SUBJECT + suffix)
+    caregiver_gamma = _caregiver("Caregiver-Gamma", CAREGIVER_GAMMA_SUBJECT + suffix)
 
     child_alpha = repos.children.create(
         Child.create(actor_id=caregiver_alpha.caregiver_id, now=stamp))

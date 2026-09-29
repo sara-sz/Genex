@@ -37,6 +37,8 @@ PROVIDER_CHILD_CONNECTION_PREFIX = "pcxn"
 #: event id derived from what it describes would leak the description.
 AUDIT_EVENT_PREFIX = "audt"
 REVISION_PREFIX = "revn"
+#: PRE-PHI 0.3. The one mutable pilot record.
+CHILD_CONTEXT_PREFIX = "cctx"
 
 ALL_PREFIXES = (
     PRACTICE_PREFIX,
@@ -47,6 +49,7 @@ ALL_PREFIXES = (
     PROVIDER_CHILD_CONNECTION_PREFIX,
     AUDIT_EVENT_PREFIX,
     REVISION_PREFIX,
+    CHILD_CONTEXT_PREFIX,
 )
 
 
@@ -88,6 +91,10 @@ def new_audit_event_id() -> str:
 
 def new_revision_id() -> str:
     return new_id(REVISION_PREFIX)
+
+
+def new_child_context_id() -> str:
+    return new_id(CHILD_CONTEXT_PREFIX)
 
 
 def entity_type_of(identifier: str) -> Optional[str]:

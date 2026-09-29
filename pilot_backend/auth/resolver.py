@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..domain.enums import EntityStatus
+from ..repository.interface import AmbiguousAuthSubject
 from ..domain.roles import ActorRole
 from .interface import VerifiedToken
 
@@ -85,8 +86,15 @@ def resolve_principal(verified: VerifiedToken, repos) -> Principal:
     if not subject:
         raise PrincipalResolutionError("verified token has no subject")
 
-    caregiver = repos.caregivers.get_by_auth_subject(subject)
-    provider = repos.providers.get_by_auth_subject(subject)
+    try:
+        caregiver = repos.caregivers.get_by_auth_subject(subject)
+        provider = repos.providers.get_by_auth_subject(subject)
+    except AmbiguousAuthSubject:
+        # Two records share this subject. Authenticated, but not resolvable to
+        # a single identity, so it is a 403 rather than a 401 — and never a
+        # silent pick of whichever sorted first.
+        raise PrincipalResolutionError(
+            "auth subject resolves to more than one application record") from None
 
     if caregiver is not None and provider is not None:
         raise PrincipalResolutionError(

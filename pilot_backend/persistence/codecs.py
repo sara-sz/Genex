@@ -39,6 +39,7 @@ from enum import Enum
 from typing import Any, Dict, Mapping, Optional, Type
 
 from ..audit.events import AuditAction, AuditEvent, AuditResult
+from ..domain.child_context import ChildContextRecord
 from ..domain.connections import CaregiverChildConnection, ProviderChildConnection
 from ..domain.entities import Caregiver, Child, Practice, Provider
 from ..domain.enums import (
@@ -236,6 +237,14 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "actor_application_id": OPT_STR, "actor_auth_subject": OPT_STR,
         "actor_role": _EnumKind(ActorRole, optional=True),
         "request_id": STR, "metadata": STR_MAP, "schema_version": STR,
+    },
+    ChildContextRecord: {
+        "record_id": STR, "child_id": STR, "content_ref": STR,
+        "current_revision_id": OPT_STR, "current_version": INT,
+        "created_at": DT, "updated_at": DT,
+        "created_by_actor_id": OPT_STR,
+        "last_actor_role": _EnumKind(ActorRole, optional=True),
+        "schema_version": STR,
     },
     Revision: {
         "revision_id": STR, "record_id": STR, "version": INT,

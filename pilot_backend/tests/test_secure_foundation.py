@@ -557,6 +557,48 @@ def test_a_subject_matching_two_records_fails_closed():
         resolve_principal(VerifiedToken(subject=CAREGIVER_ALPHA_SUBJECT), repos)
 
 
+@pytest.mark.parametrize("kind", BACKENDS)
+def test_two_records_of_one_kind_sharing_a_subject_fail_closed(kind):
+    """Found by the Firestore emulator, which does not reset between tests.
+
+    Two caregiver records bound to one auth subject used to resolve silently
+    to whichever sorted first — making the effective identity a function of
+    document ordering. The 0.2 resolver caught a subject matching a caregiver
+    AND a provider, but not two caregivers.
+    """
+    from pilot_backend.domain.entities import Caregiver
+    from pilot_backend.repository.interface import AmbiguousAuthSubject
+
+    repos = make_repos(kind)
+    build_secure_topology(repos)
+    repos.caregivers.create(Caregiver.create(
+        "Caregiver-Delta", auth_subject=CAREGIVER_ALPHA_SUBJECT, now=T0))
+
+    with pytest.raises(AmbiguousAuthSubject):
+        repos.caregivers.get_by_auth_subject(CAREGIVER_ALPHA_SUBJECT)
+
+    # ...and identity resolution refuses rather than picking one.
+    with pytest.raises(PrincipalResolutionError):
+        resolve_principal(VerifiedToken(subject=CAREGIVER_ALPHA_SUBJECT), repos)
+
+
+@pytest.mark.parametrize("kind", BACKENDS)
+def test_an_ambiguous_subject_is_403_not_a_silent_grant(kind):
+    from pilot_backend.domain.entities import Caregiver
+
+    repos = make_repos(kind)
+    topo = build_secure_topology(repos)
+    repos.caregivers.create(Caregiver.create(
+        "Caregiver-Delta", auth_subject=CAREGIVER_ALPHA_SUBJECT, now=T0))
+    verifier = verifier_for(standard_tokens())
+
+    decision = authenticate_and_authorize_child(
+        "Bearer token-caregiver-alpha", topo.child_alpha.child_id,
+        verifier=verifier, repos=repos)
+    assert not decision.allowed
+    assert decision.status_code == 403
+
+
 def test_empty_auth_subject_never_matches_an_unbound_record():
     """An unbound provider record must not be claimable by a blank subject."""
     repos = FirestoreRepositories(FakeDocumentStore())

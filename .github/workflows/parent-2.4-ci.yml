@@ -364,3 +364,142 @@ jobs:
       - name: Check-in readiness consumer (own pytest process)
         # Second, independent process — see the note above.
         run: python -m pytest tests/test_checkin_readiness.py -q
+
+  pilot-integration:
+    name: October pilot PRE-PHI integration gate
+    runs-on: ubuntu-latest
+
+    # A THIRD separate job, for the same reason `app-consumers` is a second one.
+    #
+    # `taxonomy` runs the 296 pilot_backend security tests and installs only
+    # pytest/pandas/openpyxl. Those tests assert STRUCTURALLY that pilot_backend
+    # imports no auth SDK and no database driver — an assertion that proves
+    # nothing in a job where firebase-admin and google-cloud-firestore are
+    # installed. So the SDKs live here, with pilot_runtime, and never there.
+    #
+    # Sequential steps mean a failure skips everything behind it, which is how
+    # the first 0.3C freeze run produced a green-looking skip. Isolation means an
+    # SDK or emulator problem cannot prevent the Brain, regression and
+    # app-consumer gates from running. All three jobs must be green to freeze.
+    #
+    # NO CREDENTIALS. The Firestore emulator authenticates nothing, the project
+    # id is a fictional `demo-` name that is not a resolvable real project, and
+    # no GCP/Firebase auth step exists. No deploy, no provisioning, no real data.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Java 17
+        # The Firestore emulator is a Java program. Pinned to a distribution
+        # and major version so the emulator runtime is reproducible.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up gcloud
+        # Google's official action, used WITHOUT any auth step — the emulator
+        # needs no credentials. Used rather than relying on gcloud being
+        # preinstalled on the runner image, which is an image detail that can
+        # change without notice and would fail this job on a Tuesday.
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install the Firestore emulator
+        # Official Google tooling. No credentials, no project, no network
+        # access to any real GCP resource.
+        run: |
+          gcloud --version
+          gcloud components install cloud-firestore-emulator --quiet
+          java -version
+
+      - name: Install PRE-PHI integration dependencies
+        # Exact pins with documented provenance — see the header of
+        # pilot_runtime/requirements-integration-ci.txt. Production manifests
+        # are NOT modified.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r pilot_runtime/requirements-integration-ci.txt
+          pip list
+
+      - name: Python compilation (pilot_runtime)
+        run: python -m compileall -q pilot_runtime
+
+      - name: Structural guard — pilot_backend still imports no SDK
+        # The whole reason this job exists. Re-asserted HERE, in the job where
+        # the SDKs ARE installed, so the separation is proven under the
+        # conditions that could break it rather than only where it is trivially
+        # true.
+        run: |
+          python - <<'PY'
+          import ast, pathlib, sys
+          banned = {
+              "firebase_admin", "firebase", "google", "googleapiclient",
+              "requests", "httpx", "urllib3", "aiohttp",
+              "firestore", "sqlalchemy", "psycopg2", "pymongo", "redis", "boto3",
+          }
+          offenders = []
+          for path in sorted(pathlib.Path("pilot_backend").rglob("*.py")):
+              if path.name.startswith("test_"):
+                  continue
+              tree = ast.parse(path.read_text())
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Import):
+                      for alias in node.names:
+                          if alias.name.split(".")[0] in banned:
+                              offenders.append((str(path), alias.name))
+                  if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                      if node.module.split(".")[0] in banned:
+                          offenders.append((str(path), node.module))
+          assert not offenders, f"pilot_backend imported an SDK: {offenders}"
+          import firebase_admin, google.cloud.firestore  # noqa: F401
+          print("SDKs are installed in this job, and pilot_backend still imports none")
+          PY
+
+      - name: Firebase Admin adapter (unit)
+        run: python -m pytest pilot_runtime/tests/test_firebase_adapter.py -q
+
+      - name: Firestore adapter (unit, fake client)
+        run: python -m pytest pilot_runtime/tests/test_firestore_adapter.py -q
+
+      - name: Composition root
+        run: python -m pytest pilot_runtime/tests/test_composition.py -q
+
+      - name: Firestore emulator integration (REAL adapter)
+        # Must EXECUTE. The suite's fixture RAISES rather than skipping when
+        # the emulator is unavailable, so an absent emulator fails this job
+        # instead of quietly producing a green run. A skipped emulator suite
+        # is not a pass.
+        run: python -m pytest pilot_runtime/tests/integration/test_firestore_emulator.py -q
+
+      - name: Fictional PRE-PHI end-to-end (HTTP + Firestore + audit + revisions)
+        run: python -m pytest pilot_runtime/tests/integration/test_e2e_pre_phi.py -q
+
+      - name: Prove the emulator suites actually ran
+        # Belt and braces against the one failure mode this job exists to
+        # prevent: a green result produced by tests that never executed.
+        # `--collect-only` counts them, and the run fails if the count is zero
+        # or if any test reports as skipped.
+        run: |
+          python - <<'PY'
+          import subprocess, sys
+          collected = subprocess.run(
+              [sys.executable, "-m", "pytest", "pilot_runtime/tests/integration",
+               "--collect-only", "-q"],
+              capture_output=True, text=True)
+          count = collected.stdout.count("::")
+          assert count >= 50, f"expected the integration suites to collect >=50 tests, got {count}"
+          run = subprocess.run(
+              [sys.executable, "-m", "pytest", "pilot_runtime/tests/integration",
+               "-q", "-rs"],
+              capture_output=True, text=True)
+          sys.stdout.write(run.stdout[-3000:])
+          assert run.returncode == 0, "integration suites failed"
+          assert " skipped" not in run.stdout, "no integration test may be skipped"
+          print(f"integration suites executed {count} tests, zero skipped")
+          PY

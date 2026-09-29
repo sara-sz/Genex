@@ -1,0 +1,33 @@
+# PRE-PHI Integration 0.3 — CI dependencies for the pilot_runtime SDK boundary.
+#
+# Lives INSIDE pilot_runtime/ rather than at the repository root because the
+# Parent integrity guard allows only `genex-parent/`, the Parent CI workflow,
+# `pilot_backend/` and `pilot_runtime/`. Keeping the manifest beside the code
+# it installs meant no third widening of that guard.
+#
+# Used ONLY by the `pilot-integration` job. It is deliberately NOT used by the
+# `taxonomy` job, which runs the 296 pilot_backend security tests and must stay
+# dependency-pure: those tests assert structurally that `pilot_backend` imports
+# no auth SDK and no database driver, and that assertion is worth nothing in a
+# job where the SDKs are installed.
+#
+# Exact pins, no ranges. A range here would mean a security-relevant SDK could
+# change between two runs of the same commit.
+#
+# Provenance:
+#   pytest                  9.1.1  — same pin as the other two jobs
+#   firebase-admin          7.5.0  — already pinned by
+#                                    requirements-parent24-app-ci.txt; kept
+#                                    identical so the repo has one version of
+#                                    the auth SDK, not two
+#   google-cloud-firestore  2.28.0 — the version resolved and verified locally
+#                                    against the Firestore emulator
+#
+# No other Google SDK, no OpenAI client, no analytics, no APM, no session
+# replay. The Firestore emulator itself is not a Python dependency: it is a
+# Java program supplied by the gcloud `cloud-firestore-emulator` component and
+# needs no credentials.
+
+pytest==9.1.1
+firebase-admin==7.5.0
+google-cloud-firestore==2.28.0

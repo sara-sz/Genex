@@ -36,11 +36,16 @@ from datetime import datetime
 from typing import Any, List, Optional, Sequence, Type
 
 from ..audit.events import AuditEvent
+from ..domain.child_context import ChildContextRecord
 from ..domain.connections import CaregiverChildConnection, ProviderChildConnection
 from ..domain.entities import Caregiver, Child, Practice, Provider
 from ..domain.enums import ConnectionStatus, EntityStatus
-from ..repository.interface import DuplicateRecord, RecordNotFound
-from ..revision.records import Revision
+from ..repository.interface import (
+    AmbiguousAuthSubject,
+    DuplicateRecord,
+    RecordNotFound,
+)
+from ..revision.records import ImmutableRecordError, Revision
 from .codecs import decode, encode
 from .collections import collection_for
 from .document_store import DocumentStore, DocumentStoreError
@@ -149,6 +154,8 @@ class FirestoreProviderRepository(_BaseRepo):
         if not subject:
             return None
         found = self._query("auth_subject", subject)
+        if len(found) > 1:
+            raise AmbiguousAuthSubject("auth subject matches more than one provider")
         return found[0] if found else None
 
 
@@ -170,6 +177,8 @@ class FirestoreCaregiverRepository(_BaseRepo):
         if not subject:
             return None
         found = self._query("auth_subject", subject)
+        if len(found) > 1:
+            raise AmbiguousAuthSubject("auth subject matches more than one caregiver")
         return found[0] if found else None
 
 
@@ -284,6 +293,59 @@ class FirestoreRevisionRepository(_BaseRepo):
         """Every version of one logical record, oldest first."""
         return sorted(self._query("record_id", record_id), key=lambda r: r.version)
 
+    def seal(self, sealed: Revision) -> Revision:
+        """Persist the DRAFT -> FINALIZED transition of one revision.
+
+        Finalizing keeps the same `revision_id` and the same version number —
+        sealing a draft is not a new version, it is the same version becoming
+        immutable. So this is the one whole-document write the chain permits,
+        and it is guarded in the direction that matters: the stored revision
+        must currently be a DRAFT.
+
+        The append-only property the chain actually needs is that a FINALIZED
+        revision never changes and no version is ever removed. Both hold: this
+        refuses to touch an already-finalized document, `amend` writes a NEW
+        document with the next version, and nothing deletes. A draft being
+        editable until it is sealed is the definition of a draft, not a hole
+        in the guarantee.
+        """
+        existing = self._get(sealed.revision_id)
+        if existing.is_finalized:
+            raise ImmutableRecordError(
+                f"revision {sealed.revision_id} is already finalized")
+        if not sealed.is_finalized:
+            raise ImmutableRecordError("seal() requires a finalized revision")
+        if existing.version != sealed.version or existing.record_id != sealed.record_id:
+            raise ImmutableRecordError("seal() must not change identity or version")
+        return self._set(sealed.revision_id, sealed)
+
+
+class FirestoreChildContextRepository(_BaseRepo):
+    """The one mutable pilot record. Update is whole-document, never partial.
+
+    `update` exists here where the entity repositories only expose
+    `update_status`, because the record's current-revision pointer genuinely
+    moves. It is still a whole-document write of a record the caller has
+    already read, so a concurrent amendment is a lost update rather than a
+    silently merged one — acceptable for a pilot with one writer per record,
+    and recorded as carried debt rather than papered over with a transaction
+    this phase does not need.
+    """
+
+    record_type, model = "child_context", ChildContextRecord
+
+    def create(self, record: ChildContextRecord) -> ChildContextRecord:
+        return self._create(record.record_id, record)
+
+    def get_by_id(self, record_id: str) -> ChildContextRecord:
+        return self._get(record_id)
+
+    def update(self, record: ChildContextRecord) -> ChildContextRecord:
+        return self._set(record.record_id, record)
+
+    def list_for_child(self, child_id: str) -> List[ChildContextRecord]:
+        return self._query("child_id", child_id)
+
 
 class FirestoreRepositories:
     """All repositories over one document store — the production composition."""
@@ -297,4 +359,5 @@ class FirestoreRepositories:
         self.caregiver_child = FirestoreCaregiverChildConnectionRepository(store)
         self.provider_child = FirestoreProviderChildConnectionRepository(store)
         self.audit_events = FirestoreAuditEventRepository(store)
+        self.child_contexts = FirestoreChildContextRepository(store)
         self.revisions = FirestoreRevisionRepository(store)

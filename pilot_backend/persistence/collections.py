@@ -35,6 +35,7 @@ COLLECTIONS: Mapping[str, str] = {
     "provider_child_connection": "pilot_provider_child_connections",
     "audit_event": "pilot_audit_events",
     "revision": "pilot_revisions",
+    "child_context": "pilot_child_contexts",
 }
 
 #: Names this package must never address. Parent 2.3 / Beta infrastructure.

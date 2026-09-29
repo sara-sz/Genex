@@ -43,6 +43,17 @@ class DuplicateRecord(ValueError):
     """A record with that identifier already exists."""
 
 
+class AmbiguousAuthSubject(ValueError):
+    """More than one application record carries the same auth subject.
+
+    A data-integrity fault, not a lookup miss. Returning "the first one" would
+    make the effective identity depend on document ordering, so resolution
+    fails closed instead. PHI-safe: names neither the subject nor the records.
+    """
+
+    PHI_SAFE_MESSAGE = True
+
+
 @runtime_checkable
 class PracticeRepository(Protocol):
     def create(self, practice: Practice) -> Practice: ...

@@ -62,10 +62,24 @@ ALPHA_CORE_PATH = "genex-alpha/genex_core"
 #: top-level path is still refused — the guard has not become permissive.
 PILOT_BACKEND_PREFIX = "pilot_backend/"
 
+#: PRE-PHI Integration 0.3. The SDK boundary: Firebase Admin and Firestore
+#: bindings plus the composition root. It is a SEPARATE namespace from
+#: `pilot_backend/` on purpose — the 0.1/0.2 guards assert that the backend
+#: package imports no auth SDK and no database driver, and those assertions
+#: run in a CI job that installs neither. Putting the real clients here is
+#: what keeps that provable rather than merely intended.
+#:
+#: Same reasoning as the extension above: one named directory, and
+#: `test_guard_still_rejects_unrelated_top_level_paths` proves every other
+#: top-level path — including the near-miss `pilot_runtime_extra/` — is still
+#: refused.
+PILOT_RUNTIME_PREFIX = "pilot_runtime/"
+
 PARENT_ALLOWED_PREFIXES = (
     "genex-parent/",
     ".github/workflows/parent-2.4-ci.yml",
     PILOT_BACKEND_PREFIX,
+    PILOT_RUNTIME_PREFIX,
 )
 
 #: The immutable Gold Standard input snapshot (PARENT-0.2).
@@ -247,6 +261,8 @@ def test_guard_still_rejects_unrelated_top_level_paths() -> None:
     """
     assert PILOT_BACKEND_PREFIX in PARENT_ALLOWED_PREFIXES
     assert "pilot_backend/domain/entities.py".startswith(PARENT_ALLOWED_PREFIXES)
+    assert PILOT_RUNTIME_PREFIX in PARENT_ALLOWED_PREFIXES
+    assert "pilot_runtime/auth/firebase_decoder.py".startswith(PARENT_ALLOWED_PREFIXES)
 
     must_still_fail = (
         "therapist_api/app/domain/models.py",
@@ -257,6 +273,8 @@ def test_guard_still_rejects_unrelated_top_level_paths() -> None:
         ".github/workflows/therapist-api-ci.yml",
         "deploy/cloudbuild.yaml",
         "pilot_backend_extra/thing.py",   # near-miss: not the approved namespace
+        "pilot_runtime_extra/thing.py",   # near-miss for the 0.3 namespace
+        "pilot/thing.py",                 # prefix of both, approved as neither
         "docs/plan.md",
     )
     leaked = [p for p in must_still_fail if p.startswith(PARENT_ALLOWED_PREFIXES)]
