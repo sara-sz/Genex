@@ -395,13 +395,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Set up Java 17
-        # The Firestore emulator is a Java program. Pinned to a distribution
-        # and major version so the emulator runtime is reproducible.
+      - name: Set up Java 21
+        # The Firestore emulator is a Java program, and the current emulator
+        # build REQUIRES a Java 21+ JRE — it refuses to start on 17 with:
+        #   "The java executable on your PATH is not a Java 21+ JRE."
+        # Pinned to a distribution and major version so the emulator runtime
+        # is reproducible; 21 is the minimum the emulator accepts rather than
+        # the newest available, so this pin moves only when Google's floor does.
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - name: Set up gcloud
         # Google's official action, used WITHOUT any auth step — the emulator
