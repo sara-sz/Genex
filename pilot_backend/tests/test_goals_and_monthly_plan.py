@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -930,6 +931,36 @@ def test_a_plan_starts_as_a_draft_and_carries_no_activities(s):
     assert plan.starts_on == "2026-10-01" and plan.ends_on == "2026-10-31"
     assert plan.timezone_of_record == ZONE
     assert not any("activit" in f for f in MonthlyFocusPlan.__dataclass_fields__)
+
+
+def test_a_draft_plan_is_not_active(s):
+    """`is_active` must read the STATE, not merely the absence of a timestamp.
+
+    A mutation sweep caught this: dropping the state check from `is_active`
+    left every unit test passing, because a draft and an active plan both
+    carry `closed_at = None`. A draft that reads as active makes
+    `active_for_cycle` return it, and the advisory uniqueness check in
+    `create_plan` then refuses a second plan on the strength of a draft
+    nobody activated.
+    """
+    plan = s.plans.create_plan(s.caregiver_alpha, s.child, CYCLE, ZONE)
+    assert not plan.is_active
+    assert s.repos.focus_plans.active_for_cycle(s.child, CYCLE) is None
+
+
+def test_a_closed_plan_is_inactive_even_without_a_closed_timestamp(s):
+    """The 0.4A mutation lesson, restated for plans.
+
+    `close()` always sets `state` and `closed_at` together, so a timestamp
+    check looks sufficient against records this code wrote. A stored document
+    can carry a terminal state with a null timestamp — and then the state
+    check is the only thing keeping a finished month out of the active
+    lookup.
+    """
+    plan = s.plans.create_plan(s.caregiver_alpha, s.child, CYCLE, ZONE)
+    for terminal in (MonthlyPlanState.CLOSED, MonthlyPlanState.DRAFT):
+        assert not replace(plan, state=terminal, closed_at=None).is_active
+    assert replace(plan, state=MonthlyPlanState.ACTIVE).is_active
 
 
 def test_a_child_with_a_managing_clinician_is_planned_by_that_clinician(s):
