@@ -50,10 +50,29 @@ debt, not closed items.
 |---|---|---|
 | 1 | **Real Firebase Admin / Identity Platform adapter** — a `TokenDecoder` implementation over `firebase_admin.auth.verify_id_token(..., check_revoked=True)` | The port and all production rules (revocation, verified-email, claim translation, fail-closed selection) exist and are tested. Only the SDK call is missing, and there is no Identity Platform project to call. Production currently resolves to `FailClosedAuthVerifier`, so the gap denies rather than admits. |
 | 2 | **Real Firestore adapter + emulator tests** — a `DocumentStore` implementation over `google.cloud.firestore.Client`, exercised against the Firestore emulator | Repositories, codecs, collections and ordering are complete and tested against the port. The adapter is a five-method translation. No production database exists to connect to. |
+| 3 | **Goal approval must become atomic** (added 0.4B/C) — `GoalService.approve_clinical_goal` and `approve_caregiver_goal` write the `GoalVersion` FIRST, then the goal that names it as `current_version_id`. A crash between the two writes leaves an **orphan `GoalVersion`**. | Founder-reviewed and explicitly accepted for the fictional 0.4B/C freeze. The orphan is INERT: no goal references it, no allocation can name it, no snapshot can reach it, and it is invisible to every read path — `list_chain` is keyed on a `goal_id` that does not exist. The failure mode is a dead row, never a goal whose `current_version_id` points at nothing. **Required before real PHI**, because a clinical record store must not accumulate unreferenced clinical text even when it is unreachable. |
 
-Both must be implemented, reviewed and tested **before** the first real patient
-record. Neither may be satisfied by pointing the pilot at Parent 2.3
-infrastructure.
+Items 1 and 2 must be implemented, reviewed and tested **before** the first
+real patient record. Neither may be satisfied by pointing the pilot at Parent
+2.3 infrastructure.
+
+### Blocker 3 — what "make it atomic" will require
+
+Not a reordering. Writing the goal first and the version second only moves the
+window: it produces a goal whose `current_version_id` names a document that
+does not exist, which is strictly worse than an inert orphan — an unreadable
+goal rather than an unreachable version.
+
+Atomicity needs both writes inside one transaction, and that collides with the
+same port constraint activation hit: `DocumentStore` REFUSES `set` inside a
+transaction (0.4A), so the goal's `current_version_id` cannot be filled in
+after the version is created. The likely shape is to mint both identifiers up
+front and `create` both documents in a single transaction, since `create` IS
+permitted there — the same restructuring `MonthlyPlanService.activate_plan`
+performed, rather than any weakening of the port's existence guarantee.
+
+Tracked here rather than in ordinary carried debt because it is a PRE-PHI
+hardening requirement, not a preference.
 
 ---
 
@@ -374,11 +393,11 @@ outlives its join instead of returning a short list.
   importing it: they are separate top-level namespaces and the pilot CI job
   runs from the repository root. `test_canonical_domains_mirror_parent_taxonomy`
   pins the exact seven keys, so a divergence surfaces there.
-- **Approval writes the goal version before the goal.** A crash between them
-  leaves an orphan version, which is inert. Making the pair atomic needs a
-  transaction, and the goal's `current_version_id` cannot be set without a
-  read-modify-write the port forbids inside one — the same restructuring
-  question as activation, deferred rather than papered over.
+- **Approval writes the goal version before the goal.** Promoted by founder
+  review to **PRE-PHI INTEGRATION BLOCKER 3** — see that table above. It does
+  not block the fictional 0.4B/C freeze; it must be made atomic before real
+  PHI. Listed here too so a reader of the debt section is not left thinking it
+  is merely a preference.
 - **`list_for_cycle` filters in Python after a single-field query**, because
   the `DocumentStore` port exposes equality on one field and deliberately
   promises no composite index.
