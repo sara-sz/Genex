@@ -41,6 +41,7 @@ a provider with no active relationship to the child is refused first.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
@@ -54,11 +55,18 @@ from ..domain.managing_clinician import (
 )
 from ..domain.roles import ActorRole
 from ..domain.source_link import SourceLinkStatus, SourceSystem, SourceSystemLink
+from ..persistence.document_store import DocumentStoreError
 from ..repository.interface import DuplicateRecord, RecordNotFound
 from .errors import IdentityAuthorizationError, IdentityConflict, IdentityValidationError
 
 #: Source systems a caregiver may bind on their own child.
 _CAREGIVER_WRITABLE_SYSTEMS = frozenset({SourceSystem.PARENT})
+
+def _default_repos_factory(store):
+    from ..persistence.firestore_repos import FirestoreRepositories
+
+    return FirestoreRepositories(store)
+
 
 RESOURCE_SOURCE_LINK = "source_system_link"
 RESOURCE_MANAGING_CLINICIAN = "managing_clinician"
@@ -67,9 +75,13 @@ RESOURCE_MANAGING_CLINICIAN = "managing_clinician"
 class LongitudinalIdentityService:
     """Authorized reads and writes for source links and clinical ownership."""
 
-    def __init__(self, *, repos, recorder=None, now=None) -> None:
+    def __init__(self, *, repos, recorder=None, now=None, repos_factory=None) -> None:
         self._repos = repos
         self._recorder = recorder
+        #: Builds a repository set bound to a transaction-scoped store. Kept
+        #: injectable so this package still imports no persistence module at
+        #: load time; the default resolves lazily.
+        self._repos_factory = repos_factory or _default_repos_factory
         #: Injectable clock for deterministic tests. No request parameter
         #: reaches it.
         self._now = now
@@ -188,41 +200,79 @@ class LongitudinalIdentityService:
                            RESOURCE_SOURCE_LINK, request_id, source_system,
                            "external identity is already active for another child")
 
-        # ---- authoritative claims ----
-        link_id_placeholder = f"pending:{child_id}:{source_system.value}"
-        external_claim = self._win_claim(
-            ClaimKind.EXTERNAL_IDENTITY, (source_system.value, external),
-            holder_ref=link_id_placeholder, child_id=child_id,
-            actor_id=principal.application_id)
-        try:
-            child_claim = self._win_claim(
-                ClaimKind.CHILD_SOURCE, (child_id, source_system.value),
-                holder_ref=link_id_placeholder, child_id=child_id,
-                actor_id=principal.application_id)
-        except IdentityConflict:
-            # Two `create` calls cannot be atomic together. Release the first
-            # so the external key is not orphaned at this generation, then
-            # refuse — see domain/identity_claims.py.
-            self._release_claim(external_claim.claim_id,
-                                actor_id=principal.application_id)
-            raise
-
-        link = SourceSystemLink.create(
+        # ---- authoritative claims + record, atomically ----
+        #
+        # Both claims AND the link are written in ONE transaction. Ordering
+        # them carefully was not enough: a process death between the claim and
+        # the record would strand the key at that generation with nothing to
+        # release it. Atomicity removes the window entirely rather than
+        # papering over it with a cleanup job.
+        #
+        # Firestore requires every read before every write, so both
+        # generations are computed first.
+        draft = SourceSystemLink.create(
             child_id, source_system, external,
             external_owner_ref=external_owner_ref,
             actor_id=principal.application_id,
             actor_role=principal.role.value,
-            child_source_claim_id=child_claim.claim_id,
-            external_identity_claim_id=external_claim.claim_id,
             supersedes_link_id=_supersedes_link_id,
             now=self._stamp())
-        self._repos.source_links.create(link)
+
+        # Generations are read OUTSIDE the transaction, deliberately.
+        #
+        # A query inside a Firestore transaction takes read locks, and eight
+        # writers contending on one key then retry with backoff — measured at
+        # 194s for a suite that takes 2s with the reads outside. It is also
+        # unnecessary: a stale generation cannot create a second winner, it
+        # can only collide, and a collision is the refusal we want. Reading
+        # outside keeps the transaction to pure writes, which is both fast and
+        # trivially compliant with Firestore's reads-before-writes rule.
+        external_parts = (source_system.value, external)
+        child_parts = (child_id, source_system.value)
+        external_digest = key_digest(*external_parts)
+        child_digest = key_digest(*child_parts)
+        external_generation = self._repos.identity_claims.next_generation(
+            ClaimKind.EXTERNAL_IDENTITY, external_digest)
+        child_generation = self._repos.identity_claims.next_generation(
+            ClaimKind.CHILD_SOURCE, child_digest)
+
+        def _acquire(store) -> SourceSystemLink:
+            tx = self._repos_factory(store)
+            external_claim = IdentityClaim.build(
+                ClaimKind.EXTERNAL_IDENTITY, external_parts, external_generation,
+                holder_ref=draft.link_id, child_id=child_id,
+                actor_id=principal.application_id, now=self._stamp())
+            child_claim = IdentityClaim.build(
+                ClaimKind.CHILD_SOURCE, child_parts, child_generation,
+                holder_ref=draft.link_id, child_id=child_id,
+                actor_id=principal.application_id, now=self._stamp())
+
+            tx.identity_claims.claim(external_claim)
+            tx.identity_claims.claim(child_claim)
+            persisted = replace(
+                draft,
+                external_identity_claim_id=external_claim.claim_id,
+                child_source_claim_id=child_claim.claim_id)
+            tx.source_links.create(persisted)
+            return persisted
+
+        try:
+            link = self._repos.store.run_in_transaction(_acquire)
+        except (DuplicateRecord, DocumentStoreError):
+            self._audit(AuditAction.SOURCE_LINK_CREATED, AuditResult.FAILURE,
+                        RESOURCE_SOURCE_LINK, principal=principal,
+                        child_id=child_id, resource_id=None,
+                        request_id=request_id, source_system=source_system.value)
+            raise IdentityConflict(
+                "another writer holds a uniqueness claim for this mapping") from None
+
+        child_claim_id = link.child_source_claim_id
 
         self._audit(AuditAction.SOURCE_LINK_CREATED, AuditResult.SUCCESS,
                     RESOURCE_SOURCE_LINK, principal=principal, child_id=child_id,
                     resource_id=link.link_id, request_id=request_id,
                     source_system=source_system.value, link_id=link.link_id,
-                    claim_id=child_claim.claim_id, claim_kind=ClaimKind.CHILD_SOURCE.value)
+                    claim_id=child_claim_id, claim_kind=ClaimKind.CHILD_SOURCE.value)
         return link
 
     def _fail(self, principal, child_id, action, resource_type, request_id,
@@ -305,14 +355,18 @@ class LongitudinalIdentityService:
         return self._repos.source_links.list_for_child(
             child_id, include_ended=include_ended)
 
-    def resolve_child_for_external(self, source_system: SourceSystem,
-                                   external_id: str) -> Optional[str]:
-        """Canonical child for an external identity, or None. Fails closed.
+    def _resolve_child_for_external(self, source_system: SourceSystem,
+                                     external_id: str) -> Optional[str]:
+        """INTERNAL. Canonical child for an external identity, or None.
 
-        Deliberately unauthenticated at this layer: it is the lookup a
-        transport performs BEFORE it has a child to authorize against. It
-        returns an opaque child id and nothing else, and every caller must
-        then run the normal authorization chain against that id.
+        Deliberately private. An earlier version was public, and the safe
+        sequence — resolve, then authorize — was left to the caller to
+        remember. "Remember to authorize" is not a control; it is a comment
+        that happens to be true until someone writes a new endpoint.
+
+        The only public route to a child id from an external identity is
+        `resolve_authorized_child`, which cannot return one without running
+        the gate. Use that.
         """
         external = (external_id or "").strip()
         if not external:
@@ -323,6 +377,31 @@ class LongitudinalIdentityService:
             raise IdentityConflict(
                 "external identity resolves to more than one canonical child")
         return active[0].child_id if active else None
+
+    def resolve_authorized_child(self, principal, source_system: SourceSystem,
+                                 external_id: str) -> str:
+        """Resolve an external identity AND authorize it, as one operation.
+
+        Returns a canonical child id only when `principal` is permitted that
+        child. Resolution and authorization cannot be separated by a caller,
+        so there is no sequence in which an external identifier becomes usable
+        child access without the gate.
+
+        An unknown external identity and an unauthorized one both raise
+        `IdentityAuthorizationError` with the same message. Distinguishing
+        them would turn this into an oracle for which Parent sessions are
+        bound to which children — answerable by anyone holding a valid token
+        for any child.
+        """
+        resolved = self._resolve_child_for_external(source_system, external_id)
+        if resolved is None:
+            raise IdentityAuthorizationError("not permitted for this external identity")
+        try:
+            self._authorize(principal, resolved)
+        except IdentityAuthorizationError:
+            raise IdentityAuthorizationError(
+                "not permitted for this external identity") from None
+        return resolved
 
     # =====================================================================
     # ManagingClinicianAssignment
@@ -364,27 +443,47 @@ class LongitudinalIdentityService:
             raise IdentityConflict(
                 "this child already has an active managing clinician")
 
-        claim = self._win_claim(
-            ClaimKind.MANAGING_CLINICIAN, (child_id,),
-            holder_ref=f"pending:{child_id}", child_id=child_id,
-            actor_id=principal.application_id)
-
-        assignment = ManagingClinicianAssignment.create(
+        draft = ManagingClinicianAssignment.create(
             child_id, provider_id, practice_id,
             provider_connection_id=connection.connection_id,
             actor_id=principal.application_id,
             actor_role=principal.role.value,
-            reason=reason, claim_id=claim.claim_id,
+            reason=reason,
             supersedes_assignment_id=_supersedes_assignment_id,
             now=self._stamp())
-        self._repos.managing_clinicians.create(assignment)
+
+        # Read outside the transaction — see link_source_system for why.
+        digest = key_digest(child_id)
+        generation = self._repos.identity_claims.next_generation(
+            ClaimKind.MANAGING_CLINICIAN, digest)
+
+        def _acquire(store) -> ManagingClinicianAssignment:
+            tx = self._repos_factory(store)
+            claim = IdentityClaim.build(
+                ClaimKind.MANAGING_CLINICIAN, (child_id,), generation,
+                holder_ref=draft.assignment_id, child_id=child_id,
+                actor_id=principal.application_id, now=self._stamp())
+            tx.identity_claims.claim(claim)
+            persisted = replace(draft, claim_id=claim.claim_id)
+            tx.managing_clinicians.create(persisted)
+            return persisted
+
+        try:
+            assignment = self._repos.store.run_in_transaction(_acquire)
+        except (DuplicateRecord, DocumentStoreError):
+            self._audit(AuditAction.MANAGING_CLINICIAN_ASSIGNED, AuditResult.FAILURE,
+                        RESOURCE_MANAGING_CLINICIAN, principal=principal,
+                        child_id=child_id, resource_id=None,
+                        request_id=request_id, provider_id=provider_id)
+            raise IdentityConflict(
+                "another writer holds the managing-clinician claim") from None
 
         self._audit(AuditAction.MANAGING_CLINICIAN_ASSIGNED, AuditResult.SUCCESS,
                     RESOURCE_MANAGING_CLINICIAN, principal=principal,
                     child_id=child_id, resource_id=assignment.assignment_id,
                     request_id=request_id, provider_id=provider_id,
                     practice_id=practice_id, assignment_id=assignment.assignment_id,
-                    claim_id=claim.claim_id)
+                    claim_id=assignment.claim_id)
         return assignment
 
     def end_managing_clinician(self, principal, child_id: str, *, reason: str = "",

@@ -204,7 +204,7 @@ def test_concurrent_claims_on_one_external_id_yield_exactly_one(identity):
     assert len(children) == 1, f"external id mapped to {len(children)} children"
     active = identity.repos.source_links.list_for_external_id(shared)
     assert len([a for a in active if a.is_active]) == 1
-    assert identity.svc.resolve_child_for_external(SourceSystem.PARENT, shared)
+    assert identity.svc._resolve_child_for_external(SourceSystem.PARENT, shared)
 
 
 def test_concurrent_managing_clinician_assignments_yield_exactly_one(identity):
@@ -254,6 +254,99 @@ def test_reassignment_after_a_clean_end_succeeds_under_the_next_generation(ident
     history = identity.svc.managing_clinician_history(identity.provider_alpha, child)
     assert [h.status for h in history] == [ManagingClinicianStatus.ENDED,
                                            ManagingClinicianStatus.ACTIVE]
+
+
+def test_a_crash_before_the_record_write_persists_nothing_in_firestore(identity):
+    """Crash consistency against a REAL transaction, not a rollback emulation.
+
+    This is the founder-review window: a process death after the uniqueness
+    claims but before the link write. Firestore commits the whole transaction
+    or none of it, so the external identity cannot be stranded.
+    """
+    child = identity.topo.child_alpha.child_id
+    external = ext(identity, "sess-crash")
+    digest = key_digest(SourceSystem.PARENT.value, external)
+    real_factory = identity.svc._repos_factory
+
+    class _CrashAfterClaims:
+        def __init__(self, inner):
+            self._inner = inner
+            self.identity_claims = inner.identity_claims
+
+        @property
+        def source_links(self):
+            raise RuntimeError("simulated process failure before the record write")
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    identity.svc._repos_factory = lambda store: _CrashAfterClaims(real_factory(store))
+    try:
+        with pytest.raises(RuntimeError):
+            identity.svc.link_source_system(
+                identity.caregiver_alpha, child, SourceSystem.PARENT, external)
+    finally:
+        identity.svc._repos_factory = real_factory
+
+    assert identity.repos.identity_claims.count_claims_for_key(digest) == 0, \
+        "a claim survived a crash in real Firestore"
+    assert identity.repos.source_links.list_for_child(
+        child, include_ended=True) == []
+
+    # The key is untouched, so the mapping can still be made.
+    link = identity.svc.link_source_system(
+        identity.caregiver_alpha, child, SourceSystem.PARENT, external)
+    assert link.is_active
+    assert identity.repos.identity_claims.count_claims_for_key(digest) == 1
+
+
+def test_transactions_still_refuse_a_duplicate_claim(identity):
+    """Atomicity must not have loosened uniqueness."""
+    child = identity.topo.child_alpha.child_id
+    identity.svc.link_source_system(identity.caregiver_alpha, child,
+                                    SourceSystem.PARENT, ext(identity, "sess-dup"))
+    with pytest.raises(IdentityConflict):
+        identity.svc.link_source_system(
+            identity.caregiver_alpha, child, SourceSystem.PARENT,
+            ext(identity, "sess-dup-2"))
+
+
+def test_set_is_refused_inside_a_transaction(store):
+    """A weakened `set` would silently lose the existence guarantee."""
+    from pilot_backend.persistence.document_store import DocumentStoreError
+
+    def attempt(tx_store):
+        tx_store.set("pilot_practices", "prac_fictional", {"a": "1"})
+
+    with pytest.raises(DocumentStoreError) as exc:
+        store.run_in_transaction(attempt)
+    assert "not available inside a transaction" in str(exc.value)
+
+
+def test_nested_transactions_are_refused(store):
+    from pilot_backend.persistence.document_store import DocumentStoreError
+
+    def outer(tx_store):
+        return tx_store.run_in_transaction(lambda inner: None)
+
+    with pytest.raises(DocumentStoreError):
+        store.run_in_transaction(outer)
+
+
+def test_resolve_authorized_child_gates_against_real_firestore(identity):
+    child = identity.topo.child_alpha.child_id
+    external = ext(identity, "sess-authz")
+    identity.svc.link_source_system(identity.caregiver_alpha, child,
+                                    SourceSystem.PARENT, external)
+
+    assert identity.svc.resolve_authorized_child(
+        identity.caregiver_alpha, SourceSystem.PARENT, external) == child
+    with pytest.raises(IdentityAuthorizationError):
+        identity.svc.resolve_authorized_child(
+            identity.caregiver_beta, SourceSystem.PARENT, external)
+    with pytest.raises(IdentityAuthorizationError):
+        identity.svc.resolve_authorized_child(
+            identity.provider_beta, SourceSystem.PARENT, external)
 
 
 # ===========================================================================

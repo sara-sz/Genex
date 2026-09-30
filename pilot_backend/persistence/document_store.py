@@ -37,7 +37,20 @@ which is the class of bug BACKEND 0.1 already hit once.
 from __future__ import annotations
 
 import copy
-from typing import Dict, List, Mapping, Optional, Protocol, Tuple, runtime_checkable
+import threading
+from typing import (
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Tuple,
+    TypeVar,
+    runtime_checkable,
+)
+
+T = TypeVar("T")
 
 
 class DocumentStoreError(Exception):
@@ -66,6 +79,29 @@ class DocumentStore(Protocol):
     def list_all(self, collection: str) -> List[Tuple[str, Mapping[str, object]]]:
         """Every (doc_id, data) pair in the collection, ordered by doc id."""
 
+    def run_in_transaction(self, fn: "Callable[[DocumentStore], T]") -> T:
+        """Run `fn` atomically. Either every write lands, or none does.
+
+        `fn` receives a store bound to the transaction and exposing this same
+        interface, so repositories can be constructed over it unchanged.
+
+        Two constraints, both inherited from Firestore and therefore part of
+        the port rather than of one implementation:
+
+          * **All reads must precede all writes.** A read issued after a write
+            in the same transaction is rejected by the server, so callers must
+            gather every count and lookup first.
+          * **`set` is unavailable inside a transaction.** The port's `set`
+            means "replace an EXISTING document", which requires a read to
+            verify existence — and that read would have to follow earlier
+            writes. Rather than silently drop the existence guarantee, the
+            transactional store refuses the call.
+
+        `create` keeps its full meaning: a competing transaction that created
+        the same document id causes this one to fail at commit, so uniqueness
+        survives atomicity.
+        """
+
 
 class FakeDocumentStore:
     """In-memory `DocumentStore` for tests and local development.
@@ -80,6 +116,26 @@ class FakeDocumentStore:
 
     def __init__(self) -> None:
         self._data: Dict[str, Dict[str, Dict[str, object]]] = {}
+        #: Guards transactional snapshot/rollback. Individual operations are
+        #: NOT claimed to be thread-safe — see the class docstring.
+        self._lock = threading.RLock()
+
+    def run_in_transaction(self, fn):
+        """Atomic by snapshot-and-rollback, within one process.
+
+        This gives the ALL-OR-NOTHING property a crash-consistency test needs.
+        It does NOT simulate contention between processes, and it must never
+        be used to make a concurrency claim — `FakeDocumentStore` is a plain
+        dict and the only evidence about racing writers comes from the real
+        emulator suite.
+        """
+        with self._lock:
+            snapshot = copy.deepcopy(self._data)
+            try:
+                return fn(self)
+            except BaseException:
+                self._data = snapshot
+                raise
 
     def _collection(self, collection: str) -> Dict[str, Dict[str, object]]:
         return self._data.setdefault(collection, {})

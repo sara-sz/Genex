@@ -136,6 +136,50 @@ verified independently before any real patient data is processed.
 | Practice of record taken from the connection, not the provider | `identity/service.py` |
 | No delete on any identity record or repository | `persistence/firestore_repos.py` |
 | Audit excludes the external identifier by construction | `audit/events.py` allowlist |
+| Claims AND record commit in ONE transaction — crash-consistent | `persistence/document_store.py`, `pilot_runtime/persistence/firestore_store.py` |
+| Raw external-id resolver is private; only an authorized wrapper is public | `identity/service.py` |
+
+### Approved product decision — idempotent exact repeat
+
+An exact-repeat `SourceSystemLink` request returns the existing active link
+rather than raising. Founder-approved as intentional, and **not** a uniqueness
+weakening, because it holds only when:
+
+- it resolves to the exact same active canonical mapping (same child, same
+  source system, same external identity);
+- it cannot change `child_id`, `source_system` or external-identity ownership;
+- it cannot bypass authorization — the child-access gate runs first, every time;
+- any *different* competing mapping still fails closed;
+- the behaviour stays test-covered
+  (`test_an_exact_repeat_is_idempotent_not_a_conflict`).
+
+A retry is not an ambiguity. Anything that is not a byte-identical repeat is
+refused.
+
+### Crash consistency
+
+Uniqueness claims and the authoritative record are written in a single
+Firestore transaction, so a process death between them persists nothing.
+Verified by fault injection against the real emulator
+(`test_a_crash_before_the_record_write_persists_nothing_in_firestore`).
+
+Two constraints are now part of the `DocumentStore` port rather than of one
+implementation: all reads must precede all writes, and `set` is refused inside
+a transaction because its existence guarantee would require a read after a
+write. Generation counters are therefore read OUTSIDE the transaction — a
+stale generation can only cause a collision, which is the refusal we want, and
+keeping queries out avoids read-lock contention (measured: 194s → 2.3s for the
+identity emulator suite).
+
+### External-identity resolution
+
+`_resolve_child_for_external` is private. The only public path is
+`resolve_authorized_child(principal, …)`, which resolves and authorizes as one
+operation and cannot return a child id without the gate. Unknown and
+unauthorized external identities produce the SAME error, so the method cannot
+become an oracle for which Parent sessions are bound to which children. A
+structural test asserts every public service method takes `principal` as its
+first argument.
 
 ### Forward architecture notes recorded in 0.4A (NOT implemented)
 
@@ -143,10 +187,40 @@ verified independently before any real patient data is processed.
   the managing clinician changes. The episode must be explicitly closed and a
   new one opened under the new clinician. Formal transfer semantics deferred.
 - **`RTMTechnology`** must support `regulatory_status = UNDER_REVIEW` and must
-  not imply FDA approval, clearance, registration or classification.
-- **`PayerVerification`** should capture payer, plan/product if known,
-  verification date, method/source, verified_by, status/outcome, and
-  notes/reference. It never guarantees reimbursement.
+  not imply FDA approval, clearance, registration or classification. No device
+  eligibility conclusion is implied.
+
+- **Updated October RTM overlay** (carry-forward): `ClinicalGoal` →
+  `RTMEpisode` → `RTMMonitoringPeriod`, referencing `MonthlyFocusPlan` and
+  `ObservationEvent`s, with `TherapistReview` → `ClinicalAction`, `TimeEntry`,
+  `SynchronousInteraction`, `RTMTechnology`, `RTMEvidenceSummary` and
+  `CodingAssistanceSummary`. **`PayerVerification` removed.** `MonitoringDay`
+  remains deferred.
+- **`PayerVerification` is REMOVED from the October RTM scope.** Founder
+  decision, intentional data minimisation. For the October pilot Genex will
+  not collect or store insurance/member information, verify benefits,
+  determine coverage, perform eligibility checks, call payer APIs, submit
+  claims, integrate with a clearinghouse or an EMR for billing, determine
+  reimbursement amounts, or guarantee payment. No payer, member, plan,
+  eligibility, claim or reimbursement field is to be added.
+
+- **`CodingAssistanceSummary` is carried forward to a later slice** (not
+  0.4A, not 0.4F-as-previously-scoped). Narrow, deterministic, rules-based,
+  versioned, explainable, regenerable, clinician-confirmed, and **never
+  LLM-decided**. Limited to RTM treatment-management code candidates
+  **98979 / 98980 / 98981**; device-supply RTM codes are excluded while the
+  technology/device regulatory question is unresolved. Factual inputs only:
+  calendar month, manually entered treatment-management minutes, documented
+  synchronous interactions and their modality/date, documentation
+  completeness, and therapist review/actions. Never infer undocumented time,
+  never treat asynchronous messaging as synchronous, never assume payer
+  behaviour. Output wording: "Potential CPT code candidate based on
+  Genex-documented evidence — clinician confirmation required." Never
+  "billable", "claim approved", "eligible for reimbursement" or "guaranteed
+  reimbursement". The treating SLP/practice remains responsible for RTM
+  appropriateness, medical necessity, coding requirements, final CPT
+  selection, modifiers, payer/benefit verification, billing, claim submission
+  and payer follow-up. No reimbursement-dollar calculation is planned.
 - **`MonitoringDay` remains DEFERRED** pending an explicit, versioned
   clinical/regulatory qualification rule. Only `distinct_observed_local_dates`
   may be computed, and never described as qualifying or billable.
@@ -158,3 +232,17 @@ verified independently before any real patient data is processed.
   should surface as a quality flag.
 - **Parent Save-for-Later** default suppression is one subsequent weekly cycle,
   with clinician override possible later.
+
+### 0.4A carried debt
+
+- **`FakeDocumentStore` is not thread-safe** — accepted as documented debt by
+  founder decision. Its transaction support is snapshot-and-rollback under a
+  lock, which gives all-or-nothing for fault-injection tests but simulates no
+  contention. **It must never be used to make a concurrency claim**; the only
+  evidence about racing writers comes from the real emulator suite.
+- **Transactional `set` is unavailable** (Firestore forbids a read after a
+  write). Any later slice needing a read-modify-write inside a transaction
+  must restructure rather than weaken the port's existence guarantee.
+- **Generation counters are read outside the transaction.** Correct — a stale
+  read can only cause a collision, which is the intended refusal — but it
+  means a heavily contended key does one extra read per attempt.

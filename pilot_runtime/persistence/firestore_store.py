@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import Dict, List, Mapping, Optional, Tuple
+from typing import Callable, Dict, List, Mapping, Optional, Tuple, TypeVar
 
 from google.api_core import exceptions as gcloud_exceptions
 from google.cloud import firestore
@@ -59,6 +59,8 @@ from pilot_backend.persistence.document_store import DocumentStoreError
 #: Environment variable the Firestore client honours to reach an emulator.
 #: Reading it is how this module can assert it is ABSENT in production.
 EMULATOR_ENV_VAR = "FIRESTORE_EMULATOR_HOST"
+
+T = TypeVar("T")
 
 
 def emulator_host_from(env: Mapping[str, str]) -> str:
@@ -122,11 +124,44 @@ class FirestoreDocumentStore:
             raise DocumentStoreError("collection names must not contain a path separator")
         return name
 
-    def _doc(self, collection: str, doc_id: str):
+    @staticmethod
+    def _doc_ref(client, collection: str, doc_id: str):
         key = (doc_id or "").strip()
         if not key:
             raise DocumentStoreError("document id must not be empty")
-        return self._client.collection(self._check_collection(collection)).document(key)
+        return client.collection(
+            FirestoreDocumentStore._check_collection(collection)).document(key)
+
+    def _doc(self, collection: str, doc_id: str):
+        return self._doc_ref(self._client, collection, doc_id)
+
+    def run_in_transaction(self, fn: "Callable[[object], T]") -> T:
+        """Run `fn` in a real Firestore transaction: all writes, or none.
+
+        This is what makes claim acquisition and record persistence
+        crash-consistent. A process death between the two leaves NOTHING
+        behind, so an external identity can never be stranded by a partial
+        write — which a claim-then-write sequence could not guarantee no
+        matter how carefully it was ordered.
+        """
+        @firestore.transactional
+        def _run(transaction):
+            return fn(_TransactionalFirestoreStore(self._client, transaction))
+
+        try:
+            return _run(self._client.transaction())
+        except gcloud_exceptions.AlreadyExists:
+            raise DocumentStoreError("document already exists in transaction") from None
+        except DocumentStoreError:
+            raise
+        except (gcloud_exceptions.Aborted, gcloud_exceptions.RetryError,
+                gcloud_exceptions.DeadlineExceeded,
+                gcloud_exceptions.FailedPrecondition):
+            # Contention the client could not resolve by retrying. Reported as
+            # a conflict rather than an infrastructure error, because from the
+            # caller's point of view another writer holds the key — and the
+            # SDK's text can name documents and fields.
+            raise DocumentStoreError("transaction conflicted and was abandoned") from None
 
     # -- DocumentStore -----------------------------------------------------
 
@@ -201,6 +236,68 @@ class FirestoreDocumentStore:
         except gcloud_exceptions.GoogleAPIError:
             raise DocumentStoreError(f"list failed in {collection}") from None
         return sorted(rows, key=lambda row: row[0])
+
+
+class _TransactionalFirestoreStore:
+    """A `DocumentStore` bound to one Firestore transaction.
+
+    Same five operations, same namespace guard, all issued through the
+    transaction so they commit together or not at all.
+
+    `set` is refused rather than approximated. The port's `set` means
+    "replace an EXISTING document", which needs a read to check existence —
+    and Firestore forbids a read after a write in the same transaction. A
+    silently weakened `set` that could create a document would be worse than
+    an absent one, so this raises.
+    """
+
+    def __init__(self, client: "firestore.Client", transaction) -> None:
+        self._client = client
+        self._transaction = transaction
+
+    def _ref(self, collection: str, doc_id: str):
+        return FirestoreDocumentStore._doc_ref(self._client, collection, doc_id)
+
+    def create(self, collection: str, doc_id: str, data: Mapping[str, object]) -> None:
+        # Uniqueness survives atomicity: a competing transaction that created
+        # the same id makes this one fail at commit with AlreadyExists.
+        self._transaction.create(self._ref(collection, doc_id), dict(data))
+
+    def get(self, collection: str, doc_id: str) -> Optional[Mapping[str, object]]:
+        snapshot = self._ref(collection, doc_id).get(transaction=self._transaction)
+        if not snapshot.exists:
+            return None
+        return dict(snapshot.to_dict() or {})
+
+    def set(self, collection: str, doc_id: str, data: Mapping[str, object]) -> None:
+        raise DocumentStoreError(
+            "set() is not available inside a transaction; Firestore forbids a "
+            "read after a write, so existence cannot be verified")
+
+    def query_equals(self, collection: str, field: str,
+                     value: object) -> List[Tuple[str, Mapping[str, object]]]:
+        name = FirestoreDocumentStore._check_collection(collection)
+        try:
+            stream = (self._client.collection(name)
+                      .where(filter=firestore.FieldFilter(field, "==", value))
+                      .stream(transaction=self._transaction))
+            rows = [(s.id, dict(s.to_dict() or {})) for s in stream]
+        except gcloud_exceptions.GoogleAPIError:
+            raise DocumentStoreError(f"query failed in {collection}") from None
+        return sorted(rows, key=lambda row: row[0])
+
+    def list_all(self, collection: str) -> List[Tuple[str, Mapping[str, object]]]:
+        name = FirestoreDocumentStore._check_collection(collection)
+        try:
+            rows = [(s.id, dict(s.to_dict() or {}))
+                    for s in self._client.collection(name)
+                    .stream(transaction=self._transaction)]
+        except gcloud_exceptions.GoogleAPIError:
+            raise DocumentStoreError(f"list failed in {collection}") from None
+        return sorted(rows, key=lambda row: row[0])
+
+    def run_in_transaction(self, fn: "Callable[[object], T]") -> T:
+        raise DocumentStoreError("transactions must not be nested")
 
 
 def build_firestore_client(*, project_id: str, database: str = "",

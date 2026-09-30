@@ -148,8 +148,9 @@ def test_parent_external_id_links_correctly(s):
         s.caregiver_alpha, s.topo.child_alpha.child_id,
         SourceSystem.PARENT, "sess-fictional-001")
     assert link.is_active and link.source_system is SourceSystem.PARENT
-    assert s.svc.resolve_child_for_external(
-        SourceSystem.PARENT, "sess-fictional-001") == s.topo.child_alpha.child_id
+    assert s.svc.resolve_authorized_child(
+        s.caregiver_alpha, SourceSystem.PARENT,
+        "sess-fictional-001") == s.topo.child_alpha.child_id
 
 
 def test_therapist_external_child_id_links_correctly(s):
@@ -157,9 +158,9 @@ def test_therapist_external_child_id_links_correctly(s):
         s.provider_alpha, s.topo.child_alpha.child_id,
         SourceSystem.THERAPIST, "therapist-child-fictional-001")
     assert link.is_active and link.source_system is SourceSystem.THERAPIST
-    assert s.svc.resolve_child_for_external(
-        SourceSystem.THERAPIST, "therapist-child-fictional-001"
-    ) == s.topo.child_alpha.child_id
+    assert s.svc.resolve_authorized_child(
+        s.provider_alpha, SourceSystem.THERAPIST,
+        "therapist-child-fictional-001") == s.topo.child_alpha.child_id
 
 
 def test_both_systems_may_link_the_same_child(s):
@@ -263,15 +264,13 @@ def test_claim_ids_are_deterministic_and_collision_resistant():
         claim_document_id(ClaimKind.CHILD_SOURCE, "d", -1)
 
 
-def test_a_failed_second_claim_releases_the_first(s):
-    """The two-claim orphan must be handed back, not stranded.
+def test_a_failed_second_claim_leaves_nothing_behind(s):
+    """Atomicity replaced the orphan-release workaround.
 
-    The advisory active-link check short-circuits the ordinary conflict, so
-    it is deliberately bypassed here: a competing writer takes the
-    CHILD_SOURCE claim directly, exactly as it would in the instant between
-    winning its claim and writing its link. The attempt then wins the
-    external-identity claim, loses the child-source claim, and must release
-    the external one rather than strand it.
+    Previously the two claims were separate writes, so losing the second one
+    stranded the first and the service had to release it explicitly. Both
+    claims and the link now commit in ONE transaction, so a lost race writes
+    NOTHING — there is no orphan to recover, and no generation is consumed.
     """
     child_b = s.topo.child_beta.child_id
     external = "sess-fictional-orphan"
@@ -282,22 +281,98 @@ def test_a_failed_second_claim_releases_the_first(s):
     s.repos.identity_claims.claim(competitor)
 
     external_digest = key_digest(SourceSystem.PARENT.value, external)
-    assert s.repos.identity_claims.next_generation(
-        ClaimKind.EXTERNAL_IDENTITY, external_digest) == 0
+    assert s.repos.identity_claims.count_claims_for_key(external_digest) == 0
 
     with pytest.raises(IdentityConflict):
         s.svc.link_source_system(s.caregiver_beta, child_b,
                                  SourceSystem.PARENT, external)
 
-    # The external key was acquired and then handed back.
-    assert s.repos.identity_claims.count_claims_for_key(external_digest) == 1
+    # Nothing was persisted: no external claim, no release, no generation used.
+    assert s.repos.identity_claims.count_claims_for_key(external_digest) == 0
     assert s.repos.identity_claims.next_generation(
-        ClaimKind.EXTERNAL_IDENTITY, external_digest) == 1, "not released"
+        ClaimKind.EXTERNAL_IDENTITY, external_digest) == 0
+    assert s.repos.source_links.list_for_child(child_b, include_ended=True) == []
 
-    # ...so a legitimate child can still use that external identity.
+    # ...and the external identity is untouched, so a legitimate child gets it.
     link = s.svc.link_source_system(s.caregiver_alpha, s.topo.child_alpha.child_id,
                                     SourceSystem.PARENT, external)
     assert link.is_active
+
+
+def test_a_crash_between_claim_and_record_persists_nothing(s):
+    """Fault injection: the exact window the founder review flagged.
+
+    A process death after the claims but before the link write used to strand
+    the external identity permanently. The write is now one transaction, so an
+    exception raised mid-acquisition rolls everything back.
+    """
+    child = s.topo.child_alpha.child_id
+    external = "sess-fictional-crash"
+    digest = key_digest(SourceSystem.PARENT.value, external)
+
+    real_factory = s.svc._repos_factory
+
+    class _CrashAfterClaims:
+        """Repository set that dies immediately after both claims are staged."""
+
+        def __init__(self, inner):
+            self._inner = inner
+            self.identity_claims = inner.identity_claims
+            self.managing_clinicians = inner.managing_clinicians
+
+        @property
+        def source_links(self):
+            raise RuntimeError("simulated process failure before the record write")
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    s.svc._repos_factory = lambda store: _CrashAfterClaims(real_factory(store))
+    try:
+        with pytest.raises(RuntimeError):
+            s.svc.link_source_system(s.caregiver_alpha, child,
+                                     SourceSystem.PARENT, external)
+    finally:
+        s.svc._repos_factory = real_factory
+
+    assert s.repos.identity_claims.count_claims_for_key(digest) == 0, "claim survived a crash"
+    assert s.repos.source_links.list_for_child(child, include_ended=True) == []
+
+    # The key is still usable — nothing was stranded.
+    link = s.svc.link_source_system(s.caregiver_alpha, child,
+                                    SourceSystem.PARENT, external)
+    assert link.is_active
+
+
+def test_a_crash_during_managing_clinician_assignment_persists_nothing(s):
+    child = s.topo.child_alpha.child_id
+    digest = key_digest(child)
+    real_factory = s.svc._repos_factory
+
+    class _CrashAfterClaim:
+        def __init__(self, inner):
+            self._inner = inner
+            self.identity_claims = inner.identity_claims
+
+        @property
+        def managing_clinicians(self):
+            raise RuntimeError("simulated process failure before the record write")
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    s.svc._repos_factory = lambda store: _CrashAfterClaim(real_factory(store))
+    try:
+        with pytest.raises(RuntimeError):
+            s.svc.assign_managing_clinician(
+                s.provider_alpha, child, s.topo.provider_alpha.provider_id)
+    finally:
+        s.svc._repos_factory = real_factory
+
+    assert s.repos.identity_claims.count_claims_for_key(digest) == 0
+    assert s.repos.managing_clinicians.list_for_child(child, include_ended=True) == []
+    assert s.svc.assign_managing_clinician(
+        s.provider_alpha, child, s.topo.provider_alpha.provider_id).is_active
 
 
 def test_ambiguous_external_resolution_fails_closed(s):
@@ -310,14 +385,14 @@ def test_ambiguous_external_resolution_fails_closed(s):
         now=T0)
     s.repos.source_links.create(forged)
     with pytest.raises(IdentityConflict) as exc:
-        s.svc.resolve_child_for_external(SourceSystem.PARENT, "sess-fictional-dup")
+        s.svc._resolve_child_for_external(SourceSystem.PARENT, "sess-fictional-dup")
     assert "more than one" in str(exc.value)
 
 
-def test_resolution_of_an_unknown_external_id_is_none_not_an_error(s):
-    assert s.svc.resolve_child_for_external(SourceSystem.PARENT, "nope") is None
-    assert s.svc.resolve_child_for_external(SourceSystem.PARENT, "") is None
-    assert s.svc.resolve_child_for_external(SourceSystem.PARENT, "   ") is None
+def test_internal_resolution_of_an_unknown_external_id_is_none_not_an_error(s):
+    assert s.svc._resolve_child_for_external(SourceSystem.PARENT, "nope") is None
+    assert s.svc._resolve_child_for_external(SourceSystem.PARENT, "") is None
+    assert s.svc._resolve_child_for_external(SourceSystem.PARENT, "   ") is None
 
 
 # ===========================================================================
@@ -613,6 +688,81 @@ def test_no_client_supplied_role_can_reach_the_service(s):
         params = set(inspect.signature(fn).parameters)
         assert not (params & {"role", "actor_role", "uid", "is_admin",
                               "caregiver_id", "provider_role"}), fn.__name__
+
+
+def test_every_public_service_method_requires_a_principal():
+    """The structural form of "resolve then authorize" — not a convention.
+
+    Any public method that could hand back a child id must take a principal,
+    so there is no callable surface that turns an external identifier into
+    usable child access without the gate. The raw resolver is private
+    precisely because it cannot satisfy this.
+    """
+    import inspect
+
+    for name, member in inspect.getmembers(
+            LongitudinalIdentityService, predicate=inspect.isfunction):
+        if name.startswith("_"):
+            continue
+        params = list(inspect.signature(member).parameters)
+        assert params[:2] == ["self", "principal"], (name, params)
+
+
+def test_the_raw_resolver_is_not_part_of_the_public_surface():
+    public = [n for n in dir(LongitudinalIdentityService) if not n.startswith("_")]
+    assert "resolve_child_for_external" not in public
+    assert "resolve_authorized_child" in public
+
+
+def test_resolve_authorized_child_requires_authorization(s):
+    child = s.topo.child_alpha.child_id
+    s.svc.link_source_system(s.caregiver_alpha, child,
+                             SourceSystem.PARENT, "sess-fictional-001")
+
+    assert s.svc.resolve_authorized_child(
+        s.caregiver_alpha, SourceSystem.PARENT, "sess-fictional-001") == child
+
+    # Caregiver-Beta holds a perfectly valid token for another family.
+    with pytest.raises(IdentityAuthorizationError):
+        s.svc.resolve_authorized_child(s.caregiver_beta, SourceSystem.PARENT,
+                                       "sess-fictional-001")
+    # ...as does an unrelated provider.
+    with pytest.raises(IdentityAuthorizationError):
+        s.svc.resolve_authorized_child(s.provider_beta, SourceSystem.PARENT,
+                                       "sess-fictional-001")
+
+
+def test_unknown_and_unauthorized_external_ids_are_indistinguishable(s):
+    """Otherwise this becomes an oracle for who is bound to whom."""
+    child = s.topo.child_alpha.child_id
+    s.svc.link_source_system(s.caregiver_alpha, child,
+                             SourceSystem.PARENT, "sess-fictional-001")
+
+    unauthorized, unknown = None, None
+    try:
+        s.svc.resolve_authorized_child(s.caregiver_beta, SourceSystem.PARENT,
+                                       "sess-fictional-001")
+    except IdentityAuthorizationError as exc:
+        unauthorized = str(exc)
+    try:
+        s.svc.resolve_authorized_child(s.caregiver_beta, SourceSystem.PARENT,
+                                       "sess-never-issued")
+    except IdentityAuthorizationError as exc:
+        unknown = str(exc)
+
+    assert unauthorized == unknown, "the message distinguishes the two cases"
+    assert child not in (unauthorized or "")
+
+
+def test_an_ended_relationship_revokes_external_resolution(s):
+    child = s.topo.child_alpha.child_id
+    s.svc.link_source_system(s.caregiver_alpha, child,
+                             SourceSystem.PARENT, "sess-fictional-001")
+    s.repos.caregiver_child.end_connection(
+        s.topo.link_alpha_caregiver.connection_id, status=ConnectionStatus.REVOKED)
+    with pytest.raises(IdentityAuthorizationError):
+        s.svc.resolve_authorized_child(s.caregiver_alpha, SourceSystem.PARENT,
+                                       "sess-fictional-001")
 
 
 # ===========================================================================
