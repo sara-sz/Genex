@@ -37,6 +37,9 @@ from typing import Any, List, Optional, Sequence, Type
 
 from ..audit.events import AuditEvent
 from ..domain.child_context import ChildContextRecord
+from ..domain.identity_claims import ClaimKind, ClaimRecordKind, IdentityClaim
+from ..domain.managing_clinician import ManagingClinicianAssignment
+from ..domain.source_link import SourceSystemLink
 from ..domain.connections import CaregiverChildConnection, ProviderChildConnection
 from ..domain.entities import Caregiver, Child, Practice, Provider
 from ..domain.enums import ConnectionStatus, EntityStatus
@@ -347,6 +350,114 @@ class FirestoreChildContextRepository(_BaseRepo):
         return self._query("child_id", child_id)
 
 
+class FirestoreIdentityClaimRepository(_BaseRepo):
+    """Write-time uniqueness claims. Create-only, by design.
+
+    There is no update and no delete. A claim is a record that one writer won
+    a race for a deterministic document id; rewriting it would erase the proof
+    and re-open the race.
+    """
+
+    record_type, model = "identity_claim", IdentityClaim
+
+    def claim(self, claim: IdentityClaim) -> IdentityClaim:
+        """Atomically win the claim, or raise DuplicateRecord.
+
+        This single call IS the uniqueness enforcement: the document id is
+        derived from the constraint key, so a competing writer computing the
+        same key targets the same document and exactly one `create` survives.
+        """
+        return self._create(claim.claim_id, claim)
+
+    def get_by_id(self, claim_id: str) -> IdentityClaim:
+        return self._get(claim_id)
+
+    def exists(self, claim_id: str) -> bool:
+        try:
+            self._get(claim_id)
+            return True
+        except RecordNotFound:
+            return False
+
+    def release(self, marker: IdentityClaim) -> IdentityClaim:
+        """Hand a key back, opening the next generation.
+
+        Also create-only and deterministic, so two concurrent releases of the
+        same generation cannot both succeed and skip a generation.
+        """
+        if marker.record_kind is not ClaimRecordKind.RELEASE:
+            raise ValueError("release() requires a release marker")
+        return self._create(marker.claim_id, marker)
+
+    def next_generation(self, kind: ClaimKind, key_digest: str) -> int:
+        """The generation every contender must target for this key.
+
+        Counts RELEASE markers only. A competitor winning a claim does not
+        move this number, which is exactly why all contenders compute the same
+        generation and collide on one document — see the module docstring in
+        domain/identity_claims.py for the emulator-proven failure that an
+        earlier claim-count version produced.
+        """
+        return sum(1 for record in self._query("key_digest", key_digest)
+                   if record.record_kind is ClaimRecordKind.RELEASE
+                   and record.kind is kind)
+
+    def count_claims_for_key(self, key_digest: str) -> int:
+        """Diagnostics/tests: acquisitions ever made for this key."""
+        return sum(1 for record in self._query("key_digest", key_digest)
+                   if record.record_kind is ClaimRecordKind.CLAIM)
+
+    def list_for_key(self, key_digest: str) -> List[IdentityClaim]:
+        return sorted(self._query("key_digest", key_digest),
+                      key=lambda c: (c.generation, c.record_kind.value))
+
+
+class FirestoreSourceSystemLinkRepository(_BaseRepo):
+    """Canonical child <-> source-system identity bridges. No delete."""
+
+    record_type, model = "source_system_link", SourceSystemLink
+
+    def create(self, link: SourceSystemLink) -> SourceSystemLink:
+        return self._create(link.link_id, link)
+
+    def get_by_id(self, link_id: str) -> SourceSystemLink:
+        return self._get(link_id)
+
+    def update(self, link: SourceSystemLink) -> SourceSystemLink:
+        """Whole-document write of an EXISTING link (end / lineage stamp)."""
+        return self._set(link.link_id, link)
+
+    def list_for_child(self, child_id: str, *, include_ended: bool = False
+                       ) -> List[SourceSystemLink]:
+        found = self._query("child_id", child_id)
+        return found if include_ended else [x for x in found if x.is_active]
+
+    def list_for_external_id(self, external_id: str, *, include_ended: bool = False
+                             ) -> List[SourceSystemLink]:
+        found = self._query("external_id", external_id)
+        return found if include_ended else [x for x in found if x.is_active]
+
+
+class FirestoreManagingClinicianRepository(_BaseRepo):
+    """Managing-clinician assignment history. Append-only plus lineage stamps."""
+
+    record_type, model = "managing_clinician", ManagingClinicianAssignment
+
+    def create(self, assignment: ManagingClinicianAssignment) -> ManagingClinicianAssignment:
+        return self._create(assignment.assignment_id, assignment)
+
+    def get_by_id(self, assignment_id: str) -> ManagingClinicianAssignment:
+        return self._get(assignment_id)
+
+    def update(self, assignment: ManagingClinicianAssignment) -> ManagingClinicianAssignment:
+        return self._set(assignment.assignment_id, assignment)
+
+    def list_for_child(self, child_id: str, *, include_ended: bool = False
+                       ) -> List[ManagingClinicianAssignment]:
+        found = self._query("child_id", child_id)
+        return found if include_ended else [x for x in found if x.is_active]
+
+
 class FirestoreRepositories:
     """All repositories over one document store — the production composition."""
 
@@ -360,4 +471,7 @@ class FirestoreRepositories:
         self.provider_child = FirestoreProviderChildConnectionRepository(store)
         self.audit_events = FirestoreAuditEventRepository(store)
         self.child_contexts = FirestoreChildContextRepository(store)
+        self.identity_claims = FirestoreIdentityClaimRepository(store)
+        self.source_links = FirestoreSourceSystemLinkRepository(store)
+        self.managing_clinicians = FirestoreManagingClinicianRepository(store)
         self.revisions = FirestoreRevisionRepository(store)

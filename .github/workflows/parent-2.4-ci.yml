@@ -180,6 +180,18 @@ jobs:
             echo "pilot_backend/ not present on this branch — nothing to run"
           fi
 
+      - name: October pilot 0.4A — longitudinal identity (unit)
+        # Runs in the DEPENDENCY-PURE job on purpose: the identity domain,
+        # claims and service import no SDK, and proving that here is what
+        # keeps the pilot_backend/pilot_runtime split honest.
+        working-directory: .
+        run: |
+          if [ -f pilot_backend/tests/test_longitudinal_identity.py ]; then
+            python -m pytest pilot_backend/tests/test_longitudinal_identity.py -q
+          else
+            echo "0.4A not present on this branch — nothing to run"
+          fi
+
       - name: Parent regression suite (seven-domain vocabulary)
         # Now part of the hosted gate. It exercises the Brain end to end —
         # focus selection, bridge plans, activity banks, safety and the weekly
@@ -484,6 +496,14 @@ jobs:
       - name: Fictional PRE-PHI end-to-end (HTTP + Firestore + audit + revisions)
         run: python -m pytest pilot_runtime/tests/integration/test_e2e_pre_phi.py -q
 
+      - name: Longitudinal identity — REAL emulator, REAL concurrency
+        # The concurrency assertions here are the reason 0.4A exists. They
+        # cannot run against the fake store: it is a plain dict and is not
+        # thread-safe, so competing writers would prove nothing about
+        # Firestore. An earlier claim-generation design passed every fake
+        # test and was caught by this suite on its first real run.
+        run: python -m pytest pilot_runtime/tests/integration/test_identity_emulator.py -q
+
       - name: Prove the emulator suites actually ran
         # Belt and braces against the one failure mode this job exists to
         # prevent: a green result produced by tests that never executed.
@@ -497,7 +517,7 @@ jobs:
                "--collect-only", "-q"],
               capture_output=True, text=True)
           count = collected.stdout.count("::")
-          assert count >= 50, f"expected the integration suites to collect >=50 tests, got {count}"
+          assert count >= 70, f"expected the integration suites to collect >=70 tests, got {count}"
           run = subprocess.run(
               [sys.executable, "-m", "pytest", "pilot_runtime/tests/integration",
                "-q", "-rs"],

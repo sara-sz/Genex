@@ -39,6 +39,11 @@ AUDIT_EVENT_PREFIX = "audt"
 REVISION_PREFIX = "revn"
 #: PRE-PHI 0.3. The one mutable pilot record.
 CHILD_CONTEXT_PREFIX = "cctx"
+#: 0.4A longitudinal identity. Claims are NOT listed here: their ids are
+#: deterministic by design (see domain/identity_claims.py), which is the whole
+#: uniqueness mechanism, so they must never be minted from a uuid.
+SOURCE_LINK_PREFIX = "sslk"
+MANAGING_CLINICIAN_PREFIX = "mcas"
 
 ALL_PREFIXES = (
     PRACTICE_PREFIX,
@@ -50,6 +55,8 @@ ALL_PREFIXES = (
     AUDIT_EVENT_PREFIX,
     REVISION_PREFIX,
     CHILD_CONTEXT_PREFIX,
+    SOURCE_LINK_PREFIX,
+    MANAGING_CLINICIAN_PREFIX,
 )
 
 
@@ -95,6 +102,14 @@ def new_revision_id() -> str:
 
 def new_child_context_id() -> str:
     return new_id(CHILD_CONTEXT_PREFIX)
+
+
+def new_source_link_id() -> str:
+    return new_id(SOURCE_LINK_PREFIX)
+
+
+def new_managing_clinician_id() -> str:
+    return new_id(MANAGING_CLINICIAN_PREFIX)
 
 
 def entity_type_of(identifier: str) -> Optional[str]:

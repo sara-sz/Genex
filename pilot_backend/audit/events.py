@@ -77,6 +77,13 @@ class AuditAction(str, Enum):
     ADMIN_CHANGE = "admin_change"
     RECORD_FINALIZED = "record_finalized"
     RECORD_AMENDED = "record_amended"
+    # 0.4A longitudinal identity.
+    SOURCE_LINK_CREATED = "source_link_created"
+    SOURCE_LINK_ENDED = "source_link_ended"
+    SOURCE_LINK_REPLACED = "source_link_replaced"
+    MANAGING_CLINICIAN_ASSIGNED = "managing_clinician_assigned"
+    MANAGING_CLINICIAN_ENDED = "managing_clinician_ended"
+    MANAGING_CLINICIAN_TRANSFERRED = "managing_clinician_transferred"
 
 
 class AuditResult(str, Enum):
@@ -98,6 +105,16 @@ ALLOWED_METADATA_KEYS = frozenset({
     "route",              # path TEMPLATE, never a populated path
     "method",
     "source",             # subsystem name
+    # 0.4A. All opaque identifiers or short enum values — never an external
+    # system's clinical content, and never the external identifier itself,
+    # which could be a Parent session id.
+    "source_system",      # parent | therapist
+    "link_id",            # opaque sslk_ id
+    "assignment_id",      # opaque mcas_ id
+    "claim_id",           # deterministic claim document id
+    "claim_kind",
+    "provider_id",        # opaque prov_ id
+    "practice_id",        # opaque prac_ id
 })
 
 _MAX_METADATA_VALUE_LENGTH = 64

@@ -40,6 +40,12 @@ from typing import Any, Dict, Mapping, Optional, Type
 
 from ..audit.events import AuditAction, AuditEvent, AuditResult
 from ..domain.child_context import ChildContextRecord
+from ..domain.identity_claims import ClaimKind, ClaimRecordKind, IdentityClaim
+from ..domain.managing_clinician import (
+    ManagingClinicianAssignment,
+    ManagingClinicianStatus,
+)
+from ..domain.source_link import SourceLinkStatus, SourceSystem, SourceSystemLink
 from ..domain.connections import CaregiverChildConnection, ProviderChildConnection
 from ..domain.entities import Caregiver, Child, Practice, Provider
 from ..domain.enums import (
@@ -245,6 +251,37 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "created_by_actor_id": OPT_STR,
         "last_actor_role": _EnumKind(ActorRole, optional=True),
         "schema_version": STR,
+    },
+    SourceSystemLink: {
+        "link_id": STR, "child_id": STR,
+        "source_system": _EnumKind(SourceSystem),
+        "external_id": STR, "external_owner_ref": STR,
+        "status": _EnumKind(SourceLinkStatus),
+        "linked_at": DT, "linked_by_actor_id": OPT_STR, "linked_by_role": OPT_STR,
+        "ended_at": OPT_DT, "ended_by_actor_id": OPT_STR, "end_reason": STR,
+        "child_source_claim_id": STR, "external_identity_claim_id": STR,
+        "superseded_by_link_id": OPT_STR, "supersedes_link_id": OPT_STR,
+        "created_at": DT, "updated_at": DT,
+        "created_by_actor_id": OPT_STR, "schema_version": STR,
+    },
+    ManagingClinicianAssignment: {
+        "assignment_id": STR, "child_id": STR, "provider_id": STR,
+        "practice_id": STR, "provider_connection_id": STR,
+        "status": _EnumKind(ManagingClinicianStatus),
+        "effective_from": DT, "effective_to": OPT_DT,
+        "assigned_by_actor_id": OPT_STR, "assigned_by_role": OPT_STR,
+        "reason": STR, "end_reason": STR, "ended_by_actor_id": OPT_STR,
+        "claim_id": STR,
+        "supersedes_assignment_id": OPT_STR,
+        "superseded_by_assignment_id": OPT_STR,
+        "created_at": DT, "updated_at": DT,
+        "created_by_actor_id": OPT_STR, "schema_version": STR,
+    },
+    IdentityClaim: {
+        "claim_id": STR, "record_kind": _EnumKind(ClaimRecordKind),
+        "kind": _EnumKind(ClaimKind), "key_digest": STR,
+        "generation": INT, "holder_ref": STR, "child_id": STR,
+        "created_at": DT, "created_by_actor_id": OPT_STR, "schema_version": STR,
     },
     Revision: {
         "revision_id": STR, "record_id": STR, "version": INT,

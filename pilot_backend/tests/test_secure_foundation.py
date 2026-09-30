@@ -1175,13 +1175,26 @@ def test_audit_metadata_rejects_clinical_keys(key):
 
 
 def test_audit_metadata_allowlist_is_narrow_and_operational():
+    """Every permitted key must be operational, never clinical.
+
+    The expected set is restated here rather than derived, so widening the
+    allowlist requires editing this test too — which is the point. The 0.4A
+    additions are all opaque application ids or short enum values. Note what
+    is deliberately ABSENT: `external_id`. A Parent session id is an external
+    identifier and does not belong in an audit event; links are referenced by
+    their opaque `link_id` instead.
+    """
     assert ALLOWED_METADATA_KEYS
     for key in ALLOWED_METADATA_KEYS:
         assert key in {
             "denial_reason", "http_status", "environment", "actor_practice_id",
             "connection_id", "revision_id", "record_version", "schema_version",
             "route", "method", "source",
+            # 0.4A longitudinal identity
+            "source_system", "link_id", "assignment_id", "claim_id",
+            "claim_kind", "provider_id", "practice_id",
         }, key
+    assert "external_id" not in ALLOWED_METADATA_KEYS
 
 
 def test_audit_metadata_rejects_long_or_multiline_values():

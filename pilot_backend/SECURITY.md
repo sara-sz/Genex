@@ -119,3 +119,42 @@ verified independently before any real patient data is processed.
 - Relationships end via status and `ended_at`; nothing is ever deleted.
 - `BETA_ACCESS_CODE` is not an authorization primitive and is not read by `authz`.
 - Frozen Parent 2.4 and Therapist 0.7.4 runtimes are not modified by this phase.
+
+---
+
+## 0.4A — longitudinal identity (added)
+
+| Control | Where |
+|---|---|
+| Canonical child identity remains `chld_*`; external ids never canonical | `domain/source_link.py` |
+| Write-time uniqueness via deterministic claim documents | `domain/identity_claims.py` |
+| One ACTIVE link per (child, source_system) | `identity/service.py` |
+| One ACTIVE canonical child per (source_system, external_id) | `identity/service.py` |
+| Ambiguity fails closed; resolution never picks a winner | `identity/service.py` |
+| Exactly one active managing clinician, claim-enforced | `identity/service.py` |
+| Managing clinician validated against an ACTIVE ProviderChildConnection | `identity/service.py` |
+| Practice of record taken from the connection, not the provider | `identity/service.py` |
+| No delete on any identity record or repository | `persistence/firestore_repos.py` |
+| Audit excludes the external identifier by construction | `audit/events.py` allowlist |
+
+### Forward architecture notes recorded in 0.4A (NOT implemented)
+
+- **RTM clinician change.** An open RTM episode must NOT silently transfer when
+  the managing clinician changes. The episode must be explicitly closed and a
+  new one opened under the new clinician. Formal transfer semantics deferred.
+- **`RTMTechnology`** must support `regulatory_status = UNDER_REVIEW` and must
+  not imply FDA approval, clearance, registration or classification.
+- **`PayerVerification`** should capture payer, plan/product if known,
+  verification date, method/source, verified_by, status/outcome, and
+  notes/reference. It never guarantees reimbursement.
+- **`MonitoringDay` remains DEFERRED** pending an explicit, versioned
+  clinical/regulatory qualification rule. Only `distinct_observed_local_dates`
+  may be computed, and never described as qualifying or billable.
+- **Planning policy defaults** approved: primary weight 3, secondary weight 2.
+  Relative values, versioned, configurable — never percentages, never in the
+  domain schema.
+- **Supporting `ActivityGoalAlignment`** may satisfy minimum goal coverage when
+  the alignment is meaningful and explicit; repeated all-supporting coverage
+  should surface as a quality flag.
+- **Parent Save-for-Later** default suppression is one subsequent weekly cycle,
+  with clinician override possible later.
