@@ -891,15 +891,21 @@ def test_no_parent_23_resource_is_reachable():
 
 
 # ===========================================================================
-# scope guard — 0.4A only
+# scope guard — through 0.4C
 # ===========================================================================
 
 def test_no_later_slice_object_was_implemented():
-    """0.4B+ and RTM must remain absent."""
+    """0.4D+ and RTM must remain absent.
+
+    0.4B/C narrowed this by exactly six names — `GoalSuggestion`,
+    `ClinicalGoal`, `CaregiverApprovedGoal`, `MonthlyFocusPlan`,
+    `MonthlyGoalAllocation` and `MonthlyGoalSnapshot` — which that slice
+    implements. Nothing else moved: the weekly, observation and RTM layers are
+    still absent and still asserted absent.
+    """
     banned = {
-        "GoalSuggestion", "ClinicalGoal", "CaregiverApprovedGoal",
-        "MonthlyFocusPlan", "MonthlyGoalAllocation", "MonthlyGoalSnapshot",
         "ActivityGoalAlignment", "CoverageGap", "ObservationEvent",
+        "WeeklyCycle", "WeeklyPlan", "WeeklyActivityAllocation",
         "RTMEpisode", "RTMMonitoringPeriod", "TherapistReview", "TimeEntry",
         "SynchronousInteraction", "RTMTechnology", "PayerVerification",
         "MonitoringDay", "MonthEndReport", "AdaptationRecord",

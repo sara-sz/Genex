@@ -44,6 +44,21 @@ CHILD_CONTEXT_PREFIX = "cctx"
 #: uniqueness mechanism, so they must never be minted from a uuid.
 SOURCE_LINK_PREFIX = "sslk"
 MANAGING_CLINICIAN_PREFIX = "mcas"
+#: 0.4B goals. A suggestion, a goal and each of the goal's versions are three
+#: distinct things and each gets its own identifier. Collapsing the goal and its
+#: current version into one id would make "which wording was in force in
+#: October?" unanswerable, which is the question the version chain exists for.
+GOAL_SUGGESTION_PREFIX = "gsug"
+GOAL_VERSION_PREFIX = "gver"
+CLINICAL_GOAL_PREFIX = "clgl"
+CAREGIVER_APPROVED_GOAL_PREFIX = "cagl"
+#: 0.4C monthly focus plan. The plan id is random even though a plan is unique
+#: per (child, month): uniqueness is enforced by a deterministic CLAIM document,
+#: exactly as in 0.4A, not by making the record's own id guessable. A derived
+#: plan id would let anyone holding a child id enumerate that child's months.
+MONTHLY_FOCUS_PLAN_PREFIX = "mfpl"
+MONTHLY_ALLOCATION_PREFIX = "galc"
+MONTHLY_GOAL_SNAPSHOT_PREFIX = "gsnp"
 
 ALL_PREFIXES = (
     PRACTICE_PREFIX,
@@ -57,6 +72,13 @@ ALL_PREFIXES = (
     CHILD_CONTEXT_PREFIX,
     SOURCE_LINK_PREFIX,
     MANAGING_CLINICIAN_PREFIX,
+    GOAL_SUGGESTION_PREFIX,
+    GOAL_VERSION_PREFIX,
+    CLINICAL_GOAL_PREFIX,
+    CAREGIVER_APPROVED_GOAL_PREFIX,
+    MONTHLY_FOCUS_PLAN_PREFIX,
+    MONTHLY_ALLOCATION_PREFIX,
+    MONTHLY_GOAL_SNAPSHOT_PREFIX,
 )
 
 
@@ -110,6 +132,34 @@ def new_source_link_id() -> str:
 
 def new_managing_clinician_id() -> str:
     return new_id(MANAGING_CLINICIAN_PREFIX)
+
+
+def new_goal_suggestion_id() -> str:
+    return new_id(GOAL_SUGGESTION_PREFIX)
+
+
+def new_goal_version_id() -> str:
+    return new_id(GOAL_VERSION_PREFIX)
+
+
+def new_clinical_goal_id() -> str:
+    return new_id(CLINICAL_GOAL_PREFIX)
+
+
+def new_caregiver_goal_id() -> str:
+    return new_id(CAREGIVER_APPROVED_GOAL_PREFIX)
+
+
+def new_focus_plan_id() -> str:
+    return new_id(MONTHLY_FOCUS_PLAN_PREFIX)
+
+
+def new_allocation_id() -> str:
+    return new_id(MONTHLY_ALLOCATION_PREFIX)
+
+
+def new_goal_snapshot_id() -> str:
+    return new_id(MONTHLY_GOAL_SNAPSHOT_PREFIX)
 
 
 def entity_type_of(identifier: str) -> Optional[str]:

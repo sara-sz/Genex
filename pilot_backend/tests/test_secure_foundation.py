@@ -1183,6 +1183,12 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
     is deliberately ABSENT: `external_id`. A Parent session id is an external
     identifier and does not belong in an audit event; links are referenced by
     their opaque `link_id` instead.
+
+    The 0.4B/C additions are opaque ids, short enums and small integers. Also
+    deliberately absent, and asserted below: goal text, the family-facing
+    template, an edit reason, a milestone reference, and `domain_key` — which
+    developmental domain a child's goal addresses is a clinical fact, not an
+    operational one.
     """
     assert ALLOWED_METADATA_KEYS
     for key in ALLOWED_METADATA_KEYS:
@@ -1193,8 +1199,18 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
             # 0.4A longitudinal identity
             "source_system", "link_id", "assignment_id", "claim_id",
             "claim_kind", "provider_id", "practice_id",
+            # 0.4B/C goals and monthly focus plan
+            "suggestion_id", "goal_kind", "goal_id", "goal_version_id",
+            "goal_status", "edit_type", "suggestion_count", "focus_plan_id",
+            "cycle_month", "allocation_id", "priority_rank",
+            "emphasis_weight", "policy_version", "generator_version",
+            "rule_version", "plan_state",
         }, key
     assert "external_id" not in ALLOWED_METADATA_KEYS
+    for clinical in ("goal_text", "family_facing_text", "domain_key",
+                     "milestone_refs", "reason", "observed_level",
+                     "functional_baseline_area"):
+        assert clinical not in ALLOWED_METADATA_KEYS, clinical
 
 
 def test_audit_metadata_rejects_long_or_multiline_values():

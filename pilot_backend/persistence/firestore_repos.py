@@ -37,14 +37,26 @@ from typing import Any, List, Optional, Sequence, Type
 
 from ..audit.events import AuditEvent
 from ..domain.child_context import ChildContextRecord
+from ..domain.goals import (
+    CaregiverApprovedGoal,
+    ClinicalGoal,
+    GoalSuggestion,
+    GoalVersion,
+)
 from ..domain.identity_claims import ClaimKind, ClaimRecordKind, IdentityClaim
 from ..domain.managing_clinician import ManagingClinicianAssignment
+from ..domain.monthly_plan import (
+    MonthlyFocusPlan,
+    MonthlyGoalAllocation,
+    MonthlyGoalSnapshot,
+)
 from ..domain.source_link import SourceSystemLink
 from ..domain.connections import CaregiverChildConnection, ProviderChildConnection
 from ..domain.entities import Caregiver, Child, Practice, Provider
 from ..domain.enums import ConnectionStatus, EntityStatus
 from ..repository.interface import (
     AmbiguousAuthSubject,
+    AmbiguousRecordState,
     DuplicateRecord,
     RecordNotFound,
 )
@@ -60,7 +72,20 @@ def _own_id(record: Any) -> str:
     `connection_id` is checked first and that order is load-bearing — see the
     module docstring.
     """
-    for attr in ("connection_id", "practice_id", "provider_id",
+    for attr in ("connection_id",
+                 # 0.4B/C own-ids go BEFORE child_id and focus_plan_id for the
+                 # reason in the module docstring: every suggestion, goal,
+                 # allocation and snapshot for one child shares its child_id,
+                 # and every allocation in a plan shares its focus_plan_id, so
+                 # a foreign key here would tie the whole set and hand ordering
+                 # back to the store.
+                 # snapshot_id precedes allocation_id: a snapshot CARRIES the
+                 # allocation it froze, so the looser order made every
+                 # snapshot sort under its allocation's id instead of its own.
+                 "suggestion_id", "version_id",
+                 "clinical_goal_id", "caregiver_goal_id",
+                 "snapshot_id", "allocation_id", "focus_plan_id",
+                 "practice_id", "provider_id",
                  "caregiver_id", "child_id", "event_id", "revision_id"):
         value = getattr(record, attr, None)
         if value:
@@ -68,12 +93,22 @@ def _own_id(record: Any) -> str:
     raise AttributeError("record has no known identifier field")
 
 
+#: The record's primary time field, tried in order. `snapshot_at` is listed
+#: because `MonthlyGoalSnapshot` has no `created_at`: it is not created, it is
+#: taken. An absent fallback here used to be an AttributeError at query time.
+_TIME_ATTRS = ("created_at", "occurred_at", "snapshot_at")
+
+
+def _record_time(record: Any) -> Any:
+    for attr in _TIME_ATTRS:
+        value = getattr(record, attr, None)
+        if value is not None:
+            return value
+    raise AttributeError("record has no known timestamp field")
+
+
 def _sorted(records: Sequence[Any]) -> List[Any]:
-    key_attr = "occurred_at"
-    return sorted(
-        records,
-        key=lambda r: (getattr(r, "created_at", None) or getattr(r, key_attr), _own_id(r)),
-    )
+    return sorted(records, key=lambda r: (_record_time(r), _own_id(r)))
 
 
 class _BaseRepo:
@@ -458,6 +493,175 @@ class FirestoreManagingClinicianRepository(_BaseRepo):
         return found if include_ended else [x for x in found if x.is_active]
 
 
+class FirestoreGoalSuggestionRepository(_BaseRepo):
+    """Genex-authored candidates. Create plus a status stamp. No delete.
+
+    A declined suggestion is kept, not removed. "What did Genex propose that
+    the clinician rejected, and why?" is a question the pilot exists to answer,
+    and it is unanswerable if declining erases the row.
+    """
+
+    record_type, model = "goal_suggestion", GoalSuggestion
+
+    def create(self, suggestion: GoalSuggestion) -> GoalSuggestion:
+        return self._create(suggestion.suggestion_id, suggestion)
+
+    def get_by_id(self, suggestion_id: str) -> GoalSuggestion:
+        return self._get(suggestion_id)
+
+    def update(self, suggestion: GoalSuggestion) -> GoalSuggestion:
+        """Whole-document write of an EXISTING suggestion (status stamp)."""
+        return self._set(suggestion.suggestion_id, suggestion)
+
+    def list_for_child(self, child_id: str) -> List[GoalSuggestion]:
+        return self._query("child_id", child_id)
+
+    def list_for_cycle(self, child_id: str, cycle_month: str) -> List[GoalSuggestion]:
+        """One child-month's offer.
+
+        Filtered in Python after a single-field query because `DocumentStore`
+        exposes equality on ONE field. A composite query would need a
+        Firestore index, and the port deliberately does not promise one — the
+        alternative is a store-specific method the fake could not honour.
+        """
+        return [s for s in self._query("child_id", child_id)
+                if s.cycle_month == cycle_month]
+
+
+class FirestoreGoalVersionRepository(_BaseRepo):
+    """Immutable wording history. Append-only: there is no update method."""
+
+    record_type, model = "goal_version", GoalVersion
+
+    def append(self, version: GoalVersion) -> GoalVersion:
+        return self._create(version.version_id, version)
+
+    def get_by_id(self, version_id: str) -> GoalVersion:
+        return self._get(version_id)
+
+    def list_chain(self, goal_id: str) -> List[GoalVersion]:
+        """Every wording of one goal, oldest first."""
+        return sorted(self._query("goal_id", goal_id), key=lambda v: v.version_number)
+
+    def latest_version_number(self, goal_id: str) -> int:
+        chain = self.list_chain(goal_id)
+        return chain[-1].version_number if chain else 0
+
+
+class FirestoreClinicalGoalRepository(_BaseRepo):
+    """Clinician-approved goals. Separate collection from caregiver goals."""
+
+    record_type, model = "clinical_goal", ClinicalGoal
+
+    def create(self, goal: ClinicalGoal) -> ClinicalGoal:
+        return self._create(goal.clinical_goal_id, goal)
+
+    def get_by_id(self, clinical_goal_id: str) -> ClinicalGoal:
+        return self._get(clinical_goal_id)
+
+    def update(self, goal: ClinicalGoal) -> ClinicalGoal:
+        return self._set(goal.clinical_goal_id, goal)
+
+    def list_for_child(self, child_id: str, *, include_closed: bool = False
+                       ) -> List[ClinicalGoal]:
+        found = self._query("child_id", child_id)
+        return found if include_closed else [g for g in found if g.is_active]
+
+
+class FirestoreCaregiverGoalRepository(_BaseRepo):
+    """Caregiver-approved goals. NEVER RTM-eligible, and never co-located."""
+
+    record_type, model = "caregiver_goal", CaregiverApprovedGoal
+
+    def create(self, goal: CaregiverApprovedGoal) -> CaregiverApprovedGoal:
+        return self._create(goal.caregiver_goal_id, goal)
+
+    def get_by_id(self, caregiver_goal_id: str) -> CaregiverApprovedGoal:
+        return self._get(caregiver_goal_id)
+
+    def update(self, goal: CaregiverApprovedGoal) -> CaregiverApprovedGoal:
+        return self._set(goal.caregiver_goal_id, goal)
+
+    def list_for_child(self, child_id: str, *, include_closed: bool = False
+                       ) -> List[CaregiverApprovedGoal]:
+        found = self._query("child_id", child_id)
+        return found if include_closed else [g for g in found if g.is_active]
+
+
+class FirestoreMonthlyFocusPlanRepository(_BaseRepo):
+    """One month of direction per child. No delete."""
+
+    record_type, model = "monthly_focus_plan", MonthlyFocusPlan
+
+    def create(self, plan: MonthlyFocusPlan) -> MonthlyFocusPlan:
+        return self._create(plan.focus_plan_id, plan)
+
+    def get_by_id(self, focus_plan_id: str) -> MonthlyFocusPlan:
+        return self._get(focus_plan_id)
+
+    def update(self, plan: MonthlyFocusPlan) -> MonthlyFocusPlan:
+        return self._set(plan.focus_plan_id, plan)
+
+    def list_for_child(self, child_id: str) -> List[MonthlyFocusPlan]:
+        return self._query("child_id", child_id)
+
+    def list_for_cycle(self, child_id: str, cycle_month: str) -> List[MonthlyFocusPlan]:
+        return [p for p in self._query("child_id", child_id)
+                if p.cycle_month == cycle_month]
+
+    def active_for_cycle(self, child_id: str,
+                         cycle_month: str) -> Optional[MonthlyFocusPlan]:
+        """The ACTIVE plan for one child-month, if any.
+
+        Raises rather than picking when two are active. Uniqueness is enforced
+        at write time by the activation claim, so two active plans means the
+        claim mechanism was bypassed — and the 0.3 auth-subject defect is
+        precisely what silently returning `found[0]` looks like.
+        """
+        active = [p for p in self.list_for_cycle(child_id, cycle_month) if p.is_active]
+        if len(active) > 1:
+            raise AmbiguousRecordState(
+                "more than one active focus plan for this child-month")
+        return active[0] if active else None
+
+
+class FirestoreMonthlyGoalAllocationRepository(_BaseRepo):
+    """Append-only allocation history. Update only stamps lineage/status."""
+
+    record_type, model = "monthly_goal_allocation", MonthlyGoalAllocation
+
+    def create(self, allocation: MonthlyGoalAllocation) -> MonthlyGoalAllocation:
+        return self._create(allocation.allocation_id, allocation)
+
+    def get_by_id(self, allocation_id: str) -> MonthlyGoalAllocation:
+        return self._get(allocation_id)
+
+    def update(self, allocation: MonthlyGoalAllocation) -> MonthlyGoalAllocation:
+        return self._set(allocation.allocation_id, allocation)
+
+    def list_for_plan(self, focus_plan_id: str, *, include_inactive: bool = False
+                      ) -> List[MonthlyGoalAllocation]:
+        found = self._query("focus_plan_id", focus_plan_id)
+        rows = found if include_inactive else [a for a in found if a.is_active]
+        return sorted(rows, key=lambda a: (a.priority_rank, a.allocation_id))
+
+
+class FirestoreMonthlyGoalSnapshotRepository(_BaseRepo):
+    """What the month was working toward. Create-only — never updated."""
+
+    record_type, model = "monthly_goal_snapshot", MonthlyGoalSnapshot
+
+    def create(self, snapshot: MonthlyGoalSnapshot) -> MonthlyGoalSnapshot:
+        return self._create(snapshot.snapshot_id, snapshot)
+
+    def get_by_id(self, snapshot_id: str) -> MonthlyGoalSnapshot:
+        return self._get(snapshot_id)
+
+    def list_for_plan(self, focus_plan_id: str) -> List[MonthlyGoalSnapshot]:
+        return sorted(self._query("focus_plan_id", focus_plan_id),
+                      key=lambda s: (s.priority_rank, s.snapshot_id))
+
+
 class FirestoreRepositories:
     """All repositories over one document store — the production composition."""
 
@@ -474,4 +678,11 @@ class FirestoreRepositories:
         self.identity_claims = FirestoreIdentityClaimRepository(store)
         self.source_links = FirestoreSourceSystemLinkRepository(store)
         self.managing_clinicians = FirestoreManagingClinicianRepository(store)
+        self.goal_suggestions = FirestoreGoalSuggestionRepository(store)
+        self.goal_versions = FirestoreGoalVersionRepository(store)
+        self.clinical_goals = FirestoreClinicalGoalRepository(store)
+        self.caregiver_goals = FirestoreCaregiverGoalRepository(store)
+        self.focus_plans = FirestoreMonthlyFocusPlanRepository(store)
+        self.goal_allocations = FirestoreMonthlyGoalAllocationRepository(store)
+        self.goal_snapshots = FirestoreMonthlyGoalSnapshotRepository(store)
         self.revisions = FirestoreRevisionRepository(store)

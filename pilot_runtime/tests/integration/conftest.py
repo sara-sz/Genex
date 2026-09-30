@@ -33,6 +33,7 @@ import os
 import shutil
 import socket
 import subprocess
+import tempfile
 import time
 from typing import Iterator
 
@@ -77,16 +78,41 @@ def emulator_host() -> Iterator[str]:
             "cloud-firestore-emulator component. These tests must not be skipped.")
 
     host_port = f"127.0.0.1:{_free_port()}"
+    # Output goes to a FILE, never to an undrained pipe.
+    #
+    # This was `stdout=subprocess.PIPE` with nothing ever reading it. The
+    # emulator logs a line per HTTP/2 connection, and a 92-test run produces
+    # roughly 150 KB — more than twice a 64 KB pipe buffer. Once the buffer
+    # filled, the emulator blocked in `write()` and stopped serving: client
+    # threads hung inside gRPC, and the ten-way raw-claim race reported nine
+    # losers instead of ten because one thread never returned before its
+    # sixty-second join. A harness deadlock presenting as a uniqueness
+    # failure is the most misleading shape a flake can take.
+    #
+    # It was latent while the suite stayed under the buffer and surfaced when
+    # 0.4B/C added thirteen more emulator tests. A file has no such limit, and
+    # the startup diagnostic below still reads the same output — that
+    # diagnostic is what identified the Java 21 requirement in 0.3, so it is
+    # preserved rather than traded away for `DEVNULL`.
+    log = tempfile.NamedTemporaryFile(  # noqa: SIM115 - closed in the finally
+        prefix="firestore-emulator-", suffix=".log", mode="w+", delete=False)
     process = subprocess.Popen(
         ["gcloud", "emulators", "firestore", "start", f"--host-port={host_port}"],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        stdout=log, stderr=subprocess.STDOUT, text=True,
     )
+
+    def _emulator_output() -> str:
+        try:
+            with open(log.name, "r", errors="replace") as handle:
+                return handle.read()[-1500:]
+        except OSError:  # pragma: no cover - diagnostic path only
+            return "<emulator output unavailable>"
 
     deadline = time.time() + _STARTUP_TIMEOUT_SECONDS
     while time.time() < deadline:
         if process.poll() is not None:
-            output = (process.stdout.read() if process.stdout else "")[-1500:]
-            raise RuntimeError(f"Firestore emulator exited during startup:\n{output}")
+            raise RuntimeError(
+                f"Firestore emulator exited during startup:\n{_emulator_output()}")
         if _responding(host_port):
             break
         time.sleep(0.5)
@@ -94,7 +120,8 @@ def emulator_host() -> Iterator[str]:
         process.terminate()
         raise RuntimeError(
             f"Firestore emulator did not become ready within "
-            f"{_STARTUP_TIMEOUT_SECONDS}s (needs a JDK on PATH)")
+            f"{_STARTUP_TIMEOUT_SECONDS}s (needs a JDK on PATH)"
+            f"\n{_emulator_output()}")
 
     # Deliberately NOT exported to the process environment. The emulator
     # endpoint is threaded to `build_firestore_client` as an argument instead.
@@ -114,6 +141,11 @@ def emulator_host() -> Iterator[str]:
             process.wait(timeout=20)
         except subprocess.TimeoutExpired:
             process.kill()
+        log.close()
+        try:
+            os.unlink(log.name)
+        except OSError:  # pragma: no cover - best effort cleanup
+            pass
 
 
 @pytest.fixture()

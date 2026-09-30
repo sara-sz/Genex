@@ -192,6 +192,59 @@ jobs:
             echo "0.4A not present on this branch — nothing to run"
           fi
 
+      - name: October pilot 0.4B/C — goals and monthly focus plan (unit)
+        # Also dependency-pure, and that is the point for this slice
+        # specifically: the goal SUGGESTION ENGINE is deterministic and
+        # offline, so it must pass in a job where no model client, no HTTP
+        # library and no cloud SDK is installed. A suggestion engine that
+        # needed a network would fail here rather than in review.
+        working-directory: .
+        run: |
+          if [ -f pilot_backend/tests/test_goals_and_monthly_plan.py ]; then
+            python -m pytest pilot_backend/tests/test_goals_and_monthly_plan.py -q
+          else
+            echo "0.4B/C not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.4B/C — the goal layer reaches no network
+        # A second, independent check on the same property: the import graph
+        # of every goal and planning module, walked transitively within the
+        # pilot namespace. The test above asserts it for one file; this
+        # asserts nothing the engine imports pulls a client in behind it.
+        working-directory: .
+        run: |
+          if [ ! -d pilot_backend/goals ]; then
+            echo "0.4B/C not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib, sys
+
+          BANNED = {"requests", "httpx", "urllib", "urllib3", "http", "socket",
+                    "openai", "anthropic", "google", "vertexai", "aiohttp",
+                    "firebase_admin", "grpc"}
+          roots = [pathlib.Path("pilot_backend/goals"),
+                   pathlib.Path("pilot_backend/planning"),
+                   pathlib.Path("pilot_backend/domain")]
+          offenders = []
+          for root in roots:
+              for path in sorted(root.rglob("*.py")):
+                  tree = ast.parse(path.read_text())
+                  for node in ast.walk(tree):
+                      if isinstance(node, ast.Import):
+                          names = [a.name.split(".")[0] for a in node.names]
+                      elif isinstance(node, ast.ImportFrom):
+                          names = ([node.module.split(".")[0]]
+                                   if node.module and node.level == 0 else [])
+                      else:
+                          continue
+                      hit = BANNED.intersection(names)
+                      if hit:
+                          offenders.append((str(path), sorted(hit)))
+          assert not offenders, f"goal layer imported a client: {offenders}"
+          print("goal, planning and domain modules import no network client")
+          PY
+
       - name: Parent regression suite (seven-domain vocabulary)
         # Now part of the hosted gate. It exercises the Brain end to end —
         # focus selection, bridge plans, activity banks, safety and the weekly
@@ -504,6 +557,14 @@ jobs:
         # test and was caught by this suite on its first real run.
         run: python -m pytest pilot_runtime/tests/integration/test_identity_emulator.py -q
 
+      - name: Goals and monthly plans — REAL emulator, REAL concurrency
+        # Two activations of the same child-month racing on a real server.
+        # The same reasoning as 0.4A: the fake cannot host a race, so the
+        # child-month claim is only ever proven here. Also carries the
+        # activation crash-consistency fault injection — the transaction is
+        # all-or-nothing and the boundary after it is forward-recoverable.
+        run: python -m pytest pilot_runtime/tests/integration/test_goals_emulator.py -q
+
       - name: Prove the emulator suites actually ran
         # Belt and braces against the one failure mode this job exists to
         # prevent: a green result produced by tests that never executed.
@@ -517,7 +578,9 @@ jobs:
                "--collect-only", "-q"],
               capture_output=True, text=True)
           count = collected.stdout.count("::")
-          assert count >= 70, f"expected the integration suites to collect >=70 tests, got {count}"
+          # Raised from 70 to 90 by 0.4B/C. A floor that never moves stops
+          # noticing when a suite silently stops being collected.
+          assert count >= 90, f"expected the integration suites to collect >=90 tests, got {count}"
           run = subprocess.run(
               [sys.executable, "-m", "pytest", "pilot_runtime/tests/integration",
                "-q", "-rs"],

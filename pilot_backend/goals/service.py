@@ -1,0 +1,496 @@
+"""pilot_backend/goals/service.py — the only writer of suggestions and goals.
+
+Every operation starts with the unchanged 0.2 child-access gate and ends with
+an audit event, exactly as `identity/service.py` does. Nothing here bypasses
+either, and no method takes a role, uid or actor id as a parameter — the
+principal is the only source of identity, asserted structurally by the same
+test that guards 0.4A.
+
+## Genex suggests. A human approves. Those are different verbs.
+
+`generate_suggestions` writes `GoalSuggestion` rows and NOTHING else. No goal
+comes into existence without a separate, recorded human action naming the
+suggestion it came from — or declaring that it came from none
+(`AUTHORED_FRESH`). There is no code path from a suggestion to an approved
+goal that does not pass through `approve_clinical_goal` or
+`approve_caregiver_goal`.
+
+## Who may approve what
+
+    ClinicalGoal           the ACTIVE managing clinician for that child, only
+    CaregiverApprovedGoal  a caregiver authorized for that child, only
+
+A provider who is connected to the child but is NOT the managing clinician is
+refused. Clinical ownership is a single, recorded assignment (0.4A) precisely
+so "who is responsible for this child's treatment goals?" has one answer, and
+letting any connected provider author a clinical goal would give it several.
+
+A caregiver cannot author, revise, retire or even reach a `ClinicalGoal`, and
+a clinician cannot silently adopt a caregiver's goal as clinical: they must
+author one, with its own provenance. `require_clinical_goal_ref` is the single
+structural gate, and `_authorize_for_ref` is the single behavioural one.
+
+## Consuming a suggestion is a one-time transition
+
+A suggestion leaves OFFERED exactly once. Approving from an already-consumed
+suggestion is refused rather than allowed to mint a second goal, so the
+suggestion-to-goal relationship stays one-to-at-most-one and a duplicated
+request is a conflict, not two goals that look like a clinician changed their
+mind.
+"""
+
+from __future__ import annotations
+
+from dataclasses import replace
+from datetime import datetime, timezone
+from typing import List, Optional, Tuple, Union
+
+from ..audit.events import AuditAction, AuditResult
+from ..authz.decisions import AccessDecision
+from ..authz.policy import authorize_child_access
+from ..domain.goals import (
+    CaregiverApprovedGoal,
+    ClinicalGoal,
+    EditType,
+    GoalKind,
+    GoalRef,
+    GoalStatus,
+    GoalSuggestion,
+    GoalVersion,
+    SuggestionStatus,
+    require_clinical_goal_ref,
+)
+from ..domain.planning_policy import CURRENT_PLANNING_POLICY, PlanningPolicyVersion
+from ..domain.roles import ActorRole
+from ..repository.interface import RecordNotFound
+from .errors import GoalAuthorizationError, GoalConflict, GoalValidationError
+from .suggestion_engine import (
+    GENERATOR_VERSION,
+    SUGGESTION_RULE_VERSION,
+    ObservationSnapshot,
+    generate_suggestions as build_suggestions,
+)
+
+RESOURCE_SUGGESTION = "goal_suggestion"
+RESOURCE_CLINICAL_GOAL = "clinical_goal"
+RESOURCE_CAREGIVER_GOAL = "caregiver_goal"
+
+#: How an approval edit marks the suggestion it consumed. AUTHORED_FRESH is
+#: absent on purpose: authoring fresh consumes no suggestion.
+_EDIT_TO_SUGGESTION_STATUS = {
+    EditType.ACCEPTED_VERBATIM: SuggestionStatus.ACCEPTED,
+    EditType.MODIFIED: SuggestionStatus.MODIFIED,
+    EditType.REPLACED: SuggestionStatus.REPLACED,
+}
+
+ApprovedGoal = Union[ClinicalGoal, CaregiverApprovedGoal]
+
+
+class GoalService:
+    """Authorized reads and writes for suggestions, goals and goal versions."""
+
+    def __init__(self, *, repos, recorder=None, now=None) -> None:
+        self._repos = repos
+        self._recorder = recorder
+        #: Injectable clock for deterministic tests. No request parameter
+        #: reaches it.
+        self._now = now
+
+    def _stamp(self) -> datetime:
+        return self._now() if self._now else datetime.now(timezone.utc)
+
+    # -- shared gates -------------------------------------------------------
+
+    def _authorize(self, principal, child_id: str) -> AccessDecision:
+        decision = authorize_child_access(principal, child_id, self._repos)
+        if not decision.allowed:
+            raise GoalAuthorizationError(
+                f"not permitted for this child ({decision.denial.value})")
+        return decision
+
+    def _require_managing_clinician(self, principal, child_id: str):
+        """The caller must BE this child's active managing clinician.
+
+        Not merely a provider, and not merely connected. Returns the
+        assignment so the goal can record which one authorised it.
+        """
+        if principal.role is not ActorRole.PROVIDER:
+            raise GoalAuthorizationError(
+                "a clinical goal requires the managing clinician")
+        active = self._repos.managing_clinicians.list_for_child(child_id)
+        if not active:
+            raise GoalConflict("this child has no active managing clinician")
+        if len(active) > 1:
+            # The 0.4A claim makes this impossible; refuse rather than pick.
+            raise GoalConflict("more than one active managing clinician")
+        assignment = active[0]
+        if assignment.provider_id != principal.application_id:
+            raise GoalAuthorizationError(
+                "only this child's managing clinician may author a clinical goal")
+        return assignment
+
+    def _require_caregiver(self, principal, what: str) -> None:
+        if principal.role is not ActorRole.CAREGIVER:
+            raise GoalAuthorizationError(f"{what} requires a caregiver")
+
+    def _audit(self, action: AuditAction, result: AuditResult, resource_type: str,
+               *, principal, child_id: str, resource_id: Optional[str],
+               request_id: str, **metadata) -> None:
+        if self._recorder is None:
+            return
+        self._recorder.record_action(
+            action, result, resource_type,
+            resource_id=resource_id, child_id=child_id, principal=principal,
+            request_id=request_id, metadata=metadata,
+        )
+
+    # -- goal lookup --------------------------------------------------------
+
+    def _load_goal(self, ref: GoalRef) -> ApprovedGoal:
+        repo = (self._repos.clinical_goals if ref.kind is GoalKind.CLINICAL
+                else self._repos.caregiver_goals)
+        try:
+            return repo.get_by_id(ref.goal_id)
+        except RecordNotFound:
+            raise GoalConflict("no such goal") from None
+
+    def _save_goal(self, goal: ApprovedGoal) -> ApprovedGoal:
+        repo = (self._repos.clinical_goals if isinstance(goal, ClinicalGoal)
+                else self._repos.caregiver_goals)
+        return repo.update(goal)
+
+    def _authorize_for_ref(self, principal, ref: GoalRef) -> ApprovedGoal:
+        """Load a goal and enforce who may WRITE to it.
+
+        The single behavioural gate that keeps the two goal types apart at
+        runtime, next to `require_clinical_goal_ref`'s structural one. A
+        caregiver reaching a clinical goal fails here, whatever endpoint
+        called in.
+        """
+        goal = self._load_goal(ref)
+        self._authorize(principal, goal.child_id)
+        if ref.kind is GoalKind.CLINICAL:
+            self._require_managing_clinician(principal, goal.child_id)
+        else:
+            self._require_caregiver(principal, "editing a caregiver-approved goal")
+            if goal.approved_by_caregiver_id != principal.application_id:
+                raise GoalAuthorizationError(
+                    "only the approving caregiver may edit this goal")
+        return goal
+
+    # =====================================================================
+    # Suggestions
+    # =====================================================================
+
+    def generate_suggestions(self, principal, child_id: str,
+                             snapshot: ObservationSnapshot, *,
+                             policy: PlanningPolicyVersion = CURRENT_PLANNING_POLICY,
+                             count: Optional[int] = None,
+                             request_id: str = "") -> Tuple[GoalSuggestion, ...]:
+        """Produce and persist candidates. Creates NO goal.
+
+        The snapshot's `child_id` must match the authorized one. They are
+        separate parameters so the gate runs on the id the caller claims to be
+        acting for, and a mismatch is a refusal rather than a quiet write
+        against whichever id happened to be in the payload.
+        """
+        self._authorize(principal, child_id)
+        if snapshot.child_id != child_id:
+            raise GoalValidationError(
+                "observation snapshot is for a different child")
+
+        suggestions = build_suggestions(
+            snapshot, policy=policy, count=count,
+            actor_id=principal.application_id, now=self._stamp())
+        for suggestion in suggestions:
+            self._repos.goal_suggestions.create(suggestion)
+
+        self._audit(AuditAction.GOAL_SUGGESTIONS_GENERATED, AuditResult.SUCCESS,
+                    RESOURCE_SUGGESTION, principal=principal, child_id=child_id,
+                    resource_id=None, request_id=request_id,
+                    cycle_month=snapshot.cycle_month,
+                    suggestion_count=len(suggestions),
+                    generator_version=GENERATOR_VERSION,
+                    rule_version=SUGGESTION_RULE_VERSION,
+                    policy_version=policy.policy_version)
+        return suggestions
+
+    def list_suggestions(self, principal, child_id: str, *,
+                         cycle_month: Optional[str] = None
+                         ) -> List[GoalSuggestion]:
+        self._authorize(principal, child_id)
+        if cycle_month is None:
+            return self._repos.goal_suggestions.list_for_child(child_id)
+        return self._repos.goal_suggestions.list_for_cycle(child_id, cycle_month)
+
+    def decline_suggestion(self, principal, suggestion_id: str, *,
+                           request_id: str = "") -> GoalSuggestion:
+        """Record that a human rejected a candidate. The row is kept."""
+        suggestion = self._load_suggestion(suggestion_id)
+        self._authorize(principal, suggestion.child_id)
+        if suggestion.status is not SuggestionStatus.OFFERED:
+            raise GoalConflict("this suggestion has already been acted on")
+
+        declined = suggestion.with_status(SuggestionStatus.DECLINED)
+        self._repos.goal_suggestions.update(declined)
+        self._audit(AuditAction.GOAL_SUGGESTION_DECLINED, AuditResult.SUCCESS,
+                    RESOURCE_SUGGESTION, principal=principal,
+                    child_id=suggestion.child_id, resource_id=suggestion_id,
+                    request_id=request_id, suggestion_id=suggestion_id,
+                    cycle_month=suggestion.cycle_month)
+        return declined
+
+    def _load_suggestion(self, suggestion_id: str) -> GoalSuggestion:
+        try:
+            return self._repos.goal_suggestions.get_by_id(suggestion_id)
+        except RecordNotFound:
+            raise GoalConflict("no such suggestion") from None
+
+    def _consume_suggestion(self, suggestion_id: Optional[str], child_id: str,
+                            edit_type: EditType) -> Optional[GoalSuggestion]:
+        """Validate and stamp the suggestion an approval came from.
+
+        Returns None for `AUTHORED_FRESH`, which consumes nothing. Refuses a
+        suggestion belonging to another child, or one already acted on: a
+        suggestion leaves OFFERED exactly once, so a repeated request is a
+        conflict rather than a second goal.
+        """
+        if edit_type is EditType.AUTHORED_FRESH:
+            if suggestion_id:
+                raise GoalValidationError(
+                    "authoring fresh must not name a suggestion")
+            return None
+        if not suggestion_id:
+            raise GoalValidationError(
+                f"{edit_type.value} requires the suggestion it came from")
+
+        suggestion = self._load_suggestion(suggestion_id)
+        if suggestion.child_id != child_id:
+            raise GoalValidationError("suggestion belongs to a different child")
+        if suggestion.status is not SuggestionStatus.OFFERED:
+            raise GoalConflict("this suggestion has already been acted on")
+
+        self._repos.goal_suggestions.update(
+            suggestion.with_status(_EDIT_TO_SUGGESTION_STATUS[edit_type]))
+        return suggestion
+
+    @staticmethod
+    def _approved_text(edit_type: EditType, text: str,
+                       suggestion: Optional[GoalSuggestion]) -> str:
+        """The wording to store.
+
+        Accepting verbatim takes the suggestion's OWN template rather than
+        whatever text the caller echoed back — otherwise "accepted verbatim"
+        would be a claim the record cannot support.
+        """
+        if edit_type is EditType.ACCEPTED_VERBATIM:
+            if suggestion is None:  # pragma: no cover - guarded upstream
+                raise GoalValidationError(
+                    "accepting verbatim requires a suggestion")
+            return suggestion.family_facing_text_template
+        if not (text or "").strip():
+            raise GoalValidationError(f"{edit_type.value} requires goal text")
+        return text.strip()
+
+    # =====================================================================
+    # Approval
+    # =====================================================================
+
+    def approve_clinical_goal(self, principal, child_id: str, *,
+                              edit_type: EditType,
+                              suggestion_id: Optional[str] = None,
+                              text: str = "", reason: str = "",
+                              request_id: str = "") -> ClinicalGoal:
+        """Create a clinician-approved, RTM-eligible goal at version 1."""
+        self._authorize(principal, child_id)
+        assignment = self._require_managing_clinician(principal, child_id)
+
+        suggestion = self._consume_suggestion(suggestion_id, child_id, edit_type)
+        approved_text = self._approved_text(edit_type, text, suggestion)
+
+        # The goal id must exist before its first version can point at it, and
+        # the version must exist before the goal can name it as current. So the
+        # id is minted first and the two writes are ordered goal-version-first;
+        # a crash between them leaves an orphan version, which is inert, rather
+        # than a goal whose current_version_id names nothing.
+        goal = ClinicalGoal.create(
+            child_id, principal.application_id, assignment.practice_id,
+            managing_assignment_id=assignment.assignment_id,
+            current_version_id="", actor_id=principal.application_id,
+            now=self._stamp())
+        version = GoalVersion.create(
+            goal.ref, 1, approved_text, edit_type,
+            actor_id=principal.application_id, actor_role=principal.role,
+            derived_from_suggestion_id=(suggestion.suggestion_id
+                                        if suggestion else None),
+            reason=reason, now=self._stamp())
+        self._repos.goal_versions.append(version)
+        persisted = replace(goal, current_version_id=version.version_id)
+        self._repos.clinical_goals.create(persisted)
+
+        self._audit(AuditAction.CLINICAL_GOAL_APPROVED, AuditResult.SUCCESS,
+                    RESOURCE_CLINICAL_GOAL, principal=principal,
+                    child_id=child_id, resource_id=persisted.clinical_goal_id,
+                    request_id=request_id,
+                    goal_kind=GoalKind.CLINICAL.value,
+                    goal_id=persisted.clinical_goal_id,
+                    goal_version_id=version.version_id,
+                    edit_type=edit_type.value,
+                    assignment_id=assignment.assignment_id,
+                    practice_id=assignment.practice_id,
+                    **({"suggestion_id": suggestion.suggestion_id}
+                       if suggestion else {}))
+        return persisted
+
+    def approve_caregiver_goal(self, principal, child_id: str, *,
+                               edit_type: EditType,
+                               suggestion_id: Optional[str] = None,
+                               text: str = "", reason: str = "",
+                               request_id: str = "") -> CaregiverApprovedGoal:
+        """Create a caregiver-approved goal at version 1. NEVER RTM-eligible."""
+        self._authorize(principal, child_id)
+        self._require_caregiver(principal, "approving a caregiver goal")
+
+        suggestion = self._consume_suggestion(suggestion_id, child_id, edit_type)
+        approved_text = self._approved_text(edit_type, text, suggestion)
+
+        goal = CaregiverApprovedGoal.create(
+            child_id, principal.application_id, current_version_id="",
+            actor_id=principal.application_id, now=self._stamp())
+        version = GoalVersion.create(
+            goal.ref, 1, approved_text, edit_type,
+            actor_id=principal.application_id, actor_role=principal.role,
+            derived_from_suggestion_id=(suggestion.suggestion_id
+                                        if suggestion else None),
+            reason=reason, now=self._stamp())
+        self._repos.goal_versions.append(version)
+        persisted = replace(goal, current_version_id=version.version_id)
+        self._repos.caregiver_goals.create(persisted)
+
+        self._audit(AuditAction.CAREGIVER_GOAL_APPROVED, AuditResult.SUCCESS,
+                    RESOURCE_CAREGIVER_GOAL, principal=principal,
+                    child_id=child_id, resource_id=persisted.caregiver_goal_id,
+                    request_id=request_id,
+                    goal_kind=GoalKind.CAREGIVER_APPROVED.value,
+                    goal_id=persisted.caregiver_goal_id,
+                    goal_version_id=version.version_id,
+                    edit_type=edit_type.value,
+                    **({"suggestion_id": suggestion.suggestion_id}
+                       if suggestion else {}))
+        return persisted
+
+    # =====================================================================
+    # Revision and lifecycle
+    # =====================================================================
+
+    def revise_goal(self, principal, ref: GoalRef, text: str, *,
+                    edit_type: EditType = EditType.MODIFIED, reason: str,
+                    request_id: str = "") -> GoalVersion:
+        """Append a new immutable wording and move the goal's pointer.
+
+        `reason` is keyword-ONLY and has no default: every edit type this
+        method accepts requires one, and a defaulted reason is how "modified"
+        becomes a change nobody can explain.
+        """
+        if edit_type is EditType.ACCEPTED_VERBATIM:
+            raise GoalValidationError(
+                "accepting verbatim creates a goal; it does not revise one")
+        goal = self._authorize_for_ref(principal, ref)
+        if not goal.is_active:
+            raise GoalConflict("a closed goal cannot be revised")
+
+        try:
+            previous = self._repos.goal_versions.get_by_id(goal.current_version_id)
+        except RecordNotFound:
+            raise GoalConflict("goal has no readable current version") from None
+        version = GoalVersion.create(
+            ref, previous.version_number + 1, text, edit_type,
+            actor_id=principal.application_id, actor_role=principal.role,
+            reason=reason, supersedes_version_id=previous.version_id,
+            now=self._stamp())
+        self._repos.goal_versions.append(version)
+        self._save_goal(goal.with_current_version(version.version_id,
+                                                  now=self._stamp()))
+
+        self._audit(AuditAction.GOAL_VERSION_ADDED, AuditResult.SUCCESS,
+                    self._resource_for(ref), principal=principal,
+                    child_id=goal.child_id, resource_id=ref.goal_id,
+                    request_id=request_id, goal_kind=ref.kind.value,
+                    goal_id=ref.goal_id, goal_version_id=version.version_id,
+                    edit_type=edit_type.value,
+                    record_version=version.version_number)
+        return version
+
+    def set_goal_status(self, principal, ref: GoalRef, status: GoalStatus, *,
+                        request_id: str = "") -> ApprovedGoal:
+        """Pause, resume or retire. There is no delete and no DELETED status."""
+        goal = self._authorize_for_ref(principal, ref)
+        updated = self._save_goal(goal.with_status(status, now=self._stamp()))
+        self._audit(AuditAction.GOAL_STATUS_CHANGED, AuditResult.SUCCESS,
+                    self._resource_for(ref), principal=principal,
+                    child_id=goal.child_id, resource_id=ref.goal_id,
+                    request_id=request_id, goal_kind=ref.kind.value,
+                    goal_id=ref.goal_id, goal_status=status.value)
+        return updated
+
+    @staticmethod
+    def _resource_for(ref: GoalRef) -> str:
+        return (RESOURCE_CLINICAL_GOAL if ref.kind is GoalKind.CLINICAL
+                else RESOURCE_CAREGIVER_GOAL)
+
+    # =====================================================================
+    # Reads
+    # =====================================================================
+
+    def list_goals(self, principal, child_id: str, *,
+                   include_closed: bool = False) -> Tuple[GoalRef, ...]:
+        """Every approved goal for the child, as typed references.
+
+        References rather than merged records, so a caller cannot iterate a
+        mixed list and forget which kind it is holding.
+        """
+        self._authorize(principal, child_id)
+        clinical = self._repos.clinical_goals.list_for_child(
+            child_id, include_closed=include_closed)
+        caregiver = self._repos.caregiver_goals.list_for_child(
+            child_id, include_closed=include_closed)
+        return tuple([g.ref for g in clinical] + [g.ref for g in caregiver])
+
+    def get_goal(self, principal, ref: GoalRef) -> ApprovedGoal:
+        goal = self._load_goal(ref)
+        self._authorize(principal, goal.child_id)
+        return goal
+
+    def current_text(self, principal, ref: GoalRef) -> str:
+        """The goal's wording right now, as a template. Never rendered here.
+
+        `pilot_backend` holds no child name to render WITH — substitution is
+        the caller's job, at presentation time.
+        """
+        goal = self.get_goal(principal, ref)
+        return self._repos.goal_versions.get_by_id(goal.current_version_id).text
+
+    def goal_history(self, principal, ref: GoalRef) -> List[GoalVersion]:
+        goal = self._load_goal(ref)
+        self._authorize(principal, goal.child_id)
+        return self._repos.goal_versions.list_chain(ref.goal_id)
+
+    def list_clinical_goals(self, principal, child_id: str, *,
+                            include_closed: bool = False) -> List[ClinicalGoal]:
+        """RTM-eligible goals only. The caller cannot receive anything else."""
+        self._authorize(principal, child_id)
+        return self._repos.clinical_goals.list_for_child(
+            child_id, include_closed=include_closed)
+
+    def require_rtm_eligible(self, principal, ref: GoalRef) -> ClinicalGoal:
+        """Resolve a reference that a future RTM caller may rely on.
+
+        Exists now, unused by this slice, so the eventual RTM code has one
+        place to go rather than re-deriving the rule. It is the structural
+        gate plus a real load, not a comment saying "check the kind".
+        """
+        require_clinical_goal_ref(ref)
+        goal = self.get_goal(principal, ref)
+        if not isinstance(goal, ClinicalGoal):  # pragma: no cover - defensive
+            raise GoalValidationError("reference did not resolve to a clinical goal")
+        return goal

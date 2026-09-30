@@ -84,6 +84,12 @@ class ClaimKind(str, Enum):
     EXTERNAL_IDENTITY = "external_identity"
     #: One ACTIVE managing clinician per child_id.
     MANAGING_CLINICIAN = "managing_clinician"
+    #: 0.4C. One ACTIVE monthly focus plan per (child_id, cycle_month).
+    #: The same mechanism as the 0.4A constraints and for the same reason:
+    #: two clinicians activating October's plan in the same second must not
+    #: both succeed, or the child has two competing months of direction and
+    #: nothing in the record says which one the weekly plans followed.
+    MONTHLY_FOCUS_PLAN = "monthly_focus_plan"
 
 
 class ClaimError(ValueError):

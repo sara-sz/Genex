@@ -246,3 +246,140 @@ first argument.
 - **Generation counters are read outside the transaction.** Correct — a stale
   read can only cause a collision, which is the intended refusal — but it
   means a heavily contended key does one extra read per attempt.
+
+## 0.4B/C — goal layer and monthly focus plan (added)
+
+### Goals
+
+- **Three concepts, three types.** `GoalSuggestion` (Genex-authored candidate),
+  `ClinicalGoal` (clinician-approved, RTM-eligible) and
+  `CaregiverApprovedGoal` (caregiver-approved, never RTM-eligible) are separate
+  classes in separate collections. A single type with an `approved_by_role`
+  flag would work until one function forgot to check it, at which point a
+  caregiver-approved goal becomes clinical evidence silently.
+  `require_clinical_goal_ref` is the structural gate; `_authorize_for_ref` is
+  the behavioural one.
+- **Genex suggests; a human approves.** `generate_suggestions` writes
+  suggestions and nothing else. No goal exists without a recorded human action
+  naming the suggestion it came from, or declaring `AUTHORED_FRESH`.
+- **Only the ACTIVE managing clinician may author, revise or retire a
+  `ClinicalGoal`.** Being connected to the child is not sufficient, and this
+  is tested with a provider who genuinely passes the 0.2 access gate — an
+  earlier version of the test used an unconnected provider and was vacuous.
+- **Only the approving caregiver may edit their own goal**, likewise tested
+  with a second caregiver holding a real ACTIVE connection.
+- **Versions are immutable and append-only.** A wording change writes a new
+  `GoalVersion` with a mandatory reason and a `supersedes_version_id`. Nothing
+  deletes; `set_goal_status` stamps PAUSED or RETIRED and keeps the row.
+- **A suggestion leaves OFFERED exactly once.** A repeated approval is a
+  conflict, not a second goal.
+- **Accepting verbatim stores the suggestion's OWN template**, not text the
+  caller echoed back — otherwise "accepted verbatim" is a claim the record
+  cannot support.
+
+### The suggestion engine is deterministic and offline
+
+- **No model, no network.** No client is imported, and two CI gates assert it:
+  an AST scan of the engine's imports, and a transitive scan of every module
+  under `goals/`, `planning/` and `domain/`. Both run in the DEPENDENCY-PURE
+  job, where no HTTP library or cloud SDK is installed at all.
+- **Wording is chosen from a fixed catalogue, never composed from input.** No
+  observation, area name, level or reference can reach the stored text.
+- **Stored suggestion text is name-blind.** Every template carries `{child}`;
+  substitution happens at presentation time in whichever system actually holds
+  a name. `pilot_backend` has held none since 0.1.
+- **Parent invariants are enforced structurally, not by convention:**
+  chronological age is not a parameter of the engine at all; `EvidenceSource`
+  has no diagnosis member, so a diagnosis has no representable slot;
+  `answered=False` is skipped rather than defaulted to a level or an age; and
+  Sensory evidence is never invented — the engine consumes supplied
+  observations and fabricates nothing.
+- **`generation_mode` is stamped `"deterministic"`** on every suggestion, so a
+  future LLM-assisted WORDING mode would be a visible, auditable difference in
+  the stored record rather than a silent change of meaning.
+
+### Monthly focus plan
+
+- **Direction, not content.** A `MonthlyFocusPlan` holds no activity list;
+  weekly planning stays adaptive and does not exist in this slice.
+- **Emphasis defaults are POLICY, not schema.** `PlanningPolicyVersion`
+  records primary 3 / secondary 2 / minimum coverage 1 / two goals by default.
+  Nothing caps the goal count and nothing requires 3-and-2. Weights are
+  RELATIVE, never percentages. Every plan stores the policy version it was
+  built with, and an unknown version is refused rather than silently replaced
+  by today's defaults.
+- **One active plan per (child, cycle_month)**, enforced at write time by
+  `ClaimKind.MONTHLY_FOCUS_PLAN` — the same mechanism as 0.4A, proven under
+  eight racing threads on the real emulator.
+- **Allocations are append-only.** Reprioritising writes a successor with
+  `effective_from_cycle` and `supersedes_allocation_id`; the predecessor is
+  retained, so which weighting was in force during week 2 stays answerable.
+  Both `effective_from_cycle` and `reason` are required with no default.
+- **Snapshots freeze the wording at activation.** A November edit cannot reach
+  October's record, because October's record is a copy rather than a pointer.
+- **A timezone of record is required and validated. There is no UTC
+  fallback.** Parent falls back to UTC on an invalid zone, which is acceptable
+  for a weekly display and is not acceptable here: a silent hour shift moves a
+  day across a month boundary, and this is the layer that counts days into
+  months.
+- **Closing does not release the claim.** A finished month cannot be reopened
+  and rewritten.
+
+### Activation is two steps, and why that is still safe
+
+The port refuses `set` inside a transaction — a deliberate 0.4A constraint,
+and the 0.4A note is explicit that a slice hitting it must RESTRUCTURE rather
+than relax the port. Activation needs a read-modify-write of an existing plan,
+so it is:
+
+    1. transaction: create the uniqueness claim AND every goal snapshot
+    2. outside:     set the plan ACTIVE, stamping the claim id
+
+Step 1 is all-or-nothing. A crash between 1 and 2 leaves a claim whose
+`holder_ref` is this plan's id; a retry recognises it already holds its own
+claim, skips step 1 — so no duplicate snapshots — and completes step 2. A
+DIFFERENT plan retrying collides and is refused. Recovery is idempotent for
+the rightful holder and a hard refusal for everyone else. Both paths are
+covered by fault injection against the real emulator.
+
+### Audit
+
+Eleven actions and sixteen metadata keys added, all opaque ids, short enums or
+small integers. Deliberately EXCLUDED and asserted absent: goal text, the
+family-facing template, an edit reason, milestone references, observed level,
+functional baseline area, and `domain_key` — which developmental domain a
+child's goal addresses is a clinical fact, not an operational one. The 0.2
+allowlist guard was extended by hand, as in 0.4A, rather than loosened.
+
+### Test harness defect found and fixed in 0.4B/C
+
+The emulator session fixture started the emulator with `stdout=subprocess.PIPE`
+and never read the pipe. The emulator logs a line per HTTP/2 connection and a
+92-test run produces roughly 150 KB — more than twice a 64 KB pipe buffer.
+Once it filled, the emulator blocked in `write()` and stopped serving: client
+threads hung inside gRPC and the ten-way raw-claim race reported nine losers
+instead of ten. **A harness deadlock presenting as a uniqueness failure.** It
+was latent under 79 emulator tests and surfaced at 92. Output now goes to a
+file, which preserves the startup diagnostic that identified the Java 21
+requirement in 0.3, and both `_race` helpers now fail loudly on a thread that
+outlives its join instead of returning a short list.
+
+### 0.4B/C carried debt
+
+- **Clinician-authored goal text is free text.** Genex-GENERATED wording never
+  contains a name and that is enforced; a clinician typing a child's name into
+  a goal they wrote is clinical free text the pilot does not and cannot
+  prevent. Recorded rather than pretended away.
+- **`goal_vocabulary.py` MIRRORS `parent_taxonomy.domains`** rather than
+  importing it: they are separate top-level namespaces and the pilot CI job
+  runs from the repository root. `test_canonical_domains_mirror_parent_taxonomy`
+  pins the exact seven keys, so a divergence surfaces there.
+- **Approval writes the goal version before the goal.** A crash between them
+  leaves an orphan version, which is inert. Making the pair atomic needs a
+  transaction, and the goal's `current_version_id` cannot be set without a
+  read-modify-write the port forbids inside one — the same restructuring
+  question as activation, deferred rather than papered over.
+- **`list_for_cycle` filters in Python after a single-field query**, because
+  the `DocumentStore` port exposes equality on one field and deliberately
+  promises no composite index.
+- **All earlier pilot, Parent and Therapist carried debt remains.**

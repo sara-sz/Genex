@@ -140,7 +140,15 @@ def test_claims_round_trip_and_are_create_only(identity):
 # ===========================================================================
 
 def _race(target, count: int = 8):
-    """Run `target(i)` on `count` threads released together."""
+    """Run `target(i)` on `count` threads released together.
+
+    Every thread must be accounted for. A thread that outlives its join used
+    to return a SHORT result list, so "one winner, nine losers" quietly became
+    "one winner, eight losers" and the assertion read as a uniqueness failure.
+    It was a harness deadlock — the emulator had blocked writing to an
+    undrained pipe (see `conftest.py`) — and it wasted a diagnosis pointing at
+    the claim mechanism. A stalled harness now says so.
+    """
     barrier = threading.Barrier(count)
     results, errors = [], []
     lock = threading.Lock()
@@ -158,8 +166,15 @@ def _race(target, count: int = 8):
     threads = [threading.Thread(target=runner, args=(i,)) for i in range(count)]
     for thread in threads:
         thread.start()
+    stalled = 0
     for thread in threads:
         thread.join(timeout=60)
+        if thread.is_alive():
+            stalled += 1
+    assert stalled == 0, (
+        f"{stalled} of {count} racing threads did not finish within 60s — "
+        "the harness stalled; this is not a uniqueness result")
+    assert len(results) + len(errors) == count
     return results, errors
 
 

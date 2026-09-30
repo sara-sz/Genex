@@ -54,6 +54,20 @@ class AmbiguousAuthSubject(ValueError):
     PHI_SAFE_MESSAGE = True
 
 
+class AmbiguousRecordState(ValueError):
+    """Two records hold a state that a write-time claim guarantees is unique.
+
+    Same reasoning as `AmbiguousAuthSubject`, generalised: when uniqueness is
+    enforced by a claim document, finding two survivors means the claim was
+    bypassed, and "return the first one" would let document order decide which
+    plan a child's month actually followed. Fails closed instead.
+
+    PHI-safe: names neither the records nor their contents.
+    """
+
+    PHI_SAFE_MESSAGE = True
+
+
 @runtime_checkable
 class PracticeRepository(Protocol):
     def create(self, practice: Practice) -> Practice: ...

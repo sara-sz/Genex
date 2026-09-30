@@ -40,7 +40,26 @@ from typing import Any, Dict, Mapping, Optional, Type
 
 from ..audit.events import AuditAction, AuditEvent, AuditResult
 from ..domain.child_context import ChildContextRecord
+from ..domain.goals import (
+    CaregiverApprovedGoal,
+    ClinicalGoal,
+    EditType,
+    EvidenceSource,
+    GoalKind,
+    GoalStatus,
+    GoalSuggestion,
+    GoalSuggestionEvidence,
+    GoalVersion,
+    SuggestionStatus,
+)
 from ..domain.identity_claims import ClaimKind, ClaimRecordKind, IdentityClaim
+from ..domain.monthly_plan import (
+    AllocationStatus,
+    MonthlyFocusPlan,
+    MonthlyGoalAllocation,
+    MonthlyGoalSnapshot,
+    MonthlyPlanState,
+)
 from ..domain.managing_clinician import (
     ManagingClinicianAssignment,
     ManagingClinicianStatus,
@@ -185,10 +204,75 @@ class _StrMap(Kind):
         return self.to_doc(value, field)
 
 
+class _Bool(Kind):
+    def to_doc(self, value: Any, field: str) -> Any:
+        if not isinstance(value, bool):
+            raise CodecError(f"{field}: expected a boolean")
+        return value
+
+    def from_doc(self, value: Any, field: str) -> Any:
+        return self.to_doc(value, field)
+
+
+class _StrTuple(Kind):
+    """An ORDERED list of strings, round-tripped as a tuple.
+
+    Order is preserved rather than sorted: a clinician's routine list and a
+    suggestion's milestone refs both carry meaning in their sequence, and a
+    codec that quietly reorders them would make two records that differ look
+    identical — and two that are identical fail an equality test.
+    """
+
+    def to_doc(self, value: Any, field: str) -> Any:
+        if not isinstance(value, (tuple, list)):
+            raise CodecError(f"{field}: expected a sequence of strings")
+        for item in value:
+            if not isinstance(item, str):
+                raise CodecError(f"{field}: sequence must contain only strings")
+        return list(value)
+
+    def from_doc(self, value: Any, field: str) -> Any:
+        return tuple(self.to_doc(value, field))
+
+
+class _Nested(Kind):
+    """An embedded record with its own registered spec.
+
+    Embedded rather than referenced because `GoalSuggestionEvidence` has no
+    independent lifetime: it is never queried, never updated, and meaningless
+    apart from its suggestion. It inherits the same exact-key-set strictness,
+    so a field added to the nested type cannot half-land either.
+    """
+
+    def __init__(self, cls: type, optional: bool = False) -> None:
+        self.cls = cls
+        self.optional = optional
+
+    def to_doc(self, value: Any, field: str) -> Any:
+        if value is None:
+            if not self.optional:
+                raise CodecError(f"{field}: required nested record is None")
+            return None
+        if not isinstance(value, self.cls):
+            raise CodecError(f"{field}: expected {self.cls.__name__}")
+        return encode(value)
+
+    def from_doc(self, value: Any, field: str) -> Any:
+        if value is None:
+            if not self.optional:
+                raise CodecError(f"{field}: required nested record is null")
+            return None
+        if not isinstance(value, Mapping):
+            raise CodecError(f"{field}: expected a nested document")
+        return decode(self.cls, value)
+
+
 STR, OPT_STR = _Str(), _Str(optional=True)
 INT = _Int()
+BOOL = _Bool()
 DT, OPT_DT = _DateTime(), _DateTime(optional=True)
 STR_MAP = _StrMap()
+STR_TUPLE = _StrTuple()
 
 
 #: Per-type field handling. A test asserts each spec covers exactly the
@@ -282,6 +366,87 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "kind": _EnumKind(ClaimKind), "key_digest": STR,
         "generation": INT, "holder_ref": STR, "child_id": STR,
         "created_at": DT, "created_by_actor_id": OPT_STR, "schema_version": STR,
+    },
+    GoalSuggestionEvidence: {
+        "domain_key": STR, "evidence_source": _EnumKind(EvidenceSource),
+        "milestone_refs": STR_TUPLE, "functional_baseline_area": STR,
+        "observed_level": STR, "explicitly_selected": BOOL,
+        "prior_month_summary_id": OPT_STR, "rule_version": STR,
+    },
+    GoalSuggestion: {
+        "suggestion_id": STR, "child_id": STR, "cycle_month": STR,
+        "family_facing_text_template": STR,
+        "evidence": _Nested(GoalSuggestionEvidence),
+        "suggested_priority_rank": INT, "suggested_emphasis_weight": INT,
+        "generator_version": STR, "generation_mode": STR,
+        "status": _EnumKind(SuggestionStatus),
+        "created_at": DT, "created_by_actor_id": OPT_STR, "schema_version": STR,
+    },
+    GoalVersion: {
+        "version_id": STR, "goal_kind": _EnumKind(GoalKind), "goal_id": STR,
+        "version_number": INT, "text": STR,
+        "edit_type": _EnumKind(EditType),
+        "actor_id": STR, "actor_role": _EnumKind(ActorRole),
+        "derived_from_suggestion_id": OPT_STR, "reason": STR,
+        "supersedes_version_id": OPT_STR,
+        "created_at": DT, "schema_version": STR,
+    },
+    ClinicalGoal: {
+        "clinical_goal_id": STR, "child_id": STR, "managing_provider_id": STR,
+        "practice_id": STR, "managing_assignment_id": STR,
+        "current_version_id": STR, "status": _EnumKind(GoalStatus),
+        "opened_at": DT, "closed_at": OPT_DT,
+        "created_by_actor_id": OPT_STR, "created_at": DT, "updated_at": DT,
+        "schema_version": STR,
+    },
+    CaregiverApprovedGoal: {
+        "caregiver_goal_id": STR, "child_id": STR,
+        "approved_by_caregiver_id": STR, "current_version_id": STR,
+        "status": _EnumKind(GoalStatus),
+        "opened_at": DT, "closed_at": OPT_DT,
+        "created_by_actor_id": OPT_STR, "created_at": DT, "updated_at": DT,
+        "schema_version": STR,
+    },
+    MonthlyFocusPlan: {
+        "focus_plan_id": STR, "child_id": STR, "cycle_month": STR,
+        "timezone_of_record": STR, "starts_on": STR, "ends_on": STR,
+        "monitoring_focus": STR, "routines_context": STR_TUPLE,
+        "interests_motivators": STR_TUPLE, "support_considerations": STR,
+        "expected_practice_cadence": STR, "monitoring_dimensions": STR_TUPLE,
+        "clinician_guidance": STR,
+        "state": _EnumKind(MonthlyPlanState), "policy_version": STR,
+        "current_revision_id": OPT_STR,
+        "activated_at": OPT_DT, "closed_at": OPT_DT,
+        "activation_claim_id": STR,
+        "created_at": DT, "updated_at": DT,
+        "created_by_actor_id": OPT_STR,
+        "created_by_role": _EnumKind(ActorRole, optional=True),
+        "schema_version": STR,
+    },
+    MonthlyGoalAllocation: {
+        "allocation_id": STR, "focus_plan_id": STR, "child_id": STR,
+        "goal_kind": _EnumKind(GoalKind), "goal_id": STR,
+        "priority_rank": INT, "emphasis_weight": INT,
+        "min_coverage_per_cycle": INT,
+        "status": _EnumKind(AllocationStatus),
+        "set_by_actor_id": OPT_STR,
+        "set_by_role": _EnumKind(ActorRole, optional=True),
+        "effective_from_cycle": INT,
+        "supersedes_allocation_id": OPT_STR,
+        "superseded_by_allocation_id": OPT_STR,
+        "reason": STR, "created_at": DT, "updated_at": DT,
+        "schema_version": STR,
+    },
+    MonthlyGoalSnapshot: {
+        "snapshot_id": STR, "focus_plan_id": STR, "child_id": STR,
+        "goal_kind": _EnumKind(GoalKind), "goal_id": STR,
+        "goal_version_id": STR, "goal_text_at_snapshot": STR,
+        "priority_rank": INT, "emphasis_weight": INT,
+        "min_coverage_per_cycle": INT,
+        "approved_by_role": _EnumKind(ActorRole),
+        "allocation_id": STR,
+        "effective_from": DT, "snapshot_at": DT,
+        "schema_version": STR,
     },
     Revision: {
         "revision_id": STR, "record_id": STR, "version": INT,

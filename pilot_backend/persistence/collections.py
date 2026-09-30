@@ -39,6 +39,18 @@ COLLECTIONS: Mapping[str, str] = {
     "source_system_link": "pilot_source_system_links",
     "managing_clinician": "pilot_managing_clinicians",
     "identity_claim": "pilot_identity_claims",
+    # 0.4B goals. Suggestions, versions and the two approved-goal types are
+    # four collections, not one with a discriminator field. A query that means
+    # "every clinician-approved goal for this child" must not be able to return
+    # a caregiver-approved one because a filter was omitted.
+    "goal_suggestion": "pilot_goal_suggestions",
+    "goal_version": "pilot_goal_versions",
+    "clinical_goal": "pilot_clinical_goals",
+    "caregiver_goal": "pilot_caregiver_goals",
+    # 0.4C monthly focus plan.
+    "monthly_focus_plan": "pilot_monthly_focus_plans",
+    "monthly_goal_allocation": "pilot_monthly_goal_allocations",
+    "monthly_goal_snapshot": "pilot_monthly_goal_snapshots",
 }
 
 #: Names this package must never address. Parent 2.3 / Beta infrastructure.

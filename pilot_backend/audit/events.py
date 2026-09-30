@@ -84,6 +84,21 @@ class AuditAction(str, Enum):
     MANAGING_CLINICIAN_ASSIGNED = "managing_clinician_assigned"
     MANAGING_CLINICIAN_ENDED = "managing_clinician_ended"
     MANAGING_CLINICIAN_TRANSFERRED = "managing_clinician_transferred"
+    # 0.4B goals. Suggesting, approving and editing are three DIFFERENT
+    # actions, not one "goal changed". Collapsing them would leave the trail
+    # unable to answer whether a human ever approved the wording that shipped.
+    GOAL_SUGGESTIONS_GENERATED = "goal_suggestions_generated"
+    GOAL_SUGGESTION_DECLINED = "goal_suggestion_declined"
+    CLINICAL_GOAL_APPROVED = "clinical_goal_approved"
+    CAREGIVER_GOAL_APPROVED = "caregiver_goal_approved"
+    GOAL_VERSION_ADDED = "goal_version_added"
+    GOAL_STATUS_CHANGED = "goal_status_changed"
+    # 0.4C monthly focus plan.
+    MONTHLY_PLAN_CREATED = "monthly_plan_created"
+    MONTHLY_PLAN_ACTIVATED = "monthly_plan_activated"
+    MONTHLY_PLAN_CLOSED = "monthly_plan_closed"
+    GOAL_ALLOCATED = "goal_allocated"
+    GOAL_ALLOCATION_REPRIORITIZED = "goal_allocation_reprioritized"
 
 
 class AuditResult(str, Enum):
@@ -115,6 +130,31 @@ ALLOWED_METADATA_KEYS = frozenset({
     "claim_kind",
     "provider_id",        # opaque prov_ id
     "practice_id",        # opaque prac_ id
+    # 0.4B/C. Opaque ids, short enums and small integers only.
+    #
+    # Deliberately EXCLUDED, and tested: goal text, the family-facing template,
+    # a suggestion's rendered wording, an edit reason, a domain observation and
+    # a milestone reference. Goal text is clinical content about a child, and
+    # an edit reason is free text a clinician typed — the audit trail records
+    # THAT a goal was approved and by whom, never what it said. `domain_key` is
+    # excluded on the same grounds: which developmental domain a child's goal
+    # addresses is a clinical fact, not an operational one.
+    "suggestion_id",      # opaque gsug_ id
+    "goal_kind",          # clinical | caregiver_approved
+    "goal_id",            # opaque clgl_/cagl_ id
+    "goal_version_id",    # opaque gver_ id
+    "goal_status",        # active | paused | retired
+    "edit_type",          # accepted_verbatim | modified | replaced | authored_fresh
+    "suggestion_count",   # how many candidates were offered
+    "focus_plan_id",      # opaque mfpl_ id
+    "cycle_month",        # "YYYY-MM" — a calendar month, not a date of service
+    "allocation_id",      # opaque galc_ id
+    "priority_rank",      # small integer
+    "emphasis_weight",    # small integer
+    "policy_version",     # planning-policy-YYYY.MM
+    "generator_version",  # goal-suggestion-engine-YYYY.MM
+    "rule_version",       # suggestion-rules-YYYY.MM
+    "plan_state",         # draft | active | closed
 })
 
 _MAX_METADATA_VALUE_LENGTH = 64
