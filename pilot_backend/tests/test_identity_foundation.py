@@ -455,7 +455,11 @@ def test_no_rtm_implementation_exists_yet():
             continue
         tree = ast.parse(path.read_text())
         names = {n.name for n in ast.walk(tree) if isinstance(n, ast.ClassDef)}
-        assert not {"MonitoringEvent"} & names, path.name
+        # RTMTimeEntry and MonitoringEvent are PROVISIONAL names this
+        # guard has always banned. 0.4F/G implements the concepts as
+        # TimeEntry and SynchronousInteraction, so the provisional
+        # spellings stay banned — nothing should appear under them.
+        assert not {"RTMTimeEntry", "MonitoringEvent"} & names, path.name
 
 
 # ===========================================================================

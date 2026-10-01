@@ -347,6 +347,61 @@ def test_an_amended_report_keeps_its_predecessor_in_firestore(rt):
     assert predecessor.sections == finalized.sections
 
 
+def test_a_rejected_amendment_has_zero_durable_side_effects_in_firestore(rt):
+    """The atomicity claim against a REAL store, not a dict.
+
+    Persistence is involved — `amend_report` calls `generate_report`, which
+    WRITES — so the unit test over the fake is not sufficient evidence. This
+    asserts the same five conditions against Firestore.
+    """
+    from pilot_backend.audit.events import AuditAction
+    from pilot_backend.domain.month_end import ReportState
+    from pilot_backend.rtm.errors import RTMValidationError
+
+    plan, cycle, result, goals, episode = _prepare(rt)
+    period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
+                                plan.focus_plan_id)
+    rt.rtm.finalize_period(rt.provider_alpha, period.period_id)
+    rt.rtm.generate_evidence_summary(rt.provider_alpha, period.period_id)
+    rt.rtm.generate_coding_assistance(rt.provider_alpha, period.period_id)
+    report = rt.rtm.generate_report(rt.provider_alpha, period.period_id)
+    finalized = rt.rtm.finalize_report(rt.provider_alpha, report.report_id)
+
+    before_rows = rt.repos.month_end_reports.list_for_period(period.period_id)
+    before_ids = {r.report_id for r in before_rows}
+    before_source = rt.repos.month_end_reports.get_by_id(finalized.report_id)
+    before_audit = len(rt.repos.audit_events.list_for_child(rt.child))
+
+    with pytest.raises(RTMValidationError):
+        rt.rtm.amend_report(rt.provider_alpha, finalized.report_id,
+                            reason="   ")
+
+    after_rows = rt.repos.month_end_reports.list_for_period(period.period_id)
+    after_source = rt.repos.month_end_reports.get_by_id(finalized.report_id)
+
+    assert {r.report_id for r in after_rows} == before_ids, \
+        "a rejected amendment persisted a row in Firestore"
+    assert after_source == before_source, \
+        "a rejected amendment mutated the finalized source report"
+    assert after_source.state is ReportState.FINALIZED
+    assert after_source.superseded_by_report_id is None
+    assert not [r for r in after_rows if r.supersedes_report_id]
+
+    after_events = rt.repos.audit_events.list_for_child(rt.child)
+    assert len(after_events) == before_audit, \
+        "a rejected amendment emitted an audit event"
+    assert not [e for e in after_events
+                if e.action is AuditAction.MONTH_END_REPORT_AMENDED]
+
+    assert rt.repos.month_end_reports.current_for_period(
+        period.period_id).report_id == finalized.report_id
+
+    # And a legitimate amendment still succeeds afterwards.
+    amended = rt.rtm.amend_report(rt.provider_alpha, finalized.report_id,
+                                  reason="late reconciliation")
+    assert amended.version == 2
+
+
 def test_a_coding_decision_persists_without_rewriting_candidates(rt):
     plan, cycle, result, goals, episode = _prepare(rt)
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,

@@ -1533,7 +1533,11 @@ def test_no_rtm_model_exists_in_0_2():
     """
     banned = {"PayerVerification", "MonitoringDay", "ClaimSubmission",
               "EligibilityCheck", "ClearingHouseSubmission",
-              "ReimbursementEstimate", "EMRIntegration"}
+              "ReimbursementEstimate", "EMRIntegration",
+              # Provisional names this guard has always banned. 0.4F/G
+              # implements the concepts as TimeEntry and
+              # SynchronousInteraction, so these spellings stay banned.
+              "RTMTimeEntry", "MonitoringEvent"}
     for path in sorted(PILOT_ROOT.rglob("*.py")):
         if path.name.startswith("test_"):
             continue

@@ -393,6 +393,34 @@ def test_the_episode_record_itself_refuses_a_caregiver_goal():
             opened_at=T0, opened_by_actor_id="prov_1")
 
 
+def test_participant_type_is_pinned_to_the_real_time_categories():
+    """Pins the enum so a future expansion cannot silently change coding.
+
+    `counts_as_real_time_communication` requires the participant to be the
+    patient and/or caregiver. Today EVERY `ParticipantType` member satisfies
+    that, so the participant conjunct is structurally unreachable — which is
+    why a mutation forcing it True survives the sweep. That is sound only
+    while the enum stays exactly these three.
+
+    Adding, say, a COLLEAGUE or INTERPRETER member would make the conjunct
+    live and would change which months produce a code candidate. This test
+    fails the moment that happens, forcing the mutation to be reclassified
+    as reachable and re-tested rather than silently remaining "unreachable"
+    in the freeze record.
+    """
+    assert {m.name for m in ParticipantType} == {"PATIENT", "CAREGIVER", "BOTH"}
+    assert {m.value for m in ParticipantType} == {"patient", "caregiver", "both"}
+
+    # Every member is a permitted real-time participant. This is the exact
+    # premise the unreachability classification rests on.
+    for member in ParticipantType:
+        interaction = SynchronousInteraction.record(
+            "rper_1", "chld_x", "prov_1", occurred_at_utc=T0,
+            local_date="2026-10-05", timezone_of_record=ZONE,
+            modality=InteractionModality.PHONE, participant_type=member)
+        assert interaction.counts_as_real_time_communication, member.name
+
+
 def test_an_unaffirmed_contact_does_not_count_as_real_time():
     """Mutation 30. The reachable half of the real-time check.
 
@@ -412,13 +440,48 @@ def test_an_unaffirmed_contact_does_not_count_as_real_time():
 
 
 def test_the_report_record_itself_refuses_an_unexplained_amendment():
-    """Mutation 36. `MonthEndReport.amend`'s own reason check."""
+    """Mutation 36. `MonthEndReport.amend`'s own reason check.
+
+    `__post_init__` ALSO refuses an AMENDED report with no reason, so simply
+    asserting that `amend()` raises cannot distinguish the two guards — a
+    mutation removing the `amend()` check survived on exactly that masking.
+
+    So this asserts WHERE the refusal happens: `amend()` must reject before
+    it mints a successor id. With only the `__post_init__` guard, a report
+    id is consumed and the failure occurs during construction instead. No
+    production code was changed to make this observable; the identifier
+    factory is simply counted.
+    """
+    import pilot_backend.domain.month_end as month_end
+
     report = MonthEndReport.create("rper_1", "chld_x", "mfpl_1", CYCLE)
     finalized = report.finalize(actor_id="prov_1")
-    with pytest.raises(ReportError):
-        finalized.amend(actor_id="prov_1", reason="   ")
-    with pytest.raises(ReportError):
-        finalized.amend(actor_id="  ", reason="a real reason")
+
+    minted = []
+    original = month_end.new_month_end_report_id
+
+    def counting_factory():
+        value = original()
+        minted.append(value)
+        return value
+
+    month_end.new_month_end_report_id = counting_factory
+    try:
+        with pytest.raises(ReportError):
+            finalized.amend(actor_id="prov_1", reason="   ")
+        assert minted == [], \
+            "amend() built a successor before validating the reason"
+
+        with pytest.raises(ReportError):
+            finalized.amend(actor_id="  ", reason="a real reason")
+        assert minted == [], \
+            "amend() built a successor before validating the actor"
+
+        # A valid amendment DOES mint exactly one successor.
+        finalized.amend(actor_id="prov_1", reason="a real reason")
+        assert len(minted) == 1
+    finally:
+        month_end.new_month_end_report_id = original
 
 
 def test_evidence_excludes_events_attributed_to_another_month(s):
@@ -1062,23 +1125,75 @@ def test_amendment_writes_a_successor_and_keeps_the_predecessor(s):
         period.period_id).report_id == amended.report_id
 
 
-def test_a_refused_amendment_leaves_no_orphan_draft(s):
-    """Found while analysing a surviving mutation.
+@pytest.mark.parametrize("reason", ["", "   ", "\t\n"])
+def test_a_rejected_amendment_has_zero_durable_side_effects(s, reason):
+    """A rejected amendment must leave the store exactly as it found it.
 
-    `amend_report` rebuilds the report before `MonthEndReport.amend`
-    validates the reason, so an empty reason used to persist a draft row and
-    then fail. The service now validates first.
+    `amend_report` used to rebuild the report — PERSISTING a draft — before
+    `MonthEndReport.amend` validated the reason, so a refusal left an orphan
+    row. Found while analysing a surviving mutation; the service now
+    validates first.
+
+    All five conditions are asserted, because "the count is unchanged" alone
+    would pass even if a row had been written and another removed, or if the
+    finalized source had been mutated in place.
     """
     ctx, episode, period = _full_month(s)
     report = s.rtm.generate_report(s.provider_alpha, period.period_id)
     finalized = s.rtm.finalize_report(s.provider_alpha, report.report_id)
-    before = len(s.repos.month_end_reports.list_for_period(period.period_id))
+
+    before_rows = s.repos.month_end_reports.list_for_period(period.period_id)
+    before_ids = {r.report_id for r in before_rows}
+    before_source = s.repos.month_end_reports.get_by_id(finalized.report_id)
+    before_audit = len(s.repos.audit_events.list_all())
 
     with pytest.raises(RTMValidationError):
-        s.rtm.amend_report(s.provider_alpha, finalized.report_id, reason="  ")
+        s.rtm.amend_report(s.provider_alpha, finalized.report_id,
+                           reason=reason)
 
-    after = len(s.repos.month_end_reports.list_for_period(period.period_id))
-    assert after == before, "a refused amendment persisted an orphan draft"
+    after_rows = s.repos.month_end_reports.list_for_period(period.period_id)
+    after_source = s.repos.month_end_reports.get_by_id(finalized.report_id)
+
+    # 1. no durable draft or amendment row
+    assert {r.report_id for r in after_rows} == before_ids, \
+        "a rejected amendment persisted a row"
+    assert len(after_rows) == len(before_rows)
+
+    # 2. the finalized source report is byte-identical
+    assert after_source == before_source, \
+        "a rejected amendment mutated the finalized source report"
+    assert after_source.state is ReportState.FINALIZED
+    assert after_source.version == 1
+
+    # 3. no orphan lineage in either direction
+    assert after_source.superseded_by_report_id is None
+    assert not [r for r in after_rows if r.supersedes_report_id]
+
+    # 4. no success audit event
+    after_events = s.repos.audit_events.list_all()
+    assert len(after_events) == before_audit, \
+        "a rejected amendment emitted an audit event"
+    assert not [e for e in after_events
+                if e.action is AuditAction.MONTH_END_REPORT_AMENDED]
+
+    # 5. no partial transition — the current report is still the original
+    assert s.repos.month_end_reports.current_for_period(
+        period.period_id).report_id == finalized.report_id
+
+
+def test_a_rejected_amendment_still_allows_a_valid_one(s):
+    """The refusal must not poison the record for a legitimate amendment."""
+    ctx, episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    finalized = s.rtm.finalize_report(s.provider_alpha, report.report_id)
+
+    with pytest.raises(RTMValidationError):
+        s.rtm.amend_report(s.provider_alpha, finalized.report_id, reason=" ")
+
+    amended = s.rtm.amend_report(s.provider_alpha, finalized.report_id,
+                                 reason="late time entry reconciled")
+    assert amended.version == 2
+    assert amended.supersedes_report_id == finalized.report_id
 
 
 def test_the_amend_reason_guard_is_redundant_but_present(s):
