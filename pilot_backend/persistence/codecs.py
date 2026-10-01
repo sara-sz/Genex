@@ -39,7 +39,44 @@ from enum import Enum
 from typing import Any, Dict, Mapping, Optional, Type
 
 from ..audit.events import AuditAction, AuditEvent, AuditResult
+from ..domain.adaptation import (
+    AdaptationOrigin,
+    AdaptationRecord,
+    NormalizedSignal,
+    SignalKind,
+    SignalSource,
+)
+from ..domain.alignment import (
+    ActivityGoalAlignment,
+    AlignmentRole,
+    AlignmentSource,
+    CapacityLedger,
+    CoverageGap,
+    CoverageGapReason,
+)
 from ..domain.child_context import ChildContextRecord
+from ..domain.intervention import (
+    InterventionAction,
+    InterventionScope,
+    TherapistIntervention,
+)
+from ..domain.observation import (
+    AttemptOutcome,
+    CustomizationSignalType,
+    DeferRecord,
+    Difficulty,
+    Enjoyment,
+    ObservationEvent,
+    ParentCustomizationSignal,
+    TimezoneSource,
+)
+from ..domain.weekly_cycle import (
+    GenerationReason,
+    PartialReason,
+    WeeklyCycle,
+    WeeklyPlanLink,
+    WeeklyPlanSnapshot,
+)
 from ..domain.goals import (
     CaregiverApprovedGoal,
     ClinicalGoal,
@@ -267,6 +304,61 @@ class _Nested(Kind):
         return decode(self.cls, value)
 
 
+class _EnumTuple(Kind):
+    """An ORDERED list of enum members, round-tripped as a tuple."""
+
+    def __init__(self, enum_cls: Type[Enum]) -> None:
+        self.enum_cls = enum_cls
+
+    def to_doc(self, value: Any, field: str) -> Any:
+        if not isinstance(value, (tuple, list)):
+            raise CodecError(f"{field}: expected a sequence of enums")
+        out = []
+        for item in value:
+            if not isinstance(item, self.enum_cls):
+                raise CodecError(f"{field}: expected {self.enum_cls.__name__}")
+            out.append(item.value)
+        return out
+
+    def from_doc(self, value: Any, field: str) -> Any:
+        if not isinstance(value, (tuple, list)):
+            raise CodecError(f"{field}: expected a sequence of enum values")
+        try:
+            return tuple(self.enum_cls(item) for item in value)
+        except ValueError:
+            raise CodecError(
+                f"{field}: unrecognised {self.enum_cls.__name__} value") from None
+
+
+class _NestedTuple(Kind):
+    """An ORDERED list of embedded records with their own registered spec.
+
+    Embedded rather than referenced for the same reason as
+    `GoalSuggestionEvidence`: a `NormalizedSignal` has no independent
+    lifetime and is meaningless apart from the adaptation it explains. Each
+    element inherits the exact-key-set strictness, so a field added to the
+    nested type cannot half-land either.
+    """
+
+    def __init__(self, cls: type) -> None:
+        self.cls = cls
+
+    def to_doc(self, value: Any, field: str) -> Any:
+        if not isinstance(value, (tuple, list)):
+            raise CodecError(f"{field}: expected a sequence of records")
+        out = []
+        for item in value:
+            if not isinstance(item, self.cls):
+                raise CodecError(f"{field}: expected {self.cls.__name__}")
+            out.append(encode(item))
+        return out
+
+    def from_doc(self, value: Any, field: str) -> Any:
+        if not isinstance(value, (tuple, list)):
+            raise CodecError(f"{field}: expected a sequence of documents")
+        return tuple(decode(self.cls, item) for item in value)
+
+
 STR, OPT_STR = _Str(), _Str(optional=True)
 INT = _Int()
 BOOL = _Bool()
@@ -447,6 +539,113 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "allocation_id": STR,
         "effective_from": DT, "snapshot_at": DT,
         "schema_version": STR,
+    },
+    WeeklyCycle: {
+        "cycle_id": STR, "owning_focus_plan_id": STR, "child_id": STR,
+        "sequence_in_month": INT, "starts_on": STR, "ends_on": STR,
+        "is_partial": BOOL,
+        "partial_reason": _EnumKind(PartialReason, optional=True),
+        "spans_month_boundary": BOOL,
+        "predecessor_cycle_id": OPT_STR,
+        "generation_reason": _EnumKind(GenerationReason),
+        "engine_version": STR,
+        "released_to_parent_at": OPT_DT,
+        "adaptation_record_id": OPT_STR,
+        "created_at": DT, "updated_at": DT, "schema_version": STR,
+    },
+    WeeklyPlanLink: {
+        "link_id": STR, "cycle_id": STR,
+        "source_system": _EnumKind(SourceSystem),
+        "external_plan_id": STR, "linked_at": DT,
+        "coverage_local_dates": STR_TUPLE, "schema_version": STR,
+    },
+    WeeklyPlanSnapshot: {
+        "snapshot_id": STR, "cycle_id": STR, "resolved_plan_document": STR,
+        "source_system": _EnumKind(SourceSystem), "source_plan_id": STR,
+        "source_generated_at": OPT_DT, "captured_at": DT,
+        "schema_version": STR,
+    },
+    ActivityGoalAlignment: {
+        "alignment_id": STR, "cycle_id": STR, "child_id": STR,
+        "activity_instance_ref": STR, "activity_identity_ref": STR,
+        "goal_kind": _EnumKind(GoalKind), "goal_id": STR,
+        "role": _EnumKind(AlignmentRole),
+        "alignment_source": _EnumKind(AlignmentSource),
+        "rationale": STR, "milestone_refs": STR_TUPLE, "rule_version": STR,
+        "allocation_id": OPT_STR, "assigned_by_actor_id": OPT_STR,
+        "created_at": DT, "schema_version": STR,
+    },
+    CoverageGap: {
+        "gap_id": STR, "cycle_id": STR, "child_id": STR,
+        "goal_kind": _EnumKind(GoalKind), "goal_id": STR,
+        "reason": _EnumKind(CoverageGapReason),
+        "capacity_available": INT, "capacity_required": INT,
+        "rule_version": STR, "detail": STR,
+        "created_at": DT, "schema_version": STR,
+    },
+    CapacityLedger: {
+        "ledger_id": STR, "cycle_id": STR, "child_id": STR,
+        "family_declared_capacity": INT, "allocated_by_planner": INT,
+        "clinician_added": INT, "overage_reason": STR,
+        "created_at": DT, "updated_at": DT, "schema_version": STR,
+    },
+    ObservationEvent: {
+        "event_id": STR, "child_id": STR, "owning_cycle_id": STR,
+        "attribution_month": STR, "local_date": STR, "occurred_at": DT,
+        "timezone_of_record": STR, "tz_source": _EnumKind(TimezoneSource),
+        "activity_instance_ref": STR,
+        "attempt_outcome": _EnumKind(AttemptOutcome),
+        "difficulty": _EnumKind(Difficulty, optional=True),
+        "enjoyment": _EnumKind(Enjoyment, optional=True),
+        "assistance": STR, "child_response": STR,
+        "observation_text_ref": STR, "source_feedback_id": STR,
+        "recorded_by_caregiver_id": STR,
+        "created_at": DT, "schema_version": STR,
+    },
+    ParentCustomizationSignal: {
+        "signal_id": STR, "cycle_id": STR, "child_id": STR,
+        "activity_instance_ref": STR,
+        "signal_type": _EnumKind(CustomizationSignalType),
+        "actor_id": STR, "source_overlay_ref": STR,
+        "created_at": DT, "schema_version": STR,
+    },
+    DeferRecord: {
+        "defer_id": STR, "child_id": STR, "activity_instance_ref": STR,
+        "activity_identity_ref": STR, "deferred_by_actor_id": STR,
+        "deferred_by_role": _EnumKind(ActorRole),
+        "from_cycle_id": STR, "from_cycle_sequence": INT,
+        "suppression_until_cycle": INT, "created_at": DT,
+        "became_eligible_at": OPT_DT, "override_reason": STR,
+        "overridden_by_actor_id": OPT_STR, "schema_version": STR,
+    },
+    TherapistIntervention: {
+        "intervention_id": STR, "child_id": STR, "cycle_id": STR,
+        "provider_id": STR, "action": _EnumKind(InterventionAction),
+        "applies_to": _EnumKind(InterventionScope),
+        "clinical_rationale": STR, "target_ref": STR, "guidance_text": STR,
+        "managing_assignment_id": STR,
+        "created_at": DT, "schema_version": STR,
+    },
+    NormalizedSignal: {
+        "kind": _EnumKind(SignalKind), "source": _EnumKind(SignalSource),
+        "source_ref": STR, "activity_identity_ref": STR, "goal_ref_key": STR,
+    },
+    AdaptationRecord: {
+        "record_id": STR, "child_id": STR, "focus_plan_id": STR,
+        "from_cycle_id": STR, "to_cycle_id": STR,
+        "evidence_event_ids": STR_TUPLE,
+        "customization_signal_ids": STR_TUPLE,
+        "defer_record_ids": STR_TUPLE,
+        "normalized_signals": _NestedTuple(NormalizedSignal),
+        "rule_version": STR, "origin": _EnumKind(AdaptationOrigin),
+        "signal_source": _EnumTuple(SignalSource),
+        "clinician_decision": STR, "source_action_ref": STR,
+        "intervention_id": OPT_STR,
+        "goal_alignment_before": STR_TUPLE,
+        "goal_alignment_after": STR_TUPLE,
+        "coverage_gaps": STR_TUPLE,
+        "not_a_failure": BOOL, "resulting_change": STR,
+        "created_at": DT, "schema_version": STR,
     },
     Revision: {
         "revision_id": STR, "record_id": STR, "version": INT,

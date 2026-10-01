@@ -90,6 +90,21 @@ class ClaimKind(str, Enum):
     #: both succeed, or the child has two competing months of direction and
     #: nothing in the record says which one the weekly plans followed.
     MONTHLY_FOCUS_PLAN = "monthly_focus_plan"
+    #: 0.4D. One weekly cycle per (focus_plan_id, sequence_in_month), and one
+    #: allocation per cycle_id.
+    #:
+    #: Both were read-then-write guards in a first pass, which is the 0.3
+    #: auth-subject defect one layer up: right almost always, wrong exactly
+    #: when two planners act together. Two cycle-1s for one month, or two
+    #: allocations for one cycle, would give the family a duplicated week with
+    #: nothing in the record saying which one was real.
+    #:
+    #: The allocation claim is stronger than the 0.4C plan claim because every
+    #: write it guards is a `create` — claim, alignments, gaps and ledger all
+    #: commit in ONE transaction, with no `set` and therefore no boundary to
+    #: recover across.
+    WEEKLY_CYCLE = "weekly_cycle"
+    WEEKLY_ALLOCATION = "weekly_allocation"
 
 
 class ClaimError(ValueError):

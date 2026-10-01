@@ -59,6 +59,23 @@ CAREGIVER_APPROVED_GOAL_PREFIX = "cagl"
 MONTHLY_FOCUS_PLAN_PREFIX = "mfpl"
 MONTHLY_ALLOCATION_PREFIX = "galc"
 MONTHLY_GOAL_SNAPSHOT_PREFIX = "gsnp"
+#: 0.4D weekly layer. `WeeklyCycle` is the MONTHLY LAYER's representation of a
+#: week — it is not the Parent weekly plan and never shares its identifiers.
+#: The Parent plan is reached only through `WeeklyPlanLink.external_plan_id`,
+#: which is an external identifier and never canonical, exactly as 0.4A ruled
+#: for Parent session ids.
+WEEKLY_CYCLE_PREFIX = "wcyc"
+WEEKLY_PLAN_LINK_PREFIX = "wlnk"
+WEEKLY_PLAN_SNAPSHOT_PREFIX = "wsnp"
+ACTIVITY_GOAL_ALIGNMENT_PREFIX = "algn"
+COVERAGE_GAP_PREFIX = "cgap"
+CAPACITY_LEDGER_PREFIX = "cled"
+#: 0.4E evidence and adaptation.
+OBSERVATION_EVENT_PREFIX = "obsv"
+CUSTOMIZATION_SIGNAL_PREFIX = "csig"
+DEFER_RECORD_PREFIX = "dfer"
+THERAPIST_INTERVENTION_PREFIX = "invn"
+ADAPTATION_RECORD_PREFIX = "adpt"
 
 ALL_PREFIXES = (
     PRACTICE_PREFIX,
@@ -79,6 +96,17 @@ ALL_PREFIXES = (
     MONTHLY_FOCUS_PLAN_PREFIX,
     MONTHLY_ALLOCATION_PREFIX,
     MONTHLY_GOAL_SNAPSHOT_PREFIX,
+    WEEKLY_CYCLE_PREFIX,
+    WEEKLY_PLAN_LINK_PREFIX,
+    WEEKLY_PLAN_SNAPSHOT_PREFIX,
+    ACTIVITY_GOAL_ALIGNMENT_PREFIX,
+    COVERAGE_GAP_PREFIX,
+    CAPACITY_LEDGER_PREFIX,
+    OBSERVATION_EVENT_PREFIX,
+    CUSTOMIZATION_SIGNAL_PREFIX,
+    DEFER_RECORD_PREFIX,
+    THERAPIST_INTERVENTION_PREFIX,
+    ADAPTATION_RECORD_PREFIX,
 )
 
 
@@ -160,6 +188,50 @@ def new_allocation_id() -> str:
 
 def new_goal_snapshot_id() -> str:
     return new_id(MONTHLY_GOAL_SNAPSHOT_PREFIX)
+
+
+def new_weekly_cycle_id() -> str:
+    return new_id(WEEKLY_CYCLE_PREFIX)
+
+
+def new_weekly_plan_link_id() -> str:
+    return new_id(WEEKLY_PLAN_LINK_PREFIX)
+
+
+def new_weekly_plan_snapshot_id() -> str:
+    return new_id(WEEKLY_PLAN_SNAPSHOT_PREFIX)
+
+
+def new_alignment_id() -> str:
+    return new_id(ACTIVITY_GOAL_ALIGNMENT_PREFIX)
+
+
+def new_coverage_gap_id() -> str:
+    return new_id(COVERAGE_GAP_PREFIX)
+
+
+def new_capacity_ledger_id() -> str:
+    return new_id(CAPACITY_LEDGER_PREFIX)
+
+
+def new_observation_event_id() -> str:
+    return new_id(OBSERVATION_EVENT_PREFIX)
+
+
+def new_customization_signal_id() -> str:
+    return new_id(CUSTOMIZATION_SIGNAL_PREFIX)
+
+
+def new_defer_record_id() -> str:
+    return new_id(DEFER_RECORD_PREFIX)
+
+
+def new_therapist_intervention_id() -> str:
+    return new_id(THERAPIST_INTERVENTION_PREFIX)
+
+
+def new_adaptation_record_id() -> str:
+    return new_id(ADAPTATION_RECORD_PREFIX)
 
 
 def entity_type_of(identifier: str) -> Optional[str]:

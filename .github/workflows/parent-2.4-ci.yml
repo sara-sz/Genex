@@ -245,6 +245,82 @@ jobs:
           print("goal, planning and domain modules import no network client")
           PY
 
+      - name: October pilot 0.4D/E — weekly allocation, evidence, adaptation (unit)
+        # Dependency-pure like the slices before it, and for the same reason:
+        # the weekly ALLOCATOR and the ADAPTATION engine are both
+        # deterministic and offline, so they must pass in a job where no
+        # model client, no HTTP library and no cloud SDK is installed.
+        working-directory: .
+        run: |
+          if [ -f pilot_backend/tests/test_weekly_evidence_adaptation.py ]; then
+            python -m pytest pilot_backend/tests/test_weekly_evidence_adaptation.py -q
+          else
+            echo "0.4D/E not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.4D/E — the weekly layer reaches no network
+        # Extends the transitive import-graph walk to `pilot_backend/weekly`.
+        # The adaptation engine must never acquire a model client by way of
+        # something it imports, and a docstring promising so is not a check.
+        working-directory: .
+        run: |
+          if [ ! -d pilot_backend/weekly ]; then
+            echo "0.4D/E not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib
+
+          BANNED = {"requests", "httpx", "urllib", "urllib3", "http", "socket",
+                    "openai", "anthropic", "google", "vertexai", "aiohttp",
+                    "firebase_admin", "grpc"}
+          offenders = []
+          for path in sorted(pathlib.Path("pilot_backend/weekly").rglob("*.py")):
+              tree = ast.parse(path.read_text())
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Import):
+                      names = [a.name.split(".")[0] for a in node.names]
+                  elif isinstance(node, ast.ImportFrom):
+                      names = ([node.module.split(".")[0]]
+                               if node.module and node.level == 0 else [])
+                  else:
+                      continue
+                  hit = BANNED.intersection(names)
+                  if hit:
+                      offenders.append((str(path), sorted(hit)))
+          assert not offenders, f"weekly layer imported a client: {offenders}"
+          print("weekly modules import no network client")
+          PY
+
+      - name: October pilot 0.4D/E — no double counting, structurally
+        # The arithmetic that stops a multi-goal activity inflating a total.
+        # Asserted here as well as in the unit suite because it is the single
+        # property a future MonthEndReport will lean on hardest: a refactor
+        # that "simplified" the total into a sum of per-goal streams would
+        # otherwise only surface in F/G, by which point reports exist.
+        working-directory: .
+        run: |
+          if [ ! -f pilot_backend/weekly/counting.py ]; then
+            echo "0.4D/E not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib
+
+          tree = ast.parse(pathlib.Path("pilot_backend/weekly/counting.py").read_text())
+          summarize = next(n for n in ast.walk(tree)
+                           if isinstance(n, ast.FunctionDef)
+                           and n.name == "summarize")
+          assigned = [kw for node in ast.walk(summarize)
+                      if isinstance(node, ast.Call)
+                      for kw in node.keywords if kw.arg == "total_attempts"]
+          assert len(assigned) == 1, "total_attempts must be computed exactly once"
+          rendered = ast.dump(assigned[0].value)
+          assert "seen_events" in rendered, rendered
+          assert "per_goal" not in rendered, "total derived from goal streams"
+          print("total attempts counts distinct events, not summed goal streams")
+          PY
+
       - name: Parent regression suite (seven-domain vocabulary)
         # Now part of the hosted gate. It exercises the Brain end to end —
         # focus selection, bridge plans, activity banks, safety and the weekly
@@ -565,6 +641,14 @@ jobs:
         # all-or-nothing and the boundary after it is forward-recoverable.
         run: python -m pytest pilot_runtime/tests/integration/test_goals_emulator.py -q
 
+      - name: Weekly allocation and adaptation — REAL emulator, REAL concurrency
+        # Two races a fake cannot host: eight threads creating cycle 1 of one
+        # month, and eight allocating one cycle. Also the allocation
+        # crash-consistency fault injection — every write there is a `create`,
+        # so unlike 0.4C activation the whole thing is one transaction with no
+        # boundary to recover across, and a crash must persist nothing.
+        run: python -m pytest pilot_runtime/tests/integration/test_weekly_emulator.py -q
+
       - name: Prove the emulator suites actually ran
         # Belt and braces against the one failure mode this job exists to
         # prevent: a green result produced by tests that never executed.
@@ -578,9 +662,9 @@ jobs:
                "--collect-only", "-q"],
               capture_output=True, text=True)
           count = collected.stdout.count("::")
-          # Raised from 70 to 90 by 0.4B/C. A floor that never moves stops
-          # noticing when a suite silently stops being collected.
-          assert count >= 90, f"expected the integration suites to collect >=90 tests, got {count}"
+          # Raised 70 -> 90 by 0.4B/C, 90 -> 100 by 0.4D/E. A floor that never
+          # moves stops noticing when a suite silently stops being collected.
+          assert count >= 100, f"expected the integration suites to collect >=100 tests, got {count}"
           run = subprocess.run(
               [sys.executable, "-m", "pytest", "pilot_runtime/tests/integration",
                "-q", "-rs"],

@@ -402,3 +402,176 @@ outlives its join instead of returning a short list.
   the `DocumentStore` port exposes equality on one field and deliberately
   promises no composite index.
 - **All earlier pilot, Parent and Therapist carried debt remains.**
+
+---
+
+## 0.4D/E — weekly allocation, evidence and adaptation (added)
+
+### The weekly layer is not the Parent weekly plan
+
+`WeeklyCycle` is the MONTHLY layer's own record of "week N of this focus
+plan". It carries no activity list, no schedule and no plan content. The
+Parent plan is reached only through `WeeklyPlanLink.external_plan_id`, which
+is an EXTERNAL identifier and never canonical — the rule 0.4A set for Parent
+session ids, restated. No pilot record is keyed by it and nothing joins on it.
+
+`WeeklyPlanSnapshot` exists because Parent's customization overlay is
+UNVERSIONED: a plan the family sees today can read differently tomorrow with
+no record of what was replaced. That is fine for a weekly display and unusable
+as clinical evidence. The snapshot stores the resolved document as an opaque,
+immutable JSON capture — opaque because Parent's plan shape is not ours to
+version, and a codec that validated its fields would start failing the moment
+Parent changed one. The repository is create-only: a snapshot that could be
+rewritten answers nothing.
+
+### Double counting is prevented structurally, not by discipline
+
+    ObservationEvent      is the unit of ATTEMPT COUNT
+    ActivityGoalAlignment is the unit of ATTRIBUTION
+
+One activity serving two goals, attempted once, is ONE opportunity: total
+attempts 1, goal-A attributed 1, goal-B attributed 1, and `1 + 1 = 2` is a
+number that means nothing. `weekly/counting.py` computes totals from DISTINCT
+event ids and never consults the per-goal streams; `sum_of_goal_attempts` is
+exposed under that deliberately awkward name so nobody reaches for it by
+accident, and `CoverageSummary` carries the overlapping event ids explicitly.
+
+A CI step walks the AST of `summarize` and asserts the total is computed
+exactly once, from `seen_events` and not from `per_goal`. MonthEndReport is
+out of scope until F/G; the arithmetic it will need is proven now rather than
+re-derived later under deadline.
+
+### Alignment attaches to the scheduled INSTANCE
+
+Never to the reusable template. The same activity placed in week 1 and week 3
+is two opportunities with two attributions and possibly two different goal
+sets after a reprioritisation. It is also what makes history immutable: the
+alignment repository is create-only, so a future cycle can be re-aligned
+without rewriting what a past cycle did.
+
+### Allocation is two-stage and hard-codes no split
+
+Stage 1 fills each goal's `min_coverage_per_cycle` in `priority_rank` order,
+preferring the candidate that closes the MOST open floors so a multi-goal
+activity is not duplicated per goal. Stage 2 distributes remaining capacity by
+the HIGHEST-AVERAGES rule — the next slot goes to the largest
+`weight / (placed + 1)`.
+
+That choice is deliberate: percentages would need a rounding rule and would
+break the moment a clinician adds a third goal or weights two equally. 3 and 2
+are a ratio, not 60/40. Highest-averages handles arbitrary N and arbitrary
+positive weights, needs no rounding, and is exactly reproducible. Nothing
+hard-codes a goal count or a split.
+
+### A CoverageGap is a planner condition
+
+It records that the planner could not place a meaningful opportunity. The
+reasons are a closed enum with no member for non-adherence, child performance
+or caregiver behaviour, and the type carries `is_planner_condition` and
+`not_a_failure` as constants. A gap is never evidence about a person.
+
+### Save for Later is honoured over the coverage floor
+
+A defer suppresses the activity for the NEXT cycle. After that it is ELIGIBLE
+again — eligible is not recommended, and it is never retired.
+
+When a goal's only candidates are suppressed, the allocator writes
+`DEFERRED_CONSTRAINT` rather than reaching past the caregiver's signal. The
+only route to early reuse is `DeferRecord.with_clinician_override`, which
+requires an actor and a stated reason and is reachable only through
+`WeeklyService.override_defer` behind the managing-clinician gate. A test
+asserts the allocator module never references the override at all, so a
+system-only coverage floor cannot defeat a defer.
+
+### Released plans are recorded against, never rewritten
+
+Once `released_to_parent_at` is set and a snapshot exists, a CURRENT_PLAN
+intervention that would REPLACE or REMOVE content raises
+`ReleasedPlanImmutable`. Endorsement and guidance are still recorded as
+intent. FUTURE_CYCLE interventions feed next-cycle generation directly and
+need no parent acceptance, because nothing has been shown yet. Real
+proposal-and-acceptance wiring is 0.5.
+
+A cycle also cannot be released before its plan is snapshotted: releasing
+uncaptured content would leave nothing to compare a later change against.
+
+### Family capacity is finite, including for clinicians
+
+A clinician-added activity consumes capacity like anything else. If that
+pushes a released cycle past the declared capacity, `CapacityLedger` records
+the overage and the reason; nothing the family already received is removed.
+`overage` is DERIVED from the counts it summarises rather than stored, so two
+fields in one record cannot describe different weeks.
+
+### Adaptation is deterministic, offline and conservative
+
+    too_hard | wasnt_ready_yet | didnt_want_to_try  -> EASIER_OR_MORE_SUPPORT
+    too_easy AND did_it                             -> HARDER_OR_PROGRESSED
+    anything else                                   -> MAINTAIN
+
+`MAINTAIN` is the default. Progression requires positive evidence and is never
+a fallback: a bare `did_it` progresses nothing, because completion is not
+mastery. Support wins over progression for the same activity. `JUST_RIGHT`
+maps to no signal at all — unmappable feedback stays unmapped rather than
+being invented into a domain-level signal.
+
+No model, no prompt, no network. A CI step walks the transitive import graph
+of `pilot_backend/weekly` for a banned set including `requests`, `socket`,
+`openai`, `anthropic`, `google` and `grpc`, in a job where no HTTP library or
+cloud SDK is installed.
+
+### Clinician decisions stay separable from child performance
+
+`SignalKind` is namespaced by origin — `child_`, `plan_`, `clinician_`,
+`parent_declined_` — and every signal stores its `SignalSource`. A
+clinician-directed change and a child struggling produce different next weeks
+and different conversations, and `AdaptationRecord.has_performance_evidence`
+is False when the whole difference is explained by decisions.
+
+`not_a_failure` is invariant on `AdaptationRecord`: constructing one with it
+False raises. A parent declining a therapist-proposed change is its own
+category and is explicitly not a non-attempt, a difficulty report, an activity
+failure or a clinical failure.
+
+### Attribution is by LOCAL date
+
+A cycle may span a month boundary. `owning_cycle_id` says which plan an
+attempt came from; `attribution_month` says which month it counts toward, and
+it is DERIVED from `local_date` at construction so the two cannot disagree.
+The timezone is the `MonthlyFocusPlan`'s timezone of record and is required —
+no UTC fallback, because an hour's drift moves a day across a month boundary
+and the monthly layer counts days into months.
+
+### Write-time uniqueness, strengthened
+
+`ClaimKind.WEEKLY_CYCLE` on `(focus_plan_id, sequence_in_month)` and
+`ClaimKind.WEEKLY_ALLOCATION` on `(cycle_id)`. Both were read-then-write
+guards in a first pass — the 0.3 auth-subject defect one layer up — and both
+are now claims.
+
+The allocation claim is STRONGER than the 0.4C plan claim: every write it
+guards is a `create`, so claim, alignments, gaps and ledger all commit in ONE
+transaction. There is no `set` and therefore no boundary to recover across. A
+crash persists nothing and consumes no generation. The transactional-set
+prohibition is untouched.
+
+### 0.4D/E carried debt
+
+- **Candidate activities are supplied by the caller.** 0.4D/E takes a
+  fictional candidate list; there is no activity catalogue, no suitability
+  model and no Parent activity integration. Which activities exist, and which
+  genuinely support which goal, is 0.5 work.
+- **`CandidateActivity.supports` is trusted.** The allocator treats the
+  supplied goal set as a reviewed statement of meaningful support. Nothing
+  here validates that an activity really serves a goal — that judgement is
+  clinical and belongs to the alignment source, which is recorded.
+- **Per-cycle reads are single-field queries filtered in Python**, because the
+  `DocumentStore` port exposes equality on one field and promises no composite
+  index. Unchanged from 0.4B/C and acceptable at pilot volume.
+- **`WeeklyPlanSnapshot.resolved_plan_document` is opaque.** Deliberate, but
+  it means the pilot cannot detect a MEANINGFUL change inside a captured
+  document — only that two captures differ.
+- **No RTM, month-end or coding object exists**, and a scope test asserts it.
+- **All earlier pilot, Parent and Therapist carried debt remains**, including
+  PRE-PHI INTEGRATION BLOCKER 3 (atomic goal approval), which 0.4D/E does not
+  touch.

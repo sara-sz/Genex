@@ -99,6 +99,22 @@ class AuditAction(str, Enum):
     MONTHLY_PLAN_CLOSED = "monthly_plan_closed"
     GOAL_ALLOCATED = "goal_allocated"
     GOAL_ALLOCATION_REPRIORITIZED = "goal_allocation_reprioritized"
+    # 0.4D weekly layer.
+    WEEKLY_CYCLE_CREATED = "weekly_cycle_created"
+    WEEKLY_CYCLE_ALLOCATED = "weekly_cycle_allocated"
+    WEEKLY_CYCLE_RELEASED = "weekly_cycle_released"
+    WEEKLY_PLAN_LINKED = "weekly_plan_linked"
+    WEEKLY_PLAN_SNAPSHOT_CAPTURED = "weekly_plan_snapshot_captured"
+    # 0.4E evidence and adaptation. An observation, a plan edit and a
+    # clinician decision are three DIFFERENT actions. Collapsing them would
+    # leave the trail unable to distinguish what a child did from what an
+    # adult decided — the distinction the whole slice is built around.
+    OBSERVATION_RECORDED = "observation_recorded"
+    PLAN_CUSTOMIZATION_RECORDED = "plan_customization_recorded"
+    ACTIVITY_DEFERRED = "activity_deferred"
+    DEFER_OVERRIDDEN = "defer_overridden"
+    THERAPIST_INTERVENTION_CREATED = "therapist_intervention_created"
+    ADAPTATION_RECORDED = "adaptation_recorded"
 
 
 class AuditResult(str, Enum):
@@ -155,6 +171,38 @@ ALLOWED_METADATA_KEYS = frozenset({
     "generator_version",  # goal-suggestion-engine-YYYY.MM
     "rule_version",       # suggestion-rules-YYYY.MM
     "plan_state",         # draft | active | closed
+    # 0.4D/E. Opaque ids, short enums, small integers and booleans only.
+    #
+    # Deliberately EXCLUDED, and tested: observation text (and its reference
+    # is excluded too), activity instructions, the activity's own label, a
+    # clinician's clinical rationale or guidance text, goal text, a
+    # difficulty or enjoyment rating, and a local date.
+    #
+    # `local_date` is excluded specifically: a date on which a named child
+    # attempted a therapy activity is clinical content, and the audit trail
+    # only needs the MONTH an event was attributed to in order to explain a
+    # count. `attribution_month` carries that and nothing finer.
+    "cycle_id",                 # opaque wcyc_ id
+    "cycle_sequence",           # small integer, week N of the month
+    "is_partial_week",          # boolean
+    "engine_version",           # weekly-allocation-engine-YYYY.MM
+    "snapshot_id",              # opaque wsnp_ id
+    "activity_count",           # how many opportunities were placed
+    "coverage_gap_count",       # how many floors could not be met
+    "declared_capacity",        # small integer the family declared
+    "event_id",                 # opaque obsv_ id
+    "attempt_outcome",          # did_it | wasnt_ready_yet | didnt_want_to_try
+    "attribution_month",        # "YYYY-MM" from the LOCAL date
+    "signal_id",                # opaque csig_ id
+    "customization_signal_type",
+    "defer_id",                 # opaque dfer_ id
+    "suppression_until_cycle",  # small integer
+    "intervention_id",          # opaque invn_ id
+    "intervention_action",      # endorse | adapt | replace | ...
+    "intervention_scope",       # current_plan | future_cycle
+    "adaptation_record_id",     # opaque adpt_ id
+    "adaptation_origin",        # automatic | therapist_directed | mixed
+    "signal_count",             # how many signals explained the change
 })
 
 _MAX_METADATA_VALUE_LENGTH = 64

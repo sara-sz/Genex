@@ -36,7 +36,24 @@ from datetime import datetime
 from typing import Any, List, Optional, Sequence, Type
 
 from ..audit.events import AuditEvent
+from ..domain.adaptation import AdaptationRecord
+from ..domain.alignment import (
+    ActivityGoalAlignment,
+    CapacityLedger,
+    CoverageGap,
+)
 from ..domain.child_context import ChildContextRecord
+from ..domain.intervention import TherapistIntervention
+from ..domain.observation import (
+    DeferRecord,
+    ObservationEvent,
+    ParentCustomizationSignal,
+)
+from ..domain.weekly_cycle import (
+    WeeklyCycle,
+    WeeklyPlanLink,
+    WeeklyPlanSnapshot,
+)
 from ..domain.goals import (
     CaregiverApprovedGoal,
     ClinicalGoal,
@@ -84,9 +101,25 @@ def _own_id(record: Any) -> str:
                  # snapshot sort under its allocation's id instead of its own.
                  "suggestion_id", "version_id",
                  "clinical_goal_id", "caregiver_goal_id",
-                 "snapshot_id", "allocation_id", "focus_plan_id",
+                 "snapshot_id",
+                 # 0.4D/E. Each record's OWN id, and all of them before the
+                 # foreign keys below, because every alignment, gap, event and
+                 # signal in one cycle shares `cycle_id` and `child_id`.
+                 #
+                 # Two orderings here are load-bearing and were wrong in a
+                 # first pass:
+                 #   revision_id BEFORE record_id — Revision.record_id is a
+                 #     FOREIGN key, while ChildContextRecord and
+                 #     AdaptationRecord own theirs.
+                 #   record_id BEFORE intervention_id — AdaptationRecord
+                 #     CARRIES intervention_id, so the looser order sorted
+                 #     every adaptation under the intervention it cites.
+                 "revision_id", "record_id",
+                 "alignment_id", "gap_id", "ledger_id", "defer_id",
+                 "intervention_id", "signal_id", "event_id",
+                 "allocation_id", "link_id", "cycle_id", "focus_plan_id",
                  "practice_id", "provider_id",
-                 "caregiver_id", "child_id", "event_id", "revision_id"):
+                 "caregiver_id", "child_id"):
         value = getattr(record, attr, None)
         if value:
             return str(value)
@@ -96,7 +129,9 @@ def _own_id(record: Any) -> str:
 #: The record's primary time field, tried in order. `snapshot_at` is listed
 #: because `MonthlyGoalSnapshot` has no `created_at`: it is not created, it is
 #: taken. An absent fallback here used to be an AttributeError at query time.
-_TIME_ATTRS = ("created_at", "occurred_at", "snapshot_at")
+#: `captured_at` and `linked_at` are the same situation for 0.4D.
+_TIME_ATTRS = ("created_at", "occurred_at", "snapshot_at", "captured_at",
+               "linked_at")
 
 
 def _record_time(record: Any) -> Any:
@@ -662,6 +697,220 @@ class FirestoreMonthlyGoalSnapshotRepository(_BaseRepo):
                       key=lambda s: (s.priority_rank, s.snapshot_id))
 
 
+class FirestoreWeeklyCycleRepository(_BaseRepo):
+    """The monthly layer's weekly cycles. No delete."""
+
+    record_type, model = "weekly_cycle", WeeklyCycle
+
+    def create(self, cycle: WeeklyCycle) -> WeeklyCycle:
+        return self._create(cycle.cycle_id, cycle)
+
+    def get_by_id(self, cycle_id: str) -> WeeklyCycle:
+        return self._get(cycle_id)
+
+    def update(self, cycle: WeeklyCycle) -> WeeklyCycle:
+        """Whole-document write of an EXISTING cycle (release, adaptation)."""
+        return self._set(cycle.cycle_id, cycle)
+
+    def list_for_plan(self, focus_plan_id: str) -> List[WeeklyCycle]:
+        return sorted(self._query("owning_focus_plan_id", focus_plan_id),
+                      key=lambda c: (c.sequence_in_month, c.cycle_id))
+
+    def list_for_child(self, child_id: str) -> List[WeeklyCycle]:
+        return self._query("child_id", child_id)
+
+
+class FirestoreWeeklyPlanLinkRepository(_BaseRepo):
+    """Bindings to source-system plans. Create-only."""
+
+    record_type, model = "weekly_plan_link", WeeklyPlanLink
+
+    def create(self, link: WeeklyPlanLink) -> WeeklyPlanLink:
+        return self._create(link.link_id, link)
+
+    def get_by_id(self, link_id: str) -> WeeklyPlanLink:
+        return self._get(link_id)
+
+    def list_for_cycle(self, cycle_id: str) -> List[WeeklyPlanLink]:
+        return self._query("cycle_id", cycle_id)
+
+
+class FirestoreWeeklyPlanSnapshotRepository(_BaseRepo):
+    """What the parent-facing plan contained. Create-only, by design.
+
+    There is no `update` and no `set`. A snapshot that could be rewritten
+    answers nothing — it exists precisely because Parent's customization
+    overlay is unversioned.
+    """
+
+    record_type, model = "weekly_plan_snapshot", WeeklyPlanSnapshot
+
+    def create(self, snapshot: WeeklyPlanSnapshot) -> WeeklyPlanSnapshot:
+        return self._create(snapshot.snapshot_id, snapshot)
+
+    def get_by_id(self, snapshot_id: str) -> WeeklyPlanSnapshot:
+        return self._get(snapshot_id)
+
+    def list_for_cycle(self, cycle_id: str) -> List[WeeklyPlanSnapshot]:
+        return self._query("cycle_id", cycle_id)
+
+
+class FirestoreAlignmentRepository(_BaseRepo):
+    """Activity-to-goal attribution. Create-only: alignments are immutable.
+
+    A past cycle's attribution must stay readable after a clinician
+    reprioritises (section 26), so there is no update path.
+    """
+
+    record_type, model = "activity_goal_alignment", ActivityGoalAlignment
+
+    def create(self, alignment: ActivityGoalAlignment) -> ActivityGoalAlignment:
+        return self._create(alignment.alignment_id, alignment)
+
+    def get_by_id(self, alignment_id: str) -> ActivityGoalAlignment:
+        return self._get(alignment_id)
+
+    def list_for_cycle(self, cycle_id: str) -> List[ActivityGoalAlignment]:
+        return self._query("cycle_id", cycle_id)
+
+    def list_for_child(self, child_id: str) -> List[ActivityGoalAlignment]:
+        return self._query("child_id", child_id)
+
+
+class FirestoreCoverageGapRepository(_BaseRepo):
+    """Planner conditions. Create-only."""
+
+    record_type, model = "coverage_gap", CoverageGap
+
+    def create(self, gap: CoverageGap) -> CoverageGap:
+        return self._create(gap.gap_id, gap)
+
+    def get_by_id(self, gap_id: str) -> CoverageGap:
+        return self._get(gap_id)
+
+    def list_for_cycle(self, cycle_id: str) -> List[CoverageGap]:
+        return self._query("cycle_id", cycle_id)
+
+
+class FirestoreCapacityLedgerRepository(_BaseRepo):
+    """Family capacity per cycle. Updated as activity is placed."""
+
+    record_type, model = "capacity_ledger", CapacityLedger
+
+    def create(self, ledger: CapacityLedger) -> CapacityLedger:
+        return self._create(ledger.ledger_id, ledger)
+
+    def get_by_id(self, ledger_id: str) -> CapacityLedger:
+        return self._get(ledger_id)
+
+    def update(self, ledger: CapacityLedger) -> CapacityLedger:
+        return self._set(ledger.ledger_id, ledger)
+
+    def list_for_cycle(self, cycle_id: str) -> List[CapacityLedger]:
+        return self._query("cycle_id", cycle_id)
+
+
+class FirestoreObservationEventRepository(_BaseRepo):
+    """Caregiver-recorded attempts. Create-only: evidence is not edited."""
+
+    record_type, model = "observation_event", ObservationEvent
+
+    def create(self, event: ObservationEvent) -> ObservationEvent:
+        return self._create(event.event_id, event)
+
+    def get_by_id(self, event_id: str) -> ObservationEvent:
+        return self._get(event_id)
+
+    def list_for_cycle(self, cycle_id: str) -> List[ObservationEvent]:
+        return self._query("owning_cycle_id", cycle_id)
+
+    def list_for_child(self, child_id: str) -> List[ObservationEvent]:
+        return self._query("child_id", child_id)
+
+    def list_for_attribution_month(self, child_id: str, month: str
+                                   ) -> List[ObservationEvent]:
+        """Events counting toward a calendar month, by LOCAL date.
+
+        Filtered on the event's own `attribution_month`, never on its cycle:
+        a cycle spanning Oct 26 – Nov 1 contributes its Nov 1 attempt to
+        November, and filtering by cycle would put it in October.
+        """
+        return [e for e in self._query("child_id", child_id)
+                if e.attribution_month == month]
+
+
+class FirestoreCustomizationSignalRepository(_BaseRepo):
+    """Family plan edits. Create-only. Never child performance."""
+
+    record_type, model = "customization_signal", ParentCustomizationSignal
+
+    def create(self, signal: ParentCustomizationSignal) -> ParentCustomizationSignal:
+        return self._create(signal.signal_id, signal)
+
+    def get_by_id(self, signal_id: str) -> ParentCustomizationSignal:
+        return self._get(signal_id)
+
+    def list_for_cycle(self, cycle_id: str) -> List[ParentCustomizationSignal]:
+        return self._query("cycle_id", cycle_id)
+
+
+class FirestoreDeferRecordRepository(_BaseRepo):
+    """Save for Later. Update exists ONLY to stamp a clinician override."""
+
+    record_type, model = "defer_record", DeferRecord
+
+    def create(self, record: DeferRecord) -> DeferRecord:
+        return self._create(record.defer_id, record)
+
+    def get_by_id(self, defer_id: str) -> DeferRecord:
+        return self._get(defer_id)
+
+    def update(self, record: DeferRecord) -> DeferRecord:
+        return self._set(record.defer_id, record)
+
+    def list_for_child(self, child_id: str) -> List[DeferRecord]:
+        return self._query("child_id", child_id)
+
+    def list_for_cycle(self, cycle_id: str) -> List[DeferRecord]:
+        return self._query("from_cycle_id", cycle_id)
+
+
+class FirestoreTherapistInterventionRepository(_BaseRepo):
+    """Clinician planning decisions. Create-only."""
+
+    record_type, model = "therapist_intervention", TherapistIntervention
+
+    def create(self, intervention: TherapistIntervention) -> TherapistIntervention:
+        return self._create(intervention.intervention_id, intervention)
+
+    def get_by_id(self, intervention_id: str) -> TherapistIntervention:
+        return self._get(intervention_id)
+
+    def list_for_cycle(self, cycle_id: str) -> List[TherapistIntervention]:
+        return self._query("cycle_id", cycle_id)
+
+    def list_for_child(self, child_id: str) -> List[TherapistIntervention]:
+        return self._query("child_id", child_id)
+
+
+class FirestoreAdaptationRecordRepository(_BaseRepo):
+    """Why Week N+1 differed from Week N. Create-only."""
+
+    record_type, model = "adaptation_record", AdaptationRecord
+
+    def create(self, record: AdaptationRecord) -> AdaptationRecord:
+        return self._create(record.record_id, record)
+
+    def get_by_id(self, record_id: str) -> AdaptationRecord:
+        return self._get(record_id)
+
+    def list_for_plan(self, focus_plan_id: str) -> List[AdaptationRecord]:
+        return self._query("focus_plan_id", focus_plan_id)
+
+    def list_for_child(self, child_id: str) -> List[AdaptationRecord]:
+        return self._query("child_id", child_id)
+
+
 class FirestoreRepositories:
     """All repositories over one document store — the production composition."""
 
@@ -685,4 +934,15 @@ class FirestoreRepositories:
         self.focus_plans = FirestoreMonthlyFocusPlanRepository(store)
         self.goal_allocations = FirestoreMonthlyGoalAllocationRepository(store)
         self.goal_snapshots = FirestoreMonthlyGoalSnapshotRepository(store)
+        self.weekly_cycles = FirestoreWeeklyCycleRepository(store)
+        self.weekly_plan_links = FirestoreWeeklyPlanLinkRepository(store)
+        self.weekly_plan_snapshots = FirestoreWeeklyPlanSnapshotRepository(store)
+        self.alignments = FirestoreAlignmentRepository(store)
+        self.coverage_gaps = FirestoreCoverageGapRepository(store)
+        self.capacity_ledgers = FirestoreCapacityLedgerRepository(store)
+        self.observation_events = FirestoreObservationEventRepository(store)
+        self.customization_signals = FirestoreCustomizationSignalRepository(store)
+        self.defer_records = FirestoreDeferRecordRepository(store)
+        self.interventions = FirestoreTherapistInterventionRepository(store)
+        self.adaptation_records = FirestoreAdaptationRecordRepository(store)
         self.revisions = FirestoreRevisionRepository(store)

@@ -1189,6 +1189,12 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
     template, an edit reason, a milestone reference, and `domain_key` — which
     developmental domain a child's goal addresses is a clinical fact, not an
     operational one.
+
+    The 0.4D/E additions are the same shape. Also absent, and asserted below:
+    observation text and its reference, activity instructions and labels, a
+    clinician's rationale or guidance, difficulty and enjoyment ratings, and
+    `local_date` — the date a named child attempted a therapy activity is
+    clinical content. `attribution_month` carries the only part a count needs.
     """
     assert ALLOWED_METADATA_KEYS
     for key in ALLOWED_METADATA_KEYS:
@@ -1205,11 +1211,26 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
             "cycle_month", "allocation_id", "priority_rank",
             "emphasis_weight", "policy_version", "generator_version",
             "rule_version", "plan_state",
+            # 0.4D/E weekly allocation, evidence and adaptation
+            "cycle_id", "cycle_sequence", "is_partial_week", "engine_version",
+            "snapshot_id", "activity_count", "coverage_gap_count",
+            "declared_capacity", "event_id", "attempt_outcome",
+            "attribution_month", "signal_id", "customization_signal_type",
+            "defer_id", "suppression_until_cycle", "intervention_id",
+            "intervention_action", "intervention_scope",
+            "adaptation_record_id", "adaptation_origin", "signal_count",
         }, key
     assert "external_id" not in ALLOWED_METADATA_KEYS
     for clinical in ("goal_text", "family_facing_text", "domain_key",
                      "milestone_refs", "reason", "observed_level",
-                     "functional_baseline_area"):
+                     "functional_baseline_area",
+                     # 0.4D/E
+                     "observation_text", "observation_text_ref",
+                     "activity_instructions", "activity_label",
+                     "clinical_rationale", "guidance_text",
+                     "difficulty", "enjoyment", "child_response",
+                     "local_date", "resolved_plan_document",
+                     "external_plan_id"):
         assert clinical not in ALLOWED_METADATA_KEYS, clinical
 
 

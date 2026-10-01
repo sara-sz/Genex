@@ -1494,13 +1494,15 @@ def test_immutable_records_have_no_update_path():
 # ===========================================================================
 
 def test_no_weekly_observation_or_rtm_object_was_implemented():
+    # Narrowed by 0.4D/E by exactly the five names that slice implements:
+    # WeeklyCycle, ActivityGoalAlignment, CoverageGap, ObservationEvent,
+    # AdaptationRecord. Everything else is untouched.
     banned = {
-        "WeeklyCycle", "WeeklyPlan", "WeeklyActivityAllocation",
-        "ActivityGoalAlignment", "CoverageGap", "ObservationEvent",
+        "WeeklyPlan", "WeeklyActivityAllocation",
         "RTMEpisode", "RTMMonitoringPeriod", "TherapistReview", "TimeEntry",
         "SynchronousInteraction", "RTMTechnology", "PayerVerification",
-        "MonitoringDay", "MonthEndReport", "AdaptationRecord",
-        "CodingAssistanceSummary",
+        "MonitoringDay", "MonthEndReport", "RTMEvidenceSummary",
+        "ClinicalAction", "CodingAssistanceSummary",
     }
     for path in sorted(PILOT_ROOT.rglob("*.py")):
         if path.name.startswith("test_"):

@@ -891,24 +891,32 @@ def test_no_parent_23_resource_is_reachable():
 
 
 # ===========================================================================
-# scope guard — through 0.4C
+# scope guard — through 0.4E
 # ===========================================================================
 
 def test_no_later_slice_object_was_implemented():
-    """0.4D+ and RTM must remain absent.
+    """0.4F+ and RTM must remain absent.
 
     0.4B/C narrowed this by exactly six names — `GoalSuggestion`,
     `ClinicalGoal`, `CaregiverApprovedGoal`, `MonthlyFocusPlan`,
-    `MonthlyGoalAllocation` and `MonthlyGoalSnapshot` — which that slice
-    implements. Nothing else moved: the weekly, observation and RTM layers are
-    still absent and still asserted absent.
+    `MonthlyGoalAllocation` and `MonthlyGoalSnapshot`.
+
+    0.4D/E narrowed it by exactly five more — `WeeklyCycle`,
+    `ActivityGoalAlignment`, `CoverageGap`, `ObservationEvent` and
+    `AdaptationRecord`.
+
+    `WeeklyPlan` and `WeeklyActivityAllocation` deliberately STAY banned:
+    0.4D/E does not own a weekly plan — the Parent plan is reached only by
+    external id through `WeeklyPlanLink` — and it does not introduce a
+    separate activity-level allocation object. Every RTM, month-end and
+    coding name is untouched.
     """
     banned = {
-        "ActivityGoalAlignment", "CoverageGap", "ObservationEvent",
-        "WeeklyCycle", "WeeklyPlan", "WeeklyActivityAllocation",
+        "WeeklyPlan", "WeeklyActivityAllocation",
         "RTMEpisode", "RTMMonitoringPeriod", "TherapistReview", "TimeEntry",
         "SynchronousInteraction", "RTMTechnology", "PayerVerification",
-        "MonitoringDay", "MonthEndReport", "AdaptationRecord",
+        "MonitoringDay", "MonthEndReport", "RTMEvidenceSummary",
+        "ClinicalAction", "CodingAssistanceSummary",
     }
     for path in sorted(PILOT_ROOT.rglob("*.py")):
         if path.name.startswith("test_"):

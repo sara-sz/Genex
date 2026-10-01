@@ -51,6 +51,24 @@ COLLECTIONS: Mapping[str, str] = {
     "monthly_focus_plan": "pilot_monthly_focus_plans",
     "monthly_goal_allocation": "pilot_monthly_goal_allocations",
     "monthly_goal_snapshot": "pilot_monthly_goal_snapshots",
+    # 0.4D weekly layer. These are the MONTHLY LAYER's records of a week, not
+    # the Parent weekly plan — and Parent's plan store is a GCS bucket with no
+    # Firestore collection at all, so no name here could resolve to it.
+    "weekly_cycle": "pilot_weekly_cycles",
+    "weekly_plan_link": "pilot_weekly_plan_links",
+    "weekly_plan_snapshot": "pilot_weekly_plan_snapshots",
+    "activity_goal_alignment": "pilot_activity_goal_alignments",
+    "coverage_gap": "pilot_coverage_gaps",
+    "capacity_ledger": "pilot_capacity_ledgers",
+    # 0.4E evidence and adaptation. Observations and plan customizations are
+    # separate collections because they are separate kinds of fact: one is
+    # about an attempt, the other about a schedule. A query meaning "what did
+    # the child do?" must not be able to return a plan edit.
+    "observation_event": "pilot_observation_events",
+    "customization_signal": "pilot_customization_signals",
+    "defer_record": "pilot_defer_records",
+    "therapist_intervention": "pilot_therapist_interventions",
+    "adaptation_record": "pilot_adaptation_records",
 }
 
 #: Names this package must never address. Parent 2.3 / Beta infrastructure.
