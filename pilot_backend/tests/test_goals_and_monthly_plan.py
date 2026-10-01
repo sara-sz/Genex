@@ -1499,11 +1499,8 @@ def test_no_weekly_observation_or_rtm_object_was_implemented():
     # AdaptationRecord. Everything else is untouched.
     banned = {
         "WeeklyPlan", "WeeklyActivityAllocation",
-        "RTMEpisode", "RTMMonitoringPeriod", "TherapistReview", "TimeEntry",
-        "SynchronousInteraction", "RTMTechnology", "PayerVerification",
-        "MonitoringDay", "MonthEndReport", "RTMEvidenceSummary",
-        "ClinicalAction", "CodingAssistanceSummary",
-    }
+        "PayerVerification",
+        "MonitoringDay", }
     for path in sorted(PILOT_ROOT.rglob("*.py")):
         if path.name.startswith("test_"):
             continue

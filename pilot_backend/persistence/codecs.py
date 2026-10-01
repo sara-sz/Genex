@@ -60,6 +60,37 @@ from ..domain.intervention import (
     InterventionScope,
     TherapistIntervention,
 )
+from ..domain.month_end import (
+    MonthEndReport,
+    ReportSection,
+    ReportState,
+    SectionContent,
+)
+from ..domain.rtm import (
+    EpisodeStatus,
+    PeriodStatus,
+    RegulatoryStatus,
+    RTMEpisode,
+    RTMMonitoringPeriod,
+    RTMTechnology,
+)
+from ..domain.rtm_documentation import (
+    ClinicalAction,
+    ClinicalActionType,
+    InteractionModality,
+    ParticipantType,
+    SynchronousInteraction,
+    TherapistReview,
+    TimeEntry,
+    TimeEntryMethod,
+)
+from ..domain.rtm_summary import (
+    CodingAssistanceSummary,
+    GoalEvidenceLine,
+    GoalStatusRecommendation,
+    RTMEvidenceSummary,
+)
+from ..coding.rules import ConfirmationStatus, MissingRequirement
 from ..domain.observation import (
     AttemptOutcome,
     CustomizationSignalType,
@@ -359,12 +390,122 @@ class _NestedTuple(Kind):
         return tuple(decode(self.cls, item) for item in value)
 
 
+class _OptInt(Kind):
+    """An integer that may genuinely be absent.
+
+    Distinct from defaulting to zero. A synchronous interaction with no
+    recorded duration is NOT a zero-minute interaction — the duration was
+    never captured, and zero would be a measurement nobody made.
+    """
+
+    optional = True
+
+    def to_doc(self, value: Any, field: str) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise CodecError(f"{field}: expected an integer or null")
+        return value
+
+    def from_doc(self, value: Any, field: str) -> Any:
+        return self.to_doc(value, field)
+
+
+class _PairTuple(Kind):
+    """An ORDERED list of (str, str|int) pairs, stored as a list of MAPS.
+
+    Used for goal references, report counts and code candidates. A list
+    rather than a mapping because ORDER carries meaning — report sections
+    and candidate lists are read in sequence — and because a mapping would
+    silently drop a duplicate key where a list keeps both.
+
+    Each pair is a `{"key": ..., "value": ...}` map and NOT a two-element
+    list, because **Firestore does not support nested arrays**. The first
+    implementation used `[[k, v], ...]`; `FakeDocumentStore` is a plain dict
+    and stored it happily, so every unit test passed, and the real client
+    rejected the write. It affected seven of the eleven 0.4F/G record types,
+    none of which could have persisted to a real database.
+
+    The emulator suite exists for exactly this: a shape the fake accepts and
+    the real store refuses.
+    """
+
+    KEY, VALUE = "key", "value"
+
+    def __init__(self, value_type: type) -> None:
+        self.value_type = value_type
+
+    def to_doc(self, value: Any, field: str) -> Any:
+        if not isinstance(value, (tuple, list)):
+            raise CodecError(f"{field}: expected a sequence of pairs")
+        out = []
+        for item in value:
+            if not isinstance(item, (tuple, list)) or len(item) != 2:
+                raise CodecError(f"{field}: each entry must be a pair")
+            key, val = item
+            if not isinstance(key, str):
+                raise CodecError(f"{field}: pair keys must be strings")
+            if (isinstance(val, bool)
+                    or not isinstance(val, self.value_type)):
+                raise CodecError(
+                    f"{field}: pair values must be {self.value_type.__name__}")
+            out.append({self.KEY: key, self.VALUE: val})
+        return out
+
+    def from_doc(self, value: Any, field: str) -> Any:
+        if not isinstance(value, (tuple, list)):
+            raise CodecError(f"{field}: expected a sequence of pairs")
+        pairs = []
+        for item in value:
+            if not isinstance(item, Mapping) or set(item) != {self.KEY,
+                                                              self.VALUE}:
+                raise CodecError(
+                    f"{field}: each entry must be a key/value map")
+            pairs.append((item[self.KEY], item[self.VALUE]))
+        return tuple(pairs)
+
+
+class _EnumTuple(Kind):
+    """An ORDERED list of enum members, stored as their values.
+
+    Order is preserved: the coding rules emit missing-requirement flags in a
+    deliberate sequence, and a codec that sorted them would make two
+    different evaluations compare equal.
+    """
+
+    def __init__(self, enum_cls: Type[Enum]) -> None:
+        self.enum_cls = enum_cls
+
+    def to_doc(self, value: Any, field: str) -> Any:
+        if not isinstance(value, (tuple, list)):
+            raise CodecError(f"{field}: expected a sequence of enum members")
+        out = []
+        for item in value:
+            if not isinstance(item, self.enum_cls):
+                raise CodecError(
+                    f"{field}: expected {self.enum_cls.__name__} members")
+            out.append(item.value)
+        return out
+
+    def from_doc(self, value: Any, field: str) -> Any:
+        if not isinstance(value, (tuple, list)):
+            raise CodecError(f"{field}: expected a sequence of values")
+        try:
+            return tuple(self.enum_cls(item) for item in value)
+        except ValueError:
+            raise CodecError(
+                f"{field}: unrecognised {self.enum_cls.__name__} value") from None
+
+
 STR, OPT_STR = _Str(), _Str(optional=True)
 INT = _Int()
+OPT_INT = _OptInt()
 BOOL = _Bool()
 DT, OPT_DT = _DateTime(), _DateTime(optional=True)
 STR_MAP = _StrMap()
 STR_TUPLE = _StrTuple()
+STR_PAIR_TUPLE = _PairTuple(str)
+INT_PAIR_TUPLE = _PairTuple(int)
 
 
 #: Per-type field handling. A test asserts each spec covers exactly the
@@ -646,6 +787,124 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "coverage_gaps": STR_TUPLE,
         "not_a_failure": BOOL, "resulting_change": STR,
         "created_at": DT, "schema_version": STR,
+    },
+    RTMEpisode: {
+        "episode_id": STR, "child_id": STR, "managing_provider_id": STR,
+        "practice_id": STR, "clinical_goal_refs": STR_PAIR_TUPLE,
+        "opened_at": DT, "opened_by_actor_id": STR,
+        "managing_assignment_id": STR,
+        "status": _EnumKind(EpisodeStatus),
+        "closed_at": OPT_DT, "closed_by_actor_id": OPT_STR,
+        "close_reason": STR,
+        "created_at": DT, "updated_at": DT, "schema_version": STR,
+    },
+    RTMMonitoringPeriod: {
+        "period_id": STR, "episode_id": STR, "child_id": STR,
+        "focus_plan_id": STR, "cycle_month": STR, "timezone_of_record": STR,
+        "status": _EnumKind(PeriodStatus),
+        "started_at": DT, "activated_at": OPT_DT,
+        "finalized_at": OPT_DT, "finalized_by_actor_id": OPT_STR,
+        "uniqueness_claim_id": STR,
+        "created_at": DT, "updated_at": DT, "schema_version": STR,
+    },
+    RTMTechnology: {
+        "technology_id": STR, "episode_id": STR, "child_id": STR,
+        "product_descriptor": STR,
+        "regulatory_status": _EnumKind(RegulatoryStatus),
+        "technology_version": STR, "attestation_ref": STR,
+        "created_at": DT, "updated_at": DT,
+        "supersedes_technology_id": OPT_STR,
+        "superseded_by_technology_id": OPT_STR,
+        "schema_version": STR,
+    },
+    TherapistReview: {
+        "review_id": STR, "period_id": STR, "child_id": STR,
+        "provider_id": STR, "clinical_interpretation": STR,
+        "reviewed_event_ids": STR_TUPLE, "reviewed_cycle_ids": STR_TUPLE,
+        "created_at": DT, "schema_version": STR,
+    },
+    ClinicalAction: {
+        "action_id": STR, "review_id": STR, "period_id": STR,
+        "child_id": STR, "provider_id": STR,
+        "action_type": _EnumKind(ClinicalActionType),
+        "narrative": STR, "created_at": DT, "schema_version": STR,
+    },
+    TimeEntry: {
+        "time_entry_id": STR, "period_id": STR, "child_id": STR,
+        "provider_id": STR, "local_date": STR, "timezone_of_record": STR,
+        "minutes": INT, "activity_description": STR, "entered_at": DT,
+        "entry_method": _EnumKind(TimeEntryMethod),
+        "source_review_id": OPT_STR, "source_action_id": OPT_STR,
+        "supersedes_time_entry_id": OPT_STR,
+        "superseded_by_time_entry_id": OPT_STR,
+        "correction_reason": STR, "schema_version": STR,
+    },
+    SynchronousInteraction: {
+        "interaction_id": STR, "period_id": STR, "child_id": STR,
+        "provider_id": STR, "occurred_at_utc": DT, "local_date": STR,
+        "timezone_of_record": STR,
+        "modality": _EnumKind(InteractionModality),
+        "participant_type": _EnumKind(ParticipantType),
+        "duration_minutes": OPT_INT, "real_time_affirmed": BOOL,
+        "note_ref": STR, "entered_at": DT, "schema_version": STR,
+    },
+    GoalEvidenceLine: {
+        "goal_kind": STR, "goal_id": STR, "attributed_attempts": INT,
+        "attributed_completions": INT, "scheduled_opportunities": INT,
+        "status_recommendation": _EnumKind(GoalStatusRecommendation),
+    },
+    RTMEvidenceSummary: {
+        "summary_id": STR, "period_id": STR, "child_id": STR,
+        "generated_at": DT, "rule_version": STR, "focus_plan_ref": STR,
+        "clinical_goal_refs": STR_PAIR_TUPLE, "cycle_refs": STR_TUPLE,
+        "total_distinct_observation_events": INT,
+        "distinct_observed_local_dates": INT,
+        "did_it_count": INT, "wasnt_ready_yet_count": INT,
+        "didnt_want_to_try_count": INT,
+        "per_goal_evidence": _NestedTuple(GoalEvidenceLine),
+        "multi_goal_overlap_count": INT,
+        "therapist_review_count": INT, "clinical_action_count": INT,
+        "documented_management_minutes": INT,
+        "synchronous_interaction_count": INT,
+        "real_time_interactive_communication_present": BOOL,
+        "documentation_missing_flags": STR_TUPLE,
+        "technology_regulatory_status": _EnumKind(RegulatoryStatus),
+        "schema_version": STR,
+    },
+    CodingAssistanceSummary: {
+        "coding_summary_id": STR, "period_id": STR, "child_id": STR,
+        "generated_at": DT, "coding_rule_set_id": STR,
+        "coding_rule_version": STR,
+        "documented_management_minutes": INT,
+        "real_time_interactive_communication_present": BOOL,
+        "synchronous_interaction_refs": STR_TUPLE,
+        "time_entry_refs": STR_TUPLE,
+        "potential_code_candidates": INT_PAIR_TUPLE,
+        "rule_explanations": STR_TUPLE,
+        "missing_requirement_flags": _EnumTuple(MissingRequirement),
+        "technology_regulatory_status": _EnumKind(RegulatoryStatus),
+        "clinician_confirmation_status": _EnumKind(ConfirmationStatus),
+        "clinician_confirmed_by": OPT_STR,
+        "clinician_confirmed_at": OPT_DT,
+        "confirmation_note": STR, "schema_version": STR,
+    },
+    SectionContent: {
+        "section": _EnumKind(ReportSection),
+        "record_refs": STR_TUPLE, "counts": INT_PAIR_TUPLE,
+        "labels": STR_PAIR_TUPLE, "attributed_to_role": STR,
+        "overlap_declared": BOOL,
+    },
+    MonthEndReport: {
+        "report_id": STR, "period_id": STR, "child_id": STR,
+        "focus_plan_id": STR, "cycle_month": STR,
+        "sections": _NestedTuple(SectionContent),
+        "state": _EnumKind(ReportState), "version": INT,
+        "generated_at": DT, "finalized_at": OPT_DT,
+        "finalized_by_actor_id": OPT_STR,
+        "supersedes_report_id": OPT_STR, "superseded_by_report_id": OPT_STR,
+        "amendment_reason": STR, "amended_by_actor_id": OPT_STR,
+        "evidence_summary_id": STR, "coding_summary_id": STR,
+        "created_at": DT, "updated_at": DT, "schema_version": STR,
     },
     Revision: {
         "revision_id": STR, "record_id": STR, "version": INT,

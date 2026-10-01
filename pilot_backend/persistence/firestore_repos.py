@@ -44,6 +44,15 @@ from ..domain.alignment import (
 )
 from ..domain.child_context import ChildContextRecord
 from ..domain.intervention import TherapistIntervention
+from ..domain.month_end import MonthEndReport
+from ..domain.rtm import RTMEpisode, RTMMonitoringPeriod, RTMTechnology
+from ..domain.rtm_documentation import (
+    ClinicalAction,
+    SynchronousInteraction,
+    TherapistReview,
+    TimeEntry,
+)
+from ..domain.rtm_summary import CodingAssistanceSummary, RTMEvidenceSummary
 from ..domain.observation import (
     DeferRecord,
     ObservationEvent,
@@ -117,6 +126,20 @@ def _own_id(record: Any) -> str:
                  "revision_id", "record_id",
                  "alignment_id", "gap_id", "ledger_id", "defer_id",
                  "intervention_id", "signal_id", "event_id",
+                 # 0.4F/G. Own-ids again precede the foreign keys they
+                 # share, and three orderings inside this block are
+                 # load-bearing:
+                 #   report_id BEFORE coding_summary_id — MonthEndReport
+                 #     CARRIES coding_summary_id, so the looser order would
+                 #     sort every report under the coding summary it cites.
+                 #   action_id BEFORE review_id — ClinicalAction carries
+                 #     review_id; TherapistReview owns it.
+                 #   period_id BEFORE episode_id — RTMMonitoringPeriod owns
+                 #     period_id and carries episode_id.
+                 "report_id", "coding_summary_id", "summary_id",
+                 "action_id", "review_id", "time_entry_id",
+                 "interaction_id", "technology_id",
+                 "period_id", "episode_id",
                  "allocation_id", "link_id", "cycle_id", "focus_plan_id",
                  "practice_id", "provider_id",
                  "caregiver_id", "child_id"):
@@ -130,8 +153,12 @@ def _own_id(record: Any) -> str:
 #: because `MonthlyGoalSnapshot` has no `created_at`: it is not created, it is
 #: taken. An absent fallback here used to be an AttributeError at query time.
 #: `captured_at` and `linked_at` are the same situation for 0.4D.
+#: `generated_at` and `entered_at` are the 0.4F/G cases: a derived summary is
+#: GENERATED and a time entry is ENTERED, and naming either `created_at` would
+#: make the field mean something different from every other `created_at`.
 _TIME_ATTRS = ("created_at", "occurred_at", "snapshot_at", "captured_at",
-               "linked_at")
+               "linked_at", "generated_at", "entered_at", "opened_at",
+               "started_at")
 
 
 def _record_time(record: Any) -> Any:
@@ -911,6 +938,186 @@ class FirestoreAdaptationRecordRepository(_BaseRepo):
         return self._query("child_id", child_id)
 
 
+class _PeriodScopedRepo(_BaseRepo):
+    """Records belonging to exactly one monitoring period."""
+
+    def list_for_period(self, period_id: str):
+        return self._query("period_id", period_id)
+
+
+class FirestoreRTMEpisodeRepository(_BaseRepo):
+    """Clinical episodes. Append plus a terminal stamp. No delete."""
+
+    record_type, model = "rtm_episode", RTMEpisode
+
+    def create(self, episode): return self._create(episode.episode_id, episode)
+
+    def get_by_id(self, episode_id): return self._get(episode_id)
+
+    def update(self, episode):
+        """Whole-document write of an EXISTING episode (close/lineage)."""
+        return self._set(episode.episode_id, episode)
+
+    def list_for_child(self, child_id, *, include_closed: bool = True):
+        found = self._query("child_id", child_id)
+        return found if include_closed else [e for e in found if e.is_open]
+
+
+class FirestoreRTMPeriodRepository(_BaseRepo):
+    """Monitoring periods. Finalizing stamps the row; nothing deletes."""
+
+    record_type, model = "rtm_period", RTMMonitoringPeriod
+
+    def create(self, period): return self._create(period.period_id, period)
+
+    def get_by_id(self, period_id): return self._get(period_id)
+
+    def update(self, period): return self._set(period.period_id, period)
+
+    def list_for_episode(self, episode_id):
+        return self._query("episode_id", episode_id)
+
+    def list_for_child(self, child_id):
+        return self._query("child_id", child_id)
+
+
+class FirestoreRTMTechnologyRepository(_BaseRepo):
+    """Technology declarations, append-only with revision lineage."""
+
+    record_type, model = "rtm_technology", RTMTechnology
+
+    def create(self, technology):
+        return self._create(technology.technology_id, technology)
+
+    def get_by_id(self, technology_id): return self._get(technology_id)
+
+    def update(self, technology):
+        return self._set(technology.technology_id, technology)
+
+    def list_for_episode(self, episode_id):
+        return self._query("episode_id", episode_id)
+
+
+class FirestoreTherapistReviewRepository(_PeriodScopedRepo):
+    """Clinician interpretation. Create-only: there is no update method."""
+
+    record_type, model = "therapist_review", TherapistReview
+
+    def create(self, review): return self._create(review.review_id, review)
+
+    def get_by_id(self, review_id): return self._get(review_id)
+
+
+class FirestoreClinicalActionRepository(_PeriodScopedRepo):
+    """Documented clinician decisions. Create-only."""
+
+    record_type, model = "clinical_action", ClinicalAction
+
+    def create(self, action): return self._create(action.action_id, action)
+
+    def get_by_id(self, action_id): return self._get(action_id)
+
+    def list_for_review(self, review_id):
+        return self._query("review_id", review_id)
+
+
+class FirestoreTimeEntryRepository(_PeriodScopedRepo):
+    """Manually entered minutes.
+
+    `update` exists ONLY to stamp a supersession pointer on a predecessor.
+    Minutes are never edited in place: a correction is a new row and the
+    original is retained, so the monthly total can exclude it rather than
+    pretend it never existed.
+    """
+
+    record_type, model = "time_entry", TimeEntry
+
+    def create(self, entry): return self._create(entry.time_entry_id, entry)
+
+    def get_by_id(self, time_entry_id): return self._get(time_entry_id)
+
+    def update(self, entry): return self._set(entry.time_entry_id, entry)
+
+    def list_current_for_period(self, period_id):
+        return [e for e in self.list_for_period(period_id) if e.is_current]
+
+
+class FirestoreSynchronousInteractionRepository(_PeriodScopedRepo):
+    """Real-time contacts. Create-only."""
+
+    record_type, model = "synchronous_interaction", SynchronousInteraction
+
+    def create(self, interaction):
+        return self._create(interaction.interaction_id, interaction)
+
+    def get_by_id(self, interaction_id): return self._get(interaction_id)
+
+
+class FirestoreEvidenceSummaryRepository(_PeriodScopedRepo):
+    """Derived monthly summaries. Create-only — regenerating adds a row.
+
+    No update, deliberately. A clinician who read a summary must be able to
+    find the one they read.
+    """
+
+    record_type, model = "rtm_evidence_summary", RTMEvidenceSummary
+
+    def create(self, summary): return self._create(summary.summary_id, summary)
+
+    def get_by_id(self, summary_id): return self._get(summary_id)
+
+    def latest_for_period(self, period_id):
+        found = self.list_for_period(period_id)
+        return found[-1] if found else None
+
+
+class FirestoreCodingSummaryRepository(_PeriodScopedRepo):
+    """Coding assistance.
+
+    `update` exists ONLY so a clinician decision can be stamped beside the
+    generated candidates. `with_decision` moves only the decision fields and
+    a test asserts the rest is byte-identical afterwards.
+    """
+
+    record_type, model = "coding_assistance_summary", CodingAssistanceSummary
+
+    def create(self, summary):
+        return self._create(summary.coding_summary_id, summary)
+
+    def get_by_id(self, coding_summary_id): return self._get(coding_summary_id)
+
+    def update(self, summary):
+        return self._set(summary.coding_summary_id, summary)
+
+    def latest_for_period(self, period_id):
+        found = self.list_for_period(period_id)
+        return found[-1] if found else None
+
+
+class FirestoreMonthEndReportRepository(_PeriodScopedRepo):
+    """Month-end reports. Append-only chain with amendment lineage.
+
+    `update` stamps the forward pointer on a superseded predecessor. A
+    finalized report's CONTENT is never rewritten — an amendment is a new row
+    at the next version.
+    """
+
+    record_type, model = "month_end_report", MonthEndReport
+
+    def create(self, report): return self._create(report.report_id, report)
+
+    def get_by_id(self, report_id): return self._get(report_id)
+
+    def update(self, report): return self._set(report.report_id, report)
+
+    def current_for_period(self, period_id):
+        current = [r for r in self.list_for_period(period_id) if r.is_current]
+        return current[-1] if current else None
+
+    def chain_for_period(self, period_id):
+        return sorted(self.list_for_period(period_id), key=lambda r: r.version)
+
+
 class FirestoreRepositories:
     """All repositories over one document store — the production composition."""
 
@@ -945,4 +1152,15 @@ class FirestoreRepositories:
         self.defer_records = FirestoreDeferRecordRepository(store)
         self.interventions = FirestoreTherapistInterventionRepository(store)
         self.adaptation_records = FirestoreAdaptationRecordRepository(store)
+        self.rtm_episodes = FirestoreRTMEpisodeRepository(store)
+        self.rtm_periods = FirestoreRTMPeriodRepository(store)
+        self.rtm_technologies = FirestoreRTMTechnologyRepository(store)
+        self.therapist_reviews = FirestoreTherapistReviewRepository(store)
+        self.clinical_actions = FirestoreClinicalActionRepository(store)
+        self.time_entries = FirestoreTimeEntryRepository(store)
+        self.synchronous_interactions = \
+            FirestoreSynchronousInteractionRepository(store)
+        self.evidence_summaries = FirestoreEvidenceSummaryRepository(store)
+        self.coding_summaries = FirestoreCodingSummaryRepository(store)
+        self.month_end_reports = FirestoreMonthEndReportRepository(store)
         self.revisions = FirestoreRevisionRepository(store)

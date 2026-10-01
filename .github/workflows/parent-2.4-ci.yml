@@ -292,6 +292,113 @@ jobs:
           print("weekly modules import no network client")
           PY
 
+      - name: October pilot 0.4F/G — RTM evidence, reporting, coding (unit)
+        # Dependency-pure, and that is the point for this slice: the CPT
+        # coding rule set must be deterministic and offline, so it has to
+        # pass in a job where no model client, HTTP library or cloud SDK is
+        # installed. A coding engine that reached a network would fail here
+        # rather than in review.
+        working-directory: .
+        run: |
+          if [ -f pilot_backend/tests/test_rtm_evidence_reporting.py ]; then
+            python -m pytest pilot_backend/tests/test_rtm_evidence_reporting.py -q
+          else
+            echo "0.4F/G not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.4F/G — the coding rule set is isolated
+        # §15: the rule set must be replaceable for a later year without
+        # touching clinical or product logic. Walks the coding package's
+        # imports: no service, no repository, no store, no network client.
+        working-directory: .
+        run: |
+          if [ ! -d pilot_backend/coding ]; then
+            echo "0.4F/G not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib, sys
+
+          BANNED = {"requests", "httpx", "urllib", "urllib3", "http", "socket",
+                    "openai", "anthropic", "google", "vertexai", "aiohttp",
+                    "firebase_admin", "grpc"}
+          offenders = []
+          for path in sorted(pathlib.Path("pilot_backend/coding").rglob("*.py")):
+              tree = ast.parse(path.read_text())
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Import):
+                      for alias in node.names:
+                          if alias.name.split(".")[0] in BANNED:
+                              offenders.append((str(path), alias.name))
+                  elif isinstance(node, ast.ImportFrom):
+                      root = (node.module or "").split(".")[0]
+                      if root in BANNED:
+                          offenders.append((str(path), node.module))
+                      # Relative imports reach back into the application.
+                      if node.level:
+                          offenders.append((str(path), f"relative import level {node.level}"))
+          if offenders:
+              print("coding rule set is not isolated:", offenders)
+              sys.exit(1)
+          print("coding rule set isolated: no network client, no app import")
+          PY
+
+      - name: October pilot 0.4F/G — no payer, insurance or claim-billing model
+        # §23. Token-level over the RTM layer, so prose cannot trip it and an
+        # identifier cannot hide behind one. `claim` alone is NOT banned: it
+        # is the 0.4A uniqueness mutex, a different sense of the word, and
+        # the unit suite asserts positively that every claim token in the RTM
+        # layer is that primitive.
+        working-directory: .
+        run: |
+          if [ ! -f pilot_backend/domain/rtm.py ]; then
+            echo "0.4F/G not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib, sys
+
+          BANNED = {"member_id", "policy_number", "group_number",
+                    "insurance_plan", "insurance", "payer_id", "payer",
+                    "eligibility_status", "benefit_status", "benefits",
+                    "allowed_amount", "reimbursement_amount", "reimbursement",
+                    "claim_status", "claim_number", "claim_amount",
+                    "insurance_claim", "claim_submission", "clearinghouse",
+                    "copay", "deductible", "coinsurance", "remittance"}
+          MODULES = ["pilot_backend/domain/rtm.py",
+                     "pilot_backend/domain/rtm_documentation.py",
+                     "pilot_backend/domain/rtm_summary.py",
+                     "pilot_backend/domain/month_end.py",
+                     "pilot_backend/coding/rules.py",
+                     "pilot_backend/rtm/service.py",
+                     "pilot_backend/rtm/evidence.py",
+                     "pilot_backend/rtm/reporting.py"]
+          offenders = []
+          for relative in MODULES:
+              tree = ast.parse(pathlib.Path(relative).read_text())
+              names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+              names |= {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+              names |= {n.arg for n in ast.walk(tree) if isinstance(n, ast.arg)}
+              for node in ast.walk(tree):
+                  if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                      names.add(node.name)
+              hit = BANNED & {n.lower() for n in names}
+              if hit:
+                  offenders.append((relative, sorted(hit)))
+          # PayerVerification must not exist anywhere in the pilot.
+          for path in sorted(pathlib.Path("pilot_backend").rglob("*.py")):
+              if path.name.startswith("test_"):
+                  continue
+              classes = {n.name for n in ast.walk(ast.parse(path.read_text()))
+                         if isinstance(n, ast.ClassDef)}
+              if "PayerVerification" in classes:
+                  offenders.append((str(path), ["PayerVerification"]))
+          if offenders:
+              print("payer/billing vocabulary present:", offenders)
+              sys.exit(1)
+          print("no payer, insurance or claim-billing vocabulary in the RTM layer")
+          PY
+
       - name: October pilot 0.4D/E — no double counting, structurally
         # The arithmetic that stops a multi-goal activity inflating a total.
         # Asserted here as well as in the unit suite because it is the single
@@ -649,6 +756,14 @@ jobs:
         # boundary to recover across, and a crash must persist nothing.
         run: python -m pytest pilot_runtime/tests/integration/test_weekly_emulator.py -q
 
+      - name: RTM evidence and reporting — REAL emulator, REAL concurrency
+        # The period claim under genuine contention, and fault injection
+        # inside the claim+record transaction. Also the suite that caught the
+        # nested-array defect: Firestore refuses arrays of arrays and
+        # FakeDocumentStore does not, so seven record types passed every unit
+        # test while being unable to persist to a real database.
+        run: python -m pytest pilot_runtime/tests/integration/test_rtm_emulator.py -q
+
       - name: Prove the emulator suites actually ran
         # Belt and braces against the one failure mode this job exists to
         # prevent: a green result produced by tests that never executed.
@@ -664,7 +779,9 @@ jobs:
           count = collected.stdout.count("::")
           # Raised 70 -> 90 by 0.4B/C, 90 -> 100 by 0.4D/E. A floor that never
           # moves stops noticing when a suite silently stops being collected.
-          assert count >= 100, f"expected the integration suites to collect >=100 tests, got {count}"
+          # Raised from 100 to 110 by 0.4F/G. A floor that never moves
+          # stops noticing when a suite silently stops being collected.
+          assert count >= 110, f"expected the integration suites to collect >=110 tests, got {count}"
           run = subprocess.run(
               [sys.executable, "-m", "pytest", "pilot_runtime/tests/integration",
                "-q", "-rs"],

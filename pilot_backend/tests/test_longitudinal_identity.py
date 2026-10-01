@@ -913,11 +913,8 @@ def test_no_later_slice_object_was_implemented():
     """
     banned = {
         "WeeklyPlan", "WeeklyActivityAllocation",
-        "RTMEpisode", "RTMMonitoringPeriod", "TherapistReview", "TimeEntry",
-        "SynchronousInteraction", "RTMTechnology", "PayerVerification",
-        "MonitoringDay", "MonthEndReport", "RTMEvidenceSummary",
-        "ClinicalAction", "CodingAssistanceSummary",
-    }
+        "PayerVerification",
+        "MonitoringDay", }
     for path in sorted(PILOT_ROOT.rglob("*.py")):
         if path.name.startswith("test_"):
             continue

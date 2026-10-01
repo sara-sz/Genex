@@ -1195,6 +1195,12 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
     clinician's rationale or guidance, difficulty and enjoyment ratings, and
     `local_date` — the date a named child attempted a therapy activity is
     clinical content. `attribution_month` carries the only part a count needs.
+
+    The 0.4F/G additions are opaque ids, short enums, small integers and a
+    calendar month. Deliberately ABSENT, and asserted below: clinical
+    interpretation, action narrative, activity description and interaction
+    notes. `minutes` is permitted because a count of minutes is operational;
+    what those minutes were SPENT ON is not.
     """
     assert ALLOWED_METADATA_KEYS
     for key in ALLOWED_METADATA_KEYS:
@@ -1211,6 +1217,25 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
             "cycle_month", "allocation_id", "priority_rank",
             "emphasis_weight", "policy_version", "generator_version",
             "rule_version", "plan_state",
+            # 0.4D/E weekly layer
+            "cycle_sequence", "is_partial_week", "activity_count",
+            "coverage_gap_count", "declared_capacity", "signal_count",
+            "attempt_outcome", "attribution_month", "adaptation_origin",
+            "adaptation_record_id", "customization_signal_type",
+            "suppression_until_cycle", "intervention_action",
+            "intervention_scope", "defer_id", "event_id", "snapshot_id",
+            # 0.4F/G RTM evidence and reporting
+            "episode_id", "period_id", "review_id", "action_id",
+            "time_entry_id", "supersedes_time_entry_id", "interaction_id",
+            "technology_id", "summary_id", "coding_summary_id", "report_id",
+            "supersedes_report_id", "goal_count", "minutes",
+            "documented_minutes", "entry_method", "interaction_modality",
+            "participant_type", "clinical_action_type", "regulatory_status",
+            "period_status", "reviewed_event_count",
+            "observation_event_count", "distinct_observed_local_dates",
+            "candidate_count", "missing_flag_count", "coding_rule_set_id",
+            "coding_rule_version", "confirmation_status", "report_version",
+            "report_state",
             # 0.4D/E weekly allocation, evidence and adaptation
             "cycle_id", "cycle_sequence", "is_partial_week", "engine_version",
             "snapshot_id", "activity_count", "coverage_gap_count",
@@ -1221,7 +1246,9 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
             "adaptation_record_id", "adaptation_origin", "signal_count",
         }, key
     assert "external_id" not in ALLOWED_METADATA_KEYS
-    for clinical in ("goal_text", "family_facing_text", "domain_key",
+    for clinical in ("clinical_interpretation", "narrative",
+                     "activity_description", "interaction_note",
+                     "goal_text", "family_facing_text", "domain_key",
                      "milestone_refs", "reason", "observed_level",
                      "functional_baseline_area",
                      # 0.4D/E
@@ -1498,8 +1525,15 @@ def test_no_third_party_telemetry_sdk_is_introduced():
 
 
 def test_no_rtm_model_exists_in_0_2():
-    banned = {"RTMEpisode", "RTMTimeEntry", "MonitoringEvent", "TherapistReview",
-              "ClinicalAction", "TimeEntry", "SynchronousInteraction"}
+    """0.4F/G implemented the RTM models this guard once asserted absent.
+
+    Narrowed by exactly those names. What it now bans is what remains
+    deferred or out of scope for the October pilot entirely — the guard
+    keeps its purpose rather than being deleted.
+    """
+    banned = {"PayerVerification", "MonitoringDay", "ClaimSubmission",
+              "EligibilityCheck", "ClearingHouseSubmission",
+              "ReimbursementEstimate", "EMRIntegration"}
     for path in sorted(PILOT_ROOT.rglob("*.py")):
         if path.name.startswith("test_"):
             continue

@@ -84,6 +84,11 @@ class ClaimKind(str, Enum):
     EXTERNAL_IDENTITY = "external_identity"
     #: One ACTIVE managing clinician per child_id.
     MANAGING_CLINICIAN = "managing_clinician"
+    #: 0.4F. One active/finalized monitoring period per
+    #: (episode_id, cycle_month). Two periods for one episode-month would
+    #: give the month two sets of documented minutes and two coding
+    #: summaries, with nothing saying which the clinician confirmed.
+    RTM_MONITORING_PERIOD = "rtm_monitoring_period"
     #: 0.4C. One ACTIVE monthly focus plan per (child_id, cycle_month).
     #: The same mechanism as the 0.4A constraints and for the same reason:
     #: two clinicians activating October's plan in the same second must not

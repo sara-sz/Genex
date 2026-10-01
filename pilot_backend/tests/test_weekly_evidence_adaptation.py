@@ -1829,11 +1829,8 @@ def test_immutable_records_have_no_update_path(repo_name):
 
 def test_no_rtm_or_reporting_object_was_implemented():
     banned = {
-        "RTMEpisode", "RTMMonitoringPeriod", "TherapistReview", "TimeEntry",
-        "SynchronousInteraction", "RTMTechnology", "PayerVerification",
-        "MonitoringDay", "MonthEndReport", "CodingAssistanceSummary",
-        "RTMEvidenceSummary", "ClinicalAction",
-    }
+        "PayerVerification",
+        "MonitoringDay", }
     for path in sorted(PILOT_ROOT.rglob("*.py")):
         if path.name.startswith("test_"):
             continue

@@ -69,6 +69,21 @@ COLLECTIONS: Mapping[str, str] = {
     "defer_record": "pilot_defer_records",
     "therapist_intervention": "pilot_therapist_interventions",
     "adaptation_record": "pilot_adaptation_records",
+    # 0.4F RTM evidence. An episode and a period are separate collections
+    # because they have separate lifetimes: a month ending must not be able
+    # to reach an episode row at all.
+    "rtm_episode": "pilot_rtm_episodes",
+    "rtm_period": "pilot_rtm_periods",
+    "rtm_technology": "pilot_rtm_technologies",
+    "therapist_review": "pilot_therapist_reviews",
+    "clinical_action": "pilot_clinical_actions",
+    "time_entry": "pilot_time_entries",
+    "synchronous_interaction": "pilot_synchronous_interactions",
+    # 0.4G derived artefacts. Separate collections so a regenerated summary
+    # is a new row rather than an overwrite of one a clinician already read.
+    "rtm_evidence_summary": "pilot_rtm_evidence_summaries",
+    "coding_assistance_summary": "pilot_coding_assistance_summaries",
+    "month_end_report": "pilot_month_end_reports",
 }
 
 #: Names this package must never address. Parent 2.3 / Beta infrastructure.

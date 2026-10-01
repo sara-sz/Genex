@@ -455,7 +455,7 @@ def test_no_rtm_implementation_exists_yet():
             continue
         tree = ast.parse(path.read_text())
         names = {n.name for n in ast.walk(tree) if isinstance(n, ast.ClassDef)}
-        assert not {"RTMEpisode", "RTMTimeEntry", "MonitoringEvent"} & names, path.name
+        assert not {"MonitoringEvent"} & names, path.name
 
 
 # ===========================================================================

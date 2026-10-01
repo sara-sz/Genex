@@ -115,6 +115,26 @@ class AuditAction(str, Enum):
     DEFER_OVERRIDDEN = "defer_overridden"
     THERAPIST_INTERVENTION_CREATED = "therapist_intervention_created"
     ADAPTATION_RECORDED = "adaptation_recorded"
+    # 0.4F RTM evidence. Opening and closing an episode are separate
+    # actions from opening and finalizing a MONTH, because they are separate
+    # clinical events — a trail that conflated them could not answer whether
+    # a course of treatment ended or just a calendar page turned.
+    RTM_EPISODE_OPENED = "rtm_episode_opened"
+    RTM_EPISODE_CLOSED = "rtm_episode_closed"
+    RTM_TECHNOLOGY_DECLARED = "rtm_technology_declared"
+    RTM_PERIOD_OPENED = "rtm_period_opened"
+    RTM_PERIOD_FINALIZED = "rtm_period_finalized"
+    THERAPIST_REVIEW_RECORDED = "therapist_review_recorded"
+    CLINICAL_ACTION_RECORDED = "clinical_action_recorded"
+    TIME_ENTRY_RECORDED = "time_entry_recorded"
+    TIME_ENTRY_CORRECTED = "time_entry_corrected"
+    SYNCHRONOUS_INTERACTION_RECORDED = "synchronous_interaction_recorded"
+    # 0.4G derived artefacts and reporting.
+    RTM_EVIDENCE_SUMMARY_GENERATED = "rtm_evidence_summary_generated"
+    CODING_ASSISTANCE_GENERATED = "coding_assistance_generated"
+    CODING_ASSISTANCE_DECIDED = "coding_assistance_decided"
+    MONTH_END_REPORT_FINALIZED = "month_end_report_finalized"
+    MONTH_END_REPORT_AMENDED = "month_end_report_amended"
 
 
 class AuditResult(str, Enum):
@@ -202,6 +222,43 @@ ALLOWED_METADATA_KEYS = frozenset({
     "intervention_scope",       # current_plan | future_cycle
     "adaptation_record_id",     # opaque adpt_ id
     "adaptation_origin",        # automatic | therapist_directed | mixed
+    # 0.4F/G. Opaque ids, short enums, small integers and a YYYY-MM month.
+    #
+    # Deliberately EXCLUDED and asserted absent: clinical_interpretation,
+    # narrative, activity_description, observation text, goal text, guidance
+    # text and interaction notes. The trail records THAT a clinician
+    # reviewed, acted, timed and interacted — never what they wrote.
+    "episode_id",
+    "period_id",
+    "review_id",
+    "action_id",
+    "time_entry_id",
+    "supersedes_time_entry_id",
+    "interaction_id",
+    "technology_id",
+    "summary_id",
+    "coding_summary_id",
+    "report_id",
+    "supersedes_report_id",   # opaque mrep_ id; amendment lineage
+    "goal_count",
+    "minutes",                 # a small integer, never a narrative
+    "documented_minutes",
+    "entry_method",            # always "manual"
+    "interaction_modality",    # phone | video | in_person | other_synchronous
+    "participant_type",
+    "clinical_action_type",
+    "regulatory_status",       # always "under_review" in October
+    "period_status",
+    "reviewed_event_count",
+    "observation_event_count",
+    "distinct_observed_local_dates",
+    "candidate_count",
+    "missing_flag_count",
+    "coding_rule_set_id",
+    "coding_rule_version",
+    "confirmation_status",
+    "report_version",
+    "report_state",
     "signal_count",             # how many signals explained the change
 })
 

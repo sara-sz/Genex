@@ -76,6 +76,22 @@ CUSTOMIZATION_SIGNAL_PREFIX = "csig"
 DEFER_RECORD_PREFIX = "dfer"
 THERAPIST_INTERVENTION_PREFIX = "invn"
 ADAPTATION_RECORD_PREFIX = "adpt"
+#: 0.4F RTM evidence. An EPISODE is clinical and may span months; a PERIOD is
+#: one calendar month inside it. Two prefixes because they have different
+#: lifetimes, and a month end that closed an episode would be exactly the
+#: conflation these separate identifiers exist to prevent.
+RTM_EPISODE_PREFIX = "repi"
+RTM_PERIOD_PREFIX = "rper"
+RTM_TECHNOLOGY_PREFIX = "rtec"
+THERAPIST_REVIEW_PREFIX = "trev"
+CLINICAL_ACTION_PREFIX = "clac"
+TIME_ENTRY_PREFIX = "tent"
+SYNCHRONOUS_INTERACTION_PREFIX = "sync"
+#: 0.4G derived artefacts. REGENERABLE: a fresh id per generation, so
+#: regenerating never overwrites the summary a clinician already read.
+RTM_EVIDENCE_SUMMARY_PREFIX = "revs"
+CODING_ASSISTANCE_PREFIX = "casm"
+MONTH_END_REPORT_PREFIX = "mrep"
 
 ALL_PREFIXES = (
     PRACTICE_PREFIX,
@@ -107,6 +123,16 @@ ALL_PREFIXES = (
     DEFER_RECORD_PREFIX,
     THERAPIST_INTERVENTION_PREFIX,
     ADAPTATION_RECORD_PREFIX,
+    RTM_EPISODE_PREFIX,
+    RTM_PERIOD_PREFIX,
+    RTM_TECHNOLOGY_PREFIX,
+    THERAPIST_REVIEW_PREFIX,
+    CLINICAL_ACTION_PREFIX,
+    TIME_ENTRY_PREFIX,
+    SYNCHRONOUS_INTERACTION_PREFIX,
+    RTM_EVIDENCE_SUMMARY_PREFIX,
+    CODING_ASSISTANCE_PREFIX,
+    MONTH_END_REPORT_PREFIX,
 )
 
 
@@ -232,6 +258,46 @@ def new_therapist_intervention_id() -> str:
 
 def new_adaptation_record_id() -> str:
     return new_id(ADAPTATION_RECORD_PREFIX)
+
+
+def new_rtm_episode_id() -> str:
+    return new_id(RTM_EPISODE_PREFIX)
+
+
+def new_rtm_period_id() -> str:
+    return new_id(RTM_PERIOD_PREFIX)
+
+
+def new_rtm_technology_id() -> str:
+    return new_id(RTM_TECHNOLOGY_PREFIX)
+
+
+def new_therapist_review_id() -> str:
+    return new_id(THERAPIST_REVIEW_PREFIX)
+
+
+def new_clinical_action_id() -> str:
+    return new_id(CLINICAL_ACTION_PREFIX)
+
+
+def new_time_entry_id() -> str:
+    return new_id(TIME_ENTRY_PREFIX)
+
+
+def new_synchronous_interaction_id() -> str:
+    return new_id(SYNCHRONOUS_INTERACTION_PREFIX)
+
+
+def new_rtm_evidence_summary_id() -> str:
+    return new_id(RTM_EVIDENCE_SUMMARY_PREFIX)
+
+
+def new_coding_assistance_id() -> str:
+    return new_id(CODING_ASSISTANCE_PREFIX)
+
+
+def new_month_end_report_id() -> str:
+    return new_id(MONTH_END_REPORT_PREFIX)
 
 
 def entity_type_of(identifier: str) -> Optional[str]:
