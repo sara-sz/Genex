@@ -39,6 +39,10 @@ COLLECTIONS: Mapping[str, str] = {
     "source_system_link": "pilot_source_system_links",
     "managing_clinician": "pilot_managing_clinicians",
     "identity_claim": "pilot_identity_claims",
+    # 0.5A. SUBJECT-scoped uniqueness, deliberately NOT in
+    # pilot_identity_claims: that collection is child-scoped and an
+    # auth-subject binding is won before any child exists.
+    "auth_subject_claim": "pilot_auth_subject_claims",
     # 0.4B goals. Suggestions, versions and the two approved-goal types are
     # four collections, not one with a discriminator field. A query that means
     # "every clinician-approved goal for this child" must not be able to return

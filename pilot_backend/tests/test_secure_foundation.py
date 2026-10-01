@@ -1244,8 +1244,21 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
             "defer_id", "suppression_until_cycle", "intervention_id",
             "intervention_action", "intervention_scope",
             "adaptation_record_id", "adaptation_origin", "signal_count",
+            # 0.5A authenticated identity and the Parent bridge.
+            # `subject_fingerprint` is sha256(auth_subject)[:32] — derivable
+            # from a subject but not reversible to one, so audit can prove
+            # WHICH subject an event concerned without storing an account
+            # identifier. `integration_state` is a short refusal code.
+            "caregiver_id", "subject_fingerprint", "holder_actor_type",
+            "integration_state",
         }, key
     assert "external_id" not in ALLOWED_METADATA_KEYS
+    # The raw auth subject must never become an allowlisted key. The
+    # fingerprint exists precisely so there is no reason to add one, and a
+    # Parent `session_id` is an external identifier like any other.
+    for identifier in ("auth_subject", "subject", "uid", "email", "owner_uid",
+                       "session_id", "parent_session_id", "display_name"):
+        assert identifier not in ALLOWED_METADATA_KEYS, identifier
     for clinical in ("clinical_interpretation", "narrative",
                      "activity_description", "interaction_note",
                      "goal_text", "family_facing_text", "domain_key",

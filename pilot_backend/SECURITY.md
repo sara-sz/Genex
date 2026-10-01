@@ -50,6 +50,7 @@ debt, not closed items.
 |---|---|---|
 | 1 | **Real Firebase Admin / Identity Platform adapter** — a `TokenDecoder` implementation over `firebase_admin.auth.verify_id_token(..., check_revoked=True)` | The port and all production rules (revocation, verified-email, claim translation, fail-closed selection) exist and are tested. Only the SDK call is missing, and there is no Identity Platform project to call. Production currently resolves to `FailClosedAuthVerifier`, so the gap denies rather than admits. |
 | 2 | **Real Firestore adapter + emulator tests** — a `DocumentStore` implementation over `google.cloud.firestore.Client`, exercised against the Firestore emulator | Repositories, codecs, collections and ordering are complete and tested against the port. The adapter is a five-method translation. No production database exists to connect to. |
+| 4 | **Universal `auth_subject` write-time uniqueness** (added 0.5A, PARTIALLY CLOSED) — `AuthSubjectIdentityClaim` makes the CAREGIVER path write-time unique and race-safe, and a bootstrap against a subject an existing provider holds is refused. **Provider creation does not participate.** `providers.create` keys its document on the random `provider_id`, so two providers can share a subject, and a provider can bind a subject a caregiver already claimed. | The caregiver path — the only self-service identity path, and the one real people will use — is closed and emulator-proven. Provider records are created exclusively by fixtures today; there is no provider self-registration endpoint and no provisioning service, so the gap is reachable only by code inside this repository. See the detail section below for why the fix is not small. |
 | 3 | **Goal approval must become atomic** (added 0.4B/C) — `GoalService.approve_clinical_goal` and `approve_caregiver_goal` write the `GoalVersion` FIRST, then the goal that names it as `current_version_id`. A crash between the two writes leaves an **orphan `GoalVersion`**. | Founder-reviewed and explicitly accepted for the fictional 0.4B/C freeze. The orphan is INERT: no goal references it, no allocation can name it, no snapshot can reach it, and it is invisible to every read path — `list_chain` is keyed on a `goal_id` that does not exist. The failure mode is a dead row, never a goal whose `current_version_id` points at nothing. **Required before real PHI**, because a clinical record store must not accumulate unreferenced clinical text even when it is unreachable. |
 
 Items 1 and 2 must be implemented, reviewed and tested **before** the first
@@ -73,6 +74,44 @@ performed, rather than any weakening of the port's existence guarantee.
 
 Tracked here rather than in ordinary carried debt because it is a PRE-PHI
 hardening requirement, not a preference.
+
+### Blocker 4 — exactly what 0.5A closed, and what it did not
+
+**CLOSED: caregiver self-bootstrap `auth_subject` write-time uniqueness.**
+`AuthSubjectIdentityClaim` keys a document on `sha256(auth_subject)[:32]`, and
+`bootstrap_caregiver` acquires it in the SAME transaction that creates the
+`Caregiver`. Concurrent bootstraps collide on one document, exactly one wins,
+and the losers converge on the winner's caregiver. A caregiver that predates the
+primitive gains a claim by create-only backfill rather than a duplicate
+identity. Proven against the real Firestore emulator, not `FakeDocumentStore`.
+
+**STILL OPEN: universal claim enforcement for Provider creation / provisioning.**
+
+A deterministic-key claim is only a mutex for writers that TAKE it, and the
+provider side does not:
+
+| Path | Acquires a claim? | Resulting state |
+|---|---|---|
+| `providers.create` twice with one subject | No | `AmbiguousAuthSubject` on every later resolution, permanently |
+| `providers.create` for a subject a caregiver already claimed | No | `resolve_principal` refuses: "resolves to both a caregiver and a provider record" |
+| `Provider.with_auth_subject` | No | **Latent only** — no repository method persists a late binding; `update_status` is the sole provider mutation |
+
+The caregiver bootstrap refuses a subject an existing provider holds, so the
+ordering *caregiver-after-provider* IS guarded. The reverse is not.
+
+Why 0.5A does not fix it: enforcement has to move into
+`FirestoreProviderRepository.create`, which is frozen 0.1 code, and every
+fixture and emulator test that provisions a provider would have to acquire a
+claim transactionally. That is a change to provider provisioning, not a small
+correctness patch, and 0.5A's own paths are correct without it. Expanding the
+slice to cover it was explicitly declined.
+
+Pinned by tests that assert the CURRENT state, so closing the gap breaks them
+and forces this section to be updated in the same change:
+`test_provider_creation_does_not_acquire_a_subject_claim`,
+`test_a_provider_can_still_take_a_subject_a_caregiver_holds`,
+`test_no_repository_method_persists_a_late_subject_binding` and
+`test_caregiver_creation_is_the_only_claimed_identity_path`.
 
 ---
 

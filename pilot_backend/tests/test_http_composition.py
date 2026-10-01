@@ -519,8 +519,36 @@ def test_non_get_methods_are_rejected():
 
 
 def test_route_table_and_apisurface_cannot_disagree():
-    """`route_templates` asserts agreement with the apisurface allowlist."""
-    assert route_templates() == {"/health": True, PROTECTED_CHILD_ROUTE: False}
+    """`route_templates` asserts agreement with the apisurface allowlist.
+
+    Restated by hand on purpose. Every route this application serves is listed
+    here with its public flag, so adding a route is not complete until someone
+    has written down whether it is public — which is the moment to notice if
+    the answer is the wrong one.
+    """
+    assert route_templates() == {
+        "/health": True,
+        PROTECTED_CHILD_ROUTE: False,
+        # 0.5A identity surface. Protected, every one.
+        "/pilot/me": False,
+        "/pilot/me/children": False,
+        "/pilot/bootstrap/caregiver": False,
+        "/pilot/parent-sessions/{session_id}/link-child": False,
+    }
+
+
+def test_health_is_still_the_only_public_route():
+    """The default direction, derived rather than restated.
+
+    0.5A adds four routes and `/health` must remain the only unauthenticated
+    one. Computed from `ROUTE_TABLE`, so this cannot pass by agreeing with a
+    stale hand-written copy of the list.
+    """
+    from pilot_backend.apisurface.surface import PUBLIC_ROUTES
+    from pilot_backend.transport.wsgi_app import ROUTE_TABLE
+
+    public = {template for _, template, is_public in ROUTE_TABLE if is_public}
+    assert public == {"/health"} == set(PUBLIC_ROUTES)
 
 
 # ===========================================================================

@@ -205,15 +205,61 @@ def test_no_telemetry_sdk_reaches_the_runtime_layer():
                     assert alias.name.split(".")[0] not in banned, (path.name, alias.name)
 
 
-def test_no_gcs_client_exists_in_the_runtime_layer():
-    """Parent 2.3 session storage is GCS; nothing here can reach it."""
+#: The ONE module permitted to reach Parent's GCS session store.
+#:
+#: Narrowed in 0.5A from "nowhere in the runtime layer". The allowance is a
+#: single named path, not a prefix, so a second GCS caller appearing anywhere
+#: in `pilot_runtime` still fails the test below.
+PARENT_GCS_ADAPTER = "integration/parent_gcs_source.py"
+
+
+def test_no_gcs_client_exists_outside_the_parent_session_adapter():
+    """Parent 2.3 session storage is GCS; exactly one module may read it.
+
+    0.5A adds the READ-ONLY `GcsParentSessionSource`, which necessarily
+    constructs a storage client. Everything else in the runtime layer — and all
+    of `pilot_backend` — still cannot reach GCS at all.
+    """
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
     for path in sorted(root.rglob("*.py")):
         if path.name.startswith("test_"):
             continue
+        if path.relative_to(root).as_posix() == PARENT_GCS_ADAPTER:
+            continue
         text = path.read_text()
         for marker in ("google.cloud.storage", "from google.cloud import storage",
                        "storage.Client", "gs://", "genex-api-dev-sessions"):
             assert marker not in text, (path.name, marker)
+
+
+def test_the_parent_adapter_is_the_only_gcs_caller_and_it_only_reads():
+    """The narrowed allowance, asserted positively.
+
+    The permitted module exists, it does construct a client, and it contains no
+    write, delete or listing call. An allowance with nothing checking its
+    contents would be an exemption rather than a narrowing.
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    path = root / PARENT_GCS_ADAPTER
+    assert path.exists(), PARENT_GCS_ADAPTER
+
+    text = path.read_text()
+    assert "from google.cloud import storage" in text
+
+    tree = ast.parse(text)
+    called = {node.func.attr for node in ast.walk(tree)
+              if isinstance(node, ast.Call)
+              and isinstance(node.func, ast.Attribute)}
+    for forbidden in ("upload_from_string", "upload_from_file", "delete",
+                      "patch", "copy_blob", "rewrite", "compose",
+                      "list_blobs", "list_buckets", "create_bucket",
+                      "make_public"):
+        assert forbidden not in called, forbidden
+    # No bucket name is hard-coded; it comes from configuration.
+    assert "genex-api" not in text
+    assert "gs://" not in text

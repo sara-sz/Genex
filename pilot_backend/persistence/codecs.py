@@ -54,6 +54,7 @@ from ..domain.alignment import (
     CoverageGap,
     CoverageGapReason,
 )
+from ..domain.auth_identity import AuthSubjectIdentityClaim
 from ..domain.child_context import ChildContextRecord
 from ..domain.intervention import (
     InterventionAction,
@@ -593,6 +594,12 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "superseded_by_assignment_id": OPT_STR,
         "created_at": DT, "updated_at": DT,
         "created_by_actor_id": OPT_STR, "schema_version": STR,
+    },
+    AuthSubjectIdentityClaim: {
+        "claim_id": STR, "subject_fingerprint": STR,
+        "holder_actor_id": STR,
+        "holder_actor_type": _EnumKind(ActorRole),
+        "created_at": DT, "schema_version": STR,
     },
     IdentityClaim: {
         "claim_id": STR, "record_kind": _EnumKind(ClaimRecordKind),

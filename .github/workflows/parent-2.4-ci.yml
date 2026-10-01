@@ -399,6 +399,216 @@ jobs:
           print("no payer, insurance or claim-billing vocabulary in the RTM layer")
           PY
 
+      - name: October pilot 0.5A — authenticated identity and Parent bridge (unit)
+        # Dependency-pure, deliberately: the whole 0.5A identity surface —
+        # subject claim, caregiver bootstrap, legacy backfill, the four HTTP
+        # routes — must pass in a job where no cloud SDK is installed. The
+        # Parent boundary is a Protocol here; the GCS adapter lives in
+        # pilot_runtime and is gated in the integration job.
+        working-directory: .
+        run: |
+          if [ -f pilot_backend/tests/test_integration_identity.py ]; then
+            python -m pytest pilot_backend/tests/test_integration_identity.py -q
+          else
+            echo "0.5A not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5A — the subject claim is create-only
+        # An app identity is permanent: a subject is bound to one actor for the
+        # lifetime of the record and no product operation unbinds it. A release
+        # or update path would be the route by which a subject could be
+        # silently re-pointed at a different person, so its ABSENCE is gated
+        # rather than merely documented.
+        working-directory: .
+        run: |
+          if [ ! -f pilot_backend/domain/auth_identity.py ]; then
+            echo "0.5A not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib, sys
+
+          tree = ast.parse(pathlib.Path(
+              "pilot_backend/persistence/firestore_repos.py").read_text())
+          target = next(
+              (n for n in ast.walk(tree)
+               if isinstance(n, ast.ClassDef)
+               and n.name == "FirestoreAuthSubjectClaimRepository"), None)
+          if target is None:
+              print("FirestoreAuthSubjectClaimRepository is missing")
+              sys.exit(1)
+          methods = sorted(n.name for n in target.body
+                           if isinstance(n, ast.FunctionDef)
+                           and not n.name.startswith("_"))
+          if methods != ["claim", "find_for_subject", "get_by_id"]:
+              print("subject-claim repository gained an operation:", methods)
+              sys.exit(1)
+
+          # And the record carries no generation counter: the 0.4A claims have
+          # one because their keys get RELEASED, and this one must not acquire
+          # the hook for an unreviewed re-binding feature.
+          claim_tree = ast.parse(pathlib.Path(
+              "pilot_backend/domain/auth_identity.py").read_text())
+          record = next(n for n in ast.walk(claim_tree)
+                        if isinstance(n, ast.ClassDef)
+                        and n.name == "AuthSubjectIdentityClaim")
+          fields = [n.target.id for n in record.body
+                    if isinstance(n, ast.AnnAssign)
+                    and isinstance(n.target, ast.Name)]
+          if any("generation" in name for name in fields):
+              print("the subject claim gained a generation counter:", fields)
+              sys.exit(1)
+          print("subject claim is create-only, with no generation counter")
+          PY
+
+      - name: October pilot 0.5A — the raw auth subject is never an audit key
+        # The fingerprint exists precisely so there is no reason to allowlist
+        # an account identifier. `actor_auth_subject` is a top-level AuditEvent
+        # field that has held the ACTING principal's own subject since 0.2 and
+        # is out of scope here; what this gates is METADATA.
+        working-directory: .
+        run: |
+          if [ ! -f pilot_backend/domain/auth_identity.py ]; then
+            echo "0.5A not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import sys
+          from pilot_backend.audit.events import ALLOWED_METADATA_KEYS
+
+          banned = {"auth_subject", "subject", "uid", "email", "owner_uid",
+                    "session_id", "parent_session_id", "external_id",
+                    "display_name"}
+          present = sorted(banned & set(ALLOWED_METADATA_KEYS))
+          if present:
+              print("account or external identifiers are allowlisted:", present)
+              sys.exit(1)
+          required = {"subject_fingerprint", "holder_actor_type",
+                      "caregiver_id", "integration_state"}
+          missing = sorted(required - set(ALLOWED_METADATA_KEYS))
+          if missing:
+              print("0.5A metadata keys are not registered:", missing)
+              sys.exit(1)
+          print("audit metadata carries a fingerprint and no account identifier")
+          PY
+
+      - name: October pilot 0.5A — the identity routes are protected
+        # `/health` must remain the only unauthenticated path. Derived from
+        # ROUTE_TABLE rather than restated, so this cannot pass by agreeing
+        # with a stale copy of the list.
+        working-directory: .
+        run: |
+          if [ ! -f pilot_backend/integration/identity_service.py ]; then
+            echo "0.5A not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import sys
+          from pilot_backend.apisurface.surface import PUBLIC_ROUTES
+          from pilot_backend.transport.wsgi_app import ROUTE_TABLE, route_templates
+
+          public = {t for _m, t, is_public in ROUTE_TABLE if is_public}
+          if public != {"/health"} or set(PUBLIC_ROUTES) != {"/health"}:
+              print("the public surface changed:", public, set(PUBLIC_ROUTES))
+              sys.exit(1)
+          served = route_templates()   # asserts ROUTE_TABLE agrees with apisurface
+          for route in ("/pilot/me", "/pilot/me/children",
+                        "/pilot/bootstrap/caregiver",
+                        "/pilot/parent-sessions/{session_id}/link-child"):
+              if served.get(route) is not False:
+                  print("0.5A route is missing or public:", route)
+                  sys.exit(1)
+          print("four 0.5A routes served, all protected; /health still the only public path")
+          PY
+
+      - name: October pilot 0.5A — the session bridge is one transaction
+        # The defect the real emulator caught: an earlier revision created the
+        # Child and the relationship BEFORE acquiring the 0.4A source-link
+        # claim, so eight concurrent links left seven orphan children with
+        # ACTIVE caregiver relationships — visible in /pilot/me/children.
+        # Every write must sit inside the transaction, and the claims first.
+        working-directory: .
+        run: |
+          if [ ! -f pilot_backend/integration/identity_service.py ]; then
+            echo "0.5A not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib, sys
+
+          tree = ast.parse(pathlib.Path(
+              "pilot_backend/integration/identity_service.py").read_text())
+          link = next(n for n in ast.walk(tree)
+                      if isinstance(n, ast.FunctionDef)
+                      and n.name == "link_parent_session")
+          bridge = next((n for n in ast.walk(link)
+                         if isinstance(n, ast.FunctionDef)
+                         and n.name == "_bridge"), None)
+          if bridge is None:
+              print("link_parent_session no longer has a transaction body")
+              sys.exit(1)
+
+          inside = [(ast.unparse(n.func), n.lineno) for n in ast.walk(bridge)
+                    if isinstance(n, ast.Call)
+                    and isinstance(n.func, ast.Attribute)]
+          names = [name for name, _line in inside]
+          for required in ("tx.identity_claims.claim", "tx.children.create",
+                           "tx.caregiver_child.connect", "tx.source_links.create"):
+              if required not in names:
+                  print("write is not inside the transaction:", required)
+                  sys.exit(1)
+
+          # Claims FIRST, so a loser writes nothing at all.
+          first_claim = min(l for n, l in inside if n == "tx.identity_claims.claim")
+          first_write = min(l for n, l in inside
+                            if n in ("tx.children.create",
+                                     "tx.caregiver_child.connect",
+                                     "tx.source_links.create"))
+          if first_claim > first_write:
+              print("a record is written before a uniqueness claim is taken")
+              sys.exit(1)
+
+          # And no write escapes to the non-transactional repositories inside
+          # the bridge — that is exactly how the orphan window was opened.
+          for name, _line in inside:
+              if name.startswith("self._repos.") and name.rsplit(".", 1)[-1] in (
+                      "create", "connect", "claim"):
+                  print("a write bypasses the transaction:", name)
+                  sys.exit(1)
+          print("child, relationship, link and both claims commit together; claims first")
+          PY
+
+      - name: October pilot 0.5A — pilot_backend still imports no storage SDK
+        # Ports not SDKs. The Parent GCS adapter lives in pilot_runtime; the
+        # core stays dependency-pure. Parsed with ast, not grepped — several
+        # modules NAME these libraries in docstrings to explain which boundary
+        # they sit behind, and a substring scan reads those as violations.
+        working-directory: .
+        run: |
+          python - <<'PY'
+          import ast, pathlib, sys
+
+          banned = {"google", "firebase_admin", "requests", "httpx", "boto3",
+                    "aiohttp", "urllib"}
+          offenders = []
+          for path in sorted(pathlib.Path("pilot_backend").rglob("*.py")):
+              if "tests" in path.parts:
+                  continue
+              for node in ast.walk(ast.parse(path.read_text())):
+                  names = []
+                  if isinstance(node, ast.Import):
+                      names = [a.name for a in node.names]
+                  elif isinstance(node, ast.ImportFrom):
+                      names = [node.module or ""]
+                  for name in names:
+                      if name.split(".")[0] in banned:
+                          offenders.append((str(path), name))
+          if offenders:
+              print("pilot_backend imports an SDK:", offenders)
+              sys.exit(1)
+          print("pilot_backend imports no storage, network or identity SDK")
+          PY
+
       - name: October pilot 0.4D/E — no double counting, structurally
         # The arithmetic that stops a multi-goal activity inflating a total.
         # Asserted here as well as in the unit suite because it is the single
@@ -719,6 +929,119 @@ jobs:
       - name: Firestore adapter (unit, fake client)
         run: python -m pytest pilot_runtime/tests/test_firestore_adapter.py -q
 
+      - name: 0.5A Parent GCS session adapter (unit, fake client)
+        # The READ-ONLY boundary onto Parent 2.3's `sessions/{uid}/{id}.json`.
+        # Driven through a fake implementing the storage surface the adapter
+        # touches, with documents shaped like real Parent sessions — including
+        # the clinical fields — using FICTIONAL sentinels, so "no clinical
+        # content crosses the boundary" is proven rather than asserted.
+        run: |
+          if [ -f pilot_runtime/tests/test_parent_gcs_adapter.py ]; then
+            python -m pytest pilot_runtime/tests/test_parent_gcs_adapter.py -q
+          else
+            echo "0.5A not present on this branch — nothing to run"
+          fi
+
+      - name: 0.5A Parent adapter writes nothing and enumerates nothing
+        # Parent is the system of record for session data and the pilot must
+        # never write it. Gated structurally: the capability must be absent,
+        # not merely unused. `list_blobs` is banned too — an adapter that could
+        # enumerate a prefix would be an oracle for which sessions exist.
+        run: |
+          if [ ! -f pilot_runtime/integration/parent_gcs_source.py ]; then
+            echo "0.5A not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib, sys
+
+          path = pathlib.Path("pilot_runtime/integration/parent_gcs_source.py")
+          tree = ast.parse(path.read_text())
+          called = {n.func.attr for n in ast.walk(tree)
+                    if isinstance(n, ast.Call)
+                    and isinstance(n.func, ast.Attribute)}
+          banned = {"upload_from_string", "upload_from_file",
+                    "upload_from_filename", "delete", "patch", "copy_blob",
+                    "rewrite", "compose", "make_public", "create_bucket",
+                    "list_blobs", "list_buckets"}
+          present = sorted(called & banned)
+          if present:
+              print("the Parent adapter can mutate or enumerate:", present)
+              sys.exit(1)
+
+          operations = sorted(n.name for n in ast.walk(tree)
+                              if isinstance(n, ast.FunctionDef)
+                              and not n.name.startswith("_")
+                              and any(isinstance(p, ast.ClassDef)
+                                      for p in ast.walk(tree)))
+          # Exactly one public method on the adapter class, and it is a read.
+          cls = next(n for n in ast.walk(tree)
+                     if isinstance(n, ast.ClassDef)
+                     and n.name == "GcsParentSessionSource")
+          public = sorted(n.name for n in cls.body
+                          if isinstance(n, ast.FunctionDef)
+                          and not n.name.startswith("_"))
+          if public != ["fetch_session_facts"]:
+              print("the Parent adapter gained an operation:", public)
+              sys.exit(1)
+
+          # No logger and no print: a session id must not reach a log line.
+          imported = set()
+          for node in ast.walk(tree):
+              if isinstance(node, ast.Import):
+                  imported.update(a.name.split(".")[0] for a in node.names)
+              elif isinstance(node, ast.ImportFrom):
+                  imported.add((node.module or "").split(".")[0])
+          if "logging" in imported:
+              print("the Parent adapter constructs a logger")
+              sys.exit(1)
+          if "print" in {n.func.id for n in ast.walk(tree)
+                         if isinstance(n, ast.Call)
+                         and isinstance(n.func, ast.Name)}:
+              print("the Parent adapter prints")
+              sys.exit(1)
+
+          # And Parent's own /tmp fallback is NOT mirrored: a pilot silently
+          # reading sessions from local disk would be a different system of
+          # record, which is an open decision in SECURITY.md.
+          for module in ("pathlib", "tempfile", "shutil"):
+              if module in imported:
+                  print("the Parent adapter can reach local disk:", module)
+                  sys.exit(1)
+          print("Parent adapter: one read operation, no write, no listing, no log, no local fallback")
+          PY
+
+      - name: 0.5A ParentSessionFacts carries identity only
+        # Two fields. There is nowhere for a diagnosis, concern, plan, note,
+        # answer or feedback entry to go even if a later edit tried to carry
+        # one — which is the structural half of "no clinical bridge in 0.5A".
+        run: |
+          if [ ! -f pilot_backend/integration/parent_source.py ]; then
+            echo "0.5A not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import sys
+          from pilot_backend.integration.parent_source import (
+              ParentSessionFacts, ParentSessionSource)
+
+          fields = set(ParentSessionFacts.__dataclass_fields__)
+          if fields != {"session_id", "owner_uid"}:
+              print("the Parent boundary widened:", sorted(fields))
+              sys.exit(1)
+          operations = [n for n in dir(ParentSessionSource)
+                        if not n.startswith("_")]
+          if operations != ["fetch_session_facts"]:
+              print("the Parent port gained an operation:", operations)
+              sys.exit(1)
+          for forbidden in ("save", "write", "update", "delete", "create",
+                            "put", "set", "patch"):
+              if hasattr(ParentSessionSource, forbidden):
+                  print("the Parent port can write:", forbidden)
+                  sys.exit(1)
+          print("ParentSessionFacts: session_id and owner_uid; the port cannot write")
+          PY
+
       - name: Composition root
         run: python -m pytest pilot_runtime/tests/test_composition.py -q
 
@@ -764,6 +1087,25 @@ jobs:
         # test while being unable to persist to a real database.
         run: python -m pytest pilot_runtime/tests/integration/test_rtm_emulator.py -q
 
+      - name: 0.5A auth-subject uniqueness and the Parent bridge (real emulator)
+        # Every CONTENTION claim 0.5A makes is made here and only here —
+        # `FakeDocumentStore` is a plain dict and settles nothing about racing
+        # writers. Eight-way new-subject bootstrap, eight-way legacy backfill,
+        # ambiguity and provider-held refusal under contention, three fault
+        # injections plus a combined fault+contention case.
+        #
+        # Also the suite that caught the orphan-child defect: an earlier
+        # revision created the Child and the caregiver relationship before
+        # acquiring the 0.4A source-link claim, so eight concurrent links left
+        # seven orphan children with ACTIVE relationships — all eight visible
+        # in /pilot/me/children. Every unit test passed throughout.
+        run: |
+          if [ -f pilot_runtime/tests/integration/test_identity_bridge_emulator.py ]; then
+            python -m pytest pilot_runtime/tests/integration/test_identity_bridge_emulator.py -q
+          else
+            echo "0.5A not present on this branch — nothing to run"
+          fi
+
       - name: Prove the emulator suites actually ran
         # Belt and braces against the one failure mode this job exists to
         # prevent: a green result produced by tests that never executed.
@@ -777,11 +1119,11 @@ jobs:
                "--collect-only", "-q"],
               capture_output=True, text=True)
           count = collected.stdout.count("::")
-          # Raised 70 -> 90 by 0.4B/C, 90 -> 100 by 0.4D/E. A floor that never
-          # moves stops noticing when a suite silently stops being collected.
-          # Raised from 100 to 110 by 0.4F/G. A floor that never moves
-          # stops noticing when a suite silently stops being collected.
-          assert count >= 110, f"expected the integration suites to collect >=110 tests, got {count}"
+          # Raised 70 -> 90 by 0.4B/C, 90 -> 100 by 0.4D/E, 100 -> 110 by
+          # 0.4F/G, and 110 -> 130 by 0.5A (which adds 23; local collection is
+          # 138). A floor that never moves stops noticing when a suite
+          # silently stops being collected.
+          assert count >= 130, f"expected the integration suites to collect >=130 tests, got {count}"
           run = subprocess.run(
               [sys.executable, "-m", "pytest", "pilot_runtime/tests/integration",
                "-q", "-rs"],

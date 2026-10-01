@@ -61,6 +61,10 @@ from pilot_backend.persistence import FakeDocumentStore, FirestoreRepositories
 from pilot_backend.transport import build_application
 
 from .auth.firebase_decoder import FirebaseTokenDecoder, initialize_firebase_app
+from .integration.parent_gcs_source import (
+    BUCKET_ENV_VAR,
+    build_parent_session_source,
+)
 from .persistence.firestore_store import (
     EMULATOR_ENV_VAR,
     FirestoreDocumentStore,
@@ -90,6 +94,10 @@ class PilotRuntime:
     child_context: ChildContextService
     application: Any
     cors: Any
+    #: The READ-ONLY Parent boundary. `None` when no bucket is configured, in
+    #: which case the link route refuses rather than inventing a session —
+    #: absent is the safe state, so it is not a startup failure.
+    parent_source: Any = None
 
     @property
     def is_production(self) -> bool:
@@ -157,12 +165,32 @@ def build_token_decoder(settings: PilotSettings, *, credential: Any = None,
     return FirebaseTokenDecoder(app)
 
 
+def build_parent_source(env: Mapping[str, str], *, storage_client: Any = None):
+    """The READ-ONLY Parent session boundary, or None when unconfigured.
+
+    Returns None rather than raising when no bucket is named: a pilot with no
+    Parent boundary simply cannot link a session, which is a safe state. A
+    bucket that IS named but unreachable fails on first read, not at startup —
+    the same posture `build_store` takes toward Firestore.
+
+    0.5A reads Parent and never writes it, so there is no production
+    prohibition to assert here beyond the one the adapter enforces
+    structurally: it has no mutating operation.
+    """
+    bucket = (env.get(BUCKET_ENV_VAR) or "").strip()
+    if not bucket:
+        return None
+    return build_parent_session_source(bucket_name=bucket,
+                                       client=storage_client)
+
+
 def build_runtime(env: Mapping[str, str], *,
                   process_env: Optional[Mapping[str, str]] = None,
                   in_memory: bool = False,
                   firestore_client: Any = None,
                   decoder: Any = None,
                   credential: Any = None,
+                  storage_client: Any = None,
                   log_sink: Optional[list] = None) -> PilotRuntime:
     """Assemble the runtime from an explicit environment mapping.
 
@@ -206,11 +234,15 @@ def build_runtime(env: Mapping[str, str], *,
     recorder = AuditRecorder(repos.audit_events, environment=settings.environment.value)
     child_context = ChildContextService(verifier=verifier, repos=repos, recorder=recorder)
 
+    parent_source = build_parent_source(env, storage_client=storage_client)
+
     application = build_application(settings=settings, repos=repos, verifier=verifier,
-                                    recorder=recorder, log_sink=log_sink)
+                                    recorder=recorder, parent_source=parent_source,
+                                    log_sink=log_sink)
 
     return PilotRuntime(
         settings=settings, store=store, repos=repos, verifier=verifier,
         recorder=recorder, child_context=child_context,
         application=application, cors=cors_policy_for(settings),
+        parent_source=parent_source,
     )

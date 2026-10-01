@@ -135,6 +135,13 @@ class AuditAction(str, Enum):
     CODING_ASSISTANCE_DECIDED = "coding_assistance_decided"
     MONTH_END_REPORT_FINALIZED = "month_end_report_finalized"
     MONTH_END_REPORT_AMENDED = "month_end_report_amended"
+    # 0.5A integration identity. Bootstrapping an identity and LINKING a
+    # source session are separate actions: one creates an app identity, the
+    # other binds an external id to a canonical child, and a trail that
+    # merged them could not answer which happened.
+    CAREGIVER_IDENTITY_BOOTSTRAPPED = "caregiver_identity_bootstrapped"
+    PARENT_SESSION_LINKED = "parent_session_linked"
+    CAREGIVER_CHILD_LINKED = "caregiver_child_linked"
 
 
 class AuditResult(str, Enum):
@@ -259,6 +266,19 @@ ALLOWED_METADATA_KEYS = frozenset({
     "confirmation_status",
     "report_version",
     "report_state",
+    # 0.5A. Opaque ids, short enums and a NON-REVERSIBLE fingerprint.
+    #
+    # `subject_fingerprint` is sha256(auth_subject)[:32]. The raw auth subject
+    # is a Firebase account identifier and never enters an audit record, a log
+    # line or the claim document — the fingerprint exists so provenance is
+    # traceable without storing the account id.
+    #
+    # Deliberately ABSENT and asserted: auth_subject, email, owner_uid,
+    # session contents, child name, diagnosis, concern, notes, plan content.
+    "caregiver_id",           # opaque cgvr_ id
+    "subject_fingerprint",
+    "holder_actor_type",      # caregiver | provider
+    "integration_state",      # e.g. SECOND_SESSION_UNRESOLVED
     "signal_count",             # how many signals explained the change
 })
 

@@ -42,6 +42,7 @@ from ..domain.alignment import (
     CapacityLedger,
     CoverageGap,
 )
+from ..domain.auth_identity import AuthSubjectIdentityClaim
 from ..domain.child_context import ChildContextRecord
 from ..domain.intervention import TherapistIntervention
 from ..domain.month_end import MonthEndReport
@@ -1118,6 +1119,45 @@ class FirestoreMonthEndReportRepository(_PeriodScopedRepo):
         return sorted(self.list_for_period(period_id), key=lambda r: r.version)
 
 
+class FirestoreAuthSubjectClaimRepository(_BaseRepo):
+    """One app identity per auth subject. CREATE-ONLY, by design.
+
+    No update, no release, no delete — and that is the whole point. An app
+    identity is permanent: a subject is bound to one actor for the lifetime of
+    the record, and there is no product operation that unbinds it. The 0.4A
+    claims have a release path because their keys can be handed on; this one
+    must not, or a subject could be silently re-pointed at a different person.
+
+    `claim` IS the uniqueness enforcement. The document id is derived from the
+    subject fingerprint, so two concurrent writers compute the same id, target
+    the same document, and exactly one `create` survives.
+    """
+
+    record_type, model = "auth_subject_claim", AuthSubjectIdentityClaim
+
+    def claim(self, claim: AuthSubjectIdentityClaim) -> AuthSubjectIdentityClaim:
+        """Atomically win the subject, or raise DuplicateRecord."""
+        return self._create(claim.claim_id, claim)
+
+    def get_by_id(self, claim_id: str) -> AuthSubjectIdentityClaim:
+        return self._get(claim_id)
+
+    def find_for_subject(self, auth_subject: str):
+        """The existing holder of this subject, or None.
+
+        An ADVISORY read used to make the ordinary repeat-bootstrap case
+        return the existing identity rather than a conflict. It is never the
+        uniqueness enforcement — `claim` is.
+        """
+        from ..domain.auth_identity import auth_subject_claim_id, subject_fingerprint
+
+        try:
+            return self._get(auth_subject_claim_id(
+                subject_fingerprint(auth_subject)))
+        except RecordNotFound:
+            return None
+
+
 class FirestoreRepositories:
     """All repositories over one document store — the production composition."""
 
@@ -1132,6 +1172,7 @@ class FirestoreRepositories:
         self.audit_events = FirestoreAuditEventRepository(store)
         self.child_contexts = FirestoreChildContextRepository(store)
         self.identity_claims = FirestoreIdentityClaimRepository(store)
+        self.auth_subject_claims = FirestoreAuthSubjectClaimRepository(store)
         self.source_links = FirestoreSourceSystemLinkRepository(store)
         self.managing_clinicians = FirestoreManagingClinicianRepository(store)
         self.goal_suggestions = FirestoreGoalSuggestionRepository(store)
