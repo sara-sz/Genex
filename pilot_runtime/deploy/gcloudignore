@@ -1,0 +1,24 @@
+# Build-context allowlist for the fictional staging image.
+#
+# Copied to the repository root as `.gcloudignore` by the deploy script and
+# removed afterwards, so no untracked root file is left behind and nothing
+# outside `pilot_runtime/` is committed.
+#
+# Without this, `gcloud builds submit` uploads the whole repository — which
+# here is several GB of PDFs, spreadsheets, notebooks, a tarball and two other
+# services. That is slow, and it would put the Parent 2.3 service and the
+# therapist service into a build context that has no business seeing them.
+#
+# Ignore everything, then re-admit only the two packages the image copies.
+
+*
+!pilot_backend/
+!pilot_backend/**
+!pilot_runtime/
+!pilot_runtime/**
+
+# Nothing in the image needs these, and tests are deleted in the image anyway.
+pilot_backend/tests/**
+pilot_runtime/tests/**
+**/__pycache__/**
+**/*.pyc

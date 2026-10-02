@@ -1,0 +1,28 @@
+# Cloud Build config for the fictional staging image.
+#
+# A config rather than `--tag` because `gcloud builds submit --tag` requires
+# the Dockerfile at the build-context root, and the Dockerfile has to live
+# under `pilot_runtime/` to satisfy the Parent scope guard. `-f` resolves that
+# without moving either one.
+#
+# The build context is the repository root — the Dockerfile copies
+# `pilot_backend/` and `pilot_runtime/` by those paths — narrowed to just those
+# two packages by the `.gcloudignore` beside this file.
+
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/genex-pilot-staging/pilot/pilot-api
+  _TAG: dev
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=pilot_runtime/deploy/Dockerfile
+      - --tag=${_IMAGE}:${_TAG}
+      - .
+
+images:
+  - ${_IMAGE}:${_TAG}
+
+options:
+  logging: CLOUD_LOGGING_ONLY

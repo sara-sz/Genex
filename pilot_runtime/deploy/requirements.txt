@@ -1,0 +1,29 @@
+# Runtime dependencies for the fictional staging image.
+#
+# Exact pins, no ranges — the same rule as
+# pilot_runtime/requirements-integration-ci.txt, and for the same reason: a
+# range means a security-relevant SDK could differ between two deploys of one
+# commit.
+#
+# The two SDK pins are IDENTICAL to the versions the integration suite proved
+# 0.5C against, so the deployed service runs the libraries the tests ran:
+#
+#   firebase-admin          7.5.0   — token verification (blocker 1's adapter)
+#   google-cloud-firestore  2.28.0  — the document store (blocker 2's adapter)
+#
+# gunicorn is the only addition. It is a WSGI container, not a framework: it
+# does not route, parse bodies, or touch authentication, so it adds no
+# decision to the request path.
+#
+# Deliberately absent: every analytics, APM, session-replay, error-reporting
+# and tracing client. An error reporter is the single most likely way for
+# clinical content to leave this service, because its job is to upload the
+# context of a failure. The frozen transport already refuses to put exception
+# text in a response; shipping it to a vendor instead would defeat that.
+#
+# Also absent: pytest (not a runtime dependency) and any OpenAI client (0.5C
+# makes no model call and PILOT_AI_PHI_EGRESS_ENABLED is unset).
+
+firebase-admin==7.5.0
+google-cloud-firestore==2.28.0
+gunicorn==23.0.0
