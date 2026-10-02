@@ -223,6 +223,108 @@ def test_a_provider_cannot_assign_a_managing_clinician(http):
     assert http.repos.managing_clinicians.list_for_child(http.child) == []
 
 
+def test_a_wrong_role_request_performs_no_repository_read(http):
+    """The route role check is independently meaningful, not decoration.
+
+    Found by mutation testing: removing it survived, because the service
+    refuses a wrong-role caller too and the HTTP response is byte-identical.
+    So the response cannot distinguish them — but the WORK DONE can.
+
+    With the check, a caregiver asking to `accept` is refused before the
+    service is built, so the request touches no documents at all. Without it,
+    the service loads the connection before refusing. That is a real
+    difference and worth keeping: an unauthenticated-for-this-action caller
+    should not be able to make the server read rows by naming identifiers, and
+    a refusal that costs a lookup is a refusal whose timing varies with
+    whether the id exists.
+
+    Counted at the store, which is the only place that cannot be fooled.
+    """
+    # ACTIVE, so the control `pause` below genuinely succeeds and its read
+    # count is a real upper bound rather than another early refusal.
+    connection_id = hannah_connected(http)
+
+    # Counted for the NAMED CONNECTION DOCUMENT specifically, not as a total.
+    #
+    # A total is too blunt: the difference is exactly one read, and principal
+    # resolution already performs several, so "fewer reads than a permitted
+    # request" stays true either way and the mutation survives. The property
+    # that actually matters is sharper and simpler — a caller who may not
+    # perform this action must not be able to make the server load the
+    # connection they named.
+    CONNECTIONS = "pilot_provider_child_connections"
+    loads = {"count": 0}
+    store = http.repos.store
+    real_get = store.get
+
+    def counting_get(collection, doc_id):
+        if collection == CONNECTIONS and doc_id == connection_id:
+            loads["count"] += 1
+        return real_get(collection, doc_id)
+
+    store.get = counting_get
+    try:
+        # A PROVIDER asking for a caregiver's action. This direction is the one
+        # that differs: `_connection_for_caregiver` LOADS the connection
+        # before testing the role, whereas `_connection_for_provider` tests
+        # the role first. So without the route check this request reads the
+        # connection document; with it, it never gets that far.
+        status, body, _ = act(http, connection_id, "pause", "token-hannah")
+        wrong_role_loads = loads["count"]
+
+        loads["count"] = 0
+        # The permitted caller, as a control: this one MUST load it, or the
+        # counter is measuring nothing.
+        assert act(http, connection_id, "pause",
+                   "token-caregiver-alpha")[0] == 200
+        allowed_loads = loads["count"]
+    finally:
+        store.get = real_get
+
+    assert status == 403
+    assert body == FORBIDDEN
+    assert allowed_loads > 0, "the counter is not observing the store"
+    assert wrong_role_loads == 0, (
+        f"a wrong-role request loaded the named connection "
+        f"{wrong_role_loads} time(s); the route role check is not short-"
+        f"circuiting before the service runs, so naming an identifier is "
+        f"enough to make the server read it")
+
+
+@pytest.mark.parametrize("trailing", ["garbage", "cgvr_abc", "end-now", "x"])
+def test_the_assign_route_requires_a_provider_shaped_id(http, trailing):
+    """A trailing segment that is neither `end` nor a provider id is unrouted.
+
+    Found by mutation testing. Without the `prov_` check, anything that is not
+    the literal `end` falls through to the assign handler, which then refuses
+    with 403 — so the mutation changed a 404 into a 403 and no test noticed.
+
+    Pinned because the two mean different things: 404 says this path shape is
+    not served, 403 says it is served and you may not have it. Neither leaks
+    existence, but collapsing them would let the assign handler run for
+    arbitrary input.
+    """
+    status, body, _ = call(
+        http.app, f"/pilot/children/{http.child}/managing-clinician/{trailing}",
+        method="POST", bearer="Bearer token-caregiver-alpha")
+    assert status == 404, (trailing, status)
+    assert body == {"error": "not found"}
+
+
+def test_the_assign_route_still_serves_a_provider_shaped_id(http):
+    """The companion: a real provider id is routed, not 404'd."""
+    hannah_connected(http)
+    status, _body, _ = call(
+        http.app,
+        f"/pilot/children/{http.child}/managing-clinician/{http.hannah.provider_id}",
+        method="POST", bearer="Bearer token-caregiver-alpha")
+    assert status == 200
+    # And `end` remains reserved rather than being read as a provider id.
+    assert call(http.app,
+                f"/pilot/children/{http.child}/managing-clinician/end",
+                method="POST", bearer="Bearer token-caregiver-alpha")[0] == 200
+
+
 def test_an_unknown_action_is_refused_not_404(http):
     """The action vocabulary is not enumerable.
 

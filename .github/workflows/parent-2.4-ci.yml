@@ -1267,6 +1267,27 @@ jobs:
             echo "0.5B not present on this branch — nothing to run"
           fi
 
+      - name: 0.5B stale-assignment race, FORCED interleaving
+        # The eight-thread suite above races and asserts; this one DECIDES the
+        # ordering. A one-shot barrier injected at the transaction boundary
+        # through the service's own `repos_factory` seam forces the two
+        # orderings that expose an assignment lookup outside the transaction,
+        # and an assign that does not re-read the connection inside its own.
+        #
+        # Both of those mutations survived the probabilistic suite. They fail
+        # this one deterministically — verified by applying each and observing
+        # the same single failure on repeated runs — and the unmutated
+        # implementation passes with identical timing run to run.
+        #
+        # Production contains no sleeps and no test mode; a test in this file
+        # asserts that over the AST of `pilot_backend`.
+        run: |
+          if [ -f pilot_runtime/tests/integration/test_connection_race_determinism.py ]; then
+            python -m pytest pilot_runtime/tests/integration/test_connection_race_determinism.py -q
+          else
+            echo "0.5B not present on this branch — nothing to run"
+          fi
+
       - name: 0.5B emulator harness leaks no process
         # Infrastructure, not product. The emulator wrapper exec-spawns a JVM
         # that `terminate()` orphaned, and 98 of them had accumulated by 0.5A.
@@ -1292,11 +1313,11 @@ jobs:
               capture_output=True, text=True)
           count = collected.stdout.count("::")
           # Raised 70 -> 90 by 0.4B/C, 90 -> 100 by 0.4D/E, 100 -> 110 by
-          # 0.4F/G, 110 -> 130 by 0.5A, and 130 -> 148 by 0.5B (which adds 15
-          # provider-connection tests; local collection is 153). A floor that
-          # never moves stops noticing when a suite silently stops being
-          # collected.
-          assert count >= 148, f"expected the integration suites to collect >=148 tests, got {count}"
+          # 0.4F/G, 110 -> 130 by 0.5A, and 130 -> 156 by 0.5B (which adds 15
+          # provider-connection tests plus 8 forced-interleaving ones; local
+          # collection is 161). A floor that never moves stops noticing when a
+          # suite silently stops being collected.
+          assert count >= 156, f"expected the integration suites to collect >=156 tests, got {count}"
           run = subprocess.run(
               [sys.executable, "-m", "pytest", "pilot_runtime/tests/integration",
                "-q", "-rs"],

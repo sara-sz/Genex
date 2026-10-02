@@ -227,6 +227,74 @@ def test_a_declined_invitation_grants_nothing_and_frees_the_pair(wiring):
     assert again.status is ConnectionStatus.PENDING
 
 
+def test_only_a_pending_invitation_can_be_declined_at_the_domain_layer(wiring):
+    """DECLINED means "refused before it started", and only that.
+
+    Found by mutation testing. Removing the PENDING guard from `decline()`
+    survived, because `decline_invitation` checks PENDING first and refused
+    before reaching the domain. But the repository exposes `decline()`
+    directly, and a trail showing DECLINED for a clinician who had been
+    treating a child for a month would misrepresent what happened — an ACTIVE
+    relationship being withdrawn is a REVOKE.
+    """
+    from pilot_backend.domain.connections import (
+        ConnectionError_,
+        ProviderChildConnection,
+    )
+
+    pending = ProviderChildConnection.create(
+        wiring.hannah.provider_id, wiring.child, wiring.hannah.practice_id,
+        now=T0)
+    active = pending.activate(now=T0)
+    paused = active.pause(now=T0)
+    revoked = active.end(status=ConnectionStatus.REVOKED, now=T0)
+
+    for state in (active, paused, revoked, pending.decline(now=T0)):
+        with pytest.raises(ConnectionError_):
+            state.decline(now=T0)
+    # The one legal case still works.
+    assert pending.decline(now=T0).status is ConnectionStatus.DECLINED
+
+
+def test_a_connection_that_was_never_active_cannot_be_resumed(wiring):
+    """`is_resumable` requires a prior activation, not merely PAUSED.
+
+    Found by mutation testing. Dropping the `activated_at is not None` conjunct
+    survived because the service cannot reach the state: `pause()` requires
+    `is_active`, so a paused row always carries `activated_at`.
+
+    It is still the right guard. Resuming is defined as returning to a state
+    the relationship was previously IN, and a row that never activated has no
+    such state — "resume" would be silently promoting a never-accepted
+    invitation to active, skipping the clinician's consent entirely. Asserted
+    on a directly-constructed row, which is the only way the combination
+    exists.
+    """
+    from pilot_backend.domain.connections import (
+        ConnectionError_,
+        ProviderChildConnection,
+    )
+
+    never_active = ProviderChildConnection(
+        connection_id="pcxn_never", provider_id=wiring.hannah.provider_id,
+        child_id=wiring.child, practice_id=wiring.hannah.practice_id,
+        status=ConnectionStatus.PAUSED, created_at=T0, updated_at=T0,
+        activated_at=None, paused_at=T0)
+
+    assert never_active.is_paused is True
+    assert never_active.is_resumable is False, (
+        "a connection that was never active reports itself resumable")
+    with pytest.raises(ConnectionError_):
+        never_active.resume(now=T0)
+
+    # A genuinely paused row — one that WAS active — resumes.
+    once_active = ProviderChildConnection.create(
+        wiring.hannah.provider_id, wiring.child, wiring.hannah.practice_id,
+        now=T0).activate(now=T0).pause(now=T0)
+    assert once_active.is_resumable is True
+    assert once_active.resume(now=T0).status is ConnectionStatus.ACTIVE
+
+
 def test_a_declined_connection_cannot_be_reactivated_at_the_domain_layer(wiring):
     """DECLINED is terminal, asserted on the domain object itself.
 

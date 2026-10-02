@@ -1018,12 +1018,34 @@ def test_a_provider_claim_naming_a_different_provider_fails_closed(wiring):
         discipline=ProviderDiscipline.SLP, display_name="Provider-Resolved",
         now=T0).provider
 
-    # ...and a claim for that subject naming somebody else entirely.
+    # ...and a claim for that subject naming a DIFFERENT, REAL provider in the
+    # SAME practice.
+    #
+    # Both details are load-bearing, and getting them wrong is how an earlier
+    # version of this test passed against the defect it exists to catch. If
+    # the claim names a provider that does not exist, the mutated code falls
+    # through to `get_by_id`, hits `RecordNotFound`, and raises
+    # `AmbiguousSubjectState` from the NEXT branch — the same exception, so
+    # `pytest.raises` could not tell the two apart. If the named provider is
+    # in a different practice, the practice check raises instead, for a third
+    # unrelated reason.
+    #
+    # Naming a real provider in the same practice removes every fallback: only
+    # the holder-mismatch branch can refuse, so disabling it means the call
+    # SUCCEEDS and returns somebody else's provider.
+    other = provision_provider_record(
+        wiring.repos, auth_subject="fictional-subject-provider-other",
+        practice_id=wiring.topo.practice.practice_id,
+        discipline=ProviderDiscipline.SLP, display_name="Provider-Other",
+        now=T0).provider
+    assert other.provider_id != resolved.provider_id
+    assert other.practice_id == resolved.practice_id
+
     class _ClaimNamingAnother:
         def __init__(self, real) -> None:
             self._real = real
             self._interloper = AuthSubjectIdentityClaim.build(
-                subject, holder_actor_id="prov_someone_entirely_else",
+                subject, holder_actor_id=other.provider_id,
                 holder_actor_type=ActorRole.PROVIDER, now=T0)
 
         def find_for_subject(self, auth_subject):

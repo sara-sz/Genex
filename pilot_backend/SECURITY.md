@@ -50,7 +50,7 @@ debt, not closed items.
 |---|---|---|
 | 1 | **Real Firebase Admin / Identity Platform adapter** — a `TokenDecoder` implementation over `firebase_admin.auth.verify_id_token(..., check_revoked=True)` | The port and all production rules (revocation, verified-email, claim translation, fail-closed selection) exist and are tested. Only the SDK call is missing, and there is no Identity Platform project to call. Production currently resolves to `FailClosedAuthVerifier`, so the gap denies rather than admits. |
 | 2 | **Real Firestore adapter + emulator tests** — a `DocumentStore` implementation over `google.cloud.firestore.Client`, exercised against the Firestore emulator | Repositories, codecs, collections and ordering are complete and tested against the port. The adapter is a five-method translation. No production database exists to connect to. |
-| 4 | **Universal `auth_subject` write-time uniqueness** (added 0.5A, PARTIALLY CLOSED) — `AuthSubjectIdentityClaim` makes the CAREGIVER path write-time unique and race-safe, and a bootstrap against a subject an existing provider holds is refused. **Provider creation does not participate.** `providers.create` keys its document on the random `provider_id`, so two providers can share a subject, and a provider can bind a subject a caregiver already claimed. | The caregiver path — the only self-service identity path, and the one real people will use — is closed and emulator-proven. Provider records are created exclusively by fixtures today; there is no provider self-registration endpoint and no provisioning service, so the gap is reachable only by code inside this repository. See the detail section below for why the fix is not small. |
+| ~~4~~ | **Universal `auth_subject` write-time uniqueness** — **CLOSED in 0.5B.** `ProviderProvisioningService` commits the `AuthSubjectIdentityClaim` and the `Provider` in ONE transaction on the same deterministic key, and `providers.create` is called from nowhere else in the deployed codebase. | Closed and emulator-proven in both orderings. Retained in this table struck through rather than deleted, so the lineage of what was open and when stays readable. See the detail section below. |
 | 3 | **Goal approval must become atomic** (added 0.4B/C) — `GoalService.approve_clinical_goal` and `approve_caregiver_goal` write the `GoalVersion` FIRST, then the goal that names it as `current_version_id`. A crash between the two writes leaves an **orphan `GoalVersion`**. | Founder-reviewed and explicitly accepted for the fictional 0.4B/C freeze. The orphan is INERT: no goal references it, no allocation can name it, no snapshot can reach it, and it is invisible to every read path — `list_chain` is keyed on a `goal_id` that does not exist. The failure mode is a dead row, never a goal whose `current_version_id` points at nothing. **Required before real PHI**, because a clinical record store must not accumulate unreferenced clinical text even when it is unreachable. |
 
 Items 1 and 2 must be implemented, reviewed and tested **before** the first
@@ -75,45 +75,69 @@ performed, rather than any weakening of the port's existence guarantee.
 Tracked here rather than in ordinary carried debt because it is a PRE-PHI
 hardening requirement, not a preference.
 
-### Blocker 4 — exactly what 0.5A closed, and what it did not
+### Blocker 4 — CLOSED in 0.5B
 
-**CLOSED: caregiver self-bootstrap `auth_subject` write-time uniqueness.**
-`AuthSubjectIdentityClaim` keys a document on `sha256(auth_subject)[:32]`, and
-`bootstrap_caregiver` acquires it in the SAME transaction that creates the
-`Caregiver`. Concurrent bootstraps collide on one document, exactly one wins,
-and the losers converge on the winner's caregiver. A caregiver that predates the
-primitive gains a claim by create-only backfill rather than a duplicate
-identity. Proven against the real Firestore emulator, not `FakeDocumentStore`.
+**0.5A closed the caregiver half.** `AuthSubjectIdentityClaim` keys a document
+on `sha256(auth_subject)[:32]`, and `bootstrap_caregiver` acquires it in the
+SAME transaction that creates the `Caregiver`.
 
-**STILL OPEN: universal claim enforcement for Provider creation / provisioning.**
+**0.5B closes the provider half.** `pilot_backend/provisioning/` commits the
+claim and the `Provider` in one transaction on that same key, so concurrent
+provisions of one subject collide on one document and exactly one survives.
 
-A deterministic-key claim is only a mutex for writers that TAKE it, and the
-provider side does not:
+A deterministic claim is only a mutex for writers that TAKE it, so the
+guarantee is not "provisioning acquires the claim" — it is **nothing else
+creates a Provider**. Two structural CI gates enforce that, and both were
+validated by injecting the bypass they exist to catch:
 
-| Path | Acquires a claim? | Resulting state |
-|---|---|---|
-| `providers.create` twice with one subject | No | `AmbiguousAuthSubject` on every later resolution, permanently |
-| `providers.create` for a subject a caregiver already claimed | No | `resolve_principal` refuses: "resolves to both a caregiver and a provider record" |
-| `Provider.with_auth_subject` | No | **Latent only** — no repository method persists a late binding; `update_status` is the sole provider mutation |
+  * `providers.create` appears only in `provisioning/service.py`, plus two
+    allowlisted fixture call sites;
+  * nothing reachable from the composition root imports
+    `pilot_backend.fixtures` — checked by walking the import graph, not just
+    the root module.
 
-The caregiver bootstrap refuses a subject an existing provider holds, so the
-ordering *caregiver-after-provider* IS guarded. The reverse is not.
+Proven against the real Firestore emulator:
 
-Why 0.5A does not fix it: enforcement has to move into
-`FirestoreProviderRepository.create`, which is frozen 0.1 code, and every
-fixture and emulator test that provisions a provider would have to acquire a
-claim transactionally. That is a change to provider provisioning, not a small
-correctness patch, and 0.5A's own paths are correct without it. Expanding the
-slice to cover it was explicitly declined.
+| Ordering | Outcome |
+|---|---|
+| eight concurrent provisions of one subject | one claim, one `Provider`, all eight callers return the same `provider_id` |
+| provider provisioned, then caregiver bootstrap | `SubjectAlreadyHeld`, nothing written |
+| caregiver bootstrapped, then provider provisioned | `SubjectAlreadyHeld`, nothing written |
+| eight threads racing caregiver-vs-provider on one subject | exactly one actor KIND is created; every loser fails closed |
+| repeat provision of the same subject | converges on the existing `Provider`, writes nothing |
 
-Pinned by tests that assert the CURRENT state, so closing the gap breaks them
-and forces this section to be updated in the same change:
-`test_provider_creation_does_not_acquire_a_subject_claim`,
-`test_a_provider_can_still_take_a_subject_a_caregiver_holds`,
-`test_no_repository_method_persists_a_late_subject_binding` and
-`test_caregiver_creation_is_the_only_claimed_identity_path`.
+Five refusals are pinned by test, each found or confirmed by mutation testing:
+a caregiver-held subject with no claim, a caregiver-held claim with no
+caregiver record, a claim naming a different provider than the record the
+subject resolves to, an absent or inactive practice, and a legacy provider
+which is ADOPTED by claim backfill rather than twinned. None is repaired by
+guessing.
 
----
+**The remaining scope limit, stated precisely.** Two fixture call sites still
+create `Provider` records directly, so a fixture-seeded provider holds no
+claim until provisioning touches its subject, at which point the
+legacy-backfill branch mints one. This is bounded and test-only:
+
+  * `fixtures/secure_topology.py` is backend-parametrised and also builds
+    against frozen `InMemoryRepositories`, which has no claim collection and
+    no transaction support — it predates the primitive by four slices;
+  * `fixtures/pilot_topology.py` is the BACKEND 0.1 in-memory demo topology.
+
+Routing them through provisioning was attempted and REVERTED: it would require
+adding a claim repository and transactions to frozen BACKEND 0.1 code. Making
+`provision_provider_record` tolerate a missing claim collection was rejected
+outright — a provisioning path that proceeds without its mutex is exactly the
+bypass this module removes. Neither fixture is reachable from the deployed
+composition, which is what the second gate above asserts.
+
+**There is no provisioning HTTP route, deliberately.** Creating a Provider is
+an administrative act performed on someone else's behalf, and `ActorRole`
+contains only CAREGIVER and PROVIDER — there is no principal that could
+authorize one. An endpoint would therefore have to invent an admin role or
+authorize nobody, and the second IS public provider self-registration. Hannah
+is provisioned operationally through `ProviderProvisioningService`. A CI gate
+asserts no route of that shape, and no discovery, directory or
+self-registration shape, exists.
 
 ## EXTERNAL_GO_LIVE_BLOCKER
 
@@ -614,3 +638,115 @@ prohibition is untouched.
 - **All earlier pilot, Parent and Therapist carried debt remains**, including
   PRE-PHI INTEGRATION BLOCKER 3 (atomic goal approval), which 0.4D/E does not
   touch.
+
+---
+
+## 0.5B — provider identity and the connection lifecycle (added)
+
+### Scope, and what is deliberately absent
+
+One direction only: a caregiver invites a clinician they already know, and the
+clinician accepts or declines. DEFERRED, and each one a surface that discloses
+which families or clinicians exist: provider-to-family invitation and
+redemption, family search, a provider directory or marketplace, email
+invitation infrastructure, and public provider self-registration. A CI gate
+asserts no route of any of those shapes exists.
+
+### How a caregiver names a clinician without being able to enumerate them
+
+The caregiver supplies the opaque `provider_id`, obtained out of band. There is
+no lookup route, no search and no listing, so the id is the entire addressing
+contract.
+
+Knowing the id grants nothing. It permits only OFFERING a connection, which
+creates a PENDING row conferring no access, and the clinician must then accept.
+A guessed id cannot produce access; at most it produces an invitation somebody
+has to agree to. Absent, retired and inactive-practice ids raise the SAME
+error with the SAME response body, so the endpoint cannot confirm that an id
+exists.
+
+### One live connection per (provider, child)
+
+`ClaimKind.PROVIDER_CONNECTION`, keyed on `(provider_id, child_id)` and held
+while the connection is PENDING, ACTIVE or PAUSED. A caregiver double-tapping
+"connect" produces two writers computing one key, so they collide on one
+document and exactly one survives — a read-then-write guard would be right
+almost always and wrong exactly when it matters. Declining, revoking and
+ending RELEASE the key; pausing keeps it.
+
+### Only ACTIVE authorizes
+
+`authorize_child_access` requires `is_active`, which means status ACTIVE *and*
+`ended_at` unset. PENDING, DECLINED, PAUSED, REVOKED and ENDED therefore all
+deny with no change to the authz package at all — which is why DECLINED and
+PAUSED were added as STATUSES rather than as flags.
+
+DECLINED is terminal and is not ENDED: ending means a relationship existed,
+declining means a family refused one that never started. PAUSED is the only
+non-terminal non-active state, and it preserves `activated_at` so a resume
+restores the SAME row — which matters structurally, because
+`ManagingClinicianAssignment.provider_connection_id` points at it.
+
+### The stale-assignment defect, and the atomic cascade that fixes it
+
+Found by inspection of frozen 0.4A code during 0.5B. Revoking a connection
+left its `ManagingClinicianAssignment` ACTIVE. It granted nothing at the time,
+because every clinical write path calls `authorize_child_access` BEFORE
+`_require_managing_clinician` — verified at every call site in goals, rtm and
+weekly. But the assignment is keyed on the CHILD, not the connection, so:
+
+    revoke connection          -> assignment stays ACTIVE
+    invite the same provider   -> new ACTIVE connection
+    -> authorize_child_access passes, the STALE assignment names this
+       provider, and managing-clinician status is restored with no explicit
+       assignment, citing a connection that was revoked
+
+Pausing, revoking or ending now ends any ACTIVE assignment for that
+(provider, child) and releases its claim IN THE SAME TRANSACTION. Acceptance
+never assigns a managing clinician; a resume restores access but NOT ownership,
+because "you still clinically own this child" is not something to restore
+silently after an interruption of unknown length.
+
+### Three Firestore rules the real emulator enforced
+
+Every unit test passed through all three. `FakeDocumentStore` permits them all.
+
+1. `set()` is unavailable inside a transaction, because the repository
+   verifies existence with a read and Firestore forbids a read after a write.
+   `overwrite` was added to the port and both adapters: a blind
+   whole-document write, the only one usable transactionally.
+2. All reads must precede all writes.
+3. **Conflict detection covers only documents THIS transaction read.** An
+   assignment lookup performed before the transaction opened was atomic and
+   still lost the race: a concurrent `assign_managing_clinician` was invisible,
+   so the revoke committed and left the new assignment ACTIVE.
+
+The third is the one worth remembering: atomicity and isolation are different
+properties, and a transaction can write atomically while losing a race it never
+read. The fix is symmetric — revoke QUERIES assignments inside its transaction,
+and assign RE-READS the connection inside its own, so whichever commits second
+retries and then observes the other.
+
+### The invariant, proven by forced interleaving
+
+    No execution ordering leaves an ACTIVE ManagingClinicianAssignment whose
+    required ProviderChildConnection is no longer ACTIVE.
+
+`test_connection_race_determinism.py` decides the ordering rather than racing
+for it: a one-shot barrier injected at the transaction boundary through the
+service's own `repos_factory` seam. Production contains no sleeps and no test
+mode, asserted over the AST of `pilot_backend`.
+
+### RTM invariant preserved
+
+`RTMEpisode` pins `managing_provider_id` at open time and
+`_require_episode_owner` refuses writes once the active assignment names
+someone else. Ending an assignment therefore cannot silently transfer an open
+episode: with none active the episode fails closed, and a later assignee is
+refused by name. Nothing in 0.5B touches an episode.
+
+### 0.5B carried debt
+
+`InMemoryRepositories` still has no `auth_subject_claims` collection, which is
+why two fixture call sites create `Provider` records without a claim. Bounded
+and test-only — see the Blocker 4 section above.
