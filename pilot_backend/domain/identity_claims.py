@@ -110,6 +110,20 @@ class ClaimKind(str, Enum):
     #: recover across.
     WEEKLY_CYCLE = "weekly_cycle"
     WEEKLY_ALLOCATION = "weekly_allocation"
+    #: 0.5B. One LIVE provider-child connection per (provider_id, child_id).
+    #:
+    #: "Live" means PENDING, ACTIVE or PAUSED — the three states from which a
+    #: relationship can still become or remain active. DECLINED, REVOKED and
+    #: ENDED all RELEASE the key, so a family that refused a clinician can
+    #: invite them again later and acquire generation + 1.
+    #:
+    #: Needed because the no-duplicate rule is otherwise a read-then-write
+    #: guard, which is the 0.3 auth-subject defect one layer up: right almost
+    #: always, wrong exactly when a caregiver double-taps "connect". Two live
+    #: rows for one (provider, child) would make `authorize_child_access`
+    #: depend on which row a query happened to return, and would let one be
+    #: revoked while the other silently kept access.
+    PROVIDER_CONNECTION = "provider_connection"
 
 
 class ClaimError(ValueError):

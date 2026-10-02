@@ -70,7 +70,34 @@ class DocumentStore(Protocol):
         """Return the document, or None if absent. Never raises for absence."""
 
     def set(self, collection: str, doc_id: str, data: Mapping[str, object]) -> None:
-        """Overwrite an existing document wholesale."""
+        """Overwrite an existing document wholesale.
+
+        NOT available inside a transaction: the repository layer verifies
+        existence with a read first, and Firestore forbids a read after a
+        write. Use `overwrite` for a transactional status change.
+        """
+
+    def overwrite(self, collection: str, doc_id: str,
+                  data: Mapping[str, object]) -> None:
+        """Write a document wholesale WITHOUT first checking it exists. 0.5B.
+
+        The difference from `set` is the absent read, and that is the whole
+        point: it is the only whole-document write available inside a
+        transaction.
+
+        Added because 0.5B has a genuinely atomic multi-document requirement —
+        pausing or revoking a provider connection must end that provider's
+        managing-clinician assignment in the SAME transaction, or a crash
+        between the two leaves an inactive connection with a live assignment
+        that a later reconnection silently honours.
+
+        Caller's obligation: having skipped the existence check, the caller
+        must read the document INSIDE the transaction before writing it. That
+        read is what enrolls the document in Firestore's conflict detection, so
+        a competing writer causes a retry instead of a lost update. Writing
+        blind from a value read before the transaction opened would be atomic
+        and still wrong.
+        """
 
     def query_equals(self, collection: str, field: str,
                      value: object) -> List[Tuple[str, Mapping[str, object]]]:
@@ -155,6 +182,19 @@ class FakeDocumentStore:
         if doc_id not in bucket:
             raise DocumentStoreError(f"document does not exist in {collection}")
         bucket[doc_id] = copy.deepcopy(dict(data))
+
+    def overwrite(self, collection: str, doc_id: str,
+                  data: Mapping[str, object]) -> None:
+        """No existence check, by contract — see the port.
+
+        Deliberately NOT implemented as `set` with the check removed in a way
+        that makes the fake MORE permissive than Firestore. The real adapter
+        allows this inside a transaction and so does this one; the difference
+        that matters is the one the fake CANNOT model — Firestore's conflict
+        detection — which is why the atomicity claims are proven against the
+        emulator and not here.
+        """
+        self._collection(collection)[doc_id] = copy.deepcopy(dict(data))
 
     def query_equals(self, collection: str, field: str,
                      value: object) -> List[Tuple[str, Mapping[str, object]]]:

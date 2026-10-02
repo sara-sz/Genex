@@ -204,6 +204,17 @@ class _BaseRepo:
         self._store.set(self._collection, doc_id, encode(record))
         return record
 
+    def _overwrite(self, doc_id: str, record: Any) -> Any:
+        """Write without an existence check. Transaction-safe. 0.5B.
+
+        `_set` cannot run inside a transaction because the store verifies
+        existence first and Firestore forbids a read after a write. This skips
+        that check, so the CALLER must have read the record inside the same
+        transaction — which the `*_in_transaction` methods below do.
+        """
+        self._store.overwrite(self._collection, doc_id, encode(record))
+        return record
+
     def _query(self, field: str, value: Any) -> List[Any]:
         return _sorted([decode(self.model, data)
                         for _, data in self._store.query_equals(self._collection, field, value)])
@@ -360,6 +371,22 @@ class FirestoreProviderChildConnectionRepository(_BaseRepo):
     def resume(self, connection_id: str, *, now: Optional[datetime] = None
                ) -> ProviderChildConnection:
         return self._set(connection_id, self._get(connection_id).resume(now=now))
+
+    def overwrite(self, connection: ProviderChildConnection
+                  ) -> ProviderChildConnection:
+        """Write a connection WITHOUT reading it first. Transaction-safe. 0.5B.
+
+        A pure write, deliberately. Firestore requires every read in a
+        transaction to precede every write, so a method that read-then-wrote
+        could only ever be the FIRST write in a transaction — the emulator
+        rejected exactly that shape when the cascade needed to read the
+        managing assignment after updating the connection.
+
+        The caller therefore does its own `get_by_id` inside the transaction,
+        before any write, which is both the existence check and what enrolls
+        the document in conflict detection.
+        """
+        return self._overwrite(connection.connection_id, connection)
 
     def list_children_for_provider(self, provider_id: str, *, include_ended: bool = False
                                    ) -> List[ProviderChildConnection]:
@@ -565,6 +592,16 @@ class FirestoreManagingClinicianRepository(_BaseRepo):
 
     def get_by_id(self, assignment_id: str) -> ManagingClinicianAssignment:
         return self._get(assignment_id)
+
+    def overwrite(self, assignment: ManagingClinicianAssignment
+                  ) -> ManagingClinicianAssignment:
+        """Write an assignment WITHOUT reading it first. Transaction-safe. 0.5B.
+
+        A pure write — see `FirestoreProviderChildConnectionRepository.overwrite`
+        for why reads and writes must not be interleaved inside a transaction.
+        `update` goes through `_set`, which Firestore refuses there.
+        """
+        return self._overwrite(assignment.assignment_id, assignment)
 
     def update(self, assignment: ManagingClinicianAssignment) -> ManagingClinicianAssignment:
         return self._set(assignment.assignment_id, assignment)

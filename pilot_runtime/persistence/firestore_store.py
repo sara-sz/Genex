@@ -207,6 +207,20 @@ class FirestoreDocumentStore:
         except gcloud_exceptions.GoogleAPIError:
             raise DocumentStoreError(f"write failed in {collection}") from None
 
+    def overwrite(self, collection: str, doc_id: str,
+                  data: Mapping[str, object]) -> None:
+        """Blind whole-document write. 0.5B — see the port for the contract.
+
+        Outside a transaction this is `set` without the existence check. It
+        exists here so the port has one implementation per adapter rather than
+        a method that only works transactionally, which would be a trap.
+        """
+        reference = self._doc(collection, doc_id)
+        try:
+            reference.set(dict(data))
+        except gcloud_exceptions.GoogleAPIError:
+            raise DocumentStoreError(f"write failed in {collection}") from None
+
     def query_equals(self, collection: str, field: str,
                      value: object) -> List[Tuple[str, Mapping[str, object]]]:
         """Equality query, ordered by document id.
@@ -272,7 +286,21 @@ class _TransactionalFirestoreStore:
     def set(self, collection: str, doc_id: str, data: Mapping[str, object]) -> None:
         raise DocumentStoreError(
             "set() is not available inside a transaction; Firestore forbids a "
-            "read after a write, so existence cannot be verified")
+            "read after a write, so existence cannot be verified. Use "
+            "overwrite() after reading the document inside this transaction")
+
+    def overwrite(self, collection: str, doc_id: str,
+                  data: Mapping[str, object]) -> None:
+        """Blind whole-document write, enrolled in the transaction. 0.5B.
+
+        No existence check, which is precisely why this is usable here where
+        `set` is not. `transaction.set` is an upsert, so the caller carries the
+        obligation stated on the port: read the document INSIDE this
+        transaction first — both to know it exists, and to enroll it in
+        Firestore's conflict detection so a competing writer forces a retry
+        rather than losing an update.
+        """
+        self._transaction.set(self._ref(collection, doc_id), dict(data))
 
     def query_equals(self, collection: str, field: str,
                      value: object) -> List[Tuple[str, Mapping[str, object]]]:
