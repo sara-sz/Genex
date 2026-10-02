@@ -369,8 +369,27 @@ def _query_value(environ, field: str) -> str:
 # function below is a decision about what leaves the server.
 
 
-def _goal_payload(goal, kind) -> dict:
-    return {
+def _goal_payload(goal, kind, *, text=None) -> dict:
+    """The goal, plus its CURRENT wording when the caller resolved it.
+
+    0.5D adds `text`. It is passed in rather than read here because resolving
+    it requires an authorized service call, and a serialiser that reached for
+    a repository would be deciding who may read what.
+
+    `text` is a TEMPLATE, not display-ready prose. `current_text`'s own
+    docstring is explicit that `pilot_backend` holds no child name to render
+    with, so substitution is the client's job at presentation time. The field
+    is omitted entirely when unresolved, so a caller can never mistake "not
+    looked up" for "no wording".
+
+    Deliberately NOT exposed from `GoalVersion`: `edit_type`, `reason`,
+    `actor_id`, `actor_role`, `derived_from_suggestion_id` and
+    `supersedes_version_id`. Those are provenance and history — `reason` in
+    particular can carry clinical rationale, and none of it is needed to
+    render a goal. `current_version_id` is already here, so a client that
+    needs to correlate versions can.
+    """
+    payload = {
         "goal_kind": kind.value,
         "goal_id": getattr(goal, "clinical_goal_id", None)
                    or getattr(goal, "caregiver_goal_id", ""),
@@ -378,6 +397,9 @@ def _goal_payload(goal, kind) -> dict:
         "status": goal.status.value,
         "is_rtm_eligible": kind.value == "clinical",
     }
+    if text is not None:
+        payload["text"] = text
+    return payload
 
 
 def _suggestion_payload(suggestion) -> dict:
@@ -437,6 +459,59 @@ def _cycle_payload(cycle) -> dict:
         "ends_on": cycle.ends_on,
         "is_partial": cycle.is_partial,
         "state": cycle.state.value if hasattr(cycle, "state") else None,
+    }
+
+
+def _snapshot_payload(snapshot) -> dict:
+    """The captured parent-facing plan, VERBATIM and explicitly non-canonical.
+
+    0.5D. This is the one read model in the pilot that deliberately has no
+    schema, and the naming says so at every level so a client cannot acquire
+    the shape by accident and then depend on it.
+
+    ## Why it is not normalised
+
+    `WeeklyPlanSnapshot.resolved_plan_document` is a JSON string because it is
+    an opaque capture of ANOTHER system's document. The frozen docstring states
+    the reason: "Parent's plan shape is not ours to version, and a codec that
+    validated its fields would start failing the moment Parent changed one."
+    Giving it a pilot-owned schema here would make exactly the claim that
+    sentence refuses, and would create a second source of truth for plan
+    content that Parent would then have to conform to.
+
+    So the document is handed back parsed and untouched, under
+    `source_document`, wrapped in the provenance that makes it interpretable:
+    WHICH system produced it, WHICH plan it came from, WHEN that system
+    generated it and WHEN the pilot froze it. A client that renders this is
+    rendering Parent's document, at its own risk, and `is_canonical: false`
+    plus `schema: "opaque_source_document"` are in the payload to keep that
+    unambiguous in the response itself — not merely in documentation nobody
+    re-reads.
+
+    ## What this is NOT
+
+    Not a promise of forward compatibility. Not a contract Parent currently
+    keeps. Not a field set the pilot will maintain, validate, migrate or
+    version. No key inside `source_document` is guaranteed to exist, keep its
+    type, or mean the same thing next week.
+
+    Nothing clinical is added by this projection: the snapshot is
+    `PARENT_VISIBLE` precisely because, as its docstring puts it, "the family
+    already has this content; the snapshot is a copy of it."
+    """
+    return {
+        "snapshot_id": snapshot.snapshot_id,
+        "cycle_id": snapshot.cycle_id,
+        "schema": "opaque_source_document",
+        "is_canonical": False,
+        "source_system": snapshot.source_system.value,
+        "source_plan_id": snapshot.source_plan_id,
+        "source_generated_at": (snapshot.source_generated_at.isoformat()
+                                if snapshot.source_generated_at else None),
+        "captured_at": snapshot.captured_at.isoformat(),
+        # Parsed, not re-serialised: `document()` is the frozen accessor and
+        # it never mutates the record.
+        "source_document": snapshot.document(),
     }
 
 
@@ -1258,9 +1333,24 @@ class PilotWSGIApplication:
         goals, plans, weekly, rtm = self._services()
 
         if route == CHILD_GOALS_ROUTE and method == "GET":
-            return {"goals": [_goal_payload(g, GoalKind.CLINICAL)
-                              for g in goals.list_clinical_goals(
-                                  principal, resource)]}
+            # 0.5D: the wording comes with the goal.
+            #
+            # `current_text` is the EXISTING authorized read — it calls
+            # `get_goal`, which authorizes the child, then resolves
+            # `current_version_id` against the immutable version chain. So the
+            # text is not duplicated onto `ClinicalGoal` and no new rule is
+            # introduced here; this is the frozen method, called once per goal.
+            #
+            # One Firestore read per goal, which is an N+1. Left as-is
+            # deliberately: a batched read would be new behaviour in a frozen
+            # service, and the pilot lists a handful of goals per child.
+            return {"goals": [
+                _goal_payload(g, GoalKind.CLINICAL,
+                              text=goals.current_text(
+                                  principal,
+                                  GoalRef(GoalKind.CLINICAL,
+                                          g.clinical_goal_id)))
+                for g in goals.list_clinical_goals(principal, resource)]}
 
         if route == CHILD_GOALS_ROUTE:
             body = read_json_body(environ, allowed=[
@@ -1271,7 +1361,15 @@ class PilotWSGIApplication:
                 suggestion_id=opt_str(body, "suggestion_id") or None,
                 text=opt_str(body, "text"),
                 reason=opt_str(body, "reason"), request_id=request_id)
-            return {"goal": _goal_payload(goal, GoalKind.CLINICAL)}
+            # The approved wording, read back through the same authorized
+            # path rather than echoed from the request body — what was
+            # PERSISTED is what the UI should render, and `_approved_text`
+            # may not have kept the submitted string verbatim.
+            return {"goal": _goal_payload(
+                goal, GoalKind.CLINICAL,
+                text=goals.current_text(
+                    principal,
+                    GoalRef(GoalKind.CLINICAL, goal.clinical_goal_id)))}
 
         if route == CHILD_SUGGESTIONS_ROUTE:
             return {"suggestions": [_suggestion_payload(s)
@@ -1312,12 +1410,20 @@ class PilotWSGIApplication:
                                      _requested_month(environ))
             if plan is None:
                 return {"plan": None, "cycle": None, "alignments": [],
-                        "coverage_gaps": []}
+                        "coverage_gaps": [], "plan_snapshot": None}
             cycles = weekly.list_cycles(principal, plan.focus_plan_id)
             if not cycles:
                 return {"plan": _plan_payload(plan), "cycle": None,
-                        "alignments": [], "coverage_gaps": []}
+                        "alignments": [], "coverage_gaps": [],
+                        "plan_snapshot": None}
             current = cycles[-1]
+            # `list_cycles` authorized the child, so the snapshot row read
+            # below belongs to a cycle the caller is already proven to hold.
+            # Read through the repository because the frozen weekly service
+            # exposes no snapshot read and inventing one would be new business
+            # logic — the same projection pattern CHILD_RTM_ROUTE uses.
+            snapshots = self._repos.weekly_plan_snapshots.list_for_cycle(
+                current.cycle_id)
             return {
                 "plan": _plan_payload(plan),
                 "cycle": _cycle_payload(current),
@@ -1327,6 +1433,8 @@ class PilotWSGIApplication:
                 "coverage_gaps": [_gap_payload(g) for g in
                                   weekly.list_coverage_gaps(
                                       principal, current.cycle_id)],
+                "plan_snapshot": (_snapshot_payload(snapshots[0])
+                                  if snapshots else None),
             }
 
         if route == CHILD_RTM_ROUTE:
