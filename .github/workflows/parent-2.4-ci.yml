@@ -609,6 +609,153 @@ jobs:
           print("pilot_backend imports no storage, network or identity SDK")
           PY
 
+      - name: October pilot 0.5B — provider connection lifecycle (unit)
+        # The state machine and the authorization rules. Concurrency is NOT
+        # proven here — `FakeDocumentStore` is a plain dict — it is proven in
+        # the pilot-integration job against the real emulator.
+        run: |
+          if [ -f pilot_backend/tests/test_provider_connection.py ]; then
+            python -m pytest pilot_backend/tests/test_provider_connection.py -q
+          else
+            echo "0.5B not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5B — connection surface over real HTTP
+        # Role separation, cross-family isolation and non-enumeration proven
+        # through actual request handling rather than service calls.
+        run: |
+          if [ -f pilot_backend/tests/test_provider_connection_http.py ]; then
+            python -m pytest pilot_backend/tests/test_provider_connection_http.py -q
+          else
+            echo "0.5B not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5B — Provider creation goes through the claim
+        # THE structural half of PRE-PHI blocker 4. A deterministic claim is
+        # only a mutex for writers that TAKE it, so the guarantee is not
+        # "provisioning acquires the claim" but "nothing else creates a
+        # Provider". Asserted over the AST, because a future service calling
+        # the repository directly would reopen the blocker and no behavioural
+        # test would notice.
+        run: |
+          if [ ! -d pilot_backend/provisioning ]; then
+            echo "0.5B not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib, sys
+
+          root = pathlib.Path("pilot_backend")
+          creators, claimers = set(), set()
+          for path in sorted(root.rglob("*.py")):
+              if "tests" in path.parts:
+                  continue
+              tree = ast.parse(path.read_text())
+              rel = path.relative_to(root).as_posix()
+              for node in ast.walk(tree):
+                  if (isinstance(node, ast.Call)
+                          and isinstance(node.func, ast.Attribute)
+                          and node.func.attr == "create"
+                          and isinstance(node.func.value, ast.Attribute)
+                          and node.func.value.attr == "providers"):
+                      creators.add(rel)
+                  if (isinstance(node, ast.Attribute) and node.attr == "claim"
+                          and isinstance(node.value, ast.Attribute)
+                          and node.value.attr == "auth_subject_claims"):
+                      claimers.add(rel)
+
+          allowed_creators = {"provisioning/service.py",
+                              "fixtures/secure_topology.py",
+                              "fixtures/pilot_topology.py"}
+          if creators != allowed_creators:
+              print("Provider creation moved:", sorted(creators))
+              sys.exit(1)
+          if claimers != {"integration/identity_service.py",
+                          "provisioning/service.py"}:
+              print("the subject claim gained a writer:", sorted(claimers))
+              sys.exit(1)
+          print("provider creation: provisioning only, plus two test-only "
+                "fixtures; subject claim written from exactly two paths")
+          PY
+
+      - name: October pilot 0.5B — no discovery, directory or self-registration
+        # The DEFERRED surfaces must stay absent. Each discloses which
+        # families or clinicians exist, so their absence is a security
+        # property rather than a backlog item. Provisioning has no route
+        # either: creating a Provider is an administrative act and `ActorRole`
+        # has no principal that could authorize it, so an endpoint for it
+        # would have to authorize nobody — which IS public self-registration.
+        run: |
+          if [ ! -f pilot_backend/connections/service.py ]; then
+            echo "0.5B not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import sys
+          from pilot_backend.transport.wsgi_app import ROUTE_TABLE
+
+          banned = ("search", "directory", "lookup", "register", "signup",
+                    "sign-up", "invite-family", "families", "discover")
+          for _method, template, _public in ROUTE_TABLE:
+              low = template.lower()
+              for fragment in banned:
+                  if fragment in low:
+                      print("a discovery-shaped route appeared:", template)
+                      sys.exit(1)
+              if low.rstrip("/").endswith("providers"):
+                  print("a provider-collection route appeared:", template)
+                  sys.exit(1)
+          public = [t for _m, t, p in ROUTE_TABLE if p]
+          if public != ["/health"]:
+              print("a 0.5B route is public:", public)
+              sys.exit(1)
+          print(f"{len(ROUTE_TABLE)} routes; /health still the only public one; "
+                "no discovery, directory, provisioning or self-registration route")
+          PY
+
+      - name: October pilot 0.5B — an inactive connection grants nothing
+        # PENDING, DECLINED, PAUSED, REVOKED and ENDED must all deny, and the
+        # reason they do is structural: `authorize_child_access` tests
+        # `is_active`, which requires status ACTIVE *and* `ended_at` unset. So
+        # the assertion is on the ENUM and the predicate, not on a list of
+        # states someone has to remember to extend.
+        run: |
+          if [ ! -f pilot_backend/connections/service.py ]; then
+            echo "0.5B not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import sys
+          from datetime import datetime, timezone
+          from pilot_backend.domain.connections import ProviderChildConnection
+          from pilot_backend.domain.enums import (
+              ConnectionStatus, NON_ACCESS_CONNECTION_STATUSES)
+
+          T0 = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+          if ConnectionStatus.ACTIVE in NON_ACCESS_CONNECTION_STATUSES:
+              print("ACTIVE is listed as a non-access status")
+              sys.exit(1)
+          for status in ConnectionStatus:
+              row = ProviderChildConnection(
+                  connection_id="pcxn_x", provider_id="prov_x",
+                  child_id="chld_x", practice_id="prac_x", status=status,
+                  created_at=T0, updated_at=T0)
+              expected = status is ConnectionStatus.ACTIVE
+              if row.is_active is not expected:
+                  print(f"{status.value}: is_active={row.is_active}")
+                  sys.exit(1)
+          # And an ACTIVE row that has been ended is still not active.
+          ended = ProviderChildConnection(
+              connection_id="pcxn_y", provider_id="prov_x", child_id="chld_x",
+              practice_id="prac_x", status=ConnectionStatus.ACTIVE,
+              created_at=T0, updated_at=T0, ended_at=T0)
+          if ended.is_active:
+              print("an ended ACTIVE row still reports itself active")
+              sys.exit(1)
+          print(f"only ACTIVE authorizes; {len(NON_ACCESS_CONNECTION_STATUSES)} "
+                "statuses deny, including DECLINED and PAUSED")
+          PY
+
       - name: October pilot 0.4D/E — no double counting, structurally
         # The arithmetic that stops a multi-goal activity inflating a total.
         # Asserted here as well as in the unit suite because it is the single
@@ -1106,6 +1253,31 @@ jobs:
             echo "0.5A not present on this branch — nothing to run"
           fi
 
+      - name: 0.5B provider connections and the cascade (real emulator)
+        # Every CONTENTION claim 0.5B makes is made here and only here. Also
+        # the suite that caught three Firestore rules the fake store permits:
+        # `set()` is unavailable in a transaction, all reads must precede all
+        # writes, and conflict detection covers only documents THIS
+        # transaction read — the last of which made an atomic cascade still
+        # lose a race it never read.
+        run: |
+          if [ -f pilot_runtime/tests/integration/test_provider_connection_emulator.py ]; then
+            python -m pytest pilot_runtime/tests/integration/test_provider_connection_emulator.py -q
+          else
+            echo "0.5B not present on this branch — nothing to run"
+          fi
+
+      - name: 0.5B emulator harness leaks no process
+        # Infrastructure, not product. The emulator wrapper exec-spawns a JVM
+        # that `terminate()` orphaned, and 98 of them had accumulated by 0.5A.
+        # Source-level guard so the fast lane catches a revert too.
+        run: |
+          if [ -f pilot_runtime/tests/test_emulator_lifecycle.py ]; then
+            python -m pytest pilot_runtime/tests/test_emulator_lifecycle.py -q
+          else
+            echo "0.5B not present on this branch — nothing to run"
+          fi
+
       - name: Prove the emulator suites actually ran
         # Belt and braces against the one failure mode this job exists to
         # prevent: a green result produced by tests that never executed.
@@ -1120,10 +1292,11 @@ jobs:
               capture_output=True, text=True)
           count = collected.stdout.count("::")
           # Raised 70 -> 90 by 0.4B/C, 90 -> 100 by 0.4D/E, 100 -> 110 by
-          # 0.4F/G, and 110 -> 130 by 0.5A (which adds 23; local collection is
-          # 138). A floor that never moves stops noticing when a suite
-          # silently stops being collected.
-          assert count >= 130, f"expected the integration suites to collect >=130 tests, got {count}"
+          # 0.4F/G, 110 -> 130 by 0.5A, and 130 -> 148 by 0.5B (which adds 15
+          # provider-connection tests; local collection is 153). A floor that
+          # never moves stops noticing when a suite silently stops being
+          # collected.
+          assert count >= 148, f"expected the integration suites to collect >=148 tests, got {count}"
           run = subprocess.run(
               [sys.executable, "-m", "pytest", "pilot_runtime/tests/integration",
                "-q", "-rs"],

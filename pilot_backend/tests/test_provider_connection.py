@@ -227,6 +227,39 @@ def test_a_declined_invitation_grants_nothing_and_frees_the_pair(wiring):
     assert again.status is ConnectionStatus.PENDING
 
 
+def test_a_declined_connection_cannot_be_reactivated_at_the_domain_layer(wiring):
+    """DECLINED is terminal, asserted on the domain object itself.
+
+    Found by mutation testing. Removing DECLINED from
+    `TERMINAL_CONNECTION_STATUSES` survived every service test, because
+    `accept_invitation` independently requires status PENDING and refused
+    first. The terminal-set membership was therefore redundant *through the
+    service* — but it is the only guard on `activate()`, which the repository
+    exposes directly and which fixtures already call.
+
+    So this asserts at the layer the invariant actually lives on: a refused
+    invitation cannot be turned back into an active relationship by any route,
+    and re-inviting must mint a new row instead.
+    """
+    from pilot_backend.domain.connections import (
+        ConnectionError_,
+        ProviderChildConnection,
+    )
+    from pilot_backend.domain.enums import TERMINAL_CONNECTION_STATUSES
+
+    assert ConnectionStatus.DECLINED in TERMINAL_CONNECTION_STATUSES
+    declined = ProviderChildConnection.create(
+        wiring.hannah.provider_id, wiring.child, wiring.hannah.practice_id,
+        now=T0).decline(now=T0)
+
+    with pytest.raises(ConnectionError_):
+        declined.activate(now=T0)
+    # And through the repository, which is the route the service does not take.
+    stored = wiring.repos.provider_child.connect(declined)
+    with pytest.raises(ConnectionError_):
+        wiring.repos.provider_child.activate(stored.connection_id, now=T0)
+
+
 def test_a_declined_invitation_cannot_be_accepted_afterwards(wiring):
     connection = wiring.service.invite_provider(
         wiring.caregiver, wiring.child, wiring.hannah.provider_id)

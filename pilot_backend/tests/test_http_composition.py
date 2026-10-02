@@ -534,7 +534,39 @@ def test_route_table_and_apisurface_cannot_disagree():
         "/pilot/me/children": False,
         "/pilot/bootstrap/caregiver": False,
         "/pilot/parent-sessions/{session_id}/link-child": False,
+        # 0.5B provider connections. Protected, every one.
+        "/pilot/children/{child_id}/provider-connections/{provider_id}": False,
+        "/pilot/children/{child_id}/provider-connections": False,
+        "/pilot/provider-connections/{connection_id}/{action}": False,
+        "/pilot/children/{child_id}/managing-clinician": False,
+        "/pilot/children/{child_id}/managing-clinician/{provider_id}": False,
+        "/pilot/children/{child_id}/managing-clinician/end": False,
     }
+
+
+def test_no_route_exposes_provisioning_lookup_or_discovery():
+    """The deferred surfaces are absent, derived rather than remembered.
+
+    0.5B defers provider-to-family invitation, family search, a provider
+    directory and public self-registration. Each discloses which families or
+    clinicians exist, so their absence is a security property rather than a
+    backlog item — which makes it worth a test that fails if one quietly
+    appears.
+
+    Provisioning is absent too, and for a reason beyond scope: creating a
+    Provider is an administrative act performed on someone else's behalf, and
+    `ActorRole` has no principal that could authorize it. An endpoint for it
+    would have to either invent an admin role or authorize nobody, and the
+    second IS public self-registration.
+    """
+    banned = ("search", "directory", "lookup", "register", "signup",
+              "sign-up", "invite-family", "families", "discover")
+    for template in route_templates():
+        lowered = template.lower()
+        for fragment in banned:
+            assert fragment not in lowered, (template, fragment)
+    assert not any(t.rstrip("/").endswith("providers")
+                   for t in route_templates()), route_templates()
 
 
 def test_health_is_still_the_only_public_route():

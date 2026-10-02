@@ -75,6 +75,41 @@ MY_CHILDREN_ROUTE = "/pilot/me/children"
 BOOTSTRAP_CAREGIVER_ROUTE = "/pilot/bootstrap/caregiver"
 LINK_CHILD_ROUTE = "/pilot/parent-sessions/{session_id}/link-child"
 
+#: 0.5B provider connection surface. Protected, like everything but `/health`.
+#:
+#: Every identifier a caller supplies travels in the PATH, never in a body. No
+#: handler in this application reads `wsgi.input`, and these keep it that way:
+#: a body is the one place a forged `role`, `caregiver_id` or `auth_subject`
+#: could arrive, so the application simply has no code that looks.
+#:
+#: There is deliberately NO provisioning route. Creating a Provider is an
+#: administrative act performed on someone else's behalf, so an HTTP endpoint
+#: for it would need an admin principal that `ActorRole` does not have — and an
+#: unauthenticated or self-authorizing version of it IS the public
+#: provider self-registration surface 0.5B is required not to build. Hannah is
+#: provisioned operationally through `ProviderProvisioningService`; see
+#: SECURITY.md.
+INVITE_PROVIDER_ROUTE = "/pilot/children/{child_id}/provider-connections/{provider_id}"
+CHILD_CONNECTIONS_ROUTE = "/pilot/children/{child_id}/provider-connections"
+CONNECTION_ACTION_ROUTE = "/pilot/provider-connections/{connection_id}/{action}"
+MANAGING_CLINICIAN_ROUTE = "/pilot/children/{child_id}/managing-clinician"
+ASSIGN_MANAGING_ROUTE = "/pilot/children/{child_id}/managing-clinician/{provider_id}"
+END_MANAGING_ROUTE = "/pilot/children/{child_id}/managing-clinician/end"
+
+#: The closed set of lifecycle transitions reachable over HTTP, and who may
+#: ask for each. The pairing is data rather than a chain of `if`s so that a new
+#: action cannot be added without stating its role — which is the mistake that
+#: would let a provider revoke a family's connection or a family accept on a
+#: clinician's behalf.
+CONNECTION_ACTIONS = {
+    "accept": ActorRole.PROVIDER,
+    "decline": ActorRole.PROVIDER,
+    "pause": ActorRole.CAREGIVER,
+    "resume": ActorRole.CAREGIVER,
+    "revoke": ActorRole.CAREGIVER,
+    "end": ActorRole.CAREGIVER,
+}
+
 #: (method, template, is_public). Explicit; no prefix matching anywhere.
 ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
     ("GET", PUBLIC_HEALTH_ROUTE, True),
@@ -83,6 +118,12 @@ ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
     ("GET", MY_CHILDREN_ROUTE, False),
     ("POST", BOOTSTRAP_CAREGIVER_ROUTE, False),
     ("POST", LINK_CHILD_ROUTE, False),
+    ("POST", INVITE_PROVIDER_ROUTE, False),
+    ("GET", CHILD_CONNECTIONS_ROUTE, False),
+    ("POST", CONNECTION_ACTION_ROUTE, False),
+    ("GET", MANAGING_CLINICIAN_ROUTE, False),
+    ("POST", ASSIGN_MANAGING_ROUTE, False),
+    ("POST", END_MANAGING_ROUTE, False),
 )
 
 _STATUS_TEXT = {
@@ -136,6 +177,53 @@ def _match_parent_session_route(path: str) -> Optional[str]:
             or parts[3] != "link-child"):
         return None
     return parts[2]
+
+
+def _match_child_subroute(path: str, tail: str) -> Optional[str]:
+    """Child id for `/pilot/children/{id}/{tail}`, else None.
+
+    Same hand-matching discipline as every other matcher here: an exact
+    segment count, the fixed segments compared exactly, and the id segment
+    merely required to be non-empty. No regex and no prefix rule, so a path
+    cannot fall through to a handler it was not written for.
+    """
+    parts = [p for p in path.split("/") if p != ""]
+    if len(parts) != 4:
+        return None
+    if parts[0] != "pilot" or parts[1] != "children" or parts[3] != tail:
+        return None
+    return parts[2]
+
+
+def _match_child_pair_route(path: str, tail: str) -> Optional[Tuple[str, str]]:
+    """`(child_id, trailing_id)` for `/pilot/children/{id}/{tail}/{other}`."""
+    parts = [p for p in path.split("/") if p != ""]
+    if len(parts) != 5:
+        return None
+    if parts[0] != "pilot" or parts[1] != "children" or parts[3] != tail:
+        return None
+    if not parts[2] or not parts[4]:
+        return None
+    return parts[2], parts[4]
+
+
+def _match_connection_action_route(path: str) -> Optional[Tuple[str, str]]:
+    """`(connection_id, action)` for `/pilot/provider-connections/{id}/{action}`.
+
+    The action is NOT validated here. Routing decides which handler runs;
+    whether the action exists, and which role may ask for it, is settled
+    against `CONNECTION_ACTIONS` inside the handler where the principal is
+    known. Validating here would mean an unknown action 404s while a known one
+    the caller may not use 403s — a difference a prober could read.
+    """
+    parts = [p for p in path.split("/") if p != ""]
+    if len(parts) != 4:
+        return None
+    if parts[0] != "pilot" or parts[1] != "provider-connections":
+        return None
+    if not parts[2] or not parts[3]:
+        return None
+    return parts[2], parts[3]
 
 
 class PilotWSGIApplication:
@@ -234,6 +322,59 @@ class PilotWSGIApplication:
             if method != "POST":
                 return 405, _ERROR_BODIES[405], LINK_CHILD_ROUTE
             return self._handle_link_child(environ, session_id, request_id)
+
+        # --- 0.5B provider connection surface ---------------------------
+        #
+        # Ordering matters and is deliberate: the FIVE-segment templates are
+        # tested before their four-segment prefixes, so
+        # `/managing-clinician/{provider_id}` cannot be swallowed by
+        # `/managing-clinician`. Every matcher demands an exact segment count,
+        # so this is belt-and-braces rather than the thing keeping them apart.
+        pair = _match_child_pair_route(path, "provider-connections")
+        if pair is not None:
+            if method != "POST":
+                return 405, _ERROR_BODIES[405], INVITE_PROVIDER_ROUTE
+            return self._handle_invite_provider(environ, pair[0], pair[1],
+                                                request_id)
+
+        managing_pair = _match_child_pair_route(path, "managing-clinician")
+        if managing_pair is not None:
+            if method != "POST":
+                return 405, _ERROR_BODIES[405], ASSIGN_MANAGING_ROUTE
+            child, trailing = managing_pair
+            # `end` is a reserved trailing segment, distinguishable from a
+            # provider id because every provider id carries the `prov_`
+            # prefix. Checked rather than assumed: a caller supplying the
+            # literal "end" must reach the end handler, and one supplying
+            # anything that is not a provider id must not reach assign.
+            if trailing == "end":
+                return self._handle_end_managing(environ, child, request_id)
+            if not trailing.startswith("prov_"):
+                self._log(request_id, ASSIGN_MANAGING_ROUTE, method, 404, None)
+                return 404, _ERROR_BODIES[404], ASSIGN_MANAGING_ROUTE
+            return self._handle_assign_managing(environ, child, trailing,
+                                                request_id)
+
+        connections_child = _match_child_subroute(path, "provider-connections")
+        if connections_child is not None:
+            if method != "GET":
+                return 405, _ERROR_BODIES[405], CHILD_CONNECTIONS_ROUTE
+            return self._handle_child_connections(environ, connections_child,
+                                                  request_id)
+
+        managing_child = _match_child_subroute(path, "managing-clinician")
+        if managing_child is not None:
+            if method != "GET":
+                return 405, _ERROR_BODIES[405], MANAGING_CLINICIAN_ROUTE
+            return self._handle_read_managing(environ, managing_child,
+                                              request_id)
+
+        action = _match_connection_action_route(path)
+        if action is not None:
+            if method != "POST":
+                return 405, _ERROR_BODIES[405], CONNECTION_ACTION_ROUTE
+            return self._handle_connection_action(environ, action[0], action[1],
+                                                  request_id)
 
         # Unregistered. Not public, not served, and no hint that it is neither.
         self._log(request_id, "unrouted", method, 404, None)
@@ -389,16 +530,267 @@ class PilotWSGIApplication:
         if principal is None:
             self._log(request_id, MY_CHILDREN_ROUTE, "GET", status, None)
             return status, _ERROR_BODIES[status], MY_CHILDREN_ROUTE
+
+        # One route, two server-side paths, chosen by the SERVER-DERIVED role.
+        #
+        # 0.5A served caregivers only and refused providers. 0.5B adds the
+        # clinician caseload here rather than at a second path, because
+        # "my children" is the same question asked by two kinds of actor.
+        #
+        # What is NOT shared is the authorization logic: each role goes to a
+        # different service method, and each of those answers exactly one
+        # question — `my_children` requires a caregiver and filters to the
+        # caller's active caregiver relationships, `connected_children`
+        # requires a provider and filters to the caller's ACTIVE connections.
+        # Neither takes an actor id, so neither can be aimed at someone else.
+        # The role comes from `resolve_principal`, which derives it from which
+        # repository matched the verified subject, so a client cannot select
+        # which branch runs.
         try:
-            children = self._identity_service().my_children(principal)
+            if principal.role is ActorRole.PROVIDER:
+                payload = {
+                    "children": [row.as_payload() for row
+                                 in self._connection_service()
+                                 .connected_children(principal)],
+                }
+            else:
+                payload = {
+                    "child_ids": list(
+                        self._identity_service().my_children(principal)),
+                }
         except IntegrationError:
             self._log_principal(request_id, MY_CHILDREN_ROUTE, "GET",
                                 HTTP_FORBIDDEN, principal)
             return HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN], MY_CHILDREN_ROUTE
         self._log_principal(request_id, MY_CHILDREN_ROUTE, "GET", HTTP_OK,
                             principal)
-        return HTTP_OK, {"child_ids": list(children),
-                         "request_id": request_id}, MY_CHILDREN_ROUTE
+        payload["request_id"] = request_id
+        return HTTP_OK, payload, MY_CHILDREN_ROUTE
+
+    # =====================================================================
+    # 0.5B provider connections
+    # =====================================================================
+
+    def _connection_service(self):
+        """Built per request. Holds no cross-request state."""
+        from ..connections import ProviderConnectionService
+
+        return ProviderConnectionService(
+            repos=self._repos, recorder=self._recorder)
+
+    def _refuse(self, route: str, method: str, request_id: str, principal,
+                status: int = HTTP_FORBIDDEN) -> Tuple[int, Mapping, str]:
+        """One constant-body refusal for every 0.5B failure.
+
+        Every `IntegrationError` the connection service raises renders
+        identically: `ProviderNotConnectable`, `ConnectionNotFound`,
+        `ConnectionStateConflict` and `DuplicateLiveConnection` are
+        indistinguishable over HTTP.
+
+        That is the point. The service already collapses absent-versus-
+        not-yours, but it still distinguishes "no such provider" from "illegal
+        transition" for its own callers. Preserving that difference in the
+        RESPONSE would hand a prober exactly the oracle the service was
+        careful not to be: a caller walking `prov_` ids could tell a real
+        clinician from a fictional one by which refusal came back.
+        """
+        self._log_principal(request_id, route, method, status, principal)
+        return status, _ERROR_BODIES[status], route
+
+    def _caregiver_or_provider(self, environ, route: str, method: str,
+                               request_id: str):
+        """Resolve the principal, or return the refusal tuple.
+
+        Returns `(principal, None)` or `(None, response)`.
+        """
+        principal, status = self._principal(environ)
+        if principal is None:
+            self._log(request_id, route, method, status, None)
+            return None, (status, _ERROR_BODIES[status], route)
+        return principal, None
+
+    def _handle_invite_provider(self, environ: Mapping[str, object],
+                                child_id: str, provider_id: str,
+                                request_id: str) -> Tuple[int, Mapping, str]:
+        """A caregiver offers a connection to a provider named by opaque id.
+
+        The provider id is the ONLY thing the caller supplies beyond the child
+        id, and it grants nothing: this creates a PENDING row that confers no
+        clinical access, which the provider must then accept. An id that does
+        not exist, is retired, or sits in an inactive practice produces the
+        same 403 as a child the caller does not hold — so neither segment can
+        be used to probe for existence.
+        """
+        route = INVITE_PROVIDER_ROUTE
+        principal, refusal = self._caregiver_or_provider(
+            environ, route, "POST", request_id)
+        if refusal is not None:
+            return refusal
+        try:
+            connection = self._connection_service().invite_provider(
+                principal, child_id, provider_id, request_id=request_id)
+        except IntegrationError:
+            return self._refuse(route, "POST", request_id, principal)
+
+        self._log_principal(request_id, route, "POST", HTTP_OK, principal)
+        return HTTP_OK, {
+            "connection_id": connection.connection_id,
+            "status": connection.status.value,
+            "initiated_by": connection.initiated_by.value,
+            "request_id": request_id,
+        }, route
+
+    def _handle_connection_action(self, environ: Mapping[str, object],
+                                  connection_id: str, action: str,
+                                  request_id: str) -> Tuple[int, Mapping, str]:
+        """One handler for every lifecycle transition.
+
+        The role permitted to ask for each action comes from
+        `CONNECTION_ACTIONS`, and the check happens BEFORE the service is
+        called. A caregiver asking to `accept` and a provider asking to
+        `revoke` are both refused here with the standard constant body — the
+        service would refuse them too, but the transport must not depend on
+        that to be the thing enforcing it.
+
+        An unknown action renders as the same refusal rather than a 404, so
+        the action vocabulary is not enumerable either.
+        """
+        route = CONNECTION_ACTION_ROUTE
+        principal, refusal = self._caregiver_or_provider(
+            environ, route, "POST", request_id)
+        if refusal is not None:
+            return refusal
+
+        required = CONNECTION_ACTIONS.get(action)
+        if required is None or principal.role is not required:
+            return self._refuse(route, "POST", request_id, principal)
+
+        service = self._connection_service()
+        try:
+            if action == "accept":
+                result = service.accept_invitation(
+                    principal, connection_id, request_id=request_id)
+            elif action == "decline":
+                result = service.decline_invitation(
+                    principal, connection_id, request_id=request_id)
+            elif action == "pause":
+                result = service.pause_connection(
+                    principal, connection_id, request_id=request_id)
+            elif action == "resume":
+                result = service.resume_connection(
+                    principal, connection_id, request_id=request_id)
+            else:
+                from ..domain.enums import ConnectionStatus as _Status
+
+                result = service.revoke_connection(
+                    principal, connection_id, request_id=request_id,
+                    status=(_Status.ENDED if action == "end"
+                            else _Status.REVOKED))
+        except IntegrationError:
+            return self._refuse(route, "POST", request_id, principal)
+
+        self._log_principal(request_id, route, "POST", HTTP_OK, principal)
+        return HTTP_OK, {
+            "connection_id": result.connection_id,
+            "status": result.status.value,
+            "request_id": request_id,
+        }, route
+
+    def _handle_child_connections(self, environ: Mapping[str, object],
+                                  child_id: str, request_id: str
+                                  ) -> Tuple[int, Mapping, str]:
+        """Every connection on a child the CALLER holds, closed rows included."""
+        route = CHILD_CONNECTIONS_ROUTE
+        principal, refusal = self._caregiver_or_provider(
+            environ, route, "GET", request_id)
+        if refusal is not None:
+            return refusal
+        try:
+            rows = self._connection_service().list_child_connections(
+                principal, child_id)
+        except IntegrationError:
+            return self._refuse(route, "GET", request_id, principal)
+
+        self._log_principal(request_id, route, "GET", HTTP_OK, principal)
+        return HTTP_OK, {
+            "connections": [{
+                "connection_id": row.connection_id,
+                "provider_id": row.provider_id,
+                "status": row.status.value,
+                "initiated_by": row.initiated_by.value,
+            } for row in rows],
+            "request_id": request_id,
+        }, route
+
+    def _handle_assign_managing(self, environ: Mapping[str, object],
+                                child_id: str, provider_id: str,
+                                request_id: str) -> Tuple[int, Mapping, str]:
+        """A caregiver names an ACTIVE-connected provider as managing clinician.
+
+        Separate from accepting a connection, deliberately: an ACTIVE
+        connection alone never implies clinical ownership, and this is the
+        explicit second decision.
+        """
+        route = ASSIGN_MANAGING_ROUTE
+        principal, refusal = self._caregiver_or_provider(
+            environ, route, "POST", request_id)
+        if refusal is not None:
+            return refusal
+        try:
+            assignment = self._connection_service().assign_managing_clinician(
+                principal, child_id, provider_id, request_id=request_id)
+        except IntegrationError:
+            return self._refuse(route, "POST", request_id, principal)
+
+        self._log_principal(request_id, route, "POST", HTTP_OK, principal)
+        return HTTP_OK, {
+            "assignment_id": assignment.assignment_id,
+            "provider_id": assignment.provider_id,
+            "request_id": request_id,
+        }, route
+
+    def _handle_read_managing(self, environ: Mapping[str, object],
+                              child_id: str, request_id: str
+                              ) -> Tuple[int, Mapping, str]:
+        """The child's current managing clinician, or null."""
+        route = MANAGING_CLINICIAN_ROUTE
+        principal, refusal = self._caregiver_or_provider(
+            environ, route, "GET", request_id)
+        if refusal is not None:
+            return refusal
+        try:
+            assignment = self._connection_service().current_managing_clinician(
+                principal, child_id)
+        except IntegrationError:
+            return self._refuse(route, "GET", request_id, principal)
+
+        self._log_principal(request_id, route, "GET", HTTP_OK, principal)
+        return HTTP_OK, {
+            "assignment_id": assignment.assignment_id if assignment else None,
+            "provider_id": assignment.provider_id if assignment else None,
+            "request_id": request_id,
+        }, route
+
+    def _handle_end_managing(self, environ: Mapping[str, object],
+                             child_id: str, request_id: str
+                             ) -> Tuple[int, Mapping, str]:
+        """End the assignment without altering the connection."""
+        route = END_MANAGING_ROUTE
+        principal, refusal = self._caregiver_or_provider(
+            environ, route, "POST", request_id)
+        if refusal is not None:
+            return refusal
+        try:
+            ended = self._connection_service().end_managing_clinician(
+                principal, child_id, request_id=request_id)
+        except IntegrationError:
+            return self._refuse(route, "POST", request_id, principal)
+
+        self._log_principal(request_id, route, "POST", HTTP_OK, principal)
+        return HTTP_OK, {
+            "assignment_id": ended.assignment_id,
+            "request_id": request_id,
+        }, route
 
     def _handle_bootstrap(self, environ: Mapping[str, object],
                           request_id: str) -> Tuple[int, Mapping, str]:

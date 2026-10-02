@@ -862,6 +862,191 @@ def test_provider_provisioning_refuses_a_caregiver_held_subject(wiring):
     assert principal_for(wiring.repos, NEWCOMER).role is ActorRole.CAREGIVER
 
 
+def test_provisioning_refuses_a_subject_held_by_a_CLAIMLESS_caregiver(wiring):
+    """The caregiver check is reached even when no claim exists to catch it.
+
+    Found by mutation testing. Removing the `caregiver is not None` guard
+    survived every test, because the tests all used `bootstrap_caregiver`,
+    which mints a claim — so the LATER `claim.is_held_by_caregiver` branch
+    refused and the first check was never the thing doing the work.
+
+    A legacy caregiver has no claim: fixtures and pre-0.5A admin provisioning
+    created them before the primitive existed. For that subject the first
+    check is the ONLY guard, and without it provisioning would mint a provider
+    alongside the caregiver — leaving `resolve_principal` refusing the subject
+    forever, which is the exact unrecoverable state blocker 4 exists to stop.
+    """
+    from pilot_backend.domain.enums import ProviderDiscipline
+    from pilot_backend.provisioning import provision_provider_record
+
+    legacy = seed_legacy_caregiver(wiring.repos, subject=LEGACY)
+    assert wiring.repos.auth_subject_claims.find_for_subject(LEGACY) is None, \
+        "this test is only meaningful while the caregiver holds no claim"
+    before = snapshot_all(wiring.repos)
+
+    with pytest.raises(SubjectAlreadyHeld):
+        provision_provider_record(
+            wiring.repos, auth_subject=LEGACY,
+            practice_id=wiring.topo.practice.practice_id,
+            discipline=ProviderDiscipline.SLP,
+            display_name="Provider-Intruder", now=T0)
+
+    assert snapshot_all(wiring.repos) == before, "the refusal wrote something"
+    # The subject still authenticates as the caregiver it always was.
+    assert principal_for(wiring.repos, LEGACY).application_id == \
+        legacy.caregiver_id
+
+
+def test_provisioning_refuses_a_CLAIM_held_by_a_caregiver_with_no_record(wiring):
+    """The claim check is reached even when no caregiver record catches it.
+
+    The mirror of `test_provisioning_refuses_a_subject_held_by_a_CLAIMLESS_
+    caregiver`, and found the same way. The two guards are redundant for the
+    ordinary case — a bootstrapped caregiver has BOTH a record and a claim —
+    so each one survived mutation while the other covered for it.
+
+    This is the state only the claim guard sees: a caregiver-held claim whose
+    subject resolves to no caregiver record. Reachable whenever a claim
+    outlives the record it named, and the claim repository is create-only so
+    nothing can clear it.
+    """
+    from pilot_backend.domain.enums import ProviderDiscipline
+    from pilot_backend.provisioning import provision_provider_record
+
+    subject = "fictional-subject-claim-without-record"
+    wiring.repos.auth_subject_claims.claim(AuthSubjectIdentityClaim.build(
+        subject, holder_actor_id="cgvr_no_such_record",
+        holder_actor_type=ActorRole.CAREGIVER, now=T0))
+    assert wiring.repos.caregivers.get_by_auth_subject(subject) is None, \
+        "this test is only meaningful while no caregiver record resolves"
+
+    with pytest.raises(SubjectAlreadyHeld):
+        provision_provider_record(
+            wiring.repos, auth_subject=subject,
+            practice_id=wiring.topo.practice.practice_id,
+            discipline=ProviderDiscipline.SLP,
+            display_name="Provider-Intruder", now=T0)
+
+
+def test_provisioning_backfills_a_legacy_provider_instead_of_twinning(wiring):
+    """A fixture-created provider gains a claim; it is never duplicated.
+
+    Found by mutation testing. Fixture providers are created directly through
+    the repository — `secure_topology` is backend-parametrised and the
+    in-memory set has no claim collection — so a subject can resolve to
+    exactly one provider with NO claim behind it. Provisioning that subject
+    must adopt the existing record, and dropping the backfill branch instead
+    minted a SECOND provider on the same subject, which is the twin that makes
+    `get_by_auth_subject` refuse forever.
+    """
+    from pilot_backend.domain.enums import ProviderDiscipline
+    from pilot_backend.provisioning import provision_provider_record
+
+    legacy = wiring.topo.provider_alpha
+    assert wiring.repos.auth_subject_claims.find_for_subject(
+        PROVIDER_ALPHA_SUBJECT) is None, "fixture providers hold no claim"
+
+    outcome = provision_provider_record(
+        wiring.repos, auth_subject=PROVIDER_ALPHA_SUBJECT,
+        practice_id=legacy.practice_id,
+        discipline=ProviderDiscipline.SLP, display_name="Provider-Alpha",
+        now=T0)
+
+    assert outcome.provider.provider_id == legacy.provider_id, "a twin was minted"
+    assert outcome.created is False
+    assert outcome.claim_backfilled is True
+    # Exactly one provider for the subject, and it now holds the claim.
+    matching = [p for p in wiring.repos.providers.list_by_practice(
+        legacy.practice_id) if p.auth_subject == PROVIDER_ALPHA_SUBJECT]
+    assert len(matching) == 1
+    assert wiring.repos.auth_subject_claims.find_for_subject(
+        PROVIDER_ALPHA_SUBJECT).holder_actor_id == legacy.provider_id
+
+
+def test_provisioning_refuses_an_inactive_practice(wiring):
+    """A provider is only meaningful inside a live practice.
+
+    `ProviderChildConnection` denormalises `practice_id` and
+    `ManagingClinicianAssignment` copies it again, so admitting a retired
+    practice here would put an unresolvable reference into both.
+    """
+    from pilot_backend.domain.entities import Practice
+    from pilot_backend.domain.enums import EntityStatus, ProviderDiscipline
+    from pilot_backend.provisioning import provision_provider_record
+    from pilot_backend.provisioning.errors import ProviderProvisioningError
+
+    retired = wiring.repos.practices.create(
+        Practice.create("Practice-Retired", now=T0))
+    wiring.repos.practices.update_status(
+        retired.practice_id, EntityStatus.ARCHIVED, now=T0)
+    before = snapshot_all(wiring.repos)
+
+    with pytest.raises(ProviderProvisioningError):
+        provision_provider_record(
+            wiring.repos, auth_subject="fictional-subject-retired-practice",
+            practice_id=retired.practice_id,
+            discipline=ProviderDiscipline.SLP, display_name="Provider-Nowhere",
+            now=T0)
+    assert snapshot_all(wiring.repos) == before
+
+    # And an absent practice is refused the same way.
+    with pytest.raises(ProviderProvisioningError):
+        provision_provider_record(
+            wiring.repos, auth_subject="fictional-subject-absent-practice",
+            practice_id="prac_does_not_exist",
+            discipline=ProviderDiscipline.SLP, display_name="Provider-Nowhere",
+            now=T0)
+
+
+def test_a_provider_claim_naming_a_different_provider_fails_closed(wiring):
+    """A claim and a record that disagree are never reconciled by guessing.
+
+    Found by mutation testing: dropping this check survived, because no test
+    had built the inconsistent state. It is reachable — a claim written for
+    one provider while the subject resolves to another — and either record
+    could be the wrong one, so choosing would silently decide whose caseload a
+    clinician sees.
+    """
+    from pilot_backend.domain.enums import ProviderDiscipline
+    from pilot_backend.provisioning import provision_provider_record
+
+    subject = "fictional-subject-provider-mismatch"
+    # A provider record the subject resolves to...
+    resolved = provision_provider_record(
+        wiring.repos, auth_subject=subject,
+        practice_id=wiring.topo.practice.practice_id,
+        discipline=ProviderDiscipline.SLP, display_name="Provider-Resolved",
+        now=T0).provider
+
+    # ...and a claim for that subject naming somebody else entirely.
+    class _ClaimNamingAnother:
+        def __init__(self, real) -> None:
+            self._real = real
+            self._interloper = AuthSubjectIdentityClaim.build(
+                subject, holder_actor_id="prov_someone_entirely_else",
+                holder_actor_type=ActorRole.PROVIDER, now=T0)
+
+        def find_for_subject(self, auth_subject):
+            return self._interloper
+
+        def __getattr__(self, name):
+            return getattr(self._real, name)
+
+    wiring.repos.auth_subject_claims = _ClaimNamingAnother(
+        wiring.repos.auth_subject_claims)
+
+    with pytest.raises(AmbiguousSubjectState):
+        provision_provider_record(
+            wiring.repos, auth_subject=subject,
+            practice_id=wiring.topo.practice.practice_id,
+            discipline=ProviderDiscipline.SLP,
+            display_name="Provider-Resolved", now=T0)
+
+    # Neither record was rewritten, merged or repaired.
+    assert wiring.repos.providers.get_by_id(
+        resolved.provider_id).auth_subject == subject
+
+
 def test_two_provider_provisions_of_one_subject_produce_no_twin(wiring):
     """0.5B, CLOSED: a repeat provision converges instead of twinning.
 
@@ -2085,11 +2270,36 @@ def test_my_children_over_http_returns_only_the_callers_children(http):
     assert other["child_ids"] == []
 
 
-def test_a_provider_gets_403_from_my_children(http):
+def test_a_provider_gets_their_caseload_from_my_children(http):
+    """0.5B changes this route's answer for providers, deliberately.
+
+    0.5A refused a provider here with a 403, because provider child listing
+    had no authorization review yet and reusing the caregiver path would have
+    been an enumeration shortcut. 0.5B gives providers their own reviewed
+    path — `connected_children`, filtered to the caller's ACTIVE connections —
+    so the route now answers "my children" for both kinds of actor.
+
+    What did NOT change is the thing the 0.5A refusal protected: the two roles
+    go to DIFFERENT service methods, neither takes an actor id, and the role
+    is derived by `resolve_principal` from which repository matched the
+    verified subject. A client still cannot choose which branch runs, and
+    still cannot aim either at someone else.
+
+    Provider-Alpha is connected to Child-Alpha in the fixture topology, so the
+    caseload is non-empty — a test that passed with an empty list would prove
+    nothing about filtering.
+    """
     status, body, _ = call(http.app, "/pilot/me/children",
                            bearer="Bearer token-provider-alpha")
-    assert status == 403
-    assert body == {"error": "not permitted"}
+    assert status == 200
+    assert "children" in body, body
+    assert "child_ids" not in body, "the caregiver shape leaked to a provider"
+    returned = {row["child_id"] for row in body["children"]}
+    assert returned == {http.topo.child_alpha.child_id}
+    # Connection-scoped only: being connected is not being the managing
+    # clinician, and the payload must say so rather than imply it.
+    assert all(row["is_managing_clinician"] is False
+               for row in body["children"])
 
 
 def test_my_children_accepts_no_caregiver_id_from_the_request(http):
