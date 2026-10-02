@@ -51,29 +51,62 @@ debt, not closed items.
 | 1 | **Real Firebase Admin / Identity Platform adapter** — a `TokenDecoder` implementation over `firebase_admin.auth.verify_id_token(..., check_revoked=True)` | The port and all production rules (revocation, verified-email, claim translation, fail-closed selection) exist and are tested. Only the SDK call is missing, and there is no Identity Platform project to call. Production currently resolves to `FailClosedAuthVerifier`, so the gap denies rather than admits. |
 | 2 | **Real Firestore adapter + emulator tests** — a `DocumentStore` implementation over `google.cloud.firestore.Client`, exercised against the Firestore emulator | Repositories, codecs, collections and ordering are complete and tested against the port. The adapter is a five-method translation. No production database exists to connect to. |
 | ~~4~~ | **Universal `auth_subject` write-time uniqueness** — **CLOSED in 0.5B.** `ProviderProvisioningService` commits the `AuthSubjectIdentityClaim` and the `Provider` in ONE transaction on the same deterministic key, and `providers.create` is called from nowhere else in the deployed codebase. | Closed and emulator-proven in both orderings. Retained in this table struck through rather than deleted, so the lineage of what was open and when stays readable. See the detail section below. |
-| 3 | **Goal approval must become atomic** (added 0.4B/C) — `GoalService.approve_clinical_goal` and `approve_caregiver_goal` write the `GoalVersion` FIRST, then the goal that names it as `current_version_id`. A crash between the two writes leaves an **orphan `GoalVersion`**. | Founder-reviewed and explicitly accepted for the fictional 0.4B/C freeze. The orphan is INERT: no goal references it, no allocation can name it, no snapshot can reach it, and it is invisible to every read path — `list_chain` is keyed on a `goal_id` that does not exist. The failure mode is a dead row, never a goal whose `current_version_id` points at nothing. **Required before real PHI**, because a clinical record store must not accumulate unreferenced clinical text even when it is unreachable. |
+| ~~3~~ | **Goal approval must become atomic** — **CLOSED in 0.5C.** `approve_clinical_goal` and `approve_caregiver_goal` commit the goal and its first `GoalVersion` in ONE transaction via `_commit_goal_with_version`, so neither exists unless both do. | Closed and emulator-proven under fault injection at both ends of the transaction, plus eight-way concurrency and a crash among concurrent writers. Struck through rather than deleted so the lineage of what was open, and when, stays readable. |
 
 Items 1 and 2 must be implemented, reviewed and tested **before** the first
 real patient record. Neither may be satisfied by pointing the pilot at Parent
 2.3 infrastructure.
 
-### Blocker 3 — what "make it atomic" will require
+### Blocker 3 — CLOSED in 0.5C
 
-Not a reordering. Writing the goal first and the version second only moves the
-window: it produces a goal whose `current_version_id` names a document that
-does not exist, which is strictly worse than an inert orphan — an unreadable
-goal rather than an unreachable version.
+0.4B/C minted the goal id, built the first `GoalVersion` pointing at it, then
+issued TWO separate writes ordered version-first. A crash between them left an
+orphan `GoalVersion`. That was founder-reviewed and accepted for the fictional
+freeze — the orphan is inert, unreachable from every read path, and the failure
+mode is a dead row rather than a goal whose `current_version_id` names nothing.
+The standing objection was narrower and still correct: a clinical record store
+must not accumulate unreferenced clinical text even when nothing can reach it.
 
-Atomicity needs both writes inside one transaction, and that collides with the
-same port constraint activation hit: `DocumentStore` REFUSES `set` inside a
-transaction (0.4A), so the goal's `current_version_id` cannot be filled in
-after the version is created. The likely shape is to mint both identifiers up
-front and `create` both documents in a single transaction, since `create` IS
-permitted there — the same restructuring `MonthlyPlanService.activate_plan`
-performed, rather than any weakening of the port's existence guarantee.
+Both writes now commit in one transaction.
 
-Tracked here rather than in ordinary carried debt because it is a PRE-PHI
-hardening requirement, not a preference.
+Pre-minting was already in place and is what makes a single transaction
+possible at all: the version must name the goal and the goal must name the
+version, so neither can be written first unless both identifiers exist
+beforehand. The ordering INSIDE the transaction is therefore no longer
+load-bearing and is retained only as documentation of the dependency.
+
+Two creates and nothing else, so there is no read-after-write, no `set`, and no
+boundary to recover across — the same shape as 0.4D/E weekly allocation. No
+claim is acquired, because uniqueness is not the property at stake: a goal id
+is freshly minted and cannot collide, and a child may legitimately hold many
+goals. What was missing was ATOMICITY between two mutually-referencing records.
+
+Immutable `GoalVersion` semantics are preserved exactly. The version is still
+appended by a create on its own id, so it can never be rewritten; a transaction
+changes when it becomes visible, not whether it can change afterwards. A
+revision still APPENDS version 2 and leaves version 1 byte-identical.
+
+No destructive repair exists anywhere: nothing deletes, merges or rewrites an
+orphan from before this change. Any that exist in a pre-0.5C store remain inert
+and visible.
+
+Proven against the REAL Firestore emulator in
+`pilot_runtime/tests/integration/test_goal_atomicity_emulator.py`:
+
+| Scenario | Result |
+|---|---|
+| clean approval | goal and version both exist, version_number 1, goal names it |
+| crash on the GOAL write, version already queued | neither record persists; clean retry succeeds |
+| crash on the VERSION write | neither record persists |
+| caregiver-approved path, crash on the goal write | neither record persists |
+| eight concurrent approvals | eight goals, one version each, no orphan |
+| crash among eight concurrent approvals | survivors intact, the dead writer strands nothing |
+| immutability | version 1 unchanged after a revision; re-append refused |
+| authorization unchanged | ACTIVE connection without the managing-clinician assignment is still refused |
+
+The suite was verified non-vacuous by restoring the 0.4B/C two-write shape:
+exactly the three orphan-detecting fault-injection tests fail, and the other
+five are correctly unaffected.
 
 ### Blocker 4 — CLOSED in 0.5B
 

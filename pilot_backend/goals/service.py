@@ -64,6 +64,20 @@ from ..domain.planning_policy import CURRENT_PLANNING_POLICY, PlanningPolicyVers
 from ..domain.roles import ActorRole
 from ..repository.interface import RecordNotFound
 from .errors import GoalAuthorizationError, GoalConflict, GoalValidationError
+
+
+def _default_repos_factory(store):
+    """Repositories over a transaction-bound store. 0.5C.
+
+    Imported lazily, inside the function, for the reason the whole package is
+    arranged this way: `pilot_backend` must import no storage SDK, and a
+    module-level import of the Firestore repository set would put one on the
+    import graph of every module that imports this service. A CI gate asserts
+    that over the AST.
+    """
+    from ..persistence.firestore_repos import FirestoreRepositories
+
+    return FirestoreRepositories(store)
 from .suggestion_engine import (
     GENERATOR_VERSION,
     SUGGESTION_RULE_VERSION,
@@ -89,12 +103,17 @@ ApprovedGoal = Union[ClinicalGoal, CaregiverApprovedGoal]
 class GoalService:
     """Authorized reads and writes for suggestions, goals and goal versions."""
 
-    def __init__(self, *, repos, recorder=None, now=None) -> None:
+    def __init__(self, *, repos, recorder=None, now=None,
+                 repos_factory=None) -> None:
         self._repos = repos
         self._recorder = recorder
         #: Injectable clock for deterministic tests. No request parameter
         #: reaches it.
         self._now = now
+        #: Builds repositories over a TRANSACTION-BOUND store. Load-bearing in
+        #: production — `_commit_goal_with_version` cannot be atomic without
+        #: it — and defaulted so every existing caller is unaffected. 0.5C.
+        self._repos_factory = repos_factory or _default_repos_factory
 
     def _stamp(self) -> datetime:
         return self._now() if self._now else datetime.now(timezone.utc)
@@ -296,6 +315,40 @@ class GoalService:
     # Approval
     # =====================================================================
 
+    def _commit_goal_with_version(self, goal, version, *, kind: GoalKind):
+        """Write a goal and its FIRST version atomically. PRE-PHI blocker 3.
+
+        Returns the goal with `current_version_id` filled in.
+
+        One transaction containing exactly two `create` calls. Both are
+        creates, so unlike a status change there is no read-after-write and no
+        `set` — the whole operation is a single all-or-nothing batch with no
+        boundary to recover across, which is the same shape 0.4D/E's weekly
+        allocation has.
+
+        No claim is acquired here and none is needed. Uniqueness is not the
+        property at stake: a goal id is freshly minted and cannot collide, and
+        a child may legitimately hold many goals. What was missing was
+        ATOMICITY between two records that reference each other, and a
+        transaction is exactly that.
+
+        Immutable `GoalVersion` semantics are untouched. The version is still
+        appended by `create` on its own id, so it can never be rewritten;
+        putting it in a transaction changes when it becomes visible, not
+        whether it can change afterwards.
+        """
+        collection = ("clinical_goals" if kind is GoalKind.CLINICAL
+                      else "caregiver_goals")
+        persisted = replace(goal, current_version_id=version.version_id)
+
+        def _write(store):
+            tx = self._repos_factory(store)
+            tx.goal_versions.append(version)
+            getattr(tx, collection).create(persisted)
+            return persisted
+
+        return self._repos.store.run_in_transaction(_write)
+
     def approve_clinical_goal(self, principal, child_id: str, *,
                               edit_type: EditType,
                               suggestion_id: Optional[str] = None,
@@ -308,11 +361,22 @@ class GoalService:
         suggestion = self._consume_suggestion(suggestion_id, child_id, edit_type)
         approved_text = self._approved_text(edit_type, text, suggestion)
 
-        # The goal id must exist before its first version can point at it, and
-        # the version must exist before the goal can name it as current. So the
-        # id is minted first and the two writes are ordered goal-version-first;
-        # a crash between them leaves an orphan version, which is inert, rather
-        # than a goal whose current_version_id names nothing.
+        # PRE-PHI blocker 3, CLOSED in 0.5C: the goal and its first version
+        # commit in ONE transaction.
+        #
+        # Both ids are minted BEFORE either write, which is what makes a single
+        # transaction possible at all: the version must name the goal and the
+        # goal must name the version, so neither can be written first unless
+        # both identifiers already exist. 0.4B/C minted them in exactly this
+        # order and then issued two separate writes, ordered version-first so a
+        # crash left an INERT orphan rather than a goal pointing at nothing.
+        # That was the accepted shape, and the remaining objection was that a
+        # clinical record store should not accumulate unreferenced clinical
+        # text even when it is unreachable.
+        #
+        # Now neither exists unless both do. The ordering inside the
+        # transaction is therefore no longer load-bearing — it is retained as
+        # documentation of the dependency.
         goal = ClinicalGoal.create(
             child_id, principal.application_id, assignment.practice_id,
             managing_assignment_id=assignment.assignment_id,
@@ -324,9 +388,8 @@ class GoalService:
             derived_from_suggestion_id=(suggestion.suggestion_id
                                         if suggestion else None),
             reason=reason, now=self._stamp())
-        self._repos.goal_versions.append(version)
-        persisted = replace(goal, current_version_id=version.version_id)
-        self._repos.clinical_goals.create(persisted)
+        persisted = self._commit_goal_with_version(
+            goal, version, kind=GoalKind.CLINICAL)
 
         self._audit(AuditAction.CLINICAL_GOAL_APPROVED, AuditResult.SUCCESS,
                     RESOURCE_CLINICAL_GOAL, principal=principal,
@@ -363,9 +426,12 @@ class GoalService:
             derived_from_suggestion_id=(suggestion.suggestion_id
                                         if suggestion else None),
             reason=reason, now=self._stamp())
-        self._repos.goal_versions.append(version)
-        persisted = replace(goal, current_version_id=version.version_id)
-        self._repos.caregiver_goals.create(persisted)
+        # Same atomicity as the clinician path — see `approve_clinical_goal`.
+        # A caregiver-approved goal is not RTM-eligible, but it carries the
+        # family's own words and an unreferenced orphan of those is no more
+        # acceptable than an orphan of a clinician's.
+        persisted = self._commit_goal_with_version(
+            goal, version, kind=GoalKind.CAREGIVER_APPROVED)
 
         self._audit(AuditAction.CAREGIVER_GOAL_APPROVED, AuditResult.SUCCESS,
                     RESOURCE_CAREGIVER_GOAL, principal=principal,
