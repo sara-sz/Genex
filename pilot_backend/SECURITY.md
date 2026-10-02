@@ -53,9 +53,70 @@ debt, not closed items.
 | ~~4~~ | **Universal `auth_subject` write-time uniqueness** — **CLOSED in 0.5B.** `ProviderProvisioningService` commits the `AuthSubjectIdentityClaim` and the `Provider` in ONE transaction on the same deterministic key, and `providers.create` is called from nowhere else in the deployed codebase. | Closed and emulator-proven in both orderings. Retained in this table struck through rather than deleted, so the lineage of what was open and when stays readable. See the detail section below. |
 | ~~3~~ | **Goal approval must become atomic** — **CLOSED in 0.5C.** `approve_clinical_goal` and `approve_caregiver_goal` commit the goal and its first `GoalVersion` in ONE transaction via `_commit_goal_with_version`, so neither exists unless both do. | Closed and emulator-proven under fault injection at both ends of the transaction, plus eight-way concurrency and a crash among concurrent writers. Struck through rather than deleted so the lineage of what was open, and when, stays readable. |
 
-Items 1 and 2 must be implemented, reviewed and tested **before** the first
-real patient record. Neither may be satisfied by pointing the pilot at Parent
-2.3 infrastructure.
+| 5 | **`plan_snapshot.source_document` verbatim pass-through is NOT approved as a real-PHI projection** — opened in 0.5D. Approved for FICTIONAL STAGING / browser-demo use only. See the detail section below. | Bounded today by the only thing that can reach it: staging holds fictional data exclusively, and no Parent system is wired to it — `PILOT_PARENT_SESSION_BUCKET` is unset and the deployment entrypoint refuses to start if it is set — so no real plan document can enter the pass-through. |
+
+Items 1, 2 and 5 must be resolved, reviewed and tested **before** the first
+real patient record. Neither 1 nor 2 may be satisfied by pointing the pilot at
+Parent 2.3 infrastructure.
+
+### Blocker 5 — OPENED in 0.5D: minimum-necessary review of the pass-through
+
+**Status: approved for FICTIONAL STAGING and browser-demo use only. NOT
+approved as a real-PHI production projection. Remains a PRE-PHI review item.**
+
+`GET /pilot/children/{child_id}/current-cycle` returns
+`plan_snapshot.source_document`: the captured parent-facing weekly plan, handed
+back parsed and **verbatim**, with no schema imposed by this layer.
+
+#### Why it was built this way
+
+`WeeklyPlanSnapshot.resolved_plan_document` is a JSON string because it is an
+opaque capture of another system's document, and the frozen docstring states
+the reason: "Parent's plan shape is not ours to version, and a codec that
+validated its fields would start failing the moment Parent changed one."
+
+Nothing in the pilot persists an activity title, instruction, domain,
+material, routine or per-activity date — a fact 0.5D established by
+inspection. So a Parent weekly UI cannot be built without either passing the
+document through or inventing a pilot-owned schema that contradicts that
+sentence. The pass-through was the founder-approved choice, and the payload
+carries `schema: "opaque_source_document"` and `is_canonical: false` so no
+client can acquire the shape by accident and come to depend on it.
+
+#### Why that is not yet a PHI-safe projection
+
+This is the one read model in the pilot where **this layer cannot state what
+it is disclosing.** Every other projection names its fields, so "minimum
+necessary" is reviewable by reading the serialiser. Here the field set is
+whatever the producing system put in the document, which means:
+
+- the disclosed set cannot be enumerated at review time, only at runtime;
+- a future Parent change could introduce a field — a free-text caregiver note,
+  a clinician remark, an extra identifier — that this endpoint would forward
+  silently, with no code change on this side and no test failing;
+- `WeeklyPlanSnapshot.VISIBILITY` is `PARENT_VISIBLE` on the stated grounds
+  that "the family already has this content". That is sound for the CAREGIVER
+  who authored it and is **not** an argument for any other reader.
+
+The frozen no-free-text guarantee is therefore narrower than it looks. 0.5C's
+structural gate pins `_observation_payload` to exactly eight structured fields
+so no Parent free text can leave the server *through the observation route*.
+That gate says nothing about this one, and a free-text field arriving inside
+`source_document` would bypass it entirely.
+
+#### What must happen before real PHI
+
+1. Decide whether the Parent weekly plan document is PHI in this context, and
+   on what basis a provider may read a caregiver-authored plan.
+2. Replace the pass-through with an **explicit allowlist** of the fields the
+   UI actually renders, applied on this side, so the disclosed set is
+   enumerable at review time — a deny-unknown-fields posture mirroring
+   `read_json_body`'s treatment of request bodies.
+3. Add a structural gate for the RESPONSE direction equivalent to the one
+   0.5C added for the request direction.
+4. Re-run the minimum-necessary review against that allowlist.
+
+Until all four are done, this endpoint must not serve a real plan document.
 
 ### Blocker 3 — CLOSED in 0.5C
 

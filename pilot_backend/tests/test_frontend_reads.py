@@ -368,3 +368,32 @@ def test_an_empty_suggestion_list_still_works(world):
                           f"/pilot/children/{world.child}/goal-suggestions")
     assert status == 200, body
     assert body["suggestions"] == []
+
+
+def test_accepting_verbatim_returns_the_SUGGESTION_text_not_the_body(world):
+    """The discriminating case for "read the persisted wording back".
+
+    A mutation sweep showed that echoing the request body passed every other
+    test, because for `authored_fresh` the persisted text IS the submitted
+    text — so the two behaviours are indistinguishable there.
+
+    `ACCEPTED_VERBATIM` is the case where they differ. `_approved_text`
+    deliberately takes the suggestion's OWN template and ignores whatever the
+    caller echoed back, because otherwise "accepted verbatim" would be a claim
+    the record cannot support. So submitting a DIFFERENT text alongside
+    `accepted_verbatim` proves which value the response carries.
+    """
+    suggestions = _seeded_suggestion(world)
+    suggestion = suggestions[0]
+
+    status, body, _ = post(
+        world, f"/pilot/children/{world.child}/goals", "hannah",
+        {"edit_type": "accepted_verbatim",
+         "suggestion_id": suggestion.suggestion_id,
+         "text": "Fictional-sentinel-ECHOED-BODY-SHOULD-NOT-APPEAR"})
+    assert status == 200, body
+
+    returned = body["goal"]["text"]
+    assert returned == suggestion.family_facing_text_template
+    assert "ECHOED-BODY-SHOULD-NOT-APPEAR" not in returned, (
+        "the response echoed the request body instead of the persisted wording")
