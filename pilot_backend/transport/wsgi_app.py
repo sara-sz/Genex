@@ -405,21 +405,58 @@ def _goal_payload(goal, kind, *, text=None) -> dict:
 def _suggestion_payload(suggestion) -> dict:
     """Suggestion plus its PROVENANCE.
 
-    `generator_version`, `policy_version` and the milestone/domain references
+    `generator_version`, the rule version and the domain/milestone references
     are what let a clinician see WHY a target was proposed. No LLM chooses a
     target: these are deterministic engine outputs, and the provenance is the
     evidence for that claim.
+
+    ## 0.5D correction
+
+    Every field here was wrong, and the route returned 500 for any non-empty
+    list. `suggestion.text` does not exist — the attribute is
+    `family_facing_text_template` — so this raised `AttributeError` on the
+    first real suggestion, which the transport correctly turned into a
+    constant 500. And `policy_version`, `domain_key`, `milestone_ref` and
+    `functional_baseline_ref` were read with `getattr(..., "")` against a
+    `GoalSuggestion` that has none of them, so they would have served ""
+    even once the crash was fixed: the provenance this docstring promised was
+    never actually supplied.
+
+    The provenance is real — it lives one level down, on
+    `GoalSuggestionEvidence` — and is read from there now.
+
+    This survived 0.5C because no test ever had a suggestion PRESENT. Same
+    root cause as the `_report_payload` defect that slice caught, and the same
+    lesson: a route whose happy path is never exercised is not a route anyone
+    should wire a UI to.
+
+    `family_facing_text_template` keeps its real name rather than being
+    flattened to `text`, because it is a TEMPLATE: `pilot_backend` holds no
+    child name to render with, so a client must not mistake it for
+    display-ready prose.
+
+    `policy_version` is dropped — it is not a field of `GoalSuggestion` at
+    all, and the planning policy version lives on the monthly plan the UI
+    already reads. `prior_month_summary_id` stays unexposed: it points at a
+    prior clinical summary and no screen needs it.
     """
+    evidence = suggestion.evidence
     return {
         "suggestion_id": suggestion.suggestion_id,
-        "text": suggestion.text,
+        "family_facing_text_template": suggestion.family_facing_text_template,
         "status": suggestion.status.value,
-        "generator_version": getattr(suggestion, "generator_version", ""),
-        "policy_version": getattr(suggestion, "policy_version", ""),
-        "domain_key": getattr(suggestion, "domain_key", ""),
-        "milestone_ref": getattr(suggestion, "milestone_ref", ""),
-        "functional_baseline_ref": getattr(
-            suggestion, "functional_baseline_ref", ""),
+        "cycle_month": suggestion.cycle_month,
+        "suggested_priority_rank": suggestion.suggested_priority_rank,
+        "suggested_emphasis_weight": suggestion.suggested_emphasis_weight,
+        "generator_version": suggestion.generator_version,
+        "generation_mode": suggestion.generation_mode,
+        "domain_key": evidence.domain_key,
+        "evidence_source": evidence.evidence_source.value,
+        "milestone_refs": list(evidence.milestone_refs),
+        "functional_baseline_area": evidence.functional_baseline_area,
+        "observed_level": evidence.observed_level,
+        "explicitly_selected": evidence.explicitly_selected,
+        "rule_version": evidence.rule_version,
     }
 
 

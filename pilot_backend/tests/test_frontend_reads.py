@@ -28,6 +28,7 @@ from pilot_backend.domain.goals import GoalKind, GoalRef
 # `world` depends on `e2e`, so both have to be imported — a fixture pulled in
 # by name does not drag its own dependencies with it.
 from .test_workflow_e2e import (  # noqa: F401
+    MONTH,
     SENTINEL_TEXT,
     e2e,
     get,
@@ -262,3 +263,108 @@ def test_the_snapshot_document_never_reaches_a_log_line(world):
     serialised = json.dumps(world.logs)
     for marker in ("fictional-activity-1", "fictional-parent-plan-1"):
         assert marker not in serialised, f"{marker} reached a log line"
+
+
+# ===========================================================================
+# C. the goal-suggestions route, which returned 500 in 0.5C
+#
+# 0.5C had no test with a suggestion PRESENT, so `_suggestion_payload` was
+# never run against a real `GoalSuggestion` and four of its eight fields were
+# reading attributes that do not exist. The first one crashed the route.
+#
+# These tests supply a real suggestion, which is the only thing that would
+# have caught it.
+# ===========================================================================
+
+def _seeded_suggestion(world):
+    """One real suggestion, through the frozen engine."""
+    from pilot_backend.goals.suggestion_engine import (
+        EvidenceSource,
+        ObservationSnapshot,
+        ObservedDomain,
+    )
+
+    snapshot = ObservationSnapshot(
+        child_id=world.child,
+        cycle_month=MONTH,
+        domains=(ObservedDomain(
+            domain_key="talking_and_communicating", answered=True,
+            evidence_source=EvidenceSource.EXPLICIT_SELECTION,
+            functional_baseline_area="fictional-baseline-area-1",
+            observed_level="fictional-level-1",
+            explicitly_selected=True),),
+    )
+    return world.goals.generate_suggestions(
+        world.principal("cg"), world.child, snapshot)
+
+
+def test_the_suggestions_route_serves_a_real_suggestion(world):
+    """The regression test for the 500. In 0.5C this returned 500."""
+    created = _seeded_suggestion(world)
+    assert created, "the engine produced no suggestion to serve"
+
+    status, body, _ = get(world,
+                          f"/pilot/children/{world.child}/goal-suggestions")
+    assert status == 200, body
+    assert len(body["suggestions"]) == len(created)
+
+
+def test_the_suggestion_payload_carries_real_wording_not_an_empty_string(world):
+    _seeded_suggestion(world)
+    status, body, _ = get(world,
+                          f"/pilot/children/{world.child}/goal-suggestions")
+    suggestion = body["suggestions"][0]
+
+    # The TEMPLATE keeps its real name, so no client reads it as finished prose.
+    assert suggestion["family_facing_text_template"]
+    assert "text" not in suggestion
+
+
+def test_the_suggestion_provenance_is_actually_populated(world):
+    """The point of the payload: a clinician can see WHY a target was proposed.
+
+    Each of these served "" in 0.5C, because they were read off the suggestion
+    instead of off its evidence.
+    """
+    _seeded_suggestion(world)
+    status, body, _ = get(world,
+                          f"/pilot/children/{world.child}/goal-suggestions")
+    suggestion = body["suggestions"][0]
+
+    assert suggestion["domain_key"] == "talking_and_communicating"
+    assert suggestion["evidence_source"] == "explicit_selection"
+    assert suggestion["functional_baseline_area"] == "fictional-baseline-area-1"
+    assert suggestion["observed_level"] == "fictional-level-1"
+    assert suggestion["explicitly_selected"] is True
+    assert suggestion["rule_version"]
+    assert suggestion["generator_version"]
+
+
+def test_the_suggestion_payload_shape_is_pinned(world):
+    _seeded_suggestion(world)
+    status, body, _ = get(world,
+                          f"/pilot/children/{world.child}/goal-suggestions")
+    assert set(body["suggestions"][0]) == {
+        "suggestion_id", "family_facing_text_template", "status",
+        "cycle_month", "suggested_priority_rank", "suggested_emphasis_weight",
+        "generator_version", "generation_mode", "domain_key",
+        "evidence_source", "milestone_refs", "functional_baseline_area",
+        "observed_level", "explicitly_selected", "rule_version"}
+
+
+def test_the_prior_month_summary_is_never_exposed(world):
+    """It points at a prior clinical summary. No screen needs it."""
+    _seeded_suggestion(world)
+    status, body, _ = get(world,
+                          f"/pilot/children/{world.child}/goal-suggestions")
+    serialised = json.dumps(body)
+    assert "prior_month_summary_id" not in serialised
+    assert "policy_version" not in json.dumps(body["suggestions"])
+
+
+def test_an_empty_suggestion_list_still_works(world):
+    """The 0.5C case that passed, kept so the fix did not break it."""
+    status, body, _ = get(world,
+                          f"/pilot/children/{world.child}/goal-suggestions")
+    assert status == 200, body
+    assert body["suggestions"] == []
