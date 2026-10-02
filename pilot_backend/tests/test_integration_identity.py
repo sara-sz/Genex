@@ -144,6 +144,18 @@ def claim_docs(repos):
     return repos.store.list_all("pilot_auth_subject_claims")
 
 
+def snapshot_all(repos):
+    """Every document id in every collection except the audit trail.
+
+    Audit is excluded because a REFUSAL is supposed to write an audit event —
+    that is the one thing a fail-closed path legitimately persists. Comparing
+    ids rather than counts means a write-plus-delete cannot pass as unchanged.
+    """
+    return {name: sorted(doc_id for doc_id, _ in repos.store.list_all(name))
+            for name in repos.store.collections()
+            if name != "pilot_audit_events"}
+
+
 # ===========================================================================
 # the claim primitive
 # ===========================================================================
@@ -784,63 +796,101 @@ def test_every_bootstrap_refusal_leaves_the_store_unchanged(wiring):
 # list in the same change.
 # ===========================================================================
 
-def test_provider_creation_does_not_acquire_a_subject_claim():
-    """PRE-PHI, OPEN: provider provisioning is outside the claim primitive.
+def test_provider_provisioning_acquires_the_claim_atomically(wiring):
+    """0.5B, CLOSED: the provider path now takes the same claim.
 
-    `providers.create` keys its document on the random `provider_id`, exactly
-    as `caregivers.create` did before 0.5A, so `auth_subject` has no write-time
-    protection on the provider side. Two providers can share a subject and
-    `get_by_auth_subject` then refuses it forever.
+    This test is the inverse of the 0.5A one it replaces, which asserted that
+    `providers.create` minted no claim. That assertion was the pinned form of
+    PRE-PHI Blocker 4 and it failing is the intended consequence of closing it.
 
-    0.5A does not fix this. Making the repository acquire a claim would change a
-    frozen 0.1 repository and every fixture that provisions a provider, which is
-    not a tiny fix and is not required for 0.5A's own correctness — the
-    caregiver path IS protected, and a bootstrap against an existing provider
-    subject is refused.
+    Both documents must exist. A claim without a provider would strand the
+    subject with no release path; a provider without a claim would leave the
+    subject unprotected for the next writer — which was the whole defect.
     """
     from pilot_backend.domain.enums import ProviderDiscipline
-    from pilot_backend.domain.entities import Provider
-    from pilot_backend.repository.interface import AmbiguousAuthSubject
+    from pilot_backend.provisioning import provision_provider_record
 
-    repos = FirestoreRepositories(FakeDocumentStore())
-    subject = "fictional-subject-provider-collision"
-    for name, discipline in (("Provider-One", ProviderDiscipline.SLP),
-                             ("Provider-Two", ProviderDiscipline.OT)):
-        repos.providers.create(Provider.create(
-            "prac_fictional", discipline, name, auth_subject=subject, now=T0))
+    subject = "fictional-subject-provider-provisioned"
+    outcome = provision_provider_record(
+        wiring.repos, auth_subject=subject,
+        practice_id=wiring.topo.practice.practice_id,
+        discipline=ProviderDiscipline.SLP, display_name="Provider-Hannah",
+        now=T0)
 
-    assert claim_docs(repos) == [], "provider creation now mints a claim: " \
-        "the PRE-PHI blocker list in SECURITY.md must be updated"
-    with pytest.raises(AmbiguousAuthSubject):
-        repos.providers.get_by_auth_subject(subject)
+    assert outcome.created is True
+    assert outcome.claim_backfilled is False
+    claim = wiring.repos.auth_subject_claims.find_for_subject(subject)
+    assert claim is not None, "provisioning did not acquire a subject claim"
+    assert claim.holder_actor_id == outcome.provider.provider_id
+    assert claim.is_held_by_provider is True
+    assert claim.subject_fingerprint == subject_fingerprint(subject)
+    # The record is really there, and resolves to a provider principal.
+    stored = wiring.repos.providers.get_by_id(outcome.provider.provider_id)
+    assert stored.auth_subject == subject
+    assert principal_for(wiring.repos, subject).role is ActorRole.PROVIDER
 
 
-def test_a_provider_can_still_take_a_subject_a_caregiver_holds(wiring):
-    """PRE-PHI, OPEN: the claim guards only the writers that consult it.
+def test_provider_provisioning_refuses_a_caregiver_held_subject(wiring):
+    """0.5B, CLOSED: the reverse ordering is now guarded too.
 
-    The caregiver bootstrap refuses a subject an existing provider holds. The
-    REVERSE ordering is not guarded: `providers.create` does not read the claim,
-    so it can bind a subject a caregiver already won, and `resolve_principal`
-    then refuses that subject permanently.
+    0.5A guarded caregiver-after-provider and left provider-after-caregiver
+    open, which is what kept Blocker 4 open: `providers.create` did not read the
+    claim, so it could bind a subject a caregiver had already won, and
+    `resolve_principal` then refused that subject permanently with no release
+    path.
 
-    This is the precise reason the universal-enforcement blocker stays OPEN
-    while the caregiver self-bootstrap item closes.
+    Provisioning now refuses, and — the part that matters — NOTHING is written,
+    so the subject stays resolvable as the caregiver it already was.
     """
     from pilot_backend.domain.enums import ProviderDiscipline
-    from pilot_backend.domain.entities import Provider
+    from pilot_backend.provisioning import provision_provider_record
 
     caregiver = wiring.service.bootstrap_caregiver(NEWCOMER)
+    before = snapshot_all(wiring.repos)
+
+    with pytest.raises(SubjectAlreadyHeld):
+        provision_provider_record(
+            wiring.repos, auth_subject=NEWCOMER,
+            practice_id=wiring.topo.practice.practice_id,
+            discipline=ProviderDiscipline.SLP,
+            display_name="Provider-Intruder", now=T0)
+
+    assert snapshot_all(wiring.repos) == before, "the refusal wrote something"
+    # Still exactly the caregiver's claim, and the subject still authenticates.
     assert wiring.repos.auth_subject_claims.find_for_subject(
         NEWCOMER).holder_actor_id == caregiver.caregiver_id
+    assert principal_for(wiring.repos, NEWCOMER).role is ActorRole.CAREGIVER
 
-    wiring.repos.providers.create(Provider.create(
-        wiring.topo.practice.practice_id, ProviderDiscipline.SLP,
-        "Provider-Intruder", auth_subject=NEWCOMER, now=T0))
 
-    # The claim did not stop it, and the subject is now unresolvable.
-    assert len(claim_docs(wiring.repos)) == 1
-    with pytest.raises(PrincipalResolutionError):
-        principal_for(wiring.repos, NEWCOMER)
+def test_two_provider_provisions_of_one_subject_produce_no_twin(wiring):
+    """0.5B, CLOSED: a repeat provision converges instead of twinning.
+
+    The defect being closed was two Provider records sharing one subject, which
+    `get_by_auth_subject` then refuses forever. A second provision of the same
+    subject must return the SAME provider and write nothing new.
+    """
+    from pilot_backend.domain.enums import ProviderDiscipline
+    from pilot_backend.provisioning import provision_provider_record
+
+    subject = "fictional-subject-provider-repeat"
+
+    def _provision():
+        return provision_provider_record(
+            wiring.repos, auth_subject=subject,
+            practice_id=wiring.topo.practice.practice_id,
+            discipline=ProviderDiscipline.SLP, display_name="Provider-Repeat",
+            now=T0)
+
+    first = _provision()
+    after_first = snapshot_all(wiring.repos)
+    second = _provision()
+
+    assert second.provider.provider_id == first.provider.provider_id
+    assert second.created is False
+    assert snapshot_all(wiring.repos) == after_first, "the retry wrote again"
+    # And the subject is still unambiguous, which is the property at stake.
+    assert wiring.repos.providers.get_by_auth_subject(
+        subject).provider_id == first.provider.provider_id
 
 
 def test_no_repository_method_persists_a_late_subject_binding():
@@ -860,17 +910,21 @@ def test_no_repository_method_persists_a_late_subject_binding():
                           "list_by_practice", "update_status"}, operations
 
 
-def test_caregiver_creation_is_the_only_claimed_identity_path():
-    """What 0.5A actually closes, stated positively.
+def test_the_subject_claim_is_written_from_exactly_the_two_identity_paths():
+    """The SUBJECT claim repository has exactly two writers, one per actor kind.
 
-    The SUBJECT claim repository is written from exactly one place. A second
-    writer appearing is either a widening of the guarantee (good) or a bypass
-    (bad), and either way it should be read by a human.
+    0.5A asserted ONE writer, because only the caregiver path took the claim.
+    0.5B adds the provider path, and that is the widening that closes Blocker 4
+    — so this is the expected new value, not a bypass.
+
+    A THIRD writer appearing is what this guards. It would mean either another
+    legitimate actor kind (which needs its own review) or a service minting
+    claims outside the two audited provisioning paths.
 
     Matched on the receiver `auth_subject_claims`, not on the bare method name
-    `claim`: four prior-slice services call `identity_claims.claim(...)`, which
-    is the CHILD-scoped 0.4A mutex — a different primitive that happens to share
-    a verb. A guard keyed on the verb alone would have flagged all of them.
+    `claim`: several prior-slice services call `identity_claims.claim(...)`,
+    which is the CHILD-scoped 0.4A mutex — a different primitive that happens
+    to share a verb. A guard keyed on the verb alone would flag all of them.
     """
     import ast
     import pathlib
@@ -888,7 +942,127 @@ def test_caregiver_creation_is_the_only_claimed_identity_path():
             if (isinstance(receiver, ast.Attribute)
                     and receiver.attr == "auth_subject_claims"):
                 writers.add(path.relative_to(root).as_posix())
-    assert writers == {"integration/identity_service.py"}, writers
+    assert writers == {"integration/identity_service.py",
+                       "provisioning/service.py"}, writers
+
+
+def test_provider_creation_happens_only_inside_provisioning_or_fixtures():
+    """THE gate that actually closes Blocker 4.
+
+    A deterministic claim is only a mutex for writers that TAKE it, so the
+    guarantee is not "provisioning acquires the claim" — it is "nothing creates
+    a Provider except provisioning". A future service calling
+    `repos.providers.create` directly would silently reopen the blocker, and no
+    behavioural test would notice, because the provider it created would work
+    perfectly right up until a second one appeared on the same subject.
+
+    Two fixture call sites are allowlisted, and the exemption is bounded:
+
+      * `fixtures/secure_topology.py` is backend-parametrised and also builds
+        against frozen `InMemoryRepositories`, which has no claim collection
+        and no transactions;
+      * `fixtures/pilot_topology.py` is the BACKEND 0.1 in-memory demo
+        topology.
+
+    Both are test-only, and the companion test below asserts that nothing
+    reachable from the composition root imports `pilot_backend.fixtures` — so
+    neither is a path the deployed pilot can take. A fixture-seeded provider is
+    claim-free until provisioning touches its subject, at which point the
+    legacy-backfill branch mints the claim.
+    """
+    import ast
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    creators = set()
+    for path in sorted(root.rglob("*.py")):
+        if "tests" in path.parts:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "create"):
+                continue
+            receiver = node.func.value
+            if (isinstance(receiver, ast.Attribute)
+                    and receiver.attr == "providers"):
+                creators.add(path.relative_to(root).as_posix())
+
+    assert creators == {
+        "provisioning/service.py",
+        "fixtures/secure_topology.py",
+        "fixtures/pilot_topology.py",
+    }, creators
+
+
+def test_the_deployed_composition_cannot_reach_the_fixtures():
+    """What bounds the fixture exemption above.
+
+    If any module reachable from the composition root imported
+    `pilot_backend.fixtures`, the allowlist in the previous test would stop
+    being a test-only carve-out and become a live provider-creation path that
+    bypasses the claim.
+
+    Walks the import graph from the composition root rather than checking the
+    root alone: a two-hop import would be just as reachable and far easier to
+    add by accident.
+    """
+    import ast
+    import pathlib
+
+    backend = pathlib.Path(__file__).resolve().parent.parent
+    runtime = backend.parent / "pilot_runtime"
+
+    def _module_path(dotted: str):
+        for base, prefix in ((backend, "pilot_backend."), (runtime, "pilot_runtime.")):
+            if not dotted.startswith(prefix):
+                continue
+            rel = dotted[len(prefix):].replace(".", "/")
+            for candidate in (base / f"{rel}.py", base / rel / "__init__.py"):
+                if candidate.exists():
+                    return candidate
+        return None
+
+    def _imports(path: pathlib.Path, dotted: str):
+        """Absolute and relative imports, normalised to dotted module names."""
+        package = dotted.rsplit(".", 1)[0] if "." in dotted else dotted
+        found = set()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                found.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level == 0:
+                    if node.module:
+                        found.add(node.module)
+                    continue
+                # `from ..x import y` — climb `level - 1` packages.
+                parts = package.split(".")
+                base = parts[:len(parts) - (node.level - 1)] or parts[:1]
+                found.add(".".join(base + ([node.module] if node.module else [])))
+        return found
+
+    root = "pilot_runtime.composition"
+    seen, queue, offenders = set(), [root], []
+    while queue:
+        dotted = queue.pop()
+        if dotted in seen:
+            continue
+        seen.add(dotted)
+        path = _module_path(dotted)
+        if path is None:
+            continue
+        for imported in _imports(path, dotted):
+            if imported.startswith("pilot_backend.fixtures"):
+                offenders.append((dotted, imported))
+            if imported.startswith(("pilot_backend", "pilot_runtime")):
+                queue.append(imported)
+
+    assert not offenders, (
+        f"the deployed composition can reach the fixtures: {offenders}")
+    # Sanity: the walk actually traversed something, so an empty result is a
+    # real absence rather than a graph that never got started.
+    assert len(seen) > 5, f"import walk visited too little to be meaningful: {seen}"
 
 
 # ===========================================================================

@@ -90,6 +90,32 @@ def build_secure_topology(repos, *, now: Optional[datetime] = None,
     practice = repos.practices.create(Practice.create("Practice-Alpha", now=stamp))
 
     def _provider(name: str, subject: str) -> Provider:
+        """Direct repository creation, NOT the 0.5B provisioning path.
+
+        Routing this through `provision_provider_record` was tried and
+        reverted, for a reason worth recording: this fixture is BACKEND
+        PARAMETRISED. The same function builds the topology for
+        `InMemoryRepositories` and `FirestoreRepositories`, and the in-memory
+        set — frozen BACKEND 0.1 code — has no `auth_subject_claims`
+        collection and no transaction support. It predates the claim primitive
+        by four slices.
+
+        Closing that would mean adding a claim repository and transactions to
+        frozen lower-level code, which is a larger change than the gap
+        warrants: these providers are claim-FREE, and that is safe here because
+
+          * fixtures are imported only by tests — a structural gate asserts
+            nothing reachable from the composition root imports them, so no
+            deployed path creates a provider this way; and
+          * the first time provisioning touches one of these subjects, the
+            legacy-backfill branch mints its claim, so a fixture-seeded
+            provider converges onto the protected invariant rather than
+            sitting outside it forever.
+
+        Making `provision_provider_record` tolerate a missing claim collection
+        was rejected outright — a provisioning path that proceeds without its
+        mutex is the exact bypass that module exists to remove.
+        """
         return repos.providers.create(Provider.create(
             practice.practice_id, ProviderDiscipline.SLP, name,
             auth_subject=subject, now=stamp))

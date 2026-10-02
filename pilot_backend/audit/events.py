@@ -143,6 +143,29 @@ class AuditAction(str, Enum):
     PARENT_SESSION_LINKED = "parent_session_linked"
     CAREGIVER_CHILD_LINKED = "caregiver_child_linked"
 
+    # 0.5B provider identity and the connection lifecycle.
+    #
+    # PROVISIONED is deliberately distinct from CAREGIVER_IDENTITY_BOOTSTRAPPED
+    # rather than one shared "identity created" action carrying a role in
+    # metadata: one is self-service by the person signing in, the other is an
+    # ADMINISTRATIVE act performed on someone else's behalf, and an auditor
+    # asking who created a clinician's identity must not have to infer that
+    # from a metadata field.
+    PROVIDER_IDENTITY_PROVISIONED = "provider_identity_provisioned"
+
+    # The lifecycle is audited per TRANSITION rather than as one "connection
+    # changed" action. Declining and revoking reach the same terminal place but
+    # mean very different things — a family saying no, versus access being
+    # taken away from a clinician who had it — and a trail that merged them
+    # could not separate them afterwards.
+    #
+    # PROVIDER_CONNECTED and PROVIDER_DISCONNECTED already exist from 0.1 and
+    # are REUSED for the accept and revoke/end transitions, not duplicated.
+    PROVIDER_CONNECTION_INVITED = "provider_connection_invited"
+    PROVIDER_CONNECTION_DECLINED = "provider_connection_declined"
+    PROVIDER_CONNECTION_PAUSED = "provider_connection_paused"
+    PROVIDER_CONNECTION_RESUMED = "provider_connection_resumed"
+
 
 class AuditResult(str, Enum):
     SUCCESS = "success"
@@ -280,6 +303,14 @@ ALLOWED_METADATA_KEYS = frozenset({
     "holder_actor_type",      # caregiver | provider
     "integration_state",      # e.g. SECOND_SESSION_UNRESOLVED
     "signal_count",             # how many signals explained the change
+    # 0.5B connection lifecycle. Both are short closed enums, not free text.
+    #
+    # `initiated_by` is the audit-visible half of the invitation rule: a
+    # provider-initiated connection can only exist where a family handed over
+    # an invitation token, so WHO started a relationship is the fact an auditor
+    # needs to tell a family-invited clinician from a self-asserted one.
+    "initiated_by",           # caregiver | provider
+    "connection_status",      # pending | active | declined | paused | ...
 })
 
 _MAX_METADATA_VALUE_LENGTH = 64

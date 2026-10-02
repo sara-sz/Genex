@@ -342,6 +342,25 @@ class FirestoreProviderChildConnectionRepository(_BaseRepo):
         ended = self._get(connection_id).end(status=status, now=now)
         return self._set(connection_id, ended)
 
+    # -- 0.5B transitions -------------------------------------------------
+    #
+    # Each delegates the legality check to the domain object rather than
+    # re-testing the status here. A repository that decided for itself which
+    # transitions were allowed would be a second rule set to keep in sync, and
+    # the domain one is the version the unit tests pin.
+
+    def decline(self, connection_id: str, *, now: Optional[datetime] = None
+                ) -> ProviderChildConnection:
+        return self._set(connection_id, self._get(connection_id).decline(now=now))
+
+    def pause(self, connection_id: str, *, now: Optional[datetime] = None
+              ) -> ProviderChildConnection:
+        return self._set(connection_id, self._get(connection_id).pause(now=now))
+
+    def resume(self, connection_id: str, *, now: Optional[datetime] = None
+               ) -> ProviderChildConnection:
+        return self._set(connection_id, self._get(connection_id).resume(now=now))
+
     def list_children_for_provider(self, provider_id: str, *, include_ended: bool = False
                                    ) -> List[ProviderChildConnection]:
         found = self._query("provider_id", provider_id)

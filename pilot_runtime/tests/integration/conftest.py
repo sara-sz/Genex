@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import tempfile
@@ -58,6 +59,58 @@ def _responding(host_port: str) -> bool:
             return True
     except OSError:
         return False
+
+
+def _terminate_tree(process: "subprocess.Popen") -> None:
+    """Signal the emulator's whole process GROUP, not just the wrapper.
+
+    `gcloud emulators firestore start` execs a child JVM, and that JVM is the
+    thing holding the port. Signalling the group reaches both. SIGTERM first so
+    the emulator can shut its RocksDB store down cleanly, then SIGKILL for
+    anything that ignored it.
+
+    Every step tolerates the race where a process exits between the lookup and
+    the signal: `ProcessLookupError` means the thing we wanted gone is already
+    gone, which is success, not an error to propagate out of teardown.
+    """
+    try:
+        group = os.getpgid(process.pid)
+    except ProcessLookupError:  # pragma: no cover - already reaped
+        return
+
+    for signal_number in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(group, signal_number)
+        except ProcessLookupError:
+            break
+        try:
+            process.wait(timeout=20)
+        except subprocess.TimeoutExpired:  # pragma: no cover - escalation path
+            continue
+        # The wrapper is reaped, but it is NOT the process holding the port, so
+        # its exit says nothing about the JVM. Keep going to the port check.
+        break
+
+    # Reap the wrapper so it does not linger as a zombie child of pytest.
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:  # pragma: no cover - defensive
+        pass
+
+
+def _port_released(host_port: str, timeout: float = 20.0) -> bool:
+    """Whether nothing is listening on `host_port` any more.
+
+    Polled rather than checked once: a SIGKILLed JVM releases its socket when
+    the kernel tears the process down, which is prompt but not instantaneous,
+    and TIME_WAIT on a listening socket does not block a fresh connect test.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _responding(host_port):
+            return True
+        time.sleep(0.25)
+    return not _responding(host_port)
 
 
 @pytest.fixture(scope="session")
@@ -96,9 +149,21 @@ def emulator_host() -> Iterator[str]:
     # preserved rather than traded away for `DEVNULL`.
     log = tempfile.NamedTemporaryFile(  # noqa: SIM115 - closed in the finally
         prefix="firestore-emulator-", suffix=".log", mode="w+", delete=False)
+    # `start_new_session=True` is what makes teardown possible at all.
+    #
+    # `gcloud emulators firestore start` is a SHELL WRAPPER that exec-spawns a
+    # child JVM. `Popen.terminate()` signals only the wrapper, so the JVM was
+    # orphaned on every run: it kept its listening port and its ~22 MB of RSS
+    # forever. One leak per session is invisible, which is why this went
+    # unnoticed through 0.3-0.5A — by 0.5A there were 98 orphaned JVMs holding
+    # 2.1 GB and 392 sockets, and the machine was 9.1 GB into a 10.2 GB swap.
+    #
+    # A new session makes the wrapper a process-group leader, so the whole tree
+    # can be signalled with `killpg` below rather than just its root.
     process = subprocess.Popen(
         ["gcloud", "emulators", "firestore", "start", f"--host-port={host_port}"],
         stdout=log, stderr=subprocess.STDOUT, text=True,
+        start_new_session=True,
     )
 
     def _emulator_output() -> str:
@@ -117,7 +182,11 @@ def emulator_host() -> Iterator[str]:
             break
         time.sleep(0.5)
     else:
-        process.terminate()
+        # Same process-group teardown as the happy path. A startup that timed
+        # out is the MOST likely case to have a half-started JVM behind the
+        # wrapper, so this is the last place that should settle for
+        # `terminate()`.
+        _terminate_tree(process)
         raise RuntimeError(
             f"Firestore emulator did not become ready within "
             f"{_STARTUP_TIMEOUT_SECONDS}s (needs a JDK on PATH)"
@@ -136,11 +205,16 @@ def emulator_host() -> Iterator[str]:
     try:
         yield host_port
     finally:
-        process.terminate()
-        try:
-            process.wait(timeout=20)
-        except subprocess.TimeoutExpired:
-            process.kill()
+        _terminate_tree(process)
+        # The port is the observable proof, and it is checked rather than
+        # assumed: a surviving JVM is invisible in `Popen.returncode` (the
+        # wrapper exits cleanly while its child keeps running) but it cannot
+        # hide the socket it is holding. If this raises, the leak is back.
+        if not _port_released(host_port):
+            raise RuntimeError(
+                f"Firestore emulator still listening on {host_port} after "
+                f"teardown — the emulator process tree leaked. Check for "
+                f"orphaned JVMs: pgrep -f cloud-firestore-emulator.jar")
         log.close()
         try:
             os.unlink(log.name)

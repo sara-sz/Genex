@@ -138,6 +138,7 @@ from ..domain.connections import CaregiverChildConnection, ProviderChildConnecti
 from ..domain.entities import Caregiver, Child, Practice, Provider
 from ..domain.enums import (
     CaregiverRelationship,
+    ConnectionInitiator,
     ConnectionStatus,
     EntityStatus,
     ProviderDiscipline,
@@ -552,7 +553,14 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "permissions": STR,
         "created_at": DT, "updated_at": DT,
         "activated_at": OPT_DT, "ended_at": OPT_DT,
-        "created_by_actor_id": OPT_STR, "schema_version": STR,
+        "created_by_actor_id": OPT_STR,
+        # 0.5B. Both carry the dataclass default when absent from a stored
+        # document, which is what makes the field addition backward
+        # compatible: pre-0.5B rows decode to CAREGIVER (the only initiator
+        # that existed) and to `paused_at=None` (pausing did not exist).
+        "initiated_by": _EnumKind(ConnectionInitiator),
+        "paused_at": OPT_DT,
+        "schema_version": STR,
     },
     AuditEvent: {
         "event_id": STR, "occurred_at": DT,

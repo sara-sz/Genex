@@ -65,6 +65,23 @@ def build_pilot_topology(
     repos = repos or InMemoryRepositories()
 
     practice = repos.practices.create(Practice.create(PRACTICE_NAME, now=now))
+    # DELIBERATELY NOT the 0.5B provisioning path, unlike `secure_topology`.
+    #
+    # This is the BACKEND 0.1 demo topology and it runs on
+    # `InMemoryRepositories`, a legacy test double that has no
+    # `auth_subject_claims` collection at all — it predates the claim
+    # primitive by four slices and is not the deployed repository set
+    # (production is `FirestoreRepositories`).
+    #
+    # The alternative was to make `provision_provider_record` skip the claim
+    # when the repository set lacks the collection. That was rejected outright:
+    # a provisioning path that silently proceeds without its mutex is precisely
+    # the bypass this module exists to remove, and it would have turned a
+    # missing-collection bug into an unclaimed production identity.
+    #
+    # So this single call site is allowlisted by the structural gate, with the
+    # scope of the exemption stated there: in-memory, test-only, and unreachable
+    # from the composition root.
     provider = repos.providers.create(
         Provider.create(
             practice.practice_id,

@@ -1251,6 +1251,14 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
             # identifier. `integration_state` is a short refusal code.
             "caregiver_id", "subject_fingerprint", "holder_actor_type",
             "integration_state",
+            # 0.5B provider identity and the connection lifecycle. Two short
+            # closed enums. `initiated_by` is the audit-visible half of the
+            # invitation rule — it distinguishes a family-invited clinician
+            # from a self-asserted one, which is the question an auditor asks
+            # about a provider-initiated relationship. `connection_status` is
+            # the lifecycle state, not a reason: no decline reason, pause
+            # reason or clinical justification is permitted here.
+            "initiated_by", "connection_status",
         }, key
     assert "external_id" not in ALLOWED_METADATA_KEYS
     # The raw auth subject must never become an allowlisted key. The

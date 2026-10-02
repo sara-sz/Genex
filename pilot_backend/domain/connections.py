@@ -39,6 +39,7 @@ from typing import Optional
 from .entities import SCHEMA_VERSION, utc_now
 from .enums import (
     CaregiverRelationship,
+    ConnectionInitiator,
     ConnectionStatus,
     Visibility,
     TERMINAL_CONNECTION_STATUSES,
@@ -113,6 +114,17 @@ class ProviderChildConnection:
     activated_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
     created_by_actor_id: Optional[str] = None
+    #: Which side asked for the relationship. 0.5B.
+    #:
+    #: Defaults to CAREGIVER so every connection written before this field
+    #: existed decodes to the only thing it could have been: 0.1-0.5A had no
+    #: provider-initiated path at all. A None default would have been the
+    #: cautious-looking choice and the wrong one — it would put "unknown" into
+    #: rows whose provenance is actually certain.
+    initiated_by: ConnectionInitiator = ConnectionInitiator.CAREGIVER
+    #: Set only while PAUSED, cleared on resume. Distinct from `ended_at`,
+    #: which is terminal: a paused row has neither ended nor stayed active.
+    paused_at: Optional[datetime] = None
     schema_version: str = SCHEMA_VERSION
 
     VISIBILITY = Visibility.SYSTEM_AUDIT
@@ -120,10 +132,13 @@ class ProviderChildConnection:
     @staticmethod
     def create(provider_id: str, child_id: str, practice_id: str, *,
                permissions: str = "treating_provider",
+               initiated_by: ConnectionInitiator = ConnectionInitiator.CAREGIVER,
                actor_id: Optional[str] = None,
                now: Optional[datetime] = None) -> "ProviderChildConnection":
         """Created PENDING — a clinician is connected only once it is accepted."""
         stamp = now or utc_now()
+        if not isinstance(initiated_by, ConnectionInitiator):
+            raise ConnectionError_("initiated_by must be a ConnectionInitiator")
         return ProviderChildConnection(
             connection_id=new_provider_child_connection_id(),
             provider_id=provider_id,
@@ -133,11 +148,26 @@ class ProviderChildConnection:
             created_at=stamp,
             updated_at=stamp,
             created_by_actor_id=actor_id,
+            initiated_by=initiated_by,
         )
 
     @property
     def is_active(self) -> bool:
         return self.status == ConnectionStatus.ACTIVE and self.ended_at is None
+
+    @property
+    def is_paused(self) -> bool:
+        return self.status is ConnectionStatus.PAUSED and self.ended_at is None
+
+    @property
+    def is_resumable(self) -> bool:
+        """Only a PAUSED row can come back, and only if it once was active.
+
+        `activated_at` is the test rather than the status alone: pausing is
+        defined as suspending an ACTIVE relationship, so a row that never
+        activated has nothing to resume to and must go through acceptance.
+        """
+        return self.is_paused and self.activated_at is not None
 
     def activate(self, *, now: Optional[datetime] = None) -> "ProviderChildConnection":
         if self.status in TERMINAL_CONNECTION_STATUSES:
@@ -146,9 +176,52 @@ class ProviderChildConnection:
         return replace(self, status=ConnectionStatus.ACTIVE,
                        activated_at=self.activated_at or stamp, updated_at=stamp)
 
+    def decline(self, *, now: Optional[datetime] = None) -> "ProviderChildConnection":
+        """A family refused the invitation. Terminal, and only from PENDING.
+
+        Declining an ACTIVE relationship is not a decline — it is a revoke, and
+        the two must not be reachable through one another: a trail showing
+        DECLINED for a clinician who had been treating a child for a month
+        would misrepresent what happened.
+        """
+        if self.status is not ConnectionStatus.PENDING:
+            raise ConnectionError_(
+                "only a pending invitation can be declined")
+        stamp = now or utc_now()
+        return replace(self, status=ConnectionStatus.DECLINED,
+                       ended_at=stamp, updated_at=stamp)
+
+    def pause(self, *, now: Optional[datetime] = None) -> "ProviderChildConnection":
+        """Suspend an ACTIVE relationship without ending it.
+
+        `activated_at` is PRESERVED and `ended_at` stays unset. That is what
+        makes a resume restore the same relationship rather than mint a new one
+        — `ManagingClinicianAssignment.provider_connection_id` points at this
+        row, so a pause that created a new connection would orphan it.
+        """
+        if not self.is_active:
+            raise ConnectionError_("only an active connection can be paused")
+        stamp = now or utc_now()
+        return replace(self, status=ConnectionStatus.PAUSED,
+                       paused_at=stamp, updated_at=stamp)
+
+    def resume(self, *, now: Optional[datetime] = None) -> "ProviderChildConnection":
+        """Return a PAUSED relationship to ACTIVE, same row, same id."""
+        if not self.is_resumable:
+            raise ConnectionError_(
+                "only a paused connection that was once active can be resumed")
+        stamp = now or utc_now()
+        return replace(self, status=ConnectionStatus.ACTIVE,
+                       paused_at=None, updated_at=stamp)
+
     def end(self, *, status: ConnectionStatus = ConnectionStatus.ENDED,
             now: Optional[datetime] = None) -> "ProviderChildConnection":
         if status not in TERMINAL_CONNECTION_STATUSES:
             raise ConnectionError_(f"{status} is not a terminal connection status")
+        if status is ConnectionStatus.DECLINED:
+            # Reachable only by asking for it explicitly, and `decline()` is
+            # the operation that means it. Allowing it here would let an
+            # ACTIVE relationship be recorded as refused.
+            raise ConnectionError_("use decline() to refuse a pending invitation")
         stamp = now or utc_now()
         return replace(self, status=status, ended_at=stamp, updated_at=stamp)
