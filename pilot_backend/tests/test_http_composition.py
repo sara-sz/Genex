@@ -541,6 +541,27 @@ def test_route_table_and_apisurface_cannot_disagree():
         "/pilot/children/{child_id}/managing-clinician": False,
         "/pilot/children/{child_id}/managing-clinician/{provider_id}": False,
         "/pilot/children/{child_id}/managing-clinician/end": False,
+        # 0.5C Tuesday-minimum workflow surface. Protected, every one.
+        #
+        # Seventeen route/method pairs over fourteen templates. Still ABSENT,
+        # and asserted absent by the companion test below: provisioning,
+        # provider lookup/search/directory, provider-initiated invitation, and
+        # public self-registration.
+        "/pilot/children/{child_id}/goals": False,
+        "/pilot/children/{child_id}/goal-suggestions": False,
+        "/pilot/children/{child_id}/monthly-plan": False,
+        "/pilot/children/{child_id}/current-cycle": False,
+        "/pilot/children/{child_id}/rtm": False,
+        "/pilot/goals/{goal_kind}/{goal_id}/revisions": False,
+        "/pilot/monthly-plans/{focus_plan_id}/allocations": False,
+        "/pilot/monthly-plans/{focus_plan_id}/activate": False,
+        "/pilot/cycles/{cycle_id}/observations": False,
+        "/pilot/cycles/{cycle_id}/defers": False,
+        "/pilot/rtm-periods/{period_id}/reviews": False,
+        "/pilot/rtm-periods/{period_id}/time-entries": False,
+        "/pilot/rtm-periods/{period_id}/interactions": False,
+        "/pilot/rtm-periods/{period_id}/report": False,
+        "/pilot/rtm-reviews/{review_id}/actions": False,
     }
 
 

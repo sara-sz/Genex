@@ -110,6 +110,38 @@ CONNECTION_ACTIONS = {
     "end": ActorRole.CAREGIVER,
 }
 
+#: 0.5C Tuesday-minimum workflow surface. Protected, every one.
+#:
+#: Scoped deliberately to the routes the Tuesday browser workflow calls. The
+#: frozen services expose 91 public methods; exposing all of them would be a
+#: larger attack surface and a larger review burden for no pilot benefit, so
+#: this is 17 routes and no general CRUD.
+#:
+#: Every identifier is a PATH segment. Bodies carry CONTENT only — a modified
+#: goal target, a clinical interpretation, minutes — and go through
+#: `read_json_body`, which refuses identity fields outright.
+CHILD_GOALS_ROUTE = "/pilot/children/{child_id}/goals"
+CHILD_SUGGESTIONS_ROUTE = "/pilot/children/{child_id}/goal-suggestions"
+CHILD_MONTHLY_PLAN_ROUTE = "/pilot/children/{child_id}/monthly-plan"
+CHILD_CURRENT_CYCLE_ROUTE = "/pilot/children/{child_id}/current-cycle"
+CHILD_RTM_ROUTE = "/pilot/children/{child_id}/rtm"
+GOAL_REVISIONS_ROUTE = "/pilot/goals/{goal_kind}/{goal_id}/revisions"
+PLAN_ALLOCATIONS_ROUTE = "/pilot/monthly-plans/{focus_plan_id}/allocations"
+#: Activation is a SEPARATE call because the domain refuses to activate a
+#: plan with no allocated goal — "a plan cannot be activated with no
+#: allocated goal". So the real sequence is create (DRAFT) -> allocate ->
+#: activate, and a handler that tried to create-and-activate in one call
+#: simply failed. Respecting the invariant costs one route; routing around
+#: it would have meant activating an empty month.
+PLAN_ACTIVATE_ROUTE = "/pilot/monthly-plans/{focus_plan_id}/activate"
+CYCLE_OBSERVATIONS_ROUTE = "/pilot/cycles/{cycle_id}/observations"
+CYCLE_DEFERS_ROUTE = "/pilot/cycles/{cycle_id}/defers"
+PERIOD_REVIEWS_ROUTE = "/pilot/rtm-periods/{period_id}/reviews"
+PERIOD_TIME_ROUTE = "/pilot/rtm-periods/{period_id}/time-entries"
+PERIOD_INTERACTIONS_ROUTE = "/pilot/rtm-periods/{period_id}/interactions"
+PERIOD_REPORT_ROUTE = "/pilot/rtm-periods/{period_id}/report"
+REVIEW_ACTIONS_ROUTE = "/pilot/rtm-reviews/{review_id}/actions"
+
 #: (method, template, is_public). Explicit; no prefix matching anywhere.
 ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
     ("GET", PUBLIC_HEALTH_ROUTE, True),
@@ -124,6 +156,25 @@ ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
     ("GET", MANAGING_CLINICIAN_ROUTE, False),
     ("POST", ASSIGN_MANAGING_ROUTE, False),
     ("POST", END_MANAGING_ROUTE, False),
+    # 0.5C workflow surface.
+    ("GET", CHILD_GOALS_ROUTE, False),
+    ("POST", CHILD_GOALS_ROUTE, False),
+    ("GET", CHILD_SUGGESTIONS_ROUTE, False),
+    ("GET", CHILD_MONTHLY_PLAN_ROUTE, False),
+    ("POST", CHILD_MONTHLY_PLAN_ROUTE, False),
+    ("GET", CHILD_CURRENT_CYCLE_ROUTE, False),
+    ("GET", CHILD_RTM_ROUTE, False),
+    ("POST", GOAL_REVISIONS_ROUTE, False),
+    ("POST", PLAN_ALLOCATIONS_ROUTE, False),
+    ("POST", PLAN_ACTIVATE_ROUTE, False),
+    ("GET", CYCLE_OBSERVATIONS_ROUTE, False),
+    ("POST", CYCLE_OBSERVATIONS_ROUTE, False),
+    ("POST", CYCLE_DEFERS_ROUTE, False),
+    ("POST", PERIOD_REVIEWS_ROUTE, False),
+    ("POST", PERIOD_TIME_ROUTE, False),
+    ("POST", PERIOD_INTERACTIONS_ROUTE, False),
+    ("POST", PERIOD_REPORT_ROUTE, False),
+    ("POST", REVIEW_ACTIONS_ROUTE, False),
 )
 
 _STATUS_TEXT = {
@@ -207,6 +258,40 @@ def _match_child_pair_route(path: str, tail: str) -> Optional[Tuple[str, str]]:
     return parts[2], parts[4]
 
 
+def _match_resource_subroute(path: str, collection: str, tail: str):
+    """Resource id for `/pilot/{collection}/{id}/{tail}`, else None.
+
+    The same hand-matching discipline as every other matcher here: an exact
+    segment count, fixed segments compared exactly, and the id segment merely
+    required to be non-empty. Generalised over `collection` so 0.5C adds
+    fourteen routes without fourteen near-identical parsers, each of which
+    would be a place to get the segment count wrong.
+    """
+    parts = [p for p in path.split("/") if p != ""]
+    if len(parts) != 4:
+        return None
+    if parts[0] != "pilot" or parts[1] != collection or parts[3] != tail:
+        return None
+    return parts[2] or None
+
+
+def _match_goal_revisions_route(path: str):
+    """`(goal_kind, goal_id)` for `/pilot/goals/{kind}/{id}/revisions`.
+
+    The goal KIND travels in the path because a `GoalRef` is (kind, id) and
+    the kind decides which repository and which authorization rule apply. It
+    is validated against the enum in the handler, not here.
+    """
+    parts = [p for p in path.split("/") if p != ""]
+    if len(parts) != 5:
+        return None
+    if parts[0] != "pilot" or parts[1] != "goals" or parts[4] != "revisions":
+        return None
+    if not parts[2] or not parts[3]:
+        return None
+    return parts[2], parts[3]
+
+
 def _match_connection_action_route(path: str) -> Optional[Tuple[str, str]]:
     """`(connection_id, action)` for `/pilot/provider-connections/{id}/{action}`.
 
@@ -224,6 +309,203 @@ def _match_connection_action_route(path: str) -> Optional[Tuple[str, str]]:
     if not parts[2] or not parts[3]:
         return None
     return parts[2], parts[3]
+
+
+def _requested_month(environ) -> str:
+    """The month to read, defaulting to the CURRENT one on the server clock.
+
+    `active_plan` and the cycle read both require a `YYYY-MM`. The UI asks for
+    "the current monthly plan" and should not have to compute which month that
+    is — a browser clock disagreeing with the server about the month boundary
+    would silently show an empty plan.
+
+    A supplied `?cycle_month=` still wins, so a clinician can look at a
+    specific month. This is a default for a READ FILTER, not a business rule:
+    which month is current decides nothing about authorization, and every read
+    it reaches is already scoped to a child the caller is proven to hold.
+    """
+    supplied = _query_value(environ, "cycle_month")
+    if supplied:
+        return supplied
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m")
+
+
+def _query_value(environ, field: str) -> str:
+    """One query-string value, or "".
+
+    The ONLY query parameter 0.5C reads is `cycle_month`, which selects which
+    month to look at. It is not identity and not authorization: every read it
+    reaches is already scoped to a child the caller is proven to hold.
+
+    Hand-parsed rather than via `urllib.parse.parse_qs`, because the no-network
+    gate bans the whole `urllib` package — `urllib.request` opens sockets, and
+    the gate is an import-level assertion that cannot tell `parse` from
+    `request`. Widening the allowlist to admit one submodule would weaken a
+    guard that exists to keep this package incapable of egress, for a function
+    that is four lines of string splitting.
+
+    Percent-decoding is deliberately NOT implemented: the only accepted value
+    is a `YYYY-MM` month, which needs none, and a decoder here would be
+    untested surface. A value containing `%` simply fails the service's own
+    month validation.
+    """
+    raw = str(environ.get("QUERY_STRING") or "")
+    for pair in raw.split("&"):
+        if not pair or "=" not in pair:
+            continue
+        name, _, value = pair.partition("=")
+        if name == field:
+            return value.replace("+", " ").strip()
+    return ""
+
+
+# -- serialisers -----------------------------------------------------------
+#
+# Flat, explicit dicts rather than a generic dataclass dumper. A dumper would
+# ship whatever field someone adds to a domain object next, which is how a
+# clinical field reaches a browser without anyone deciding it should. Each
+# function below is a decision about what leaves the server.
+
+
+def _goal_payload(goal, kind) -> dict:
+    return {
+        "goal_kind": kind.value,
+        "goal_id": getattr(goal, "clinical_goal_id", None)
+                   or getattr(goal, "caregiver_goal_id", ""),
+        "current_version_id": goal.current_version_id,
+        "status": goal.status.value,
+        "is_rtm_eligible": kind.value == "clinical",
+    }
+
+
+def _suggestion_payload(suggestion) -> dict:
+    """Suggestion plus its PROVENANCE.
+
+    `generator_version`, `policy_version` and the milestone/domain references
+    are what let a clinician see WHY a target was proposed. No LLM chooses a
+    target: these are deterministic engine outputs, and the provenance is the
+    evidence for that claim.
+    """
+    return {
+        "suggestion_id": suggestion.suggestion_id,
+        "text": suggestion.text,
+        "status": suggestion.status.value,
+        "generator_version": getattr(suggestion, "generator_version", ""),
+        "policy_version": getattr(suggestion, "policy_version", ""),
+        "domain_key": getattr(suggestion, "domain_key", ""),
+        "milestone_ref": getattr(suggestion, "milestone_ref", ""),
+        "functional_baseline_ref": getattr(
+            suggestion, "functional_baseline_ref", ""),
+    }
+
+
+def _plan_payload(plan) -> dict:
+    return {
+        "focus_plan_id": plan.focus_plan_id,
+        "cycle_month": plan.cycle_month,
+        "state": plan.state.value,
+        "timezone_of_record": plan.timezone_of_record,
+        "policy_version": getattr(plan, "policy_version", ""),
+    }
+
+
+def _allocation_payload(allocation) -> dict:
+    """Relative EMPHASIS, never a percentage.
+
+    `emphasis_weight` is a relative weight and `priority_rank` an ordering.
+    Neither is a share of anything, and the field names are kept as the domain
+    names so a UI cannot mistake one for a percentage.
+    """
+    return {
+        "allocation_id": allocation.allocation_id,
+        "goal_kind": allocation.goal_kind.value,
+        "goal_id": allocation.goal_id,
+        "priority_rank": allocation.priority_rank,
+        "emphasis_weight": allocation.emphasis_weight,
+        "min_coverage_per_cycle": allocation.min_coverage_per_cycle,
+        "status": allocation.status.value,
+    }
+
+
+def _cycle_payload(cycle) -> dict:
+    return {
+        "cycle_id": cycle.cycle_id,
+        "sequence_in_month": cycle.sequence_in_month,
+        "starts_on": cycle.starts_on,
+        "ends_on": cycle.ends_on,
+        "is_partial": cycle.is_partial,
+        "state": cycle.state.value if hasattr(cycle, "state") else None,
+    }
+
+
+def _alignment_payload(alignment) -> dict:
+    """SCHEDULED coverage. Not attempted, not completed, not improvement."""
+    return {
+        "alignment_id": alignment.alignment_id,
+        "activity_instance_ref": alignment.activity_instance_ref,
+        "goal_kind": alignment.goal_kind.value,
+        "goal_id": alignment.goal_id,
+        "scheduled_local_date": getattr(alignment, "scheduled_local_date", ""),
+    }
+
+
+def _gap_payload(gap) -> dict:
+    return {
+        "gap_id": gap.gap_id,
+        "goal_kind": gap.goal_kind.value,
+        "goal_id": gap.goal_id,
+        "reason": getattr(gap, "reason", ""),
+    }
+
+
+def _observation_payload(event) -> dict:
+    """Structured Parent evidence. NO free text of any kind.
+
+    `assistance`, `child_response` and `observation_text_ref` exist on the
+    domain object and are deliberately NOT serialised: the pilot carries
+    structured evidence only, and none of those three is structured.
+    """
+    return {
+        "event_id": event.event_id,
+        "activity_instance_ref": event.activity_instance_ref,
+        "local_date": event.local_date,
+        "attribution_month": event.attribution_month,
+        "timezone_of_record": event.timezone_of_record,
+        "attempt_outcome": event.attempt_outcome.value,
+        "difficulty": event.difficulty.value if event.difficulty else None,
+        "enjoyment": event.enjoyment.value if event.enjoyment else None,
+    }
+
+
+def _episode_payload(episode) -> dict:
+    return {
+        "episode_id": episode.episode_id,
+        "status": episode.status.value,
+        "managing_provider_id": episode.managing_provider_id,
+        "opened_at": episode.opened_at.isoformat() if episode.opened_at else None,
+    }
+
+
+def _report_payload(report) -> dict:
+    """A DRAFT month-end report — a preview, not a submission.
+
+    `coding_candidates` are POTENTIAL coding assistance only. 98979/98980/98981
+    output requires explicit clinician confirmation, carries no reimbursement
+    guarantee, and Genex makes no medical-necessity determination. There is no
+    payer, member, insurance or claim field anywhere in this payload, and a CI
+    gate asserts the RTM domain has none.
+    """
+    return {
+        "report_id": report.report_id,
+        "state": report.state.value,
+        "report_version": report.report_version,
+        "period_id": report.period_id,
+        "documented_minutes": getattr(report, "documented_minutes", None),
+        "coding_summary_id": getattr(report, "coding_summary_id", "") or None,
+        "is_preview": report.state.value != "finalized",
+    }
 
 
 class PilotWSGIApplication:
@@ -375,6 +657,42 @@ class PilotWSGIApplication:
                 return 405, _ERROR_BODIES[405], CONNECTION_ACTION_ROUTE
             return self._handle_connection_action(environ, action[0], action[1],
                                                   request_id)
+
+        # --- 0.5C workflow surface --------------------------------------
+        #
+        # Five-segment templates are matched before four-segment ones, and
+        # every matcher demands an exact segment count, so no path can fall
+        # through to a handler it was not written for.
+        revision = _match_goal_revisions_route(path)
+        if revision is not None:
+            if method != "POST":
+                return 405, _ERROR_BODIES[405], GOAL_REVISIONS_ROUTE
+            return self._handle_goal_revision(environ, revision[0],
+                                              revision[1], request_id)
+
+        for collection, tail, route, verbs in (
+                ("children", "goals", CHILD_GOALS_ROUTE, ("GET", "POST")),
+                ("children", "goal-suggestions", CHILD_SUGGESTIONS_ROUTE, ("GET",)),
+                ("children", "monthly-plan", CHILD_MONTHLY_PLAN_ROUTE, ("GET", "POST")),
+                ("children", "current-cycle", CHILD_CURRENT_CYCLE_ROUTE, ("GET",)),
+                ("children", "rtm", CHILD_RTM_ROUTE, ("GET",)),
+                ("monthly-plans", "allocations", PLAN_ALLOCATIONS_ROUTE, ("POST",)),
+                ("monthly-plans", "activate", PLAN_ACTIVATE_ROUTE, ("POST",)),
+                ("cycles", "observations", CYCLE_OBSERVATIONS_ROUTE, ("GET", "POST")),
+                ("cycles", "defers", CYCLE_DEFERS_ROUTE, ("POST",)),
+                ("rtm-periods", "reviews", PERIOD_REVIEWS_ROUTE, ("POST",)),
+                ("rtm-periods", "time-entries", PERIOD_TIME_ROUTE, ("POST",)),
+                ("rtm-periods", "interactions", PERIOD_INTERACTIONS_ROUTE, ("POST",)),
+                ("rtm-periods", "report", PERIOD_REPORT_ROUTE, ("POST",)),
+                ("rtm-reviews", "actions", REVIEW_ACTIONS_ROUTE, ("POST",)),
+        ):
+            resource = _match_resource_subroute(path, collection, tail)
+            if resource is None:
+                continue
+            if method not in verbs:
+                return 405, _ERROR_BODIES[405], route
+            return self._handle_workflow(environ, route, method, resource,
+                                         request_id)
 
         # Unregistered. Not public, not served, and no hint that it is neither.
         self._log(request_id, "unrouted", method, 404, None)
@@ -791,6 +1109,334 @@ class PilotWSGIApplication:
             "assignment_id": ended.assignment_id,
             "request_id": request_id,
         }, route
+
+    # =====================================================================
+    # 0.5C workflow surface
+    # =====================================================================
+    #
+    # Every handler here is a TRANSLATOR: resolve the principal, read an
+    # allowlisted body, call ONE frozen service method, serialise the result.
+    # No handler re-implements an authorization rule — `_authorize`,
+    # `_require_managing_clinician` and `_require_caregiver` live in the
+    # services, already have tests, and are the same functions every prior
+    # slice uses. A transport-layer copy would be a second rule set to keep
+    # correct, and the one that drifted would be the one nobody tested.
+
+    def _services(self):
+        """The frozen services, built per request. No cross-request state."""
+        from ..goals.service import GoalService
+        from ..planning.service import MonthlyPlanService
+        from ..rtm.service import RTMService
+        from ..weekly.service import WeeklyService
+
+        shared = {"repos": self._repos, "recorder": self._recorder}
+        return (GoalService(**shared), MonthlyPlanService(**shared),
+                WeeklyService(**shared), RTMService(**shared))
+
+    def _handle_workflow(self, environ, route: str, method: str,
+                         resource: str, request_id: str):
+        """One entry point for the thirteen resource-subroute handlers.
+
+        Centralised so the principal resolution and the refusal mapping happen
+        in exactly one place. Every domain, service and body error renders as
+        the SAME constant 403 body: the services already collapse
+        absent-versus-not-yours, and preserving their finer distinctions in the
+        response would hand a prober the oracle they were careful not to be.
+        """
+        from ..transport.body import BodyError
+
+        principal, status = self._principal(environ)
+        if principal is None:
+            self._log(request_id, route, method, status, None)
+            return status, _ERROR_BODIES[status], route
+
+        try:
+            payload = self._dispatch_workflow(environ, route, method, resource,
+                                              principal, request_id)
+        except BodyError:
+            # A malformed or over-reaching body. 400 would be more RESTful,
+            # but it would also tell a caller which of their fields the server
+            # recognises, so it renders as the standard refusal.
+            return self._refuse(route, method, request_id, principal)
+        except Exception as exc:  # noqa: BLE001 - classified below
+            if not getattr(exc, "PHI_SAFE_MESSAGE", False):
+                # An unexpected failure. Nothing about it reaches the client.
+                self._log(request_id, route, method, 500, None)
+                return 500, _ERROR_BODIES[500], route
+            return self._refuse(route, method, request_id, principal)
+
+        self._log_principal(request_id, route, method, HTTP_OK, principal)
+        payload["request_id"] = request_id
+        return HTTP_OK, payload, route
+
+    def _dispatch_workflow(self, environ, route, method, resource, principal,
+                           request_id):
+        """Route -> one frozen service call. Raises; never returns a status."""
+        from ..domain.goals import EditType, GoalKind, GoalRef
+        from ..domain.observation import AttemptOutcome, Difficulty, Enjoyment
+        from ..domain.rtm_documentation import (
+            ClinicalActionType,
+            InteractionModality,
+            ParticipantType,
+        )
+        from ..transport.body import (
+            enum_member,
+            opt_bool,
+            opt_int,
+            opt_str,
+            opt_str_list,
+            read_json_body,
+        )
+
+        goals, plans, weekly, rtm = self._services()
+
+        if route == CHILD_GOALS_ROUTE and method == "GET":
+            return {"goals": [_goal_payload(g, GoalKind.CLINICAL)
+                              for g in goals.list_clinical_goals(
+                                  principal, resource)]}
+
+        if route == CHILD_GOALS_ROUTE:
+            body = read_json_body(environ, allowed=[
+                "edit_type", "suggestion_id", "text", "reason"])
+            goal = goals.approve_clinical_goal(
+                principal, resource,
+                edit_type=enum_member(EditType, body, "edit_type"),
+                suggestion_id=opt_str(body, "suggestion_id") or None,
+                text=opt_str(body, "text"),
+                reason=opt_str(body, "reason"), request_id=request_id)
+            return {"goal": _goal_payload(goal, GoalKind.CLINICAL)}
+
+        if route == CHILD_SUGGESTIONS_ROUTE:
+            return {"suggestions": [_suggestion_payload(s)
+                                    for s in goals.list_suggestions(
+                                        principal, resource)]}
+
+        if route == CHILD_MONTHLY_PLAN_ROUTE and method == "GET":
+            body = {}
+            plan = plans.active_plan(principal, resource,
+                                     _requested_month(environ))
+            if plan is None:
+                return {"plan": None, "allocations": []}
+            return {"plan": _plan_payload(plan),
+                    "allocations": [_allocation_payload(a) for a in
+                                    plans.list_allocations(
+                                        principal, plan.focus_plan_id)]}
+
+        if route == CHILD_MONTHLY_PLAN_ROUTE:
+            # Creates a DRAFT. Activation is a separate call, because the
+            # domain refuses to activate a month with no allocated goal — see
+            # PLAN_ACTIVATE_ROUTE. An earlier revision of this handler
+            # activated here and failed on exactly that invariant.
+            body = read_json_body(
+                environ, allowed=["cycle_month", "timezone_of_record"],
+                required=["cycle_month", "timezone_of_record"])
+            plan = plans.create_plan(
+                principal, resource, opt_str(body, "cycle_month"),
+                opt_str(body, "timezone_of_record"), request_id=request_id)
+            return {"plan": _plan_payload(plan)}
+
+        if route == PLAN_ACTIVATE_ROUTE:
+            plan = plans.activate_plan(principal, resource,
+                                       request_id=request_id)
+            return {"plan": _plan_payload(plan)}
+
+        if route == CHILD_CURRENT_CYCLE_ROUTE:
+            plan = plans.active_plan(principal, resource,
+                                     _requested_month(environ))
+            if plan is None:
+                return {"plan": None, "cycle": None, "alignments": [],
+                        "coverage_gaps": []}
+            cycles = weekly.list_cycles(principal, plan.focus_plan_id)
+            if not cycles:
+                return {"plan": _plan_payload(plan), "cycle": None,
+                        "alignments": [], "coverage_gaps": []}
+            current = cycles[-1]
+            return {
+                "plan": _plan_payload(plan),
+                "cycle": _cycle_payload(current),
+                "alignments": [_alignment_payload(a) for a in
+                               weekly.list_alignments(principal,
+                                                      current.cycle_id)],
+                "coverage_gaps": [_gap_payload(g) for g in
+                                  weekly.list_coverage_gaps(
+                                      principal, current.cycle_id)],
+            }
+
+        if route == CHILD_RTM_ROUTE:
+            episodes = rtm.list_episodes(principal, resource)
+            return {"episodes": [_episode_payload(e) for e in episodes]}
+
+        if route == PLAN_ALLOCATIONS_ROUTE:
+            body = read_json_body(environ, allowed=[
+                "goal_kind", "goal_id", "priority_rank", "emphasis_weight",
+                "min_coverage_per_cycle", "reason"],
+                required=["goal_kind", "goal_id"])
+            ref = GoalRef(enum_member(GoalKind, body, "goal_kind"),
+                          opt_str(body, "goal_id"))
+            allocation = plans.allocate_goal(
+                principal, resource, ref,
+                priority_rank=opt_int(body, "priority_rank"),
+                emphasis_weight=opt_int(body, "emphasis_weight"),
+                min_coverage_per_cycle=opt_int(body, "min_coverage_per_cycle"),
+                reason=opt_str(body, "reason"), request_id=request_id)
+            return {"allocation": _allocation_payload(allocation)}
+
+        if route == CYCLE_OBSERVATIONS_ROUTE and method == "GET":
+            return {"observations": [_observation_payload(o) for o in
+                                     weekly.list_observations(principal,
+                                                              resource)]}
+
+        if route == CYCLE_OBSERVATIONS_ROUTE:
+            # NO free-text note field is allowlisted. `observation_text_ref`
+            # and `assistance`/`child_response` are deliberately absent: the
+            # pilot carries structured evidence only, and an opaque text ref
+            # would need an approved store that does not exist.
+            body = read_json_body(environ, allowed=[
+                "activity_instance_ref", "local_date", "attempt_outcome",
+                "difficulty", "enjoyment"],
+                required=["activity_instance_ref", "local_date",
+                          "attempt_outcome"])
+            event = weekly.record_observation(
+                principal, resource, opt_str(body, "activity_instance_ref"),
+                local_date=opt_str(body, "local_date"),
+                attempt_outcome=enum_member(AttemptOutcome, body,
+                                            "attempt_outcome"),
+                difficulty=(enum_member(Difficulty, body, "difficulty")
+                            if opt_str(body, "difficulty") else None),
+                enjoyment=(enum_member(Enjoyment, body, "enjoyment")
+                           if opt_str(body, "enjoyment") else None),
+                request_id=request_id)
+            return {"observation": _observation_payload(event)}
+
+        if route == CYCLE_DEFERS_ROUTE:
+            body = read_json_body(
+                environ, allowed=["activity_instance_ref",
+                                  "suppress_for_cycles"],
+                required=["activity_instance_ref"])
+            record = weekly.defer_activity(
+                principal, resource, opt_str(body, "activity_instance_ref"),
+                suppress_for_cycles=opt_int(body, "suppress_for_cycles"),
+                request_id=request_id)
+            return {"defer": {"defer_id": record.defer_id,
+                              "activity_instance_ref":
+                                  record.activity_instance_ref}}
+
+        if route == PERIOD_REVIEWS_ROUTE:
+            body = read_json_body(
+                environ, allowed=["clinical_interpretation",
+                                  "reviewed_event_ids", "reviewed_cycle_ids"],
+                required=["clinical_interpretation"])
+            review = rtm.record_review(
+                principal, resource,
+                clinical_interpretation=opt_str(body,
+                                                "clinical_interpretation"),
+                reviewed_event_ids=opt_str_list(body, "reviewed_event_ids"),
+                reviewed_cycle_ids=opt_str_list(body, "reviewed_cycle_ids"),
+                request_id=request_id)
+            return {"review": {"review_id": review.review_id,
+                               "reviewed_event_count":
+                                   len(review.reviewed_event_ids)}}
+
+        if route == REVIEW_ACTIONS_ROUTE:
+            body = read_json_body(environ,
+                                  allowed=["action_type", "narrative"],
+                                  required=["action_type"])
+            action = rtm.record_clinical_action(
+                principal, resource,
+                action_type=enum_member(ClinicalActionType, body,
+                                        "action_type"),
+                narrative=opt_str(body, "narrative"), request_id=request_id)
+            return {"action": {"action_id": action.action_id,
+                               "action_type": action.action_type.value}}
+
+        if route == PERIOD_TIME_ROUTE:
+            # Minutes are SUPPLIED, never inferred — the frozen 0.4F/G rule.
+            body = read_json_body(
+                environ, allowed=["local_date", "minutes",
+                                  "activity_description", "source_review_id",
+                                  "source_action_id"],
+                required=["local_date", "activity_description"])
+            entry = rtm.record_time(
+                principal, resource, local_date=opt_str(body, "local_date"),
+                minutes=opt_int(body, "minutes"),
+                activity_description=opt_str(body, "activity_description"),
+                source_review_id=opt_str(body, "source_review_id") or None,
+                source_action_id=opt_str(body, "source_action_id") or None,
+                request_id=request_id)
+            return {"time_entry": {"time_entry_id": entry.time_entry_id,
+                                   "minutes": entry.minutes}}
+
+        if route == PERIOD_INTERACTIONS_ROUTE:
+            # `real_time_affirmed` is the clinician's explicit attestation.
+            # An async message is never a synchronous interaction, and the
+            # service refuses one that is not affirmed.
+            body = read_json_body(
+                environ, allowed=["local_date", "modality", "participant_type",
+                                  "duration_minutes", "real_time_affirmed"],
+                required=["local_date"])
+            interaction = rtm.record_synchronous_interaction(
+                principal, resource, local_date=opt_str(body, "local_date"),
+                modality=enum_member(InteractionModality, body, "modality"),
+                participant_type=enum_member(ParticipantType, body,
+                                             "participant_type"),
+                duration_minutes=opt_int(body, "duration_minutes"),
+                real_time_affirmed=bool(opt_bool(body, "real_time_affirmed")),
+                request_id=request_id)
+            return {"interaction": {
+                "interaction_id": interaction.interaction_id,
+                "modality": interaction.modality.value}}
+
+        if route == PERIOD_REPORT_ROUTE:
+            # A PREVIEW. `generate_report` produces a DRAFT; nothing here
+            # finalizes it, and the coding assistance it carries is a
+            # CANDIDATE requiring explicit clinician confirmation.
+            summary = rtm.generate_evidence_summary(principal, resource,
+                                                    request_id=request_id)
+            report = rtm.generate_report(principal, resource,
+                                         request_id=request_id)
+            return {"report": _report_payload(report),
+                    "evidence_summary": {"summary_id": summary.summary_id}}
+
+        raise AssertionError(f"unrouted workflow route: {route}")  # pragma: no cover
+
+    def _handle_goal_revision(self, environ, goal_kind: str, goal_id: str,
+                              request_id: str):
+        """Revise a goal's wording. Appends a version; never rewrites one."""
+        from ..domain.goals import EditType, GoalKind, GoalRef
+        from ..transport.body import BodyError, enum_member, opt_str, read_json_body
+
+        route = GOAL_REVISIONS_ROUTE
+        principal, status = self._principal(environ)
+        if principal is None:
+            self._log(request_id, route, "POST", status, None)
+            return status, _ERROR_BODIES[status], route
+
+        try:
+            kind = next((k for k in GoalKind if k.value == goal_kind), None)
+            if kind is None:
+                # An unrecognised kind renders as the standard refusal rather
+                # than a 404, so the kind vocabulary is not enumerable.
+                return self._refuse(route, "POST", request_id, principal)
+            body = read_json_body(environ,
+                                  allowed=["text", "edit_type", "reason"],
+                                  required=["text"])
+            goals = self._services()[0]
+            version = goals.revise_goal(
+                principal, GoalRef(kind, goal_id), opt_str(body, "text"),
+                edit_type=enum_member(EditType, body, "edit_type"),
+                reason=opt_str(body, "reason"), request_id=request_id)
+        except BodyError:
+            return self._refuse(route, "POST", request_id, principal)
+        except Exception as exc:  # noqa: BLE001 - classified below
+            if not getattr(exc, "PHI_SAFE_MESSAGE", False):
+                self._log(request_id, route, "POST", 500, None)
+                return 500, _ERROR_BODIES[500], route
+            return self._refuse(route, "POST", request_id, principal)
+
+        self._log_principal(request_id, route, "POST", HTTP_OK, principal)
+        return HTTP_OK, {"version_id": version.version_id,
+                         "version_number": version.version_number,
+                         "request_id": request_id}, route
 
     def _handle_bootstrap(self, environ: Mapping[str, object],
                           request_id: str) -> Tuple[int, Mapping, str]:
