@@ -491,20 +491,87 @@ def _episode_payload(episode) -> dict:
 def _report_payload(report) -> dict:
     """A DRAFT month-end report — a preview, not a submission.
 
-    `coding_candidates` are POTENTIAL coding assistance only. 98979/98980/98981
-    output requires explicit clinician confirmation, carries no reimbursement
-    guarantee, and Genex makes no medical-necessity determination. There is no
-    payer, member, insurance or claim field anywhere in this payload, and a CI
-    gate asserts the RTM domain has none.
+    Field names are the DOMAIN's, verified against `MonthEndReport` rather
+    than assumed: it carries `version`, not `report_version`, and has no
+    `documented_minutes` at all. An earlier revision of this function guessed
+    both and would have raised `AttributeError` on the first real call — the
+    mutation sweep caught it by flagging that nothing asserted this shape.
+
+    Any coding assistance reachable from a report is POTENTIAL only.
+    98979/98980/98981 output requires explicit clinician confirmation, carries
+    no reimbursement guarantee, and Genex makes no medical-necessity
+    determination. There is no payer, member, insurance or claim field here,
+    and a test asserts that over the whole payload.
     """
     return {
         "report_id": report.report_id,
-        "state": report.state.value,
-        "report_version": report.report_version,
         "period_id": report.period_id,
-        "documented_minutes": getattr(report, "documented_minutes", None),
-        "coding_summary_id": getattr(report, "coding_summary_id", "") or None,
+        "cycle_month": report.cycle_month,
+        "state": report.state.value,
+        "version": report.version,
+        "section_count": len(report.sections),
+        # A preview until a clinician finalizes it, which no 0.5C route does.
         "is_preview": report.state.value != "finalized",
+    }
+
+
+def _present(**kwargs) -> dict:
+    """Drop keys whose value is None.
+
+    Passing `None` for an omitted optional is NOT the same as omitting it: the
+    frozen services declare their own defaults — `suppress_for_cycles`,
+    `emphasis_weight`, `min_coverage_per_cycle` — and handing them None
+    replaces a working default with a value they never expected. That produced
+    two 500s during 0.5C, both of which read as authorization failures at
+    first glance.
+    """
+    return {name: value for name, value in kwargs.items() if value is not None}
+
+
+def _coding_payload(coding) -> dict:
+    """POTENTIAL coding assistance. Field names verified against the domain.
+
+    `potential_code_candidates` is the domain's own name and is carried
+    through unchanged, because "potential" is the whole claim: 98979/98980/
+    98981 output is a CANDIDATE requiring explicit clinician confirmation. It
+    carries no reimbursement guarantee, and Genex makes no medical-necessity
+    determination.
+
+    `missing_requirement_flags` and `rule_explanations` are included
+    deliberately — a clinician deciding whether to confirm a code needs to see
+    what the rule set thought was missing, not just the number it produced.
+
+    `documented_management_minutes` is a sum of MANUALLY ENTERED minutes.
+    Nothing in this system infers time.
+    """
+    return {
+        "coding_summary_id": coding.coding_summary_id,
+        "coding_rule_set_id": coding.coding_rule_set_id,
+        "coding_rule_version": coding.coding_rule_version,
+        "documented_management_minutes": coding.documented_management_minutes,
+        "real_time_interactive_communication_present":
+            coding.real_time_interactive_communication_present,
+        "potential_code_candidates": [
+            {"code": code, "count": count}
+            for code, count in coding.potential_code_candidates],
+        "missing_requirement_flags": [f.value for f
+                                      in coding.missing_requirement_flags],
+        "rule_explanations": list(coding.rule_explanations),
+        # Never a determination. Always a candidate awaiting confirmation.
+        "is_candidate_only": True,
+        "requires_clinician_confirmation": True,
+    }
+
+
+def _period_payload(period) -> dict:
+    """The monitoring period the Tuesday UI writes against."""
+    return {
+        "period_id": period.period_id,
+        "episode_id": period.episode_id,
+        "focus_plan_id": period.focus_plan_id,
+        "cycle_month": period.cycle_month,
+        "timezone_of_record": period.timezone_of_record,
+        "status": period.status.value,
     }
 
 
@@ -1263,8 +1330,25 @@ class PilotWSGIApplication:
             }
 
         if route == CHILD_RTM_ROUTE:
+            # `list_episodes` authorizes the child first, so the period rows
+            # read below belong to an episode the caller is already proven to
+            # hold. Read through the repository because the frozen RTM service
+            # exposes no list-periods method and inventing one would be new
+            # business logic — this is a projection of already-authorized
+            # rows, not a new rule.
             episodes = rtm.list_episodes(principal, resource)
-            return {"episodes": [_episode_payload(e) for e in episodes]}
+            payload = []
+            for episode in episodes:
+                periods = self._repos.rtm_periods.list_for_episode(
+                    episode.episode_id)
+                entry = _episode_payload(episode)
+                entry["periods"] = [_period_payload(p) for p in periods]
+                entry["documented_minutes"] = {
+                    p.period_id: rtm.documented_minutes_for(principal,
+                                                            p.period_id)
+                    for p in periods}
+                payload.append(entry)
+            return {"episodes": payload}
 
         if route == PLAN_ALLOCATIONS_ROUTE:
             body = read_json_body(environ, allowed=[
@@ -1275,10 +1359,14 @@ class PilotWSGIApplication:
                           opt_str(body, "goal_id"))
             allocation = plans.allocate_goal(
                 principal, resource, ref,
-                priority_rank=opt_int(body, "priority_rank"),
-                emphasis_weight=opt_int(body, "emphasis_weight"),
-                min_coverage_per_cycle=opt_int(body, "min_coverage_per_cycle"),
-                reason=opt_str(body, "reason"), request_id=request_id)
+                # `priority_rank` has no service default, so it is always
+                # sent; the other two do and are omitted when absent.
+                priority_rank=opt_int(body, "priority_rank") or 1,
+                reason=opt_str(body, "reason"), request_id=request_id,
+                **_present(
+                    emphasis_weight=opt_int(body, "emphasis_weight"),
+                    min_coverage_per_cycle=opt_int(
+                        body, "min_coverage_per_cycle")))
             return {"allocation": _allocation_payload(allocation)}
 
         if route == CYCLE_OBSERVATIONS_ROUTE and method == "GET":
@@ -1315,8 +1403,9 @@ class PilotWSGIApplication:
                 required=["activity_instance_ref"])
             record = weekly.defer_activity(
                 principal, resource, opt_str(body, "activity_instance_ref"),
-                suppress_for_cycles=opt_int(body, "suppress_for_cycles"),
-                request_id=request_id)
+                request_id=request_id,
+                **_present(suppress_for_cycles=opt_int(
+                    body, "suppress_for_cycles")))
             return {"defer": {"defer_id": record.defer_id,
                               "activity_instance_ref":
                                   record.activity_instance_ref}}
@@ -1358,11 +1447,11 @@ class PilotWSGIApplication:
                 required=["local_date", "activity_description"])
             entry = rtm.record_time(
                 principal, resource, local_date=opt_str(body, "local_date"),
-                minutes=opt_int(body, "minutes"),
                 activity_description=opt_str(body, "activity_description"),
                 source_review_id=opt_str(body, "source_review_id") or None,
                 source_action_id=opt_str(body, "source_action_id") or None,
-                request_id=request_id)
+                request_id=request_id,
+                **_present(minutes=opt_int(body, "minutes")))
             return {"time_entry": {"time_entry_id": entry.time_entry_id,
                                    "minutes": entry.minutes}}
 
@@ -1379,23 +1468,38 @@ class PilotWSGIApplication:
                 modality=enum_member(InteractionModality, body, "modality"),
                 participant_type=enum_member(ParticipantType, body,
                                              "participant_type"),
-                duration_minutes=opt_int(body, "duration_minutes"),
                 real_time_affirmed=bool(opt_bool(body, "real_time_affirmed")),
-                request_id=request_id)
+                request_id=request_id,
+                **_present(duration_minutes=opt_int(body, "duration_minutes")))
             return {"interaction": {
                 "interaction_id": interaction.interaction_id,
                 "modality": interaction.modality.value}}
 
         if route == PERIOD_REPORT_ROUTE:
-            # A PREVIEW. `generate_report` produces a DRAFT; nothing here
-            # finalizes it, and the coding assistance it carries is a
-            # CANDIDATE requiring explicit clinician confirmation.
+            # A PREVIEW, and the three steps are the frozen PREREQUISITE
+            # CHAIN, not an orchestration choice: `generate_report` refuses
+            # with "generate the evidence and coding summaries before the
+            # report". So the coding summary is produced here because the
+            # report cannot exist without it — which is why it appears in the
+            # Tuesday surface at all.
+            #
+            # `generate_report` produces a DRAFT and nothing here finalizes
+            # it. The coding assistance is a CANDIDATE requiring explicit
+            # clinician confirmation: 98979/98980/98981 output carries no
+            # reimbursement guarantee and Genex makes no medical-necessity
+            # determination. `decide_coding_assistance` is deliberately NOT
+            # exposed — confirming a code is not a preview.
             summary = rtm.generate_evidence_summary(principal, resource,
+                                                    request_id=request_id)
+            coding = rtm.generate_coding_assistance(principal, resource,
                                                     request_id=request_id)
             report = rtm.generate_report(principal, resource,
                                          request_id=request_id)
-            return {"report": _report_payload(report),
-                    "evidence_summary": {"summary_id": summary.summary_id}}
+            return {
+                "report": _report_payload(report),
+                "evidence_summary": {"summary_id": summary.summary_id},
+                "coding_assistance": _coding_payload(coding),
+            }
 
         raise AssertionError(f"unrouted workflow route: {route}")  # pragma: no cover
 

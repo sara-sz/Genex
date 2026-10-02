@@ -237,3 +237,60 @@ def test_the_body_module_never_logs():
     printed = {n.func.id for n in ast.walk(tree)
                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
     assert "print" not in printed
+
+
+# ===========================================================================
+# distinguishing the two identity guards
+#
+# `read_json_body` has two identity checks and a mutation sweep showed them
+# covering each other. They are NOT equivalent, and the difference is which
+# mistake each catches:
+#
+#   `forbidden` = the ROUTE is wrong — it allowlisted an identity field. A
+#                 programming error, raised before any payload is looked at.
+#   `identity`  = the PAYLOAD carried one. Reachable only if the field was
+#                 allowlisted, which `forbidden` already refuses.
+#
+# So `forbidden` is load-bearing and `identity` is unreachable defence in
+# depth. The tests below pin that by asserting WHICH guard fired, rather than
+# merely that something did.
+# ===========================================================================
+
+def test_the_route_allowlist_guard_names_itself():
+    """An allowlisted identity field fails as a ROUTE error, before parsing."""
+    with pytest.raises(BodyError) as caught:
+        read_json_body(env({}), allowed=["provider_id"])
+    assert "route allowlist" in str(caught.value), (
+        "the refusal must identify this as a route-definition error, not a "
+        "caller error")
+    # And it fires with NO payload at all, which proves it precedes parsing.
+    assert "identity may not be supplied" not in str(caught.value)
+
+
+def test_child_id_is_an_identity_field_for_the_allowlist_guard():
+    """`child_id` must be refusable as a route allowlist entry.
+
+    A child is always named by a PATH segment. If `child_id` were not an
+    identity field, a future route could allowlist it and the body would
+    become a second, unauthorized way to name the subject of an operation.
+    """
+    assert "child_id" in IDENTITY_FIELDS
+    with pytest.raises(BodyError) as caught:
+        read_json_body(env({}), allowed=["child_id"])
+    assert "route allowlist" in str(caught.value)
+
+
+def test_a_body_at_the_cap_boundary_is_refused_on_the_READ_side():
+    """The read-side cap, reached by declaring exactly the maximum.
+
+    An earlier test declared a SMALL length and sent a large body, which the
+    read truncates to `length + 1` — so it never reached this branch and the
+    mutation that removed it survived. Declaring exactly `MAX_BODY_BYTES`
+    while sending one byte more is the case that does.
+    """
+    oversized = b"{" + b"x" * MAX_BODY_BYTES
+    assert len(oversized) == MAX_BODY_BYTES + 1
+    with pytest.raises(BodyError) as caught:
+        read_json_body(env(oversized, declared=MAX_BODY_BYTES),
+                       allowed=["text"])
+    assert "too large" in str(caught.value)

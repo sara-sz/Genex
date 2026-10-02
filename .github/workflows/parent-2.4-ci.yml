@@ -756,6 +756,127 @@ jobs:
                 "statuses deny, including DECLINED and PAUSED")
           PY
 
+      - name: October pilot 0.5C — Tuesday workflow surface (unit)
+        # The authorization matrix for the eighteen route/method pairs: two
+        # families, five providers in deliberately different connection
+        # states, and every refusal asserted through real request handling.
+        run: |
+          if [ -f pilot_backend/tests/test_workflow_http.py ]; then
+            python -m pytest pilot_backend/tests/test_workflow_http.py -q
+          else
+            echo "0.5C not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5C — Hannah workflow end to end
+        # Suggestion -> goal -> month -> week -> Parent evidence -> review ->
+        # action -> minutes -> interaction -> report preview, over HTTP. Exists
+        # because a mutation sweep showed the RTM routes implemented but never
+        # successfully called, which was hiding a real AttributeError in the
+        # report payload.
+        run: |
+          if [ -f pilot_backend/tests/test_workflow_e2e.py ]; then
+            python -m pytest pilot_backend/tests/test_workflow_e2e.py -q
+          else
+            echo "0.5C not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5C — the request-body trust boundary
+        run: |
+          if [ -f pilot_backend/tests/test_request_body.py ]; then
+            python -m pytest pilot_backend/tests/test_request_body.py -q
+          else
+            echo "0.5C not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5C — no body may carry identity
+        # 0.1-0.5B read NO request body, because a body is the one place a
+        # forged actor id can arrive. 0.5C must accept content, so the rule
+        # became "one function, explicit per-route allowlist". This asserts no
+        # route allowlist contains an identity field, over the AST of every
+        # `read_json_body` call site — the guard that keeps the widening safe.
+        run: |
+          if [ ! -f pilot_backend/transport/body.py ]; then
+            echo "0.5C not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib, sys
+          from pilot_backend.transport.body import IDENTITY_FIELDS
+
+          for required in ("auth_subject", "role", "actor_id", "caregiver_id",
+                           "provider_id", "child_id"):
+              if required not in IDENTITY_FIELDS:
+                  print("IDENTITY_FIELDS lost a field:", required)
+                  sys.exit(1)
+
+          tree = ast.parse(pathlib.Path(
+              "pilot_backend/transport/wsgi_app.py").read_text())
+          sites = offenders = 0
+          for node in ast.walk(tree):
+              if not (isinstance(node, ast.Call)
+                      and isinstance(node.func, ast.Name)
+                      and node.func.id == "read_json_body"):
+                  continue
+              sites += 1
+              for keyword in node.keywords:
+                  if keyword.arg not in {"allowed", "required"}:
+                      continue
+                  if not isinstance(keyword.value, (ast.List, ast.Tuple)):
+                      continue
+                  for element in keyword.value.elts:
+                      if (isinstance(element, ast.Constant)
+                              and element.value in IDENTITY_FIELDS):
+                          print("route allowlists identity:", element.value)
+                          offenders += 1
+          if offenders:
+              sys.exit(1)
+          if sites == 0:
+              print("no read_json_body call sites found — the guard is vacuous")
+              sys.exit(1)
+          print(f"{sites} body call sites; none allowlists an identity field")
+          PY
+
+      - name: October pilot 0.5C — no Parent free text leaves the server
+        # The pilot carries STRUCTURED evidence only. `assistance`,
+        # `child_response` and `observation_text_ref` exist on the domain
+        # object and must be neither accepted nor serialised, so the
+        # observation payload is pinned to an exact key set.
+        run: |
+          if [ ! -f pilot_backend/transport/body.py ]; then
+            echo "0.5C not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import ast, pathlib, sys
+
+          source = pathlib.Path("pilot_backend/transport/wsgi_app.py").read_text()
+          tree = ast.parse(source)
+          serialiser = next(
+              (n for n in ast.walk(tree)
+               if isinstance(n, ast.FunctionDef)
+               and n.name == "_observation_payload"), None)
+          if serialiser is None:
+              print("the observation serialiser is gone")
+              sys.exit(1)
+          emitted = {k.value for n in ast.walk(serialiser)
+                     if isinstance(n, ast.Dict)
+                     for k in n.keys
+                     if isinstance(k, ast.Constant)}
+          banned = {"assistance", "child_response", "observation_text_ref",
+                    "note", "comment", "recorded_by_caregiver_id"}
+          leaked = emitted & banned
+          if leaked:
+              print("the observation payload leaks free text:", sorted(leaked))
+              sys.exit(1)
+          expected = {"event_id", "activity_instance_ref", "local_date",
+                      "attribution_month", "timezone_of_record",
+                      "attempt_outcome", "difficulty", "enjoyment"}
+          if emitted != expected:
+              print("the observation payload changed shape:", sorted(emitted))
+              sys.exit(1)
+          print("observation payload: eight structured fields, no free text")
+          PY
+
       - name: October pilot 0.4D/E — no double counting, structurally
         # The arithmetic that stops a multi-goal activity inflating a total.
         # Asserted here as well as in the unit suite because it is the single
@@ -1267,6 +1388,17 @@ jobs:
             echo "0.5B not present on this branch — nothing to run"
           fi
 
+      - name: 0.5C goal + first version are one transaction (real emulator)
+        # PRE-PHI blocker 3. Fault injection at BOTH ends of the transaction,
+        # the caregiver path, eight-way concurrency, a crash among concurrent
+        # writers, immutability after revision, and authorization unchanged.
+        run: |
+          if [ -f pilot_runtime/tests/integration/test_goal_atomicity_emulator.py ]; then
+            python -m pytest pilot_runtime/tests/integration/test_goal_atomicity_emulator.py -q
+          else
+            echo "0.5C not present on this branch — nothing to run"
+          fi
+
       - name: 0.5B stale-assignment race, FORCED interleaving
         # The eight-thread suite above races and asserts; this one DECIDES the
         # ordering. A one-shot barrier injected at the transaction boundary
@@ -1313,11 +1445,11 @@ jobs:
               capture_output=True, text=True)
           count = collected.stdout.count("::")
           # Raised 70 -> 90 by 0.4B/C, 90 -> 100 by 0.4D/E, 100 -> 110 by
-          # 0.4F/G, 110 -> 130 by 0.5A, and 130 -> 156 by 0.5B (which adds 15
-          # provider-connection tests plus 8 forced-interleaving ones; local
-          # collection is 161). A floor that never moves stops noticing when a
-          # suite silently stops being collected.
-          assert count >= 156, f"expected the integration suites to collect >=156 tests, got {count}"
+          # 0.4F/G, 110 -> 130 by 0.5A, 130 -> 156 by 0.5B, and 156 -> 164 by
+          # 0.5C (which adds the 8 blocker-3 atomicity tests; local collection
+          # is 169). A floor that never moves stops noticing when a suite
+          # silently stops being collected.
+          assert count >= 164, f"expected the integration suites to collect >=164 tests, got {count}"
           run = subprocess.run(
               [sys.executable, "-m", "pytest", "pilot_runtime/tests/integration",
                "-q", "-rs"],
