@@ -198,9 +198,11 @@ class Stack:
 #: `approve_clinical_goal` copies it onto the goal inside the same transaction,
 #: and the goal is then allocatable. No anchor row is inserted by hand.
 #:
-#: Only `talking_and_communicating` carries one. `fine_motor` and
-#: `gross_motor` are deliberately left unanchored, so this file still exercises
-#: the fail-closed path as well as the happy one.
+#: All three observed domains carry one, because `_plan_with_goal` approves
+#: EVERY offered suggestion and the allocation tests allocate goals[0] and
+#: goals[1]. The fail-closed path (unanchored, authored_fresh, invalid family)
+#: has dedicated coverage in test_goal_anchor.py rather than being a
+#: side effect of this file's fixture.
 def _anchor_rung(domain="talking_and_communicating"):
     from pilot_backend.domain.canonical_rung import (
         ActivityFamilyBinding,
@@ -210,10 +212,9 @@ def _anchor_rung(domain="talking_and_communicating"):
     return CanonicalRung.build(
         domain_key=domain, source_rung_months=24,
         milestone_text="Fictional canonical rung for planning tests",
-        subdomain="expressive_language",
-        family_bindings=[ActivityFamilyBinding("expressive_two_word_phrase",
-                                               (domain,))],
-        track_subdomains=("expressive_language",),
+        subdomain=f"{domain}_track",
+        family_bindings=[ActivityFamilyBinding(f"{domain}_family", (domain,))],
+        track_subdomains=(f"{domain}_track",),
         taxonomy_version="activity_family_taxonomy_v1",
         baseline_version="parent-2.4-functional-baseline-v1")
 
@@ -228,10 +229,12 @@ def snapshot(child_id, *, cycle=CYCLE, domains=None) -> ObservationSnapshot:
                        canonical_rung=_anchor_rung()),
         ObservedDomain("fine_motor", True,
                        EvidenceSource.CAREGIVER_REPORTED_MILESTONE,
-                       milestone_refs=("mv1:cdc:fine:24m:scribble",)),
+                       milestone_refs=("mv1:cdc:fine:24m:scribble",),
+                       canonical_rung=_anchor_rung("fine_motor")),
         ObservedDomain("gross_motor", True,
                        EvidenceSource.CAREGIVER_REPORTED_MILESTONE,
-                       functional_baseline_area="transitions"),
+                       functional_baseline_area="transitions",
+                       canonical_rung=_anchor_rung("gross_motor")),
     ))
 
 
@@ -1008,6 +1011,34 @@ def test_a_child_with_no_clinician_is_planned_by_a_caregiver(s):
 # allocation
 # ===========================================================================
 
+def _anchored_clinical_goal(s, text, reason="r"):
+    """An ADDITIONAL allocatable clinical goal, through the real path.
+
+    0.5E-A. These call sites used `AUTHORED_FRESH` purely as the shortest way
+    to obtain one more goal to allocate — the subject of every one of them is
+    a plan claim, a snapshot or a closure rule, never authoring behaviour. So
+    the fixture moves to the anchored path and the assertions stay as they
+    were.
+
+    `MODIFIED` keeps the caller's wording, which `test_activation_snapshots_
+    the_wording_as_it_then_read` reads back.
+
+    Dedicated `authored_fresh` coverage is unaffected and lives both in this
+    file (authoring, authorization) and in test_goal_anchor.py (unmappability).
+    """
+    offered = s.goals.generate_suggestions(
+        s.provider_alpha, s.child,
+        snapshot(s.child, domains=(
+            ObservedDomain("learning_and_thinking", True,
+                           EvidenceSource.CLINICIAN_OBSERVATION,
+                           functional_baseline_area="attention",
+                           canonical_rung=_anchor_rung("learning_and_thinking")),
+        )))
+    return s.goals.approve_clinical_goal(
+        s.provider_alpha, s.child, edit_type=EditType.MODIFIED,
+        suggestion_id=offered[0].suggestion_id, text=text, reason=reason)
+
+
 def _plan_with_goal(s):
     s.make_managing_clinician()
     offered = s.goals.generate_suggestions(s.provider_alpha, s.child,
@@ -1041,9 +1072,7 @@ def test_an_explicit_weight_overrides_the_default(s):
 
 def test_nothing_caps_the_number_of_allocated_goals(s):
     plan, goals = _plan_with_goal(s)
-    third = s.goals.approve_clinical_goal(
-        s.provider_alpha, s.child, edit_type=EditType.AUTHORED_FRESH,
-        text="A third focus.", reason="clinician judgement")
+    third = _anchored_clinical_goal(s, "A third focus.", "clinician judgement")
     for rank, goal in enumerate([goals[0], goals[1], third], start=1):
         s.plans.allocate_goal(s.provider_alpha, plan.focus_plan_id, goal.ref,
                               priority_rank=rank)
@@ -1183,9 +1212,7 @@ def test_a_second_plan_for_the_same_child_month_is_refused(s):
     second = MonthlyFocusPlan.create(s.child, CYCLE, ZONE,
                                      policy_version=POLICY_2026_10.policy_version)
     s.repos.focus_plans.create(second)
-    goal = s.goals.approve_clinical_goal(
-        s.provider_alpha, s.child, edit_type=EditType.AUTHORED_FRESH,
-        text="Another focus.", reason="r")
+    goal = _anchored_clinical_goal(s, "Another focus.", "r")
     s.plans.allocate_goal(s.provider_alpha, second.focus_plan_id, goal.ref,
                           priority_rank=1)
     with pytest.raises(GoalConflict):
@@ -1253,9 +1280,7 @@ def test_a_failed_activation_persists_no_snapshot(s):
     second = MonthlyFocusPlan.create(s.child, CYCLE, ZONE,
                                      policy_version=POLICY_2026_10.policy_version)
     s.repos.focus_plans.create(second)
-    goal = s.goals.approve_clinical_goal(
-        s.provider_alpha, s.child, edit_type=EditType.AUTHORED_FRESH,
-        text="Another focus.", reason="r")
+    goal = _anchored_clinical_goal(s, "Another focus.", "r")
     s.plans.allocate_goal(s.provider_alpha, second.focus_plan_id, goal.ref,
                           priority_rank=1)
     with pytest.raises(GoalConflict):
@@ -1268,9 +1293,7 @@ def test_a_closed_plan_cannot_be_changed(s):
     closed = s.plans.close_plan(s.provider_alpha, activated.focus_plan_id)
     assert closed.state is MonthlyPlanState.CLOSED
 
-    third = s.goals.approve_clinical_goal(
-        s.provider_alpha, s.child, edit_type=EditType.AUTHORED_FRESH,
-        text="Too late.", reason="r")
+    third = _anchored_clinical_goal(s, "Too late.", "r")
     with pytest.raises(GoalConflict):
         s.plans.allocate_goal(s.provider_alpha, activated.focus_plan_id,
                               third.ref, priority_rank=3)
@@ -1291,9 +1314,7 @@ def test_closing_does_not_release_the_month(s):
 def test_a_different_month_is_a_different_claim(s):
     _activated(s)
     november = s.plans.create_plan(s.provider_alpha, s.child, "2026-11", ZONE)
-    goal = s.goals.approve_clinical_goal(
-        s.provider_alpha, s.child, edit_type=EditType.AUTHORED_FRESH,
-        text="November focus.", reason="r")
+    goal = _anchored_clinical_goal(s, "November focus.", "r")
     s.plans.allocate_goal(s.provider_alpha, november.focus_plan_id, goal.ref,
                           priority_rank=1)
     assert s.plans.activate_plan(
@@ -1335,9 +1356,7 @@ def test_a_refused_activation_is_audited_as_a_failure(s):
     second = MonthlyFocusPlan.create(s.child, CYCLE, ZONE,
                                      policy_version=POLICY_2026_10.policy_version)
     s.repos.focus_plans.create(second)
-    goal = s.goals.approve_clinical_goal(
-        s.provider_alpha, s.child, edit_type=EditType.AUTHORED_FRESH,
-        text="t", reason="r")
+    goal = _anchored_clinical_goal(s, "t", "r")
     s.plans.allocate_goal(s.provider_alpha, second.focus_plan_id, goal.ref,
                           priority_rank=1)
     with pytest.raises(GoalConflict):

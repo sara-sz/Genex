@@ -640,3 +640,77 @@ def test_authored_fresh_still_requires_a_reason(world):
         world.goals.approve_clinical_goal(
             world.clinician, world.child, edit_type=EditType.AUTHORED_FRESH,
             text="A fictional target for {child}.", reason="")
+
+
+# ===========================================================================
+# mutation-driven additions
+#
+# Each test below exists because a mutation survived without it. Named for the
+# defect it kills rather than the behaviour it describes, so the link between
+# sweep and suite stays visible.
+# ===========================================================================
+
+def test_a_goal_anchor_may_only_be_copied_from_a_suggestion_anchor():
+    """Kills: the copy constructor accepting any object.
+
+    Without the isinstance gate, `from_suggestion_anchor` would happily build
+    a goal anchor from a dict, a rung, or anything else with the right
+    attribute names — which is a second way to mint provenance.
+    """
+    rung = a_rung()
+    for impostor in (None, rung, {"suggestion_id": "x", "child_id": "y",
+                                  "rung": rung}, "gsug_x", 7):
+        with pytest.raises(RungError):
+            ClinicalGoalAnchor.from_suggestion_anchor("clgl_x", impostor)
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+def test_a_goal_anchor_requires_its_source_suggestion(blank):
+    """Kills: dropping the source-suggestion requirement.
+
+    An anchor nobody can trace back to a suggestion is indistinguishable from
+    a guess, however well-formed its rung is.
+    """
+    with pytest.raises(RungError):
+        ClinicalGoalAnchor(clinical_goal_id="clgl_x", child_id="child_x",
+                           source_suggestion_id=blank, rung=a_rung())
+
+
+def test_the_rung_digest_fields_cannot_run_together():
+    """Kills: replacing the unit separator with an empty join.
+
+    The discriminator has to be a pair whose fields CONCATENATE identically.
+    months=1 + "8words" and months=18 + "words" both yield "18words" with no
+    separator, so only a separated join keeps them distinct. An earlier
+    version of this test used "8 words"/"words", whose space made the
+    concatenations differ anyway — and the mutation survived.
+    """
+    assert (compute_rung_ref(RUNG_DOMAIN, 1, "8words")
+            != compute_rung_ref(RUNG_DOMAIN, 18, "words"))
+
+
+def test_two_tracks_differing_only_by_SUBDOMAIN_differ():
+    """Kills: dropping subdomains from the track digest."""
+    assert (compute_track_ref(RUNG_DOMAIN, ["expressive_language"], [])
+            != compute_track_ref(RUNG_DOMAIN, ["receptive_language"], []))
+
+
+def test_track_components_are_sorted_not_merely_deduplicated():
+    """Kills: returning set order instead of sorted order.
+
+    `tuple(a_set)` is stable within one process but NOT across processes —
+    string hashing is randomised by PYTHONHASHSEED — so a set-ordered digest
+    would be reproducible in CI and different on a laptop. A two-element
+    comparison cannot catch it reliably, because for one fixed set both
+    orderings often agree; ten reversed elements make agreement vanishingly
+    unlikely.
+    """
+    from pilot_backend.domain.canonical_rung import _clean_tuple
+
+    reversed_items = [f"sub_{i:02d}" for i in range(10)][::-1]
+    assert _clean_tuple(reversed_items, "track_subdomains") == tuple(
+        sorted(reversed_items))
+
+    # And the identifier itself is insensitive to the order supplied.
+    assert (compute_track_ref(RUNG_DOMAIN, reversed_items, [])
+            == compute_track_ref(RUNG_DOMAIN, sorted(reversed_items), []))

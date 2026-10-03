@@ -95,16 +95,54 @@ def gp(repos, topology, unique_suffix):
     return bundle
 
 
+#: 0.5E-A canonical provenance, so suggestions generated here go through the
+#: real anchored path and the goals they produce are allocatable. No anchor
+#: row is ever written by hand: `generate_suggestions` persists the
+#: SuggestionCanonicalAnchor and `approve_clinical_goal` copies it onto the
+#: goal inside the same transaction.
+def _rung_for(domain, *, months=24, family=None):
+    from pilot_backend.domain.canonical_rung import (
+        ActivityFamilyBinding,
+        CanonicalRung,
+    )
+
+    return CanonicalRung.build(
+        domain_key=domain, source_rung_months=months,
+        milestone_text=f"Fictional canonical rung for {domain}",
+        subdomain=f"{domain}_track",
+        family_bindings=[ActivityFamilyBinding(family or f"{domain}_family",
+                                               (domain,))],
+        track_subdomains=(f"{domain}_track",),
+        taxonomy_version="activity_family_taxonomy_v1",
+        baseline_version="parent-2.4-functional-baseline-v1")
+
+
 def _snapshot(child_id, cycle=CYCLE) -> ObservationSnapshot:
     return ObservationSnapshot(child_id, cycle, (
         ObservedDomain("talking_and_communicating", True,
                        EvidenceSource.CLINICIAN_OBSERVATION,
                        milestone_refs=("mv1:cdc:comm:24m:two-word",),
-                       functional_baseline_area="requesting"),
+                       functional_baseline_area="requesting",
+                       canonical_rung=_rung_for("talking_and_communicating")),
         ObservedDomain("fine_motor", True,
                        EvidenceSource.CAREGIVER_REPORTED_MILESTONE,
-                       milestone_refs=("mv1:cdc:fine:24m:scribble",)),
+                       milestone_refs=("mv1:cdc:fine:24m:scribble",),
+                       canonical_rung=_rung_for("fine_motor")),
     ))
+
+
+def _anchored_goal(gp, text, reason="r"):
+    """One ALLOCATABLE clinical goal, through the real anchored path.
+
+    0.5E-A. These two call sites used AUTHORED_FRESH only to obtain a goal to
+    allocate — their subject is the activation race and the losing-writer
+    snapshot rule, not authoring. `MODIFIED` keeps the caller's wording.
+    """
+    offered = gp.goals.generate_suggestions(
+        gp.provider_alpha, gp.child, _snapshot(gp.child))
+    return gp.goals.approve_clinical_goal(
+        gp.provider_alpha, gp.child, edit_type=EditType.MODIFIED,
+        suggestion_id=offered[0].suggestion_id, text=text, reason=reason)
 
 
 def _prepare(gp, *, cycle=CYCLE, goal_count=2):
@@ -203,9 +241,7 @@ def test_concurrent_activations_of_one_child_month_yield_exactly_one(gp):
     """Eight threads, eight draft plans, one October. One survivor."""
     gp.identity.assign_managing_clinician(
         gp.provider_alpha, gp.child, gp.topo.provider_alpha.provider_id)
-    goal = gp.goals.approve_clinical_goal(
-        gp.provider_alpha, gp.child, edit_type=EditType.AUTHORED_FRESH,
-        text="Shared focus.", reason="race setup")
+    goal = _anchored_goal(gp, "Shared focus.", "race setup")
 
     drafts = []
     for _ in range(8):
@@ -241,9 +277,7 @@ def test_a_losing_activation_writes_no_snapshot(gp):
     loser = MonthlyFocusPlan.create(
         gp.child, CYCLE, ZONE, policy_version=POLICY_2026_10.policy_version)
     gp.repos.focus_plans.create(loser)
-    goal = gp.goals.approve_clinical_goal(
-        gp.provider_alpha, gp.child, edit_type=EditType.AUTHORED_FRESH,
-        text="Losing focus.", reason="r")
+    goal = _anchored_goal(gp, "Losing focus.", "r")
     gp.plans.allocate_goal(gp.provider_alpha, loser.focus_plan_id, goal.ref,
                            priority_rank=1)
 

@@ -203,14 +203,59 @@ def test_hannah_revises_a_goal_and_the_version_chain_grows(wf):
     assert revised[1]["version_id"] != goal["current_version_id"]
 
 
+#: 0.5E-A canonical provenance, so suggestions generated here go through the
+#: real anchored path and the goals they produce are allocatable. No anchor
+#: row is ever written by hand: `generate_suggestions` persists the
+#: SuggestionCanonicalAnchor and `approve_clinical_goal` copies it onto the
+#: goal inside the same transaction.
+def _rung_for(domain, *, months=24, family=None):
+    from pilot_backend.domain.canonical_rung import (
+        ActivityFamilyBinding,
+        CanonicalRung,
+    )
+
+    return CanonicalRung.build(
+        domain_key=domain, source_rung_months=months,
+        milestone_text=f"Fictional canonical rung for {domain}",
+        subdomain=f"{domain}_track",
+        family_bindings=[ActivityFamilyBinding(family or f"{domain}_family",
+                                               (domain,))],
+        track_subdomains=(f"{domain}_track",),
+        taxonomy_version="activity_family_taxonomy_v1",
+        baseline_version="parent-2.4-functional-baseline-v1")
+
+
 def test_the_month_moves_from_approved_goals_to_an_active_plan(wf):
     """create (DRAFT) -> allocate -> activate, which is the real sequence.
 
     Activation is refused for a month with no allocated goal, so the three
     steps are a domain invariant rather than an API style choice.
     """
+    # 0.5E-A: this goal is ALLOCATED below, so it must be activity-mappable.
+    # The anchored suggestion is generated server-side (generate_suggestions
+    # is the canonical boundary and has no route); the approval itself still
+    # goes over HTTP, which is what this test is about. `modified` keeps the
+    # original wording so nothing downstream changes.
+    from pilot_backend.goals.suggestion_engine import (
+        EvidenceSource,
+        ObservationSnapshot,
+        ObservedDomain,
+    )
+
+    domain = "talking_and_communicating"
+    from pilot_backend.goals.service import GoalService
+
+    offered = GoalService(repos=wf.repos).generate_suggestions(
+        wf.principal("hannah"), wf.child_a,
+        ObservationSnapshot(wf.child_a, _CURRENT_MONTH, (
+            ObservedDomain(domain, True,
+                           EvidenceSource.CLINICIAN_OBSERVATION,
+                           functional_baseline_area="requesting",
+                           canonical_rung=_rung_for(domain)),)))
     goal = post(wf, f"/pilot/children/{wf.child_a}/goals", "hannah",
-                {"edit_type": "authored_fresh", "text": "Fictional target",
+                {"edit_type": "modified",
+                 "suggestion_id": offered[0].suggestion_id,
+                 "text": "Fictional target",
                  "reason": "Fictional rationale"})[1]["goal"]
 
     created = post(wf, f"/pilot/children/{wf.child_a}/monthly-plan", "hannah",

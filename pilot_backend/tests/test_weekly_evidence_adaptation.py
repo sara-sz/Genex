@@ -186,8 +186,36 @@ class Stack:
             self.provider_alpha, self.child, self.topo.provider_alpha.provider_id)
 
     def approve_goal(self, text: str):
+        """An ANCHORED clinical goal carrying the caller's wording.
+
+        0.5E-A. These goals are allocated into a month and drive weekly
+        activities, so they must be activity-mappable — and the only way to
+        become mappable is the real path: a canonical rung on the observed
+        domain, a suggestion generated from it (which persists the
+        SuggestionCanonicalAnchor), then approval copying that anchor onto the
+        goal inside the same transaction.
+
+        `MODIFIED` rather than `ACCEPTED_VERBATIM` so the caller's `text` is
+        still the goal's wording — accepting verbatim would substitute the
+        suggestion's own template and silently change what every assertion in
+        this file reads.
+        """
+        from pilot_backend.goals.suggestion_engine import (
+            ObservationSnapshot,
+            ObservedDomain,
+        )
+
+        domain = "talking_and_communicating"
+        offered = self.goals.generate_suggestions(
+            self.provider_alpha, self.child,
+            ObservationSnapshot(self.child, CYCLE_MONTH, (
+                ObservedDomain(domain, True,
+                               EvidenceSource.CLINICIAN_OBSERVATION,
+                               functional_baseline_area="requesting",
+                               canonical_rung=_rung_for(domain)),)))
         return self.goals.approve_clinical_goal(
-            self.provider_alpha, self.child, edit_type=EditType.AUTHORED_FRESH,
+            self.provider_alpha, self.child, edit_type=EditType.MODIFIED,
+            suggestion_id=offered[0].suggestion_id,
             text=text, reason="fictional pilot scenario")
 
     def active_month(self, *, goal_count: int = 2):
@@ -202,6 +230,29 @@ class Stack:
                                      goal.ref, priority_rank=rank)
         return self.plans.activate_plan(
             self.provider_alpha, plan.focus_plan_id), goals
+
+
+#: 0.5E-A canonical provenance, so suggestions generated here go through the
+#: real anchored path and the goals they produce are allocatable. No anchor
+#: row is ever written by hand: `generate_suggestions` persists the
+#: SuggestionCanonicalAnchor and `approve_clinical_goal` copies it onto the
+#: goal inside the same transaction.
+def _rung_for(domain, *, months=24, family=None):
+    from pilot_backend.domain.canonical_rung import (
+        ActivityFamilyBinding,
+        CanonicalRung,
+    )
+
+    return CanonicalRung.build(
+        domain_key=domain, source_rung_months=months,
+        milestone_text=f"Fictional canonical rung for {domain}",
+        subdomain=f"{domain}_track",
+        family_bindings=[ActivityFamilyBinding(family or f"{domain}_family",
+                                               (domain,))],
+        track_subdomains=(f"{domain}_track",),
+        taxonomy_version="activity_family_taxonomy_v1",
+        baseline_version="parent-2.4-functional-baseline-v1")
+
 
 
 @pytest.fixture()

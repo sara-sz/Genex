@@ -98,13 +98,55 @@ def wk(repos, topology, unique_suffix):
     return bundle
 
 
+#: 0.5E-A canonical provenance, so suggestions generated here go through the
+#: real anchored path and the goals they produce are allocatable. No anchor
+#: row is ever written by hand: `generate_suggestions` persists the
+#: SuggestionCanonicalAnchor and `approve_clinical_goal` copies it onto the
+#: goal inside the same transaction.
+def _rung_for(domain, *, months=24, family=None):
+    from pilot_backend.domain.canonical_rung import (
+        ActivityFamilyBinding,
+        CanonicalRung,
+    )
+
+    return CanonicalRung.build(
+        domain_key=domain, source_rung_months=months,
+        milestone_text=f"Fictional canonical rung for {domain}",
+        subdomain=f"{domain}_track",
+        family_bindings=[ActivityFamilyBinding(family or f"{domain}_family",
+                                               (domain,))],
+        track_subdomains=(f"{domain}_track",),
+        taxonomy_version="activity_family_taxonomy_v1",
+        baseline_version="parent-2.4-functional-baseline-v1")
+
+
 def _active_month(wk, *, goal_count: int = 2):
     wk.identity.assign_managing_clinician(
         wk.provider_alpha, wk.child, wk.topo.provider_alpha.provider_id)
-    goals = [wk.goals.approve_clinical_goal(
-        wk.provider_alpha, wk.child, edit_type=EditType.AUTHORED_FRESH,
-        text=f"Fictional focus {n}.", reason="pilot scenario")
-        for n in range(1, goal_count + 1)]
+    # 0.5E-A: these goals are allocated and drive the weekly cycle, so each
+    # must be activity-mappable. Built through the real path — anchored
+    # suggestion, then approval copying the anchor in one transaction.
+    # `MODIFIED` keeps the original wording the assertions read.
+    from pilot_backend.goals.suggestion_engine import (
+        EvidenceSource,
+        ObservationSnapshot,
+        ObservedDomain,
+    )
+
+    goals = []
+    for n in range(1, goal_count + 1):
+        domain = "talking_and_communicating"
+        offered = wk.goals.generate_suggestions(
+            wk.provider_alpha, wk.child,
+            ObservationSnapshot(wk.child, CYCLE_MONTH, (
+                ObservedDomain(domain, True,
+                               EvidenceSource.CLINICIAN_OBSERVATION,
+                               functional_baseline_area="requesting",
+                               canonical_rung=_rung_for(domain)),)))
+        goals.append(wk.goals.approve_clinical_goal(
+            wk.provider_alpha, wk.child, edit_type=EditType.MODIFIED,
+            suggestion_id=offered[0].suggestion_id,
+            text=f"Fictional focus {n}.", reason="pilot scenario"))
     plan = wk.plans.create_plan(wk.provider_alpha, wk.child, CYCLE_MONTH, ZONE)
     for rank, goal in enumerate(goals, start=1):
         wk.plans.allocate_goal(wk.provider_alpha, plan.focus_plan_id, goal.ref,

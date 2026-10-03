@@ -97,14 +97,38 @@ def rt(repos, topology, unique_suffix):
     return bundle
 
 
+#: 0.5E-A canonical provenance, so suggestions generated here go through the
+#: real anchored path and the goals they produce are allocatable. No anchor
+#: row is ever written by hand: `generate_suggestions` persists the
+#: SuggestionCanonicalAnchor and `approve_clinical_goal` copies it onto the
+#: goal inside the same transaction.
+def _rung_for(domain, *, months=24, family=None):
+    from pilot_backend.domain.canonical_rung import (
+        ActivityFamilyBinding,
+        CanonicalRung,
+    )
+
+    return CanonicalRung.build(
+        domain_key=domain, source_rung_months=months,
+        milestone_text=f"Fictional canonical rung for {domain}",
+        subdomain=f"{domain}_track",
+        family_bindings=[ActivityFamilyBinding(family or f"{domain}_family",
+                                               (domain,))],
+        track_subdomains=(f"{domain}_track",),
+        taxonomy_version="activity_family_taxonomy_v1",
+        baseline_version="parent-2.4-functional-baseline-v1")
+
+
 def _snapshot(child_id):
     return ObservationSnapshot(child_id, CYCLE, (
         ObservedDomain("talking_and_communicating", True,
                        EvidenceSource.CLINICIAN_OBSERVATION,
-                       milestone_refs=("mv1:cdc:comm:24m:two-word",)),
+                       milestone_refs=("mv1:cdc:comm:24m:two-word",),
+                       canonical_rung=_rung_for("talking_and_communicating")),
         ObservedDomain("social_and_emotional", True,
                        EvidenceSource.CAREGIVER_REPORTED_MILESTONE,
-                       milestone_refs=("mv1:cdc:social:24m:turns",)),
+                       milestone_refs=("mv1:cdc:social:24m:turns",),
+                       canonical_rung=_rung_for("social_and_emotional")),
     ))
 
 

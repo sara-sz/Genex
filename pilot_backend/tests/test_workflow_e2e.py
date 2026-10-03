@@ -142,9 +142,71 @@ def post(e2e, path, token="hannah", body=None):
 # the staged world — each stage builds on the last
 # ---------------------------------------------------------------------------
 
+#: 0.5E-A canonical provenance, so suggestions generated here go through the
+#: real anchored path and the goals they produce are allocatable. No anchor
+#: row is ever written by hand: `generate_suggestions` persists the
+#: SuggestionCanonicalAnchor and `approve_clinical_goal` copies it onto the
+#: goal inside the same transaction.
+def _rung_for(domain, *, months=24, family=None):
+    from pilot_backend.domain.canonical_rung import (
+        ActivityFamilyBinding,
+        CanonicalRung,
+    )
+
+    return CanonicalRung.build(
+        domain_key=domain, source_rung_months=months,
+        milestone_text=f"Fictional canonical rung for {domain}",
+        subdomain=f"{domain}_track",
+        family_bindings=[ActivityFamilyBinding(family or f"{domain}_family",
+                                               (domain,))],
+        track_subdomains=(f"{domain}_track",),
+        taxonomy_version="activity_family_taxonomy_v1",
+        baseline_version="parent-2.4-functional-baseline-v1")
+
+
+def _anchored_suggestion(e2e):
+    """A canonical anchored suggestion, generated SERVER-SIDE.
+
+    0.5E-A. `generate_suggestions` has no HTTP route — it is the canonical
+    boundary and the only writer of `SuggestionCanonicalAnchor` — so the
+    fixture reaches it through the frozen service, exactly as an
+    administrative path would. The approval that follows still goes over HTTP.
+    """
+    from pilot_backend.goals.suggestion_engine import (
+        EvidenceSource,
+        ObservationSnapshot,
+        ObservedDomain,
+    )
+
+    domain = "talking_and_communicating"
+    offered = e2e.goals.generate_suggestions(
+        e2e.principal("hannah"), e2e.child,
+        ObservationSnapshot(e2e.child, MONTH, (
+            ObservedDomain(domain, True,
+                           EvidenceSource.CLINICIAN_OBSERVATION,
+                           functional_baseline_area="requesting",
+                           canonical_rung=_rung_for(domain)),)))
+    return offered[0]
+
+
 def _approved_goal(e2e) -> dict:
+    """An ANCHORED clinical goal, approved over HTTP.
+
+    0.5E-A: this goal is allocated into a month and drives the weekly cycle
+    the rest of this file exercises, so it has to be activity-mappable.
+
+    `modified` rather than `accepted_verbatim`, deliberately. Both are
+    suggestion-derived anchored paths, but accepting verbatim would replace the
+    wording with the suggestion's own template — and SENTINEL_TEXT is asserted
+    downstream, including by the log-leak checks and by
+    `test_frontend_reads.test_the_goal_list_carries_the_current_wording`.
+    Keeping `modified` preserves every existing assertion unchanged.
+    """
+    suggestion = _anchored_suggestion(e2e)
     created = post(e2e, f"/pilot/children/{e2e.child}/goals", "hannah",
-                   {"edit_type": "authored_fresh", "text": SENTINEL_TEXT,
+                   {"edit_type": "modified",
+                    "suggestion_id": suggestion.suggestion_id,
+                    "text": SENTINEL_TEXT,
                     "reason": "Fictional clinical rationale"})
     assert created[0] == 200, created
     return created[1]["goal"]

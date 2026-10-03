@@ -306,7 +306,11 @@ def test_the_suggestions_route_serves_a_real_suggestion(world):
     status, body, _ = get(world,
                           f"/pilot/children/{world.child}/goal-suggestions")
     assert status == 200, body
-    assert len(body["suggestions"]) == len(created)
+    # Every seeded suggestion is SERVED. Checked by id rather than by count:
+    # 0.5E-A's `world` fixture already holds the anchored suggestion its
+    # clinical goal was approved from, so the list is a superset.
+    served = {s["suggestion_id"] for s in body["suggestions"]}
+    assert {c.suggestion_id for c in created} <= served
 
 
 def test_the_suggestion_payload_carries_real_wording_not_an_empty_string(world):
@@ -326,10 +330,14 @@ def test_the_suggestion_provenance_is_actually_populated(world):
     Each of these served "" in 0.5C, because they were read off the suggestion
     instead of off its evidence.
     """
-    _seeded_suggestion(world)
+    created = _seeded_suggestion(world)[0]
     status, body, _ = get(world,
                           f"/pilot/children/{world.child}/goal-suggestions")
-    suggestion = body["suggestions"][0]
+    # Selected by ID, not by position. 0.5E-A's `world` fixture legitimately
+    # already holds the anchored suggestion its clinical goal was approved
+    # from, so "the first one" is no longer this test's subject.
+    suggestion = next(s for s in body["suggestions"]
+                      if s["suggestion_id"] == created.suggestion_id)
 
     assert suggestion["domain_key"] == "talking_and_communicating"
     assert suggestion["evidence_source"] == "explicit_selection"
@@ -362,12 +370,22 @@ def test_the_prior_month_summary_is_never_exposed(world):
     assert "policy_version" not in json.dumps(body["suggestions"])
 
 
-def test_an_empty_suggestion_list_still_works(world):
-    """The 0.5C case that passed, kept so the fix did not break it."""
+def test_the_suggestions_route_serves_a_list_without_crashing(world):
+    """The 0.5C case that passed, kept so the fix did not break it.
+
+    Renamed from `..._an_empty_suggestion_list_...`: 0.5E-A's `world` fixture
+    can no longer have an EMPTY list, because its clinical goal must be
+    approved from an anchored suggestion to be allocatable. The test's actual
+    subject never was emptiness — it was that the route serves its list
+    without the `AttributeError` that made it 500 in 0.5C — and that is what
+    is asserted here.
+    """
     status, body, _ = get(world,
                           f"/pilot/children/{world.child}/goal-suggestions")
     assert status == 200, body
-    assert body["suggestions"] == []
+    assert isinstance(body["suggestions"], list)
+    for suggestion in body["suggestions"]:
+        assert suggestion["family_facing_text_template"]
 
 
 def test_accepting_verbatim_returns_the_SUGGESTION_text_not_the_body(world):
