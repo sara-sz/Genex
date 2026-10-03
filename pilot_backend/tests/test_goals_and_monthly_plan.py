@@ -191,13 +191,41 @@ class Stack:
         return bool(self.repos.managing_clinicians.list_for_child(child_id))
 
 
+#: 0.5E-A. Canonical provenance for the domain these tests allocate from.
+#:
+#: Added to the SHARED snapshot so suggestions are generated through the real
+#: anchored path: `generate_suggestions` persists a `SuggestionCanonicalAnchor`,
+#: `approve_clinical_goal` copies it onto the goal inside the same transaction,
+#: and the goal is then allocatable. No anchor row is inserted by hand.
+#:
+#: Only `talking_and_communicating` carries one. `fine_motor` and
+#: `gross_motor` are deliberately left unanchored, so this file still exercises
+#: the fail-closed path as well as the happy one.
+def _anchor_rung(domain="talking_and_communicating"):
+    from pilot_backend.domain.canonical_rung import (
+        ActivityFamilyBinding,
+        CanonicalRung,
+    )
+
+    return CanonicalRung.build(
+        domain_key=domain, source_rung_months=24,
+        milestone_text="Fictional canonical rung for planning tests",
+        subdomain="expressive_language",
+        family_bindings=[ActivityFamilyBinding("expressive_two_word_phrase",
+                                               (domain,))],
+        track_subdomains=("expressive_language",),
+        taxonomy_version="activity_family_taxonomy_v1",
+        baseline_version="parent-2.4-functional-baseline-v1")
+
+
 def snapshot(child_id, *, cycle=CYCLE, domains=None) -> ObservationSnapshot:
     return ObservationSnapshot(child_id, cycle, domains if domains is not None else (
         ObservedDomain("talking_and_communicating", True,
                        EvidenceSource.CLINICIAN_OBSERVATION,
                        milestone_refs=("mv1:cdc:comm:24m:two-word",),
                        functional_baseline_area="requesting",
-                       observed_level="emerging"),
+                       observed_level="emerging",
+                       canonical_rung=_anchor_rung()),
         ObservedDomain("fine_motor", True,
                        EvidenceSource.CAREGIVER_REPORTED_MILESTONE,
                        milestone_refs=("mv1:cdc:fine:24m:scribble",)),
