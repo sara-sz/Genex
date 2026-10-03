@@ -531,3 +531,112 @@ def test_the_guard_does_not_change_caregiver_goal_behaviour(world):
     source = inspect.getsource(MonthlyPlanService._require_activity_mappable)
     assert "GoalKind.CLINICAL" in source
     assert "return" in source.split("GoalKind.CLINICAL")[1][:80]
+
+
+# ===========================================================================
+# THE TWO FIXTURE HELPERS — the reference implementation for migration
+#
+# Deliberately TWO functions with different names, not one generic helper with
+# a flag. The distinction between "anchored and allocatable" and "free text and
+# explicitly unmappable" is the whole subject of 0.5E-A, and a single helper
+# taking `anchored=True` would hide at its call sites exactly the thing a
+# reader needs to see.
+# ===========================================================================
+
+def create_anchored_clinical_goal(world, *, rung=None):
+    """Canonical suggestion -> accepted_verbatim -> ALLOCATABLE goal.
+
+    The real path, end to end: `generate_suggestions` persists a
+    `SuggestionCanonicalAnchor`, and `approve_clinical_goal` copies it onto the
+    goal inside the same transaction. No anchor row is written by hand.
+
+    Use this wherever a pre-0.5E-A fixture used `authored_fresh` merely as a
+    convenient way to obtain a goal that the test later allocates.
+    """
+    suggestion = generate(world, rung=rung or a_rung())
+    goal = world.goals.approve_clinical_goal(
+        world.clinician, world.child,
+        edit_type=EditType.ACCEPTED_VERBATIM,
+        suggestion_id=suggestion.suggestion_id)
+    return goal, suggestion
+
+
+def create_authored_fresh_goal(world, *, text=None, reason="Fictional rationale"):
+    """Free-text clinical goal -> valid clinically, EXPLICITLY unmappable.
+
+    Use this only where `authored_fresh` is the behaviour under test. A goal
+    from here cannot be allocated, by design.
+    """
+    return world.goals.approve_clinical_goal(
+        world.clinician, world.child, edit_type=EditType.AUTHORED_FRESH,
+        text=text or "A fictional clinician-authored target for {child}.",
+        reason=reason)
+
+
+def test_the_anchored_helper_produces_an_allocatable_goal(world):
+    goal, suggestion = create_anchored_clinical_goal(world)
+    ref = GoalRef(GoalKind.CLINICAL, goal.clinical_goal_id)
+    assert world.goals.is_activity_mappable(world.clinician, ref) is True
+    anchor = world.goals.goal_anchor(world.clinician, ref)
+    assert anchor.source_suggestion_id == suggestion.suggestion_id
+    plan = _plan(world)
+    assert world.plans.allocate_goal(
+        world.clinician, plan.focus_plan_id, ref, priority_rank=1)
+
+
+def test_the_authored_fresh_helper_produces_an_unmappable_goal(world):
+    goal = create_authored_fresh_goal(world)
+    ref = GoalRef(GoalKind.CLINICAL, goal.clinical_goal_id)
+    assert world.goals.is_activity_mappable(world.clinician, ref) is False
+    plan = _plan(world)
+    with pytest.raises(GoalValidationError):
+        world.plans.allocate_goal(world.clinician, plan.focus_plan_id, ref,
+                                  priority_rank=1)
+
+
+# ===========================================================================
+# authored_fresh remains a VALID clinical operation
+#
+# 0.5E-A restricts what an authored_fresh goal may DRIVE, not whether it may
+# exist. These pin the half that must not change.
+# ===========================================================================
+
+def test_authored_fresh_still_creates_a_real_clinical_goal(world):
+    goal = create_authored_fresh_goal(world)
+    stored = world.repos.clinical_goals.get_by_id(goal.clinical_goal_id)
+    assert stored.status.value == "active"
+    assert stored.current_version_id
+    version = world.repos.goal_versions.get_by_id(stored.current_version_id)
+    assert version.version_number == 1
+    assert version.edit_type is EditType.AUTHORED_FRESH
+    assert version.derived_from_suggestion_id is None
+
+
+def test_authored_fresh_wording_and_revision_behaviour_is_unchanged(world):
+    """Revising an unmappable goal still works exactly as before.
+
+    0.5E-A touched allocation eligibility, not the version chain. An
+    authored_fresh goal still revises, still appends immutable versions, still
+    resolves its current wording — and still has no anchor afterwards.
+    """
+    goal = create_authored_fresh_goal(world)
+    ref = GoalRef(GoalKind.CLINICAL, goal.clinical_goal_id)
+
+    revised = "A fictional revised authored target for {child}."
+    version = world.goals.revise_goal(
+        world.clinician, ref, revised, edit_type=EditType.MODIFIED,
+        reason="Fictional revision rationale")
+    assert version.version_number == 2
+    assert world.goals.current_text(world.clinician, ref) == revised
+
+    # Still unanchored, and still refused by allocation after the revision.
+    assert world.goals.goal_anchor(world.clinician, ref) is None
+    assert world.goals.is_activity_mappable(world.clinician, ref) is False
+
+
+def test_authored_fresh_still_requires_a_reason(world):
+    """An unchanged pre-0.5E-A rule, pinned so the slice cannot have moved it."""
+    with pytest.raises(Exception):
+        world.goals.approve_clinical_goal(
+            world.clinician, world.child, edit_type=EditType.AUTHORED_FRESH,
+            text="A fictional target for {child}.", reason="")
