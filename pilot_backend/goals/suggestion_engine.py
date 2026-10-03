@@ -67,6 +67,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Mapping, Optional, Tuple
 
+from ..domain.canonical_rung import CanonicalRung
 from ..domain.goal_vocabulary import (
     CANONICAL_DOMAIN_KEYS,
     domain_rank,
@@ -140,6 +141,13 @@ class ObservedDomain:
     observed_level: str = ""
     explicitly_selected: bool = False
     prior_month_summary_id: Optional[str] = None
+    #: 0.5E-A. Canonical provenance for the TARGET, supplied by the
+    #: generation boundary. Deliberately absent from `evidence_score`,
+    #: `rank_key` and `explain`: an anchored domain must not outrank an
+    #: unanchored one, because mappability is an activity-generation property
+    #: and has nothing to do with how well a target is evidenced. Carried here
+    #: only so the service can persist it beside the suggestion it belongs to.
+    canonical_rung: Optional["CanonicalRung"] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "domain_key",

@@ -49,6 +49,12 @@ COLLECTIONS: Mapping[str, str] = {
     # a caregiver-approved one because a filter was omitted.
     "goal_suggestion": "pilot_goal_suggestions",
     "goal_version": "pilot_goal_versions",
+    # 0.5E-A canonical anchors. SIDECAR collections: adding a field to
+    # GoalSuggestion or ClinicalGoal would make every already-stored
+    # document undecodable, because the codec refuses any key-set
+    # mismatch. Absence of an anchor row IS the unmappable state.
+    "suggestion_canonical_anchor": PILOT_COLLECTION_PREFIX + "suggestion_anchors",
+    "clinical_goal_anchor": PILOT_COLLECTION_PREFIX + "clinical_goal_anchors",
     "clinical_goal": "pilot_clinical_goals",
     "caregiver_goal": "pilot_caregiver_goals",
     # 0.4C monthly focus plan.

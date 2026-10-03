@@ -64,6 +64,7 @@ from ..domain.weekly_cycle import (
     WeeklyPlanLink,
     WeeklyPlanSnapshot,
 )
+from ..domain.goal_anchor import ClinicalGoalAnchor, SuggestionCanonicalAnchor
 from ..domain.goals import (
     CaregiverApprovedGoal,
     ClinicalGoal,
@@ -645,6 +646,58 @@ class FirestoreGoalSuggestionRepository(_BaseRepo):
         """
         return [s for s in self._query("child_id", child_id)
                 if s.cycle_month == cycle_month]
+
+
+class FirestoreSuggestionAnchorRepository(_BaseRepo):
+    """Canonical anchors for goal suggestions. CREATE-ONLY, by design.
+
+    There is no `update`, no `set` and no `overwrite`. Immutability is
+    structural: no method exists that could rewrite an anchor, so "immutable
+    after creation" is not a rule anyone has to remember.
+
+    `get_by_id` takes a suggestion id, because the anchor IS keyed by its
+    suggestion — at most one anchor per suggestion, and the document id
+    carries no information the record does not also hold.
+    """
+
+    record_type, model = "suggestion_canonical_anchor", SuggestionCanonicalAnchor
+
+    def create(self, anchor: SuggestionCanonicalAnchor) -> SuggestionCanonicalAnchor:
+        return self._create(anchor.suggestion_id, anchor)
+
+    def get_by_id(self, suggestion_id: str) -> SuggestionCanonicalAnchor:
+        return self._get(suggestion_id)
+
+    def find(self, suggestion_id: str) -> Optional[SuggestionCanonicalAnchor]:
+        """The anchor, or None when the suggestion carries no provenance.
+
+        Absence is a NORMAL state, not an error: every suggestion generated
+        before 0.5E-A has no anchor, and the approved behaviour is to treat
+        that as unmappable rather than to fail the read.
+        """
+        try:
+            return self._get(suggestion_id)
+        except RecordNotFound:
+            return None
+
+
+class FirestoreClinicalGoalAnchorRepository(_BaseRepo):
+    """Canonical anchors for approved clinical goals. CREATE-ONLY."""
+
+    record_type, model = "clinical_goal_anchor", ClinicalGoalAnchor
+
+    def create(self, anchor: ClinicalGoalAnchor) -> ClinicalGoalAnchor:
+        return self._create(anchor.clinical_goal_id, anchor)
+
+    def get_by_id(self, clinical_goal_id: str) -> ClinicalGoalAnchor:
+        return self._get(clinical_goal_id)
+
+    def find(self, clinical_goal_id: str) -> Optional[ClinicalGoalAnchor]:
+        """The anchor, or None for an unanchored (unmappable) goal."""
+        try:
+            return self._get(clinical_goal_id)
+        except RecordNotFound:
+            return None
 
 
 class FirestoreGoalVersionRepository(_BaseRepo):
@@ -1234,6 +1287,8 @@ class FirestoreRepositories:
         self.goal_suggestions = FirestoreGoalSuggestionRepository(store)
         self.goal_versions = FirestoreGoalVersionRepository(store)
         self.clinical_goals = FirestoreClinicalGoalRepository(store)
+        self.suggestion_anchors = FirestoreSuggestionAnchorRepository(store)
+        self.clinical_goal_anchors = FirestoreClinicalGoalAnchorRepository(store)
         self.caregiver_goals = FirestoreCaregiverGoalRepository(store)
         self.focus_plans = FirestoreMonthlyFocusPlanRepository(store)
         self.goal_allocations = FirestoreMonthlyGoalAllocationRepository(store)

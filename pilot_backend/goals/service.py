@@ -48,6 +48,7 @@ from typing import List, Optional, Tuple, Union
 from ..audit.events import AuditAction, AuditResult
 from ..authz.decisions import AccessDecision
 from ..authz.policy import authorize_child_access
+from ..domain.goal_anchor import ClinicalGoalAnchor, SuggestionCanonicalAnchor
 from ..domain.goals import (
     CaregiverApprovedGoal,
     ClinicalGoal,
@@ -221,8 +222,40 @@ class GoalService:
         suggestions = build_suggestions(
             snapshot, policy=policy, count=count,
             actor_id=principal.application_id, now=self._stamp())
+
+        # 0.5E-A: this method IS the canonical boundary. It is the only place a
+        # `SuggestionCanonicalAnchor` is ever written, which is what makes the
+        # approval path's "copy, never derive" rule meaningful.
+        #
+        # Matched by DOMAIN KEY rather than by list position. The engine emits
+        # at most one suggestion per domain and stamps rank from its own sort
+        # order, so zipping the two lists would couple this method to that
+        # ordering — a coupling that would break silently if the engine ever
+        # emitted two suggestions for one domain.
+        observed_by_domain = {observed.domain_key: observed
+                              for observed in snapshot.domains}
         for suggestion in suggestions:
             self._repos.goal_suggestions.create(suggestion)
+            observed = observed_by_domain.get(suggestion.evidence.domain_key)
+            rung = getattr(observed, "canonical_rung", None)
+            if rung is None:
+                # No canonical provenance for this domain. The suggestion is
+                # still valid and approvable; the goal it produces will simply
+                # be unmappable. This is the fail-closed default, and it is
+                # the state EVERY pre-0.5E-A suggestion is already in.
+                continue
+            if rung.domain_key != suggestion.evidence.domain_key:
+                # A rung for a different domain than the suggestion it would
+                # anchor. Refused rather than stored: a mismatched anchor is
+                # worse than no anchor, because it looks authoritative.
+                raise GoalValidationError(
+                    "canonical rung does not match its suggestion's domain")
+            self._repos.suggestion_anchors.create(
+                SuggestionCanonicalAnchor(
+                    suggestion_id=suggestion.suggestion_id,
+                    child_id=child_id,
+                    rung=rung,
+                    created_at=self._stamp()))
 
         self._audit(AuditAction.GOAL_SUGGESTIONS_GENERATED, AuditResult.SUCCESS,
                     RESOURCE_SUGGESTION, principal=principal, child_id=child_id,
@@ -315,7 +348,8 @@ class GoalService:
     # Approval
     # =====================================================================
 
-    def _commit_goal_with_version(self, goal, version, *, kind: GoalKind):
+    def _commit_goal_with_version(self, goal, version, *, kind: GoalKind,
+                                  anchor=None):
         """Write a goal and its FIRST version atomically. PRE-PHI blocker 3.
 
         Returns the goal with `current_version_id` filled in.
@@ -336,6 +370,12 @@ class GoalService:
         appended by `create` on its own id, so it can never be rewritten;
         putting it in a transaction changes when it becomes visible, not
         whether it can change afterwards.
+
+        0.5E-A adds an optional THIRD create: the canonical anchor. It joins
+        the SAME transaction rather than following it, because a goal that is
+        briefly anchored-without-a-goal, or approved-without-its-anchor, is
+        exactly the half-landed state blocker 3 was closed to prevent. Three
+        creates, still all-or-nothing, still no read-after-write.
         """
         collection = ("clinical_goals" if kind is GoalKind.CLINICAL
                       else "caregiver_goals")
@@ -345,9 +385,66 @@ class GoalService:
             tx = self._repos_factory(store)
             tx.goal_versions.append(version)
             getattr(tx, collection).create(persisted)
+            if anchor is not None:
+                tx.clinical_goal_anchors.create(anchor)
             return persisted
 
         return self._repos.store.run_in_transaction(_write)
+
+    def _anchor_for_approval(self, goal_id: str,
+                             suggestion: Optional[GoalSuggestion]):
+        """The canonical anchor for a new clinical goal, or None.
+
+        THE TRUST BOUNDARY of 0.5E-A, and the whole reason the feature is
+        safe. An anchor is only ever COPIED from a `SuggestionCanonicalAnchor`
+        that the generation boundary already persisted. Three consequences,
+        each deliberate:
+
+        - nothing a clinician's approval request contains can influence it.
+          The request carries `suggestion_id`, `edit_type`, `text` and
+          `reason`; no domain, no milestone, no months, no family, no rung
+          ref. A browser cannot author provenance.
+        - goal TEXT is never consulted. Not to infer a domain, not to match a
+          milestone, not at all. The wording a clinician chose and the target
+          the goal is anchored to are independent facts.
+        - insufficient provenance FAILS CLOSED to None, which makes the goal
+          unmappable. Every suggestion generated before 0.5E-A has no anchor
+          record, so every goal approved from one is unmappable — the approved
+          behaviour, not a migration bug.
+
+        `authored_fresh` reaches here with `suggestion is None` and therefore
+        gets no anchor, which is the explicit requirement rather than a
+        side effect.
+        """
+        if suggestion is None:
+            return None
+        stored = self._repos.suggestion_anchors.find(suggestion.suggestion_id)
+        if stored is None:
+            return None
+        return ClinicalGoalAnchor.from_suggestion_anchor(
+            goal_id, stored, now=self._stamp())
+
+    def goal_anchor(self, principal, ref: GoalRef):
+        """The canonical anchor for a goal, or None. Authorized read.
+
+        None means unmappable. Callers must treat absence as a refusal to
+        generate activities, never as a reason to derive one.
+        """
+        goal = self._load_goal(ref)
+        self._authorize(principal, goal.child_id)
+        if ref.kind is not GoalKind.CLINICAL:
+            return None
+        return self._repos.clinical_goal_anchors.find(ref.goal_id)
+
+    def is_activity_mappable(self, principal, ref: GoalRef) -> bool:
+        """Whether a goal may drive weekly activity generation.
+
+        Derived from the stored anchor on every call. There is no cached or
+        separately stored boolean anywhere in this slice, so there is nothing
+        that could disagree with the anchor it describes.
+        """
+        anchor = self.goal_anchor(principal, ref)
+        return bool(anchor and anchor.is_activity_mappable)
 
     def approve_clinical_goal(self, principal, child_id: str, *,
                               edit_type: EditType,
@@ -388,8 +485,11 @@ class GoalService:
             derived_from_suggestion_id=(suggestion.suggestion_id
                                         if suggestion else None),
             reason=reason, now=self._stamp())
+        # Copied from stored canonical provenance, or None. Never derived
+        # from the request, never from the goal's text.
+        anchor = self._anchor_for_approval(goal.clinical_goal_id, suggestion)
         persisted = self._commit_goal_with_version(
-            goal, version, kind=GoalKind.CLINICAL)
+            goal, version, kind=GoalKind.CLINICAL, anchor=anchor)
 
         self._audit(AuditAction.CLINICAL_GOAL_APPROVED, AuditResult.SUCCESS,
                     RESOURCE_CLINICAL_GOAL, principal=principal,

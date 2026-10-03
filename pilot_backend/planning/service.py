@@ -329,6 +329,39 @@ class MonthlyPlanService:
         except RecordNotFound:
             raise GoalValidationError("allocation names a goal that does not exist") from None
 
+    def _require_activity_mappable(self, ref: GoalRef) -> None:
+        """0.5E-A: refuse to allocate a clinical goal with no canonical anchor.
+
+        FAIL CLOSED. An allocated goal is the thing weekly generation plans
+        activities FOR, so allowing an unanchored one onto the month would
+        leave the planner holding a target with no domain, no milestone and no
+        activity family — and the only ways out of that would be to guess or
+        to drop the goal silently. Refusing here makes the failure loud, early
+        and at the point a human chose the goal.
+
+        Clinical goals only. A `CaregiverApprovedGoal` is out of scope for
+        0.5E-A and its behaviour is deliberately unchanged, so a family's own
+        goal continues to allocate exactly as it did before this slice.
+
+        Reads the anchor repository directly. That is the same projection
+        pattern the RTM and current-cycle routes already use: the caller has
+        been authorized against the plan's child above, and this is a
+        presence check on an already-authorized goal, not a new rule.
+        """
+        if ref.kind is not GoalKind.CLINICAL:
+            return
+        anchor = self._repos.clinical_goal_anchors.find(ref.goal_id)
+        if anchor is None:
+            raise GoalValidationError(
+                "this goal has no canonical anchor and cannot be allocated as "
+                "an activity-generating target")
+        if not anchor.is_activity_mappable:
+            # An anchor exists but does not permit activity generation — an
+            # empty family set, or a family that is not valid for the goal's
+            # canonical domain. Refused for the same reason as a missing one.
+            raise GoalValidationError(
+                "this goal's canonical anchor is not activity-mappable")
+
     def allocate_goal(self, principal, focus_plan_id: str, ref: GoalRef, *,
                       priority_rank: int,
                       emphasis_weight: Optional[int] = None,
@@ -356,6 +389,7 @@ class MonthlyPlanService:
             raise GoalValidationError("goal belongs to a different child")
         if not goal.is_active:
             raise GoalValidationError("a closed goal cannot be allocated")
+        self._require_activity_mappable(ref)
 
         for existing in self._repos.goal_allocations.list_for_plan(focus_plan_id):
             if existing.goal_ref == ref:

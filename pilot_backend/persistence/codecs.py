@@ -109,6 +109,8 @@ from ..domain.weekly_cycle import (
     WeeklyPlanLink,
     WeeklyPlanSnapshot,
 )
+from ..domain.canonical_rung import ActivityFamilyBinding, CanonicalRung
+from ..domain.goal_anchor import ClinicalGoalAnchor, SuggestionCanonicalAnchor
 from ..domain.goals import (
     CaregiverApprovedGoal,
     ClinicalGoal,
@@ -614,6 +616,35 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "kind": _EnumKind(ClaimKind), "key_digest": STR,
         "generation": INT, "holder_ref": STR, "child_id": STR,
         "created_at": DT, "created_by_actor_id": OPT_STR, "schema_version": STR,
+    },
+    # ---- 0.5E-A canonical anchors --------------------------------------
+    #
+    # `is_activity_mappable` is ABSENT from every spec below on purpose. It is
+    # a derived property, so there is no stored copy that could drift away
+    # from the rung it summarises. The codec drives off dataclass fields, and
+    # a property is not a field — the omission is structural, not a choice
+    # someone has to keep making.
+    ActivityFamilyBinding: {
+        "family_ref": STR, "allowed_domains": STR_TUPLE,
+    },
+    CanonicalRung: {
+        "domain_key": STR, "source_rung_months": INT,
+        "milestone_text": STR, "subdomain": STR,
+        "family_bindings": _NestedTuple(ActivityFamilyBinding),
+        "track_subdomains": STR_TUPLE, "track_families": STR_TUPLE,
+        "rung_ref": STR, "track_ref": STR,
+        "taxonomy_version": STR, "baseline_version": STR,
+    },
+    SuggestionCanonicalAnchor: {
+        "suggestion_id": STR, "child_id": STR,
+        "rung": _Nested(CanonicalRung),
+        "created_at": DT, "schema_version": STR,
+    },
+    ClinicalGoalAnchor: {
+        "clinical_goal_id": STR, "child_id": STR,
+        "source_suggestion_id": STR,
+        "rung": _Nested(CanonicalRung),
+        "created_at": DT, "schema_version": STR,
     },
     GoalSuggestionEvidence: {
         "domain_key": STR, "evidence_source": _EnumKind(EvidenceSource),
