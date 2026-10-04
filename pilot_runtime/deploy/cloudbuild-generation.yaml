@@ -1,0 +1,42 @@
+# Cloud Build config for the OFFLINE GENERATION JOB image.
+#
+# A second config beside `cloudbuild.yaml`, which builds the served API image
+# and is NOT modified by this slice. The two produce different images from
+# different Dockerfiles with different build contexts, and nothing shares a
+# tag: the API publishes `pilot-api`, this publishes `pilot-generation`.
+#
+# Same `-f` reasoning as the serving config: `gcloud builds submit --tag`
+# requires the Dockerfile at the context root, and these Dockerfiles have to
+# live under `pilot_runtime/` to satisfy the Parent scope guard
+# (`PARENT_ALLOWED_PREFIXES` in genex-parent/tests/test_parent_24_integrity.py
+# permits only genex-parent/, the Parent CI workflow, pilot_backend/ and
+# pilot_runtime/ — a root-level deploy/ fails that gate).
+#
+# The build context is the repository root, narrowed by
+# `gcloudignore-generation`, which is copied to the root as `.gcloudignore`
+# for the duration of the submit exactly as the serving deploy does. That file
+# admits the two pilot packages plus three paths under genex-parent/, and
+# nothing else.
+#
+# Dockerfile.generation runs its own in-build assertions — openai and gunicorn
+# absent, no genex-parent/api or webapp, both workbooks present, and the bridge
+# resolving 17 mappable SLP rungs — so a mis-narrowed context fails the BUILD
+# rather than the job.
+
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/genex-pilot-staging/pilot/pilot-generation
+  _TAG: dev
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=pilot_runtime/deploy/Dockerfile.generation
+      - --tag=${_IMAGE}:${_TAG}
+      - .
+
+images:
+  - ${_IMAGE}:${_TAG}
+
+options:
+  logging: CLOUD_LOGGING_ONLY

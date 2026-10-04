@@ -236,6 +236,208 @@ def test_lookup_is_case_and_whitespace_tolerant():
 
 
 # ---------------------------------------------------------------------------
+# 3b. Scenario C — the 13 approved Talking & Communicating aliases
+#
+# The Gold Standard milestone workbook names 30 distinct `activity_family`
+# values across its 40 Talking & Communicating rungs, and only 6 of them were
+# identifiers this taxonomy actually defines. The gap was overwhelmingly
+# NAMING: 26 of the 56 families already permit `talking_and_communicating`,
+# but the workbook referenced 6 of them.
+#
+# Scenario C closes that with aliases ONLY — no new family, no milestone edit,
+# and no widening of any existing family's allowed domains. Measured effect:
+# 7 -> 27 of 40 rungs mappable, and 5 -> 17 of the 21 rungs on the declared
+# functional-baseline track.
+#
+# Two things are deliberately NOT done here, and are pinned as not-done below:
+# the seven genuinely MISSING families (Scenario D, which needs clinical
+# content review), and four AMBIGUOUS identifiers that more than one existing
+# family could plausibly claim.
+# ---------------------------------------------------------------------------
+
+#: alias -> canonical family. Category 1 is a naming mismatch for the same
+#: concept; category 3 is a fine-grained workbook value an existing BROADER
+#: family already covers.
+SCENARIO_C_ALIASES = {
+    # category 1 — naming mismatch (6)
+    "conversation_exchange": "conversation_turn_taking",
+    "early_vocalization_sound_play": "early_vocalizations",
+    "expressive_two_word_phrase": "two_word_phrases",
+    "object_function_questions": "function_question_answering",
+    "receptive_direction": "receptive_directions_one_step",
+    "story_narration": "narration_storytelling",
+    # category 3 — maps to an existing broader family (7)
+    "expressive_three_words": "expressive_first_words",
+    "four_word_sentences": "sentence_building",
+    "gesture_request_pickup": "gesture_communication",
+    "gesture_requesting": "gesture_communication",
+    "gesture_variety": "gesture_communication",
+    "gesture_waving": "gesture_communication",
+    "receptive_direction_with_gesture": "receptive_directions_one_step",
+}
+
+#: Category 2 — genuinely missing families. Explicitly OCTOBER POST-PILOT:
+#: each needs a reviewed definition, allowed domains, disciplines and activity
+#: content before it exists. Pinned so none can appear without that review.
+DEFERRED_MISSING_FAMILIES = (
+    "pronouns",
+    "receptive_object_identification",
+    "rhyming",
+    "sound_response_orientation",
+    "speech_intelligibility",
+    "story_comprehension",
+    "wh_question_asking",
+)
+
+#: Category 4 — ambiguous. More than one existing family could claim these, so
+#: aliasing one would be a guess recorded as provenance. Left unresolved on
+#: purpose; a rung referencing them stays unmappable and fails closed.
+AMBIGUOUS_UNRESOLVED = (
+    "daily_recall_narrative",
+    "expressive_name_response",
+    "receptive_stop_no",
+    "song_story_words",
+)
+
+
+def test_scenario_c_added_exactly_thirteen_aliases():
+    aliases = AF.get_taxonomy().aliases
+    assert len(SCENARIO_C_ALIASES) == 13
+    # 13 approved + the one pre-existing `helper_context`.
+    assert len(aliases) == 14, sorted(aliases)
+    assert set(SCENARIO_C_ALIASES) <= set(aliases)
+    assert "helper_context" in aliases
+
+
+@pytest.mark.parametrize("legacy,canonical", sorted(SCENARIO_C_ALIASES.items()))
+def test_each_approved_alias_resolves_to_an_existing_canonical_family(legacy, canonical):
+    families = AF.get_taxonomy().families
+    assert AF.resolve_family_key(legacy) == canonical
+    assert canonical in families, canonical
+    assert AF.is_known_family(legacy)
+
+
+@pytest.mark.parametrize("legacy,canonical", sorted(SCENARIO_C_ALIASES.items()))
+def test_each_approved_alias_target_is_not_itself_an_alias(legacy, canonical):
+    """Single hop. An alias pointing at an alias would make resolution depend
+    on iteration order, and provenance must not."""
+    aliases = AF.get_taxonomy().aliases
+    assert canonical not in aliases, f"{legacy} -> {canonical} is a chain"
+
+
+@pytest.mark.parametrize("legacy", sorted(SCENARIO_C_ALIASES))
+def test_no_approved_alias_shadows_a_real_family(legacy):
+    assert legacy not in AF.get_taxonomy().families
+
+
+def test_the_alias_graph_has_no_cycle_and_terminates_in_one_hop():
+    aliases = AF.get_taxonomy().aliases
+    for legacy in aliases:
+        seen, cur, hops = {legacy}, aliases[legacy], 1
+        while cur in aliases:
+            hops += 1
+            assert cur not in seen, f"cycle through {cur!r}"
+            seen.add(cur)
+            cur = aliases[cur]
+        assert hops == 1, f"{legacy!r} resolves in {hops} hops, not 1"
+        assert cur in AF.get_taxonomy().families
+
+
+@pytest.mark.parametrize("legacy", sorted(SCENARIO_C_ALIASES))
+def test_each_approved_alias_is_deterministic_across_a_cache_reload(legacy):
+    """The same identifier must resolve identically every time, including
+    after the loader cache is dropped — provenance written into an immutable
+    anchor cannot depend on process state."""
+    first = AF.resolve_family_key(legacy)
+    first_domains = AF.allowed_domains(legacy)
+    AF.reload_cache()
+    assert AF.resolve_family_key(legacy) == first
+    assert AF.allowed_domains(legacy) == first_domains
+
+
+@pytest.mark.parametrize("legacy", sorted(SCENARIO_C_ALIASES))
+def test_every_approved_alias_permits_talking_and_communicating(legacy):
+    """An alias that resolved onto a family which does NOT permit the domain
+    would make the rung unmappable anyway — and would do it silently."""
+    assert "talking_and_communicating" in AF.allowed_domains(legacy)
+
+
+#: The allowed domains of every family the 13 aliases point at, frozen as they
+#: were BEFORE Scenario C. Scenario C was approved as aliases only, so if a
+#: later change widened one of these to make more rungs mappable, that is a
+#: content decision and must fail here rather than pass quietly.
+APPROVED_TARGET_DOMAINS = {
+    "conversation_turn_taking": {"talking_and_communicating", "social_and_emotional"},
+    "early_vocalizations": {"talking_and_communicating"},
+    "expressive_first_words": {"talking_and_communicating"},
+    "function_question_answering": {"talking_and_communicating", "learning_and_thinking"},
+    "gesture_communication": {"talking_and_communicating", "social_and_emotional"},
+    "narration_storytelling": {"talking_and_communicating", "learning_and_thinking"},
+    "receptive_directions_one_step": {"talking_and_communicating"},
+    "sentence_building": {"talking_and_communicating"},
+    "two_word_phrases": {"talking_and_communicating"},
+}
+
+
+def test_scenario_c_widened_no_existing_family_allowed_domains():
+    assert set(APPROVED_TARGET_DOMAINS) == set(SCENARIO_C_ALIASES.values())
+    for family, expected in sorted(APPROVED_TARGET_DOMAINS.items()):
+        entry = AF.get_taxonomy().families[family]
+        assert set(entry.allowed_domains) == expected, family
+        # Still DERIVED, not stored — an alias must not be able to add a domain.
+        assert entry.allowed_domains == frozenset(
+            (entry.primary_domain, *entry.secondary_domains)
+        ), family
+
+
+def test_the_family_count_is_unchanged_by_scenario_c():
+    """Aliases only. A new family would mean new clinical content, which is
+    Scenario D and explicitly deferred."""
+    assert len(AF.get_taxonomy().families) == EXPECTED_FAMILY_COUNT == 56
+
+
+@pytest.mark.parametrize("identifier", DEFERRED_MISSING_FAMILIES)
+def test_deferred_missing_families_are_still_absent(identifier):
+    """Scenario D is post-pilot. These must not appear as a family OR be
+    quietly aliased onto a near neighbour to improve a coverage number."""
+    taxonomy = AF.get_taxonomy()
+    assert identifier not in taxonomy.families, identifier
+    assert identifier not in taxonomy.aliases, identifier
+    assert not AF.is_known_family(identifier)
+    assert AF.allowed_domains(identifier) is None
+
+
+@pytest.mark.parametrize("identifier", AMBIGUOUS_UNRESOLVED)
+def test_ambiguous_identifiers_remain_unresolved(identifier):
+    """Four workbook values more than one existing family could claim. They
+    stay unknown, so a rung referencing them is unmappable and allocation
+    refuses it — rather than being mapped to a guess."""
+    taxonomy = AF.get_taxonomy()
+    assert identifier not in taxonomy.aliases, identifier
+    assert identifier not in taxonomy.families, identifier
+    assert not AF.is_known_family(identifier)
+
+
+def test_asking_and_answering_were_not_merged():
+    """`wh_question_asking` (the child ASKS) must never resolve onto
+    `function_question_answering` (the child ANSWERS). The identifiers look
+    adjacent and the merge would have been the single easiest way to gain a
+    rung; it would also have silently inverted who produces the question."""
+    assert not AF.is_known_family("wh_question_asking")
+    assert AF.resolve_family_key("wh_question_asking") == "wh_question_asking"
+    assert "function_question_answering" in AF.get_taxonomy().families
+
+
+def test_receptive_and_expressive_narrative_were_not_merged():
+    """`story_comprehension` is receptive; `narration_storytelling` is
+    expressive. Aliasing the first onto the second would broaden the family to
+    cover a skill nobody reviewed it for."""
+    assert not AF.is_known_family("story_comprehension")
+    assert AF.resolve_family_key("story_comprehension") == "story_comprehension"
+    assert "narration_storytelling" in AF.get_taxonomy().families
+
+
+# ---------------------------------------------------------------------------
 # 4. load-time validation fails closed
 # ---------------------------------------------------------------------------
 

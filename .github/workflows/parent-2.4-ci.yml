@@ -206,6 +206,101 @@ jobs:
             echo "0.4B/C not present on this branch — nothing to run"
           fi
 
+      - name: October pilot 0.5E-B — canonical-rung port (dependency-pure)
+        # The PORT, with no Parent content on the path at all. That is the
+        # property as much as the contract: if `pilot_backend` ever reached
+        # across to read the workbook itself, this step stops importing.
+        working-directory: .
+        run: |
+          if [ -f pilot_backend/tests/test_gold_standard_port.py ]; then
+            python -m pytest pilot_backend/tests/test_gold_standard_port.py -q
+          else
+            echo "0.5E-B not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5E-B — generation path + image separation
+        # Runs in the dependency-pure job deliberately. It asserts that the
+        # SERVED api image still installs exactly its three pins and copies no
+        # Parent content, and that the separate GENERATION image carries the
+        # workbook dependencies instead — so the two cannot silently converge.
+        # Dependency-pure because the generation PATH goes through the port and
+        # needs no workbook to test.
+        working-directory: .
+        run: |
+          if [ -f pilot_runtime/tests/test_generation_job.py ]; then
+            python -m pytest pilot_runtime/tests/test_generation_job.py -q
+          else
+            echo "0.5E-B not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5E-B — CROSS-SYSTEM canonical-rung bridge
+        # The gate that cannot be faked by a mirror. It runs the LIVE adapter
+        # against the real Parent 2.4 milestone workbook and the real
+        # activity-family taxonomy, and asserts the whole SLP rung set is
+        # accounted for: 17 built, 13 refused on an unresolved activity
+        # family, 10 refused for want of a declared functional-baseline track.
+        #
+        # This step exists because NO OTHER JOB CAN IMPORT BOTH SIDES. The
+        # Parent steps above run with `working-directory: genex-parent`, where
+        # `pilot_backend` is not importable; the pilot steps run from the root,
+        # where `parent_taxonomy` is not. Only `.` plus PYTHONPATH reaches
+        # both.
+        #
+        # It belongs in THIS job rather than the integration job because the
+        # dependency set it needs — pandas, openpyxl, pytest — is exactly what
+        # `requirements-parent24-ci.txt` already installs here, and exactly
+        # what the offline generation image installs. No firebase, no
+        # firestore, no model client: a test proves the adapter imports with
+        # those blocked.
+        working-directory: .
+        env:
+          PYTHONPATH: genex-parent
+        run: |
+          if [ -f pilot_runtime/tests/test_parent_gold_standard_adapter.py ]; then
+            python -m pytest \
+              pilot_runtime/tests/test_parent_gold_standard_adapter.py -q
+          else
+            echo "0.5E-B not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5E-B — the bridge is not a mirror
+        # An independent check on the one property the architecture was chosen
+        # for. The founder rejected restating the 21 SLP rungs inside
+        # pilot_backend, so NO pilot module may contain workbook content: not
+        # a milestone text, not an activity-family identifier, not a rung ref.
+        # Asserted over the whole pilot tree rather than the two new files,
+        # because the cheapest way to "fix" a future bridge failure would be
+        # to paste a rung into some other module.
+        working-directory: .
+        run: |
+          python - <<'PY'
+          import pathlib, sys
+
+          CONTENT = (
+              "says about 50 words", "calls parents mama or dada",
+              "expressive_vocabulary_growth", "early_vocalizations",
+              "gesture_communication", "two_word_phrases",
+              "narration_storytelling", "receptive_directions_one_step",
+          )
+          offenders = []
+          for root in ("pilot_backend", "pilot_runtime"):
+              base = pathlib.Path(root)
+              if not base.is_dir():
+                  continue
+              for path in base.rglob("*.py"):
+                  # Tests legitimately name content: they assert on it.
+                  if "tests" in path.parts or "fixtures" in path.parts:
+                      continue
+                  text = path.read_text()
+                  for needle in CONTENT:
+                      if needle in text:
+                          offenders.append(f"{path}: {needle!r}")
+          assert not offenders, (
+              "workbook content is restated in non-test pilot code; it must "
+              "cross the boundary at runtime:\n  " + "\n  ".join(offenders))
+          print("no workbook content restated in pilot_backend/ or pilot_runtime/")
+          PY
+
       - name: October pilot 0.4B/C — the goal layer reaches no network
         # A second, independent check on the same property: the import graph
         # of every goal and planning module, walked transitively within the
@@ -916,14 +1011,41 @@ jobs:
         # The founder-reviewed workbook is the source of truth for activity
         # family -> allowed domain. Pinned so a silent content edit fails the
         # gate rather than quietly changing which activity cards are blocked.
+        #
+        # ROTATED ONCE, 0.5E-B (Scenario C). The previous digest was
+        # 9165c653be075c560bfb957beba29c5780fc358737740d3558ab64b6451be30e.
+        # The only change between the two is 13 founder-approved rows appended
+        # to the `activity_family_aliases` sheet — no `activity_families` row
+        # was added, removed or edited, which the assertions below re-prove
+        # independently of the digest: the family count stays 56, the
+        # primary-domain histogram is unchanged, and allowed_domains stays
+        # derived. The Gold Standard milestone workbook
+        # (cdc_milestones_with_bridges_family_cleaned_final_app_ready.xlsx,
+        # c2b6735d...) is a DIFFERENT file and is not touched by this slice.
         run: |
           python - <<'PY'
           import hashlib, pathlib, sys
           sys.path.insert(0, ".")
-          EXPECTED = "9165c653be075c560bfb957beba29c5780fc358737740d3558ab64b6451be30e"
+          EXPECTED = "e5835969ead556129530f01d4629c584b823729a1b4e4425e5e3d29ddba4d262"
           p = pathlib.Path("data/parent_2_4/activity_family_taxonomy_v1.xlsx")
           got = hashlib.sha256(p.read_bytes()).hexdigest()
           assert got == EXPECTED, f"activity-family taxonomy changed: {got}"
+
+          # 0.5E-B: the Parent 2.4 CANDIDATE workbook is pinned too, for a
+          # reason that did not exist before this slice. It is the file
+          # `genex_core.table_loader` actually reads, so it decides which
+          # canonical rungs exist — and from now on a `rung_ref` computed from
+          # one of those rungs is frozen into an immutable ClinicalGoalAnchor
+          # the moment a clinician approves a goal. If the rung set moved
+          # underneath an existing anchor, that anchor would point at a
+          # milestone the workbook no longer contains, and no later check
+          # could notice. This was previously referenced by the brain tests
+          # but byte-pinned nowhere.
+          CANDIDATE = "a16ce10fe9c932bc7ca6e3275748541b3c8a1e15a0d8a2702b0560a56ddc5fd6"
+          c = pathlib.Path("data/parent_2_4/cdc_milestones_parent_2_4_candidate.xlsx")
+          got_candidate = hashlib.sha256(c.read_bytes()).hexdigest()
+          assert got_candidate == CANDIDATE, \
+              f"parent 2.4 candidate milestone workbook changed: {got_candidate}"
 
           from parent_taxonomy.activity_families import get_taxonomy
           from parent_taxonomy.domains import BY_KEY
@@ -956,8 +1078,22 @@ jobs:
           assert not hasattr(activity_validator, "FAMILY_TO_CATEGORY"), \
               "FAMILY_TO_CATEGORY was re-created"
 
+          # 0.5E-B: the alias sheet is now load-bearing for SLP coverage, so
+          # its size is pinned too. The digest above would already catch a
+          # change, but this names WHAT changed instead of only that something
+          # did — 1 pre-existing alias plus the 13 approved in Scenario C.
+          assert len(t.aliases) == 14, len(t.aliases)
+          # An alias may never shadow or retarget a real family, and single-hop
+          # is re-proved here rather than trusted from the loader.
+          for legacy, canonical in t.aliases.items():
+              assert legacy not in t.families, legacy
+              assert canonical in t.families, canonical
+              assert canonical not in t.aliases, canonical
+
           print("activity-family taxonomy OK:", got)
           print("  56 families,", counts, "| 27 with secondary domains")
+          print("  14 aliases, all single-hop onto real families")
+          print("parent 2.4 candidate milestone workbook OK:", got_candidate)
           PY
 
       - name: Frozen PARENT-0.2 contract summary

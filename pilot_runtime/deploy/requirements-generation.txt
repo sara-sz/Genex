@@ -1,0 +1,56 @@
+# Dependencies for the OFFLINE SUGGESTION-GENERATION JOB image.
+#
+# A SEPARATE image from the served API on purpose. The serving image
+# (requirements.txt beside this file) carries three pins and deliberately no
+# dataframe library, no spreadsheet reader and no Parent content, because it
+# is the image a PHI-era container review has to read. The generation job
+# needs the Parent workbooks, so it gets its own image rather than widening
+# that one.
+#
+# This is safe to separate because generation is NOT request-path code:
+# `GoalService.generate_suggestions` has no HTTP route (the suggestions route
+# is GET-only), so nothing a browser can call needs these libraries.
+#
+# WHAT IS HERE AND WHY
+#
+#   firebase-admin          7.5.0   identical pin to the serving image. The
+#   google-cloud-firestore  2.28.0  job writes suggestions and anchors through
+#                                   the same adapters the API reads them with,
+#                                   so the two must agree on SDK version.
+#   pandas                  3.0.3   the workbook reader. Same pin as
+#   openpyxl                3.1.5   requirements-parent24-ci.txt, so the job
+#                                   runs the versions the cross-system gate
+#                                   proved the bridge against. An unbounded
+#                                   lower bound is what let pandas move from
+#                                   2.x to 3.0.3 underneath a local run during
+#                                   PARENT-0.2C; a job that mints immutable
+#                                   anchor identifiers cannot have its
+#                                   workbook parser drift.
+#
+# DELIBERATELY ABSENT
+#
+#   gunicorn    this is a batch job, not a web server. It has no port, no
+#               request loop and no listener.
+#   openai      `genex_core.functional_baseline` reaches
+#               `genex_core.activity_engine`, which holds Parent's activity
+#               writer. That import is LAZY — inside `_get_openai_client()`,
+#               behind a try/except ImportError, behind ACTIVITY_MODEL and
+#               OPENAI_API_KEY. Omitting the package means the lazy path
+#               cannot activate even if an env var were set by mistake, so
+#               this job cannot make a model call and cannot egress clinical
+#               content to a model vendor.
+#   streamlit, requests, google-cloud-storage
+#               carried by genex-parent/requirements.txt (the Parent
+#               APPLICATION policy) and needed by none of the four modules
+#               this job imports. The Parent application requirements file is
+#               NOT used here, for the same reason Parent 2.4 CI does not use
+#               it.
+#   every analytics, APM, session-replay, error-reporting and tracing client
+#               same rule as the serving image: an error reporter's job is to
+#               upload the context of a failure, and this job's context is
+#               clinical.
+
+firebase-admin==7.5.0
+google-cloud-firestore==2.28.0
+pandas==3.0.3
+openpyxl==3.1.5

@@ -1,0 +1,111 @@
+# OFFLINE SUGGESTION-GENERATION JOB image — October pilot 0.5E-B.
+#
+# A SECOND, SEPARATE image. It does not replace, rebuild or modify the served
+# API image (`Dockerfile` beside this file), and the API's own requirements
+# file is untouched by this slice.
+#
+# WHY A SEPARATE IMAGE
+#
+# The canonical-rung bridge has to read the real Parent 2.4 milestone workbook
+# and the real activity-family taxonomy, which means the Parent modules,
+# pandas and openpyxl. The served API image copies only `pilot_backend/` and
+# `pilot_runtime/` and pins three libraries, specifically so a PHI-era
+# container review has a small surface to read. Adding a dataframe library, a
+# spreadsheet reader and the Parent brain to it would undo that.
+#
+# It does not need to be there. `GoalService.generate_suggestions` has NO HTTP
+# route — the suggestions route is GET-only — so generation is not request-path
+# code. It is a batch job. A test asserts that the served entrypoint's import
+# graph never reaches the workbook adapter, so the two images cannot silently
+# converge.
+#
+# WHAT THIS IMAGE CONTAINS BEYOND THE SERVING IMAGE
+#
+#   genex-parent/parent_taxonomy/   the activity-family taxonomy loader
+#   genex-parent/genex_core/        the workbook loader + declared tracks
+#   genex-parent/data/parent_2_4/   the two workbooks, measured as the ONLY
+#                                   two files the generation path opens
+#   pandas, openpyxl                the workbook readers
+#
+# WHAT IT STILL DOES NOT CONTAIN
+#
+#   genex-parent/api/               the Parent FastAPI service
+#   genex-parent/webapp/            the Parent frontend
+#   genex-parent/tests/             tests are not part of any served artifact
+#   genex-parent/data/*.xlsx        the other workbooks at the data root,
+#                                   including the immutable c2b6735d
+#                                   provenance snapshot, which the generation
+#                                   path does not read
+#   openai                          see requirements-generation.txt: Parent's
+#                                   model client import is lazy and the
+#                                   package is absent, so it cannot activate
+#   gunicorn                        no listener; this is not a web service
+#
+# The two Parent packages are copied whole rather than file-by-file. The
+# measured import closure is ten modules, but naming ten files here would
+# break the moment Parent split one of them, and a broken COPY in a job image
+# is discovered later and more confusingly than a slightly wider copy. The
+# narrowing that matters — no `api/`, no `webapp/`, no other workbooks, no
+# model client — is enforced above and by the cross-system test.
+
+FROM python:3.11.9-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+COPY pilot_runtime/deploy/requirements-generation.txt /app/requirements.txt
+RUN pip install -r /app/requirements.txt
+
+COPY pilot_backend/ /app/pilot_backend/
+COPY pilot_runtime/ /app/pilot_runtime/
+
+# The Parent subset. `genex-parent` contains a hyphen and so can never be an
+# importable package name — the adapter puts this directory on sys.path and
+# imports `parent_taxonomy` and `genex_core` out of it.
+COPY genex-parent/parent_taxonomy/ /app/genex-parent/parent_taxonomy/
+COPY genex-parent/genex_core/ /app/genex-parent/genex_core/
+COPY genex-parent/data/parent_2_4/ /app/genex-parent/data/parent_2_4/
+
+# Tests and fixtures are not part of a deployed artifact. Removing the pilot
+# fixtures also removes the in-memory document store from the filesystem, so
+# no fake persistence path is present in a job that writes real records.
+RUN rm -rf /app/pilot_backend/tests /app/pilot_runtime/tests \
+           /app/pilot_backend/fixtures \
+           /app/genex-parent/genex_core/tests \
+    && find /app -name '__pycache__' -type d -prune -exec rm -rf {} +
+
+# Fail the build rather than the job if the narrowing above ever regresses.
+# Each of these is a property the requirements file or this Dockerfile claims
+# in prose; a claim in a comment is not a guarantee.
+RUN python -c "import importlib.util, sys; \
+assert importlib.util.find_spec('openai') is None, 'openai must not be installed'; \
+assert importlib.util.find_spec('gunicorn') is None, 'no web server in a job image'; \
+import pandas, openpyxl, firebase_admin; \
+print('generation image deps OK:', pandas.__version__, openpyxl.__version__)"
+RUN test ! -d /app/genex-parent/api && test ! -d /app/genex-parent/webapp \
+    && test -f /app/genex-parent/data/parent_2_4/activity_family_taxonomy_v1.xlsx \
+    && test -f /app/genex-parent/data/parent_2_4/cdc_milestones_parent_2_4_candidate.xlsx \
+    && echo "generation image Parent subset OK"
+
+# Prove the bridge actually resolves inside the built image, before any job
+# runs against real records. A missing workbook or a mis-copied package fails
+# the BUILD here rather than surfacing as "no rung today" at generation time.
+RUN cd /app && python -c "\
+from pilot_runtime.integration.parent_gold_standard_source import ParentGoldStandardSource; \
+import pathlib; \
+s = ParentGoldStandardSource(parent_root=pathlib.Path('/app/genex-parent')); \
+r = s.mappable_rungs_for_domain('talking_and_communicating'); \
+assert len(r) == 17, len(r); \
+print('bridge OK inside image:', len(r), 'mappable SLP rungs')"
+
+RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 pilot
+USER 10001
+
+# No CMD. The job's command is supplied at execution time so one image can run
+# the generation entrypoint for a specific child-month without baking the
+# arguments — and so an image with no default command cannot be mistaken for a
+# service and deployed as one.

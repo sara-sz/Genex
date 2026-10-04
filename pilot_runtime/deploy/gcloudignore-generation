@@ -1,0 +1,47 @@
+# Build-context allowlist for the OFFLINE GENERATION JOB image.
+#
+# Separate from `gcloudignore` beside it, which is the SERVING image's context
+# and admits only `pilot_backend/` and `pilot_runtime/`. That file is not
+# modified by this slice: the served image's build context stays as narrow as
+# it was.
+#
+# This context additionally admits three paths under `genex-parent/`, and only
+# three. Without an ignore file at all, `gcloud builds submit` would upload the
+# whole repository — several GB of PDFs, notebooks, a tarball, the Parent 2.3
+# service and the therapist service — into a build that has no business seeing
+# any of it.
+#
+# Ignore everything, then re-admit exactly what Dockerfile.generation copies.
+
+*
+
+!pilot_backend/
+!pilot_backend/**
+!pilot_runtime/
+!pilot_runtime/**
+
+# The Parent subset the canonical-rung bridge reads. `api/` and `webapp/` are
+# NOT admitted: the Parent FastAPI service and frontend are not part of this
+# job, and keeping them out of the context keeps them out of a reviewable
+# artifact even by accident.
+!genex-parent/
+!genex-parent/parent_taxonomy/
+!genex-parent/parent_taxonomy/**
+!genex-parent/genex_core/
+!genex-parent/genex_core/**
+
+# Only the parent_2_4 data directory, which holds the two workbooks the
+# generation path was measured to open. The other workbooks at the data root —
+# including the immutable c2b6735d provenance snapshot — are not read by this
+# job and stay out.
+!genex-parent/data/
+!genex-parent/data/parent_2_4/
+!genex-parent/data/parent_2_4/**
+
+# Tests are deleted in the image anyway; keeping them out of the context too
+# means they are never uploaded.
+pilot_backend/tests/**
+pilot_runtime/tests/**
+genex-parent/genex_core/tests/**
+**/__pycache__/**
+**/*.pyc
