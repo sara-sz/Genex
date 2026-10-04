@@ -214,6 +214,64 @@ def test_the_snapshot_handed_to_the_engine_carries_the_resolved_rung():
 
 
 # ---------------------------------------------------------------------------
+# the remaining blocker, classified correctly
+#
+# 0.5E-B may freeze as the SLP taxonomy coverage + canonical-rung generation
+# adapter foundation. It may NOT be read as a working generation pipeline.
+# These pin that distinction in the artifact rather than only in a report.
+# ---------------------------------------------------------------------------
+
+JOB_SOURCE = (DEPLOY / "generate_suggestions_job.py").read_text()
+
+
+def test_the_entrypoint_refuses_because_no_observation_source_is_wired(
+        monkeypatch):
+    from pilot_runtime.deploy.generate_suggestions_job import main
+
+    monkeypatch.setenv("PILOT_ENVIRONMENT", "test")
+    code = main(["generate_suggestions_job.py", "child_x", "2026-10"])
+    assert code == 3, code
+
+
+def test_the_entrypoint_requires_an_explicit_child_and_month(monkeypatch):
+    """No default child, no default month. A generation entrypoint defaulting
+    to "the current month for every child" is one mis-scheduled run away from
+    writing a parallel candidate set for a whole caseload."""
+    from pilot_runtime.deploy.generate_suggestions_job import main
+
+    monkeypatch.setenv("PILOT_ENVIRONMENT", "test")
+    assert main(["generate_suggestions_job.py"]) == 2
+    assert main(["generate_suggestions_job.py", "child_x"]) == 2
+
+
+def test_the_entrypoint_requires_an_explicit_environment(monkeypatch):
+    from pilot_runtime.deploy.generate_suggestions_job import main
+
+    monkeypatch.delenv("PILOT_ENVIRONMENT", raising=False)
+    assert main(["generate_suggestions_job.py", "child_x", "2026-10"]) == 2
+
+
+def test_the_missing_piece_is_classified_as_an_integration_blocker():
+    """Explicitly NOT Week 1 activity-generation work. The gap is the read
+    that turns a child's stored Parent baseline into observations, which is a
+    Parent onboarding -> suggestion-generation integration blocker and is
+    pilot-critical."""
+    assert "INTEGRATION BLOCKER" in JOB_SOURCE
+    assert "not Week 1" in JOB_SOURCE
+    assert "NOT operational" in JOB_SOURCE
+    assert "onboarding" in JOB_SOURCE
+
+
+def test_the_module_does_not_claim_generation_is_working():
+    """A guard against the claim drifting back in. Every sentence that could
+    read as "generation works" has to stay qualified."""
+    for overclaim in ("generation is operational",
+                      "generation pipeline is complete",
+                      "end-to-end generation works"):
+        assert overclaim not in JOB_SOURCE, overclaim
+
+
+# ---------------------------------------------------------------------------
 # A. the SERVING image stays narrow — unchanged by this slice
 # ---------------------------------------------------------------------------
 

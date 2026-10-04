@@ -1595,3 +1595,258 @@ jobs:
           assert " skipped" not in run.stdout, "no integration test may be skipped"
           print(f"integration suites executed {count} tests, zero skipped")
           PY
+
+  pilot-generation-image:
+    name: October pilot 0.5E-B generation artifact
+    runs-on: ubuntu-latest
+
+    # A SEPARATE job, and the narrowest one that can prove what it claims.
+    #
+    # 0.5E-B introduced a second container image — the offline generation job
+    # that carries the Parent workbook — and the local machine that authored it
+    # had no container runtime, so its in-build assertions had never executed.
+    # Nothing else in this workflow builds a container: before this job the
+    # repository had zero `docker build` steps, so the artifact was unproven.
+    #
+    # It is a separate job rather than extra steps on an existing one because
+    # it needs no Python dependencies, no emulator and no Parent CI
+    # requirements — only Docker. Bolting it onto the taxonomy job would make
+    # a content gate depend on a container toolchain for no reason, and it
+    # runs in parallel here.
+    #
+    # It does NOT publish. There is no registry login, no push, and no
+    # credential in this job: the image is built, inspected, run locally and
+    # discarded.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage the narrowed generation build context
+        # The central point of this job. `docker build` honours `.dockerignore`
+        # and knows nothing about `gcloudignore-generation`, so building from
+        # the repository root would prove the Dockerfile compiles but NOT that
+        # the approved narrow context is sufficient — the two most likely
+        # failures (a path missing from the allowlist, or the image silently
+        # depending on something outside it) would both pass.
+        #
+        # So the context is staged from the allowlist ITSELF, parsed out of
+        # `gcloudignore-generation` rather than restated here. A path the
+        # allowlist forgets is absent from the stage, and the build fails.
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import pathlib, shutil
+
+          ignore = pathlib.Path(
+              "pilot_runtime/deploy/gcloudignore-generation").read_text()
+          admitted = []
+          for line in ignore.splitlines():
+              line = line.strip()
+              if line.startswith("!") and not line.endswith("**"):
+                  path = line[1:].rstrip("/")
+                  if path:
+                      admitted.append(path)
+          assert admitted, "parsed no allowlist entries from the ignore file"
+
+          # gcloudignore requires a parent directory to be un-ignored before
+          # anything under it can be, so the allowlist necessarily contains
+          # CONTAINER entries: `genex-parent/` and `genex-parent/data/` exist
+          # only to admit their children. Copying those wholesale would drag in
+          # the Parent FastAPI service, the frontend and every other workbook.
+          # Keep only the deepest entries — a path that is a proper prefix of
+          # another is a container, not a payload.
+          admitted = [p for p in admitted
+                      if not any(q != p and q.startswith(p + "/")
+                                 for q in admitted)]
+          print("allowlist admits (containers pruned):", admitted)
+          assert "genex-parent" not in admitted, \
+              "the Parent root must never be staged wholesale"
+
+          stage = pathlib.Path("/tmp/genctx")
+          if stage.exists():
+              shutil.rmtree(stage)
+          stage.mkdir(parents=True)
+
+          def drop(_root, names):
+              return [n for n in names
+                      if n in ("__pycache__", "tests", "fixtures")]
+
+          for rel in admitted:
+              src = pathlib.Path(rel)
+              if not src.exists():
+                  continue
+              dst = stage / rel
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              if src.is_dir():
+                  if dst.exists():
+                      continue
+                  shutil.copytree(src, dst, ignore=drop)
+              else:
+                  shutil.copy2(src, dst)
+
+          # The Dockerfile and its requirements are referenced by path from
+          # inside the context, so they must be present in the stage. They
+          # live under pilot_runtime/, which the allowlist admits.
+          for required in (
+              "pilot_runtime/deploy/Dockerfile.generation",
+              "pilot_runtime/deploy/requirements-generation.txt",
+              "pilot_backend/integration/gold_standard_source.py",
+              "pilot_runtime/integration/parent_gold_standard_source.py",
+              "genex-parent/parent_taxonomy/activity_families.py",
+              "genex-parent/genex_core/milestones.py",
+              "genex-parent/genex_core/functional_baseline.py",
+              "genex-parent/data/parent_2_4/activity_family_taxonomy_v1.xlsx",
+              "genex-parent/data/parent_2_4/cdc_milestones_parent_2_4_candidate.xlsx",
+          ):
+              assert (stage / required).is_file(), f"missing from stage: {required}"
+
+          # And the context must contain NOTHING ELSE from genex-parent. This
+          # is the over-broad direction: an allowlist that admitted the Parent
+          # service would build fine and be wrong.
+          for forbidden in ("genex-parent/api", "genex-parent/webapp",
+                            "genex-parent/tests", "genex-parent/notebooks",
+                            "genex-parent/requirements.txt"):
+              assert not (stage / forbidden).exists(), \
+                  f"forbidden path reached the context: {forbidden}"
+
+          # The frozen c2b6735d provenance snapshot lives at the data ROOT and
+          # is not read by the generation path. It must not be bundled.
+          root_data = stage / "genex-parent" / "data"
+          stray = [p.name for p in root_data.iterdir() if p.is_file()] \
+              if root_data.is_dir() else []
+          assert stray == [], f"unexpected files at genex-parent/data: {stray}"
+
+          top = sorted(p.name for p in stage.iterdir())
+          assert top == ["genex-parent", "pilot_backend", "pilot_runtime"], top
+          print("staged context top level:", top)
+          PY
+
+      - name: Build the generation image from the narrowed context
+        # The Dockerfile runs its own assertions during the build — openai and
+        # gunicorn absent, no genex-parent/api or webapp, both workbooks
+        # present, and the bridge resolving 17 mappable SLP rungs. A failure in
+        # any of them fails THIS step, which is the independent proof the local
+        # machine could not produce.
+        working-directory: .
+        run: |
+          docker build \
+            --file /tmp/genctx/pilot_runtime/deploy/Dockerfile.generation \
+            --tag pilot-generation:ci \
+            /tmp/genctx
+
+      - name: The built image carries the workbook deps and no model client
+        # Re-asserted from OUTSIDE the build, against the finished artifact.
+        # The in-build checks could be edited out of the Dockerfile in the same
+        # commit that broke them; this step reads the image instead.
+        run: |
+          docker run --rm pilot-generation:ci python -c "
+          import importlib.util as u
+          import pandas, openpyxl
+          print('pandas', pandas.__version__, '| openpyxl', openpyxl.__version__)
+          assert u.find_spec('openai') is None, 'openai present in the image'
+          assert u.find_spec('gunicorn') is None, 'gunicorn present in the image'
+          import firebase_admin, google.cloud.firestore
+          print('firestore SDK present, model client and web server absent')
+          "
+
+      - name: The adapter imports and resolves the canonical rung IN the image
+        # The end-to-end claim: the bundled Parent workbook and taxonomy, read
+        # inside the built artifact, reproduce the EXACT canonical identity of
+        # the anchor a clinician already approved through the Therapist UI in
+        # fictional staging. If the bundled content differed in any byte that
+        # mattered, these refs would not match.
+        run: |
+          docker run --rm pilot-generation:ci python -c "
+          import pathlib
+          from pilot_runtime.integration.parent_gold_standard_source import (
+              ParentGoldStandardSource)
+          from pilot_backend.integration.gold_standard_source import RungTarget
+
+          source = ParentGoldStandardSource(
+              parent_root=pathlib.Path('/app/genex-parent'))
+          rungs = source.mappable_rungs_for_domain('talking_and_communicating')
+          assert len(rungs) == 17, len(rungs)
+
+          rung = source.rung_for_target(RungTarget(
+              'talking_and_communicating', 30, 'says about 50 words'))
+          assert rung.rung_ref == 'rung1:9993f7881ea0041be4813976973f77e6', \
+              rung.rung_ref
+          assert rung.track_ref == 'track1:5be892494f3e6894a7de24a868084e0f', \
+              rung.track_ref
+          assert rung.activity_family_refs == ('expressive_vocabulary_growth',)
+          assert rung.is_activity_mappable
+          print('17 mappable SLP rungs from the bundled workbook')
+          print('rung_ref ', rung.rung_ref)
+          print('track_ref', rung.track_ref)
+          "
+
+      - name: The generation artifact is not runnable as the web service
+        # Three independent reasons, because any one alone could be undone.
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+
+          def sh(*args):
+              return subprocess.run(args, capture_output=True, text=True)
+
+          config = json.loads(sh(
+              "docker", "image", "inspect", "pilot-generation:ci").stdout
+          )[0]["Config"]
+          assert not config.get("Cmd"), f"image declares Cmd: {config.get('Cmd')}"
+          assert not config.get("Entrypoint"), \
+              f"image declares Entrypoint: {config.get('Entrypoint')}"
+          assert not config.get("ExposedPorts"), \
+              f"image exposes ports: {config.get('ExposedPorts')}"
+          print("no Cmd, no Entrypoint, no exposed port")
+
+          # With no default command, starting it as a service fails.
+          started = sh("docker", "run", "--rm", "pilot-generation:ci")
+          assert started.returncode != 0, \
+              "the image started with no command — it could be deployed as a service"
+          print("docker run with no command exits", started.returncode)
+
+          # And the serving entrypoint cannot be launched out of it anyway,
+          # because there is no WSGI container installed.
+          served = sh("docker", "run", "--rm", "pilot-generation:ci",
+                      "python", "-c", "import gunicorn")
+          assert served.returncode != 0, "gunicorn importable in the job image"
+          print("gunicorn not importable: cannot serve pilot_runtime.server")
+          PY
+
+      - name: The SERVING image surface is byte-unchanged
+        # The founder's requirement A, asserted on the artifact definitions
+        # rather than on prose. These four digests are the served API image's
+        # entire build surface, measured at the 0.5E-A freeze and unchanged by
+        # this slice. A dependency added to the PHI-reviewed web service — the
+        # exact thing the separate generation image exists to prevent — fails
+        # here.
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib
+
+          EXPECTED = {
+              "Dockerfile":
+                  "b2ef486117944c16812566a636f46be4417ccb079abe849afec7adfbf77ae767",
+              "requirements.txt":
+                  "16f3757abc96a213b20c73cd146ade76b1f2559166a33e62dc3d6474c12070bb",
+              "gcloudignore":
+                  "a3a87be9f6872c0608aafacdf82d8ef6bb911a83ba678e2db12b79eacdd9a43b",
+              "cloudbuild.yaml":
+                  "629fc1ce0608f900cd68f49cb7aa504d85ba64f218904106a65d9743cdb31641",
+          }
+          base = pathlib.Path("pilot_runtime/deploy")
+          for name, expected in sorted(EXPECTED.items()):
+              got = hashlib.sha256((base / name).read_bytes()).hexdigest()
+              assert got == expected, f"serving {name} changed: {got}"
+              print(f"serving {name}: {got[:16]}... unchanged")
+
+          # And the two images must not have converged on a tag.
+          serving = (base / "cloudbuild.yaml").read_text()
+          generation = (base / "cloudbuild-generation.yaml").read_text()
+          assert "pilot/pilot-api" in serving
+          assert "pilot/pilot-generation" in generation
+          assert "pilot/pilot-api" not in generation
+          print("serving publishes pilot-api; generation publishes pilot-generation")
+          PY

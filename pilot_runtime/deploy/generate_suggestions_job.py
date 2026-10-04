@@ -5,6 +5,32 @@ and the only place a `SuggestionCanonicalAnchor` is ever written. It runs as a
 batch job on the GENERATION image (`Dockerfile.generation`), never inside the
 served API.
 
+## STATUS — REAL SUGGESTION GENERATION IS NOT OPERATIONAL YET
+
+Stated plainly, because the rest of this module describes machinery that does
+work and it would be easy to read more into it than is true.
+
+`main()` returns exit 3. The canonical-rung bridge, the generation image and
+the path from a resolved rung to the frozen `generate_suggestions` boundary
+are complete, tested and proven against the real Parent content. What does NOT
+exist is the step before all of that: **nothing reads a child's stored Parent
+baseline/observation and turns it into the observation tuples this module
+consumes.**
+
+That gap is **NOT Week 1 activity-generation work.** It is a remaining real
+**Parent onboarding → suggestion-generation integration blocker**, and it is
+pilot-critical. 0.5E-B is therefore the *SLP taxonomy coverage + canonical-rung
+generation adapter foundation* — not a working generation pipeline.
+
+The next pilot-critical slice wires:
+
+    stored Parent baseline/observation
+        -> this generation job
+        -> CanonicalRung-enriched ObservationSnapshot
+        -> deterministic GoalSuggestion
+
+and lands BEFORE any goal -> Week 1 activity generation work begins.
+
 ## Why generation is a job and not a route
 
 `generate_suggestions` has no HTTP route: `/pilot/children/{id}/goal-suggestions`
@@ -180,11 +206,18 @@ def main(argv: Sequence[str]) -> int:  # pragma: no cover - job entrypoint
     if not os.environ.get("PILOT_ENVIRONMENT"):
         print("PILOT_ENVIRONMENT must be set explicitly", file=sys.stderr)
         return 2
-    print("This entrypoint requires an observation source for the child, "
-          "which 0.5E-B does not yet read from stored Parent input.\n"
-          "The generation PATH, the bridge and the image are in place and "
-          "proven by the cross-system gate; wiring the observation read is "
-          "the next slice.", file=sys.stderr)
+    print(
+        "BLOCKED: no stored Parent baseline/observation source is wired.\n"
+        "\n"
+        "This is a remaining Parent onboarding -> suggestion-generation\n"
+        "INTEGRATION BLOCKER, not Week 1 activity-generation work. Real\n"
+        "suggestion generation is NOT operational.\n"
+        "\n"
+        "In place and proven: the canonical-rung bridge over the real Parent\n"
+        "workbook and taxonomy, the separate generation image, and the path\n"
+        "from a resolved rung through the frozen generate_suggestions\n"
+        "boundary. Missing: the read that turns a child's stored Parent\n"
+        "baseline into observations for that path.\n", file=sys.stderr)
     return 3
 
 
