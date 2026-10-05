@@ -105,7 +105,22 @@ print('bridge OK inside image:', len(r), 'mappable SLP rungs')"
 RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 pilot
 USER 10001
 
-# No CMD. The job's command is supplied at execution time so one image can run
-# the generation entrypoint for a specific child-month without baking the
-# arguments — and so an image with no default command cannot be mistaken for a
-# service and deployed as one.
+# An EXPLICIT refusing default command.
+#
+# The first version of this file deliberately declared no CMD, on the reasoning
+# that an image which cannot start on its own cannot be mistaken for a service.
+# Hosted CI disproved that: `python:3.11.9-slim-bookworm` declares
+# `CMD ["python3"]`, and a Dockerfile INHERITS the base image's CMD unless it
+# overrides it. So the artifact did have a default command — a Python REPL,
+# which with no TTY reads EOF and exits 0, i.e. it started "successfully" and
+# did nothing.
+#
+# Absence was the wrong tool. An explicit refusal is strictly better: the
+# default behaviour is now a loud, non-zero exit naming what the image is for,
+# so an accidental `docker run` or a Cloud Run service deployment fails
+# immediately and legibly instead of looking healthy.
+#
+# The real command is still supplied at execution time, so one image can run
+# the generation entrypoint for a specific child-month without baking in the
+# arguments.
+CMD ["python", "-c", "import sys; sys.exit('pilot-generation is a BATCH JOB image, not a service. Pass an explicit command, e.g.: python -m pilot_runtime.deploy.generate_suggestions_job <child_id> <cycle_month>')"]

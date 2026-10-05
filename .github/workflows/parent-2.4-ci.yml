@@ -1782,7 +1782,15 @@ jobs:
           "
 
       - name: The generation artifact is not runnable as the web service
-        # Three independent reasons, because any one alone could be undone.
+        # Four independent reasons, because any one alone could be undone.
+        #
+        # This step previously asserted the image declared NO default command.
+        # That was wrong and this gate caught it: python:3.11.9-slim-bookworm
+        # declares `CMD ["python3"]` and a Dockerfile inherits its base image's
+        # CMD, so the artifact defaulted to a Python REPL — which with no TTY
+        # exits 0, i.e. it appeared to start successfully. The Dockerfile now
+        # sets an EXPLICIT refusing CMD instead, and this step verifies the
+        # refusal rather than an absence.
         run: |
           python3 - <<'PY'
           import json, subprocess
@@ -1793,21 +1801,35 @@ jobs:
           config = json.loads(sh(
               "docker", "image", "inspect", "pilot-generation:ci").stdout
           )[0]["Config"]
-          assert not config.get("Cmd"), f"image declares Cmd: {config.get('Cmd')}"
+
+          # 1. No entrypoint and no exposed port: nothing to connect to.
           assert not config.get("Entrypoint"), \
               f"image declares Entrypoint: {config.get('Entrypoint')}"
           assert not config.get("ExposedPorts"), \
               f"image exposes ports: {config.get('ExposedPorts')}"
-          print("no Cmd, no Entrypoint, no exposed port")
 
-          # With no default command, starting it as a service fails.
+          # 2. The default command is a refusal, and names no server. The
+          #    inherited `python3` REPL must not be what is left in place.
+          cmd = config.get("Cmd") or []
+          joined = " ".join(cmd)
+          assert cmd != ["python3"], \
+              "image still inherits the base image's bare python3 REPL as CMD"
+          assert "BATCH JOB" in joined, f"CMD is not the refusal: {cmd}"
+          for server in ("gunicorn", "uvicorn", "waitress",
+                         "pilot_runtime.server", "--bind", "0.0.0.0"):
+              assert server not in joined, f"CMD names a server: {server}"
+          print("no Entrypoint, no exposed port, CMD is an explicit refusal")
+
+          # 3. Running it with no command fails loudly rather than idling.
           started = sh("docker", "run", "--rm", "pilot-generation:ci")
           assert started.returncode != 0, \
               "the image started with no command — it could be deployed as a service"
+          assert "BATCH JOB" in (started.stderr + started.stdout), \
+              "the refusal did not explain what the image is for"
           print("docker run with no command exits", started.returncode)
 
-          # And the serving entrypoint cannot be launched out of it anyway,
-          # because there is no WSGI container installed.
+          # 4. And the serving entrypoint could not be launched out of it
+          #    anyway, because no WSGI container is installed.
           served = sh("docker", "run", "--rm", "pilot-generation:ci",
                       "python", "-c", "import gunicorn")
           assert served.returncode != 0, "gunicorn importable in the job image"

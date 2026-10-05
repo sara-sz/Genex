@@ -227,6 +227,37 @@ def _active_plan(e2e, goal) -> str:
     return plan_id
 
 
+def _sequence_covering_today() -> int:
+    """The week of THIS month that actually contains `TODAY`.
+
+    Previously hard-coded to 1, which made the whole file date-dependent: the
+    observations below are dated `TODAY`, and `record_observation` refuses a
+    date the cycle does not cover. Week 1 of a month that starts midweek is a
+    PARTIAL week, so for 2026-10 sequence 1 spans 2026-10-01..2026-10-04 and
+    every run from the 5th onward got a refusal that surfaced as
+    `KeyError: 'observation'` — the rejection body has no such key.
+
+    It passed only because every run of this file so far happened inside the
+    first four days of October. Derived here instead, so the fixture builds the
+    week the observations belong to on any date.
+    """
+    from pilot_backend.domain.weekly_cycle import (
+        WeeklyCycleError, plan_cycle_bounds)
+
+    for sequence in range(1, 7):
+        try:
+            starts_on, ends_on, _, _ = plan_cycle_bounds(MONTH, sequence)
+        except WeeklyCycleError:
+            # A month has 4 to 5 cycles depending on how it falls, and asking
+            # for one past the end raises rather than returning empty bounds.
+            # Stop at the last real week instead of propagating.
+            break
+        if starts_on <= TODAY <= ends_on:
+            return sequence
+    raise AssertionError(
+        f"no cycle sequence in {MONTH} covers {TODAY}")
+
+
 def _cycle(e2e, plan_id, goal_id) -> str:
     """A RELEASED weekly cycle, created through the frozen service.
 
@@ -242,7 +273,7 @@ def _cycle(e2e, plan_id, goal_id) -> str:
     from pilot_backend.domain.source_link import SourceSystem
 
     cycle = e2e.weekly.create_cycle(e2e.principal("hannah"), plan_id,
-                                    sequence_in_month=1)
+                                    sequence_in_month=_sequence_covering_today())
     # The SNAPSHOT comes before the release: "a cycle cannot be released
     # before its plan is snapshotted". The snapshot freezes what the
     # parent-facing plan actually contained, so a later review is reading the

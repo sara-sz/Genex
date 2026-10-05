@@ -391,13 +391,28 @@ def test_the_generation_dockerfile_does_not_copy_the_frozen_snapshot():
     assert "cdc_milestones_with_bridges_family_cleaned_final_app_ready" not in text
 
 
-def test_the_generation_image_is_a_job_with_no_default_command():
-    """No CMD and no ENTRYPOINT: an image that cannot start on its own cannot
-    be mistaken for a service and deployed as one."""
-    lines = [line.strip().upper()
-             for line in (DEPLOY / "Dockerfile.generation").read_text().splitlines()]
-    assert not any(line.startswith("CMD") for line in lines)
-    assert not any(line.startswith("ENTRYPOINT") for line in lines)
+def test_the_generation_image_refuses_to_start_as_a_service():
+    """An EXPLICIT refusing CMD, not an absent one.
+
+    This test first asserted the Dockerfile declared no CMD at all, on the
+    reasoning that an image which cannot start cannot be deployed as a
+    service. Hosted CI disproved it: `python:3.11.9-slim-bookworm` declares
+    `CMD ["python3"]` and a Dockerfile INHERITS its base image's CMD, so the
+    artifact defaulted to a Python REPL that exits 0 with no TTY — it looked
+    like a clean start. Absence was the wrong tool; a declared refusal is
+    checkable in the built image rather than inferred from a missing line.
+    """
+    text = (DEPLOY / "Dockerfile.generation").read_text()
+    lines = [line.strip() for line in text.splitlines()]
+    cmds = [line for line in lines if line.upper().startswith("CMD")]
+    assert len(cmds) == 1, cmds
+    assert "sys.exit" in cmds[0]
+    assert "BATCH JOB" in cmds[0]
+    assert not any(line.upper().startswith("ENTRYPOINT") for line in lines)
+    assert not any(line.upper().startswith("EXPOSE") for line in lines)
+    # The refusal must not be a server command wearing a refusal's clothes.
+    for server in ("gunicorn", "uvicorn", "pilot_runtime.server", "--bind"):
+        assert server not in cmds[0], server
 
 
 def test_the_generation_build_admits_parent_but_not_the_parent_service():
