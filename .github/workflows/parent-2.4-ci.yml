@@ -1211,7 +1211,68 @@ jobs:
         run: |
           python -m compileall -q api \
             tests/test_beta_access.py \
-            tests/test_checkin_readiness.py
+            tests/test_checkin_readiness.py \
+            tests/test_parent_24_baseline_api.py
+
+      - name: Parent 2.4 functional baseline — product path (own pytest process)
+        # 0.5F-A1. In THIS job rather than the dependency-pure taxonomy job
+        # because it drives the real app through TestClient, which needs
+        # fastapi, httpx and firebase-admin — exactly what
+        # requirements-parent24-app-ci.txt already installs.
+        #
+        # Its own process, for the same reason the two steps below have theirs:
+        # these suites reassign the global firebase_admin verify_id_token at
+        # import time with incompatible fake-token maps, so whichever imports
+        # last wins and the others get 401.
+        run: python -m pytest tests/test_parent_24_baseline_api.py -q
+
+      - name: The functional baseline engine is NOT test-only
+        # The regression this slice exists to prevent recurring.
+        #
+        # Before 0.5F-A1, genex_core/functional_baseline.py was imported by
+        # exactly two files in the repository — itself and its own unit test —
+        # so a frozen, correct engine was completely unreachable and no real
+        # session could carry a baseline. No ordinary test catches that: every
+        # test of the engine passed the whole time.
+        #
+        # This counts PRODUCTION importers over the AST and fails if the count
+        # returns to zero. Deleting the API module, or quietly reverting the
+        # wiring, breaks the build here rather than going unnoticed.
+        run: |
+          python - <<'PY'
+          import ast, pathlib
+
+          TARGET = "genex_core.functional_baseline"
+          production = []
+          for path in sorted(pathlib.Path(".").rglob("*.py")):
+              parts = path.parts
+              if "tests" in parts or "__pycache__" in parts:
+                  continue
+              if path.as_posix().endswith("genex_core/functional_baseline.py"):
+                  continue
+              try:
+                  tree = ast.parse(path.read_text())
+              except (SyntaxError, UnicodeDecodeError):
+                  continue
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.ImportFrom) and node.module == TARGET:
+                      production.append(path.as_posix())
+                      break
+                  if isinstance(node, ast.Import) and any(
+                          a.name == TARGET for a in node.names):
+                      production.append(path.as_posix())
+                      break
+
+          assert production, (
+              "genex_core/functional_baseline.py has NO production importer — "
+              "the engine is unreachable again and no session can carry a "
+              "baseline")
+          assert any(p.startswith("api/") for p in production), (
+              f"no api/ module imports the baseline engine: {production}")
+          print("production importers of the baseline engine:")
+          for path in production:
+              print("  ", path)
+          PY
 
       - name: Beta access consumer (own pytest process)
         # SEPARATE INVOCATION, deliberately. This suite and

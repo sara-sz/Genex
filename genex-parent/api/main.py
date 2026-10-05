@@ -85,6 +85,8 @@ from api.schemas import (
     AddonAddActivityRequest,
     AddonSwapRequest,
     AnswerRequest,
+    BaselineAnswerRequest,
+    BaselineStartRequest,
     FeedbackRequest,
     InterviewCompleteResponse,
     MilestoneCheckinResponseRequest,
@@ -94,6 +96,7 @@ from api.schemas import (
     SessionStartResponse,
     SwapRequest,
 )
+from api import functional_baseline_api as baseline_api
 from api.session_store import (
     SessionContentionError,
     SessionLoadError,
@@ -2932,3 +2935,224 @@ async def session_addon_activity_add(
         "activity_date": activity_date,
         "plan_customization_summary": overlay_summary(overlay, module_id),
     }
+
+
+# ===========================================================================
+# Parent 2.4 functional baseline (0.5F-A1)
+#
+# Four routes that make the frozen functional-baseline engine a real product
+# path. Before this slice the engine was imported by nothing but its own test,
+# so no session ever carried a baseline.
+#
+# Shape follows the Beta 2.2 add-on focus flow — `/focus/{key}/start`,
+# `/answer`, `/cancel` and a GET — because this is the same kind of
+# interaction: a short structured intake scoped to one domain, stored under its
+# own key, touching neither the primary interview nor `doc["plans"]`.
+#
+# There is no `/cancel`. The engine's `asked` list is append-only and offers no
+# removal, so a cancel would have to delete a parent's answers outright. That
+# is a product decision, not a persistence one, and it is out of this slice.
+#
+# Guards, shared by all four:
+#   404 session_not_found / 403 — from `_require_session`, unchanged
+#   404 unsupported_baseline_domain — only talking_and_communicating is wired
+#   404 baseline_not_started
+#   409 baseline_already_finalized
+#   409 baseline_not_in_progress
+#   422 — Pydantic (unknown field, bad answer) or question-id mismatch
+#
+# No LLM call, no diagnosis read, no free-text read, and `doc["qna"]` is
+# neither read nor written by any of them.
+# ===========================================================================
+
+
+def _baseline_http(exc: Exception) -> HTTPException:
+    """Translate a baseline-layer refusal into this API's conventions.
+
+    Kept in one place so the four routes cannot drift into giving the same
+    condition two different status codes.
+    """
+    if isinstance(exc, baseline_api.BaselineDomainUnsupported):
+        return HTTPException(status_code=404,
+                             detail="unsupported_baseline_domain")
+    if isinstance(exc, baseline_api.BaselineNotStarted):
+        return HTTPException(status_code=404, detail="baseline_not_started")
+    if isinstance(exc, baseline_api.BaselineAlreadyFinalized):
+        return HTTPException(status_code=409,
+                             detail="baseline_already_finalized")
+    if isinstance(exc, baseline_api.BaselineNotInProgress):
+        return HTTPException(status_code=409,
+                             detail="baseline_not_in_progress")
+    if isinstance(exc, baseline_api.BaselineEntryChoiceUnknown):
+        return HTTPException(status_code=422, detail="unknown_entry_choice")
+    if isinstance(exc, baseline_api.BaselineQuestionMismatch):
+        return HTTPException(
+            status_code=422,
+            detail=(
+                f"Unexpected question_id {exc.received!r}. "
+                f"Expected {exc.expected!r}. Answers must be submitted "
+                f"in order."
+            ),
+        )
+    # A BaselineError from the engine means the engine refused the input.
+    # Its message names the field and the allowed vocabulary, never a child.
+    if isinstance(exc, baseline_api.BaselineError):
+        return HTTPException(status_code=422, detail=str(exc))
+    raise exc
+
+
+@app.get(
+    "/api/v1/session/{session_id}/baseline/{domain}/entry-screen",
+    tags=["session"],
+)
+async def session_baseline_entry_screen(
+    session_id: str,
+    domain: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """The area's reviewed entry descriptors for the start screen.
+
+    A read, and a pure pass-through of the engine's own `entry_screen`, so a
+    client never hard-codes descriptor ids the engine owns. Session ownership
+    is still enforced: the descriptor list is not secret, but an endpoint that
+    answered for an unowned session would be an existence oracle.
+    """
+    _require_session(auth.uid, session_id)
+    try:
+        return baseline_api.entry_screen_for(domain)
+    except Exception as exc:
+        raise _baseline_http(exc)
+
+
+@app.post(
+    "/api/v1/session/{session_id}/baseline/{domain}/start",
+    tags=["session"],
+)
+async def session_baseline_start(
+    session_id: str,
+    domain: str,
+    body: BaselineStartRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Begin the functional baseline for one domain.
+
+    The entry descriptor says where to START ASKING. It is not an ability
+    claim and not an age; the engine moves rung by rung from there on observed
+    answers only.
+
+    Idempotent while in progress: calling again returns the current state and
+    does NOT restart, because restarting would discard answers the parent
+    already gave and `asked` has no partial undo. A finalized baseline is
+    refused with 409.
+    """
+    doc = _require_session(auth.uid, session_id)
+    try:
+        result, mutated = baseline_api.start(doc, domain, body.entry_choice_id)
+    except Exception as exc:
+        raise _baseline_http(exc)
+
+    if mutated:
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500,
+                                detail=f"Failed to save session: {exc}")
+    return result
+
+
+@app.post(
+    "/api/v1/session/{session_id}/baseline/{domain}/answer",
+    tags=["session"],
+)
+async def session_baseline_answer(
+    session_id: str,
+    domain: str,
+    body: BaselineAnswerRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Record one structured answer against the question the engine asked.
+
+    `question_id` must match the engine's expected next question, exactly as
+    `/focus/{key}/answer` requires. That is what makes a retry safe: the
+    engine's `record_answer` appends without deduplicating, so a resubmitted
+    answer would otherwise be counted twice and move the floor. Once an answer
+    lands the expected id changes, so the retry is refused instead.
+
+    Changing an earlier answer is not offered. `asked` is append-only in the
+    engine, so an answer for an already-answered rung simply is not the
+    expected next question.
+    """
+    doc = _require_session(auth.uid, session_id)
+    try:
+        result = baseline_api.answer(doc, domain, body.question_id, body.answer)
+    except Exception as exc:
+        raise _baseline_http(exc)
+
+    try:
+        store_save(auth.uid, session_id, doc)
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500,
+                            detail=f"Failed to save session: {exc}")
+    return result
+
+
+@app.post(
+    "/api/v1/session/{session_id}/baseline/{domain}/finalize",
+    tags=["session"],
+)
+async def session_baseline_finalize(
+    session_id: str,
+    domain: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Resolve the bracket and make the baseline immutable.
+
+    Takes no body: everything it needs is the stored answers. There is nothing
+    for a client to supply, and accepting a body would invite a client to think
+    it could influence the outcome.
+
+    Idempotent: finalizing twice returns the stored state and rewrites nothing,
+    so an immutable record never looks edited.
+
+    Finalizing early is allowed, and the ENGINE decides what the evidence
+    supports — with nothing usable it returns UNRESOLVED and no anchor rather
+    than a fabricated level. This route does not impose a minimum number of
+    answers, because that would be a clinical rule living in the transport.
+    """
+    doc = _require_session(auth.uid, session_id)
+    try:
+        result, mutated = baseline_api.finalize_baseline(doc, domain)
+    except Exception as exc:
+        raise _baseline_http(exc)
+
+    if mutated:
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500,
+                                detail=f"Failed to save session: {exc}")
+    return result
+
+
+@app.get(
+    "/api/v1/session/{session_id}/baseline/{domain}",
+    tags=["session"],
+)
+async def session_baseline_get(
+    session_id: str,
+    domain: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """The baseline's progress and current question.
+
+    Deliberately WITHOUT `routing_anchor_months`, `demonstrated_months`,
+    `not_demonstrated_months` and the track. Those are server-side provenance
+    for the later canonical-rung path; a raw anchor number rendered in a parent
+    UI would read as a developmental age, which is what that field's own naming
+    comment exists to prevent.
+    """
+    doc = _require_session(auth.uid, session_id)
+    try:
+        return baseline_api.view(doc, domain)
+    except Exception as exc:
+        raise _baseline_http(exc)

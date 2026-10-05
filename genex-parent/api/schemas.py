@@ -114,6 +114,58 @@ class AnswerRequest(BaseModel):
     answer: Literal["yes", "sometimes", "with_help", "no", "not_sure"]
 
 
+# ── Parent 2.4 functional baseline (0.5F-A1) ───────────────────────────────
+#
+# These two models FORBID extra fields, which is stricter than every other
+# request model in this file. That is deliberate, not an inconsistency.
+#
+# Pydantic's default is to IGNORE unknown keys, which is fine when a stray
+# field is merely noise. It is not fine here: every interesting value in a
+# finalized baseline — `routing_anchor_months`, `demonstrated_months`,
+# `not_demonstrated_months`, `status`, the track, the `asked` provenance — is
+# DERIVED by the frozen baseline engine from observed answers. A client that
+# sent one of those names must be refused loudly, because silently dropping it
+# would leave the caller believing it had set a clinical result it did not.
+#
+# The allowlist is therefore the whole contract: a client may choose an entry
+# descriptor, and answer the question it was actually asked. Nothing else.
+
+
+class BaselineStartRequest(BaseModel):
+    """Begin a functional baseline from a structured entry descriptor.
+
+    `entry_choice_id` names one of the area's reviewed descriptors. It is NOT
+    an ability claim and NOT an age: it only says where the engine starts
+    asking, and the engine then moves rung by rung on observed answers.
+
+    Chronological age is deliberately ABSENT from this body. It is read from
+    the session the parent already completed, so a client cannot shift the
+    starting rung by restating the child's age here.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    entry_choice_id: str = Field(..., min_length=1, max_length=64)
+
+
+class BaselineAnswerRequest(BaseModel):
+    """One structured answer to the question the engine actually asked.
+
+    The same five-value vocabulary as `AnswerRequest`, because it is the same
+    vocabulary the baseline engine's `_classify` accepts — demonstrated,
+    emerging, not-demonstrated, unknown. Reusing it keeps one answer language
+    across the product instead of a second parallel one.
+
+    `question_id` is checked against the engine's expected next question, so
+    an answer can only ever be recorded against the rung it was asked for.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    question_id: str = Field(..., min_length=1)
+    answer: Literal["yes", "sometimes", "with_help", "no", "not_sure"]
+
+
 class FeedbackRequest(BaseModel):
     """
     One activity feedback record submitted by the parent via Lovable.
