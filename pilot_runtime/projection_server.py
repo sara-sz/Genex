@@ -21,13 +21,29 @@ A test asserts this module's import graph never reaches `CorsMiddleware` or the
 browser `WsgiApplication`, and that `pilot_runtime.server`'s graph never
 reaches the projection app. Neither artifact can become the other.
 
-## FAIL CLOSED AT STARTUP
+## CLOUD RUN IAM IS AUTHORITATIVE; APP VERIFICATION IS OPTIONAL
 
-Three variables are required and none has a default:
+`PILOT_PROJECTION_AUTH_MODE` is REQUIRED and has NO DEFAULT. Two values:
 
-    PILOT_PROJECTION_AUDIENCE          the exact audience tokens must carry
-    PILOT_PROJECTION_CALLER            the one service account permitted
-    PILOT_GCP_PROJECT_ID / database    via the existing settings loader
+    iam_only          Cloud Run IAM is the gate. This app inspects no token.
+    iam_plus_token    IAM is still the gate, AND the app re-verifies.
+
+The distinction matters because app-level re-verification rests on an
+assumption about what Cloud Run delivers to the container. Depending on header
+handling — `Authorization` versus `X-Serverless-Authorization` — the value the
+container sees may not remain independently signature-verifiable. If
+correctness depended on that, a correctly authorised deployment could be
+refused by its own application.
+
+So `iam_plus_token` is OPT-IN and valid only once the deployed header
+behaviour has been PROVEN by `pilot_runtime/deploy/probe_projection_auth.sh`.
+Until then `iam_only` is the supported posture, and it is not the weaker one:
+the service has no `allUsers` invoker and exactly one `roles/run.invoker`
+binding, so a wrong caller never reaches Python.
+
+`PILOT_PROJECTION_AUDIENCE` and `PILOT_PROJECTION_CALLER` are required ONLY in
+`iam_plus_token`. Demanding them in `iam_only` would imply a verification that
+is not happening.
 
 ## IT DOES NOT IMPORT THE COMPOSITION ROOT EITHER
 
@@ -38,10 +54,11 @@ Firestore store is therefore constructed directly from
 `pilot_runtime.persistence.firestore_store`, which has no Firebase dependency
 at all.
 
-A missing audience or caller raises before the first request. An
-`allUsers`-reachable service that accepted anyone would be the worst possible
-failure, so an unconfigured deployment refuses to start instead of starting
-permissively.
+## FAIL CLOSED AT STARTUP
+
+The mode is declared, never inferred. An absent or unrecognised mode raises
+before the first request, so a deployment cannot start in an undeclared
+posture.
 
 PROD is refused outright. This slice is the fictional staging pairing only, and
 production gets its own service, its own identity and its own review after
@@ -69,6 +86,17 @@ from pilot_runtime.persistence.firestore_store import (
 
 AUDIENCE_ENV_VAR = "PILOT_PROJECTION_AUDIENCE"
 CALLER_ENV_VAR = "PILOT_PROJECTION_CALLER"
+AUTH_MODE_ENV_VAR = "PILOT_PROJECTION_AUTH_MODE"
+
+#: Cloud Run IAM is the gate; this app inspects no token. The supported
+#: default posture for the fictional staging deployment.
+AUTH_MODE_IAM_ONLY = "iam_only"
+#: Cloud Run IAM is still the gate, AND the app re-verifies the Google token.
+#: Only valid once the deployed header behaviour has been PROVEN by the auth
+#: probe — see pilot_runtime/deploy/probe_projection_auth.sh.
+AUTH_MODE_IAM_PLUS_TOKEN = "iam_plus_token"
+
+AUTH_MODES = (AUTH_MODE_IAM_ONLY, AUTH_MODE_IAM_PLUS_TOKEN)
 
 
 class ProjectionConfigError(RuntimeError):
@@ -83,16 +111,30 @@ def build_projection_application(env: Optional[Mapping[str, str]] = None, *,
     """Assemble the projection application or raise. No degraded mode."""
     env = os.environ if env is None else env
 
+    # The auth mode is DECLARED, never inferred and never defaulted. An
+    # operator has to say which model is in force, so the code can never
+    # silently drop verification and can never silently depend on it.
+    mode = (env.get(AUTH_MODE_ENV_VAR) or "").strip()
+    if mode not in AUTH_MODES:
+        raise ProjectionConfigError(
+            f"{AUTH_MODE_ENV_VAR} must be one of {AUTH_MODES}; there is no "
+            f"default, because the two modes rest on different guarantees")
+
     audience = (env.get(AUDIENCE_ENV_VAR) or "").strip()
     caller = (env.get(CALLER_ENV_VAR) or "").strip()
-    if not audience:
-        raise ProjectionConfigError(
-            f"{AUDIENCE_ENV_VAR} is required; without it the service could "
-            f"accept a token minted for a different audience")
-    if not caller:
-        raise ProjectionConfigError(
-            f"{CALLER_ENV_VAR} is required; without it the service could "
-            f"accept any Google service identity")
+    if mode == AUTH_MODE_IAM_PLUS_TOKEN:
+        # Only required in the mode that uses them. Requiring them in
+        # `iam_only` would imply the app was verifying when it is not.
+        if not audience:
+            raise ProjectionConfigError(
+                f"{AUDIENCE_ENV_VAR} is required in {AUTH_MODE_IAM_PLUS_TOKEN}; "
+                f"without it the service could accept a token minted for a "
+                f"different audience")
+        if not caller:
+            raise ProjectionConfigError(
+                f"{CALLER_ENV_VAR} is required in {AUTH_MODE_IAM_PLUS_TOKEN}; "
+                f"without it the service could accept any Google service "
+                f"identity")
 
     settings = PilotSettings.from_env(env)
     if settings.environment.is_prod:
@@ -117,8 +159,15 @@ def build_projection_application(env: Optional[Mapping[str, str]] = None, *,
         emulator_host=emulator_host_from(env))
     repos = FirestoreRepositories(FirestoreDocumentStore(client))
 
-    identity = verifier or GoogleServiceIdentityVerifier(
-        audience=audience, expected_service_account=caller)
+    if verifier is not None:
+        identity = verifier
+    elif mode == AUTH_MODE_IAM_PLUS_TOKEN:
+        identity = GoogleServiceIdentityVerifier(
+            audience=audience, expected_service_account=caller)
+    else:
+        # iam_only. None is the explicit, declared posture — Cloud Run has
+        # already refused every caller but the one permitted service account.
+        identity = None
 
     # A factory, not an instance: the service holds no cross-request state and
     # building it per request keeps it that way by construction.

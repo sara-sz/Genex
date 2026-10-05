@@ -756,3 +756,80 @@ def test_neither_new_module_constructs_a_logger():
         for noisy in ("print", "getLogger", "basicConfig", "warning",
                       "error", "exception", "critical"):
             assert noisy not in called, (relative, noisy)
+
+
+# ---------------------------------------------------------------------------
+# 9. IAM-ONLY is a first-class transport mode
+#
+# Cloud Run IAM is the authoritative gate. App-level re-verification is
+# optional, because it rests on an unproven assumption about which header
+# Cloud Run delivers to the container. So `verifier=None` must be a supported,
+# explicitly-chosen posture — not a hole and not a degraded mode.
+# ---------------------------------------------------------------------------
+
+def test_an_iam_only_app_reports_that_it_verifies_nothing():
+    stack = _Stack()
+    app = ProjectionApp(service_factory=stack.service)
+    assert app.verifies_tokens is False
+    assert ProjectionApp(service_factory=stack.service,
+                         verifier=_AcceptingVerifier()).verifies_tokens is True
+
+
+def test_an_iam_only_app_accepts_a_valid_projection_with_no_header():
+    """The request already passed Cloud Run's invoker check; there is nothing
+    for the app to add. Proven end to end: the projection is created."""
+    stack = _Stack()
+    app = ProjectionApp(service_factory=stack.service)
+    status, payload, _ = _request(app, body=_body())
+    assert status == 201 and payload["created"] is True
+    assert stack.repos.parent_baseline_projections.find(
+        payload["projection_id"]) is not None
+
+
+def test_an_iam_only_app_still_validates_the_payload():
+    """Dropping caller verification must not drop anything else: the
+    seven-field allowlist, the digest and child resolution all still apply."""
+    stack = _Stack()
+    app = ProjectionApp(service_factory=stack.service)
+    status, _, _ = _request(app, body=_body(projection={"domain": "fine_motor"}))
+    assert status == 400
+    status, _, _ = _request(app, body=_body(digest="nope"))
+    assert status == 400
+    status, _, _ = _request(_app_unlinked(), body=_body())
+    assert status == 404
+
+
+def _app_unlinked():
+    return ProjectionApp(service_factory=_Stack(link=False).service)
+
+
+def test_an_iam_only_app_still_refuses_a_client_supplied_child_id():
+    stack = _Stack()
+    app = ProjectionApp(service_factory=stack.service)
+    status, _, _ = _request(app, body=_body(
+        projection=dict(VALID_PROJECTION, child_id="chld_x")))
+    assert status == 400
+
+
+def test_an_iam_only_app_is_still_idempotent_and_still_conflicts():
+    stack = _Stack()
+    app = ProjectionApp(service_factory=stack.service)
+    assert _request(app, body=_body())[0] == 201
+    assert _request(app, body=_body())[0] == 200
+    assert _request(app, body=_body(digest=DIGEST_B))[0] == 409
+
+
+def test_an_iam_plus_token_app_still_refuses_a_bad_caller():
+    """The optional layer, when enabled, behaves exactly as before."""
+    stack = _Stack()
+    app = ProjectionApp(service_factory=stack.service,
+                        verifier=_AcceptingVerifier(ok=False))
+    status, payload, _ = _request(app, body=_body())
+    assert status == 401 and payload == {"error": "not permitted"}
+
+
+def test_the_transport_documents_that_iam_is_authoritative():
+    source = (PILOT_ROOT / "transport" / "projection_wsgi.py").read_text()
+    assert "AUTHORITATIVE" in source.upper()
+    assert "X-Serverless-Authorization" in source
+    assert "iam_only" in source

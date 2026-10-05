@@ -655,3 +655,221 @@ def test_an_unresolved_baseline_can_still_be_projected():
     payload = client_mod.build_projection(record)
     assert payload["status"] == "UNRESOLVED"
     assert payload["routing_anchor_months"] is None
+
+
+# ---------------------------------------------------------------------------
+# 8. CORRECTION 1 — the GCS permission model
+#
+# An earlier proposal was objectViewer + objectCreator, on the belief that
+# replacing an object needs only storage.objects.create. That is wrong:
+# REPLACING an existing object at the same name also requires
+# storage.objects.delete, so the Parent service would have saved each session
+# exactly once and then started failing. These tests pin the corrected model
+# and the two facts that make the delete permission safe to grant.
+# ---------------------------------------------------------------------------
+
+from api import session_store_iam as iam  # noqa: E402
+
+
+class _RecordingBlob:
+    """A blob that records every operation and the bytes it was given."""
+
+    def __init__(self, name, store, log):
+        self.name = name
+        self._store = store
+        self._log = log
+
+    def upload_from_string(self, data, content_type=None, **kwargs):
+        self._log.append(("upload_from_string", self.name,
+                          "if_generation_match" in kwargs))
+        existed = self.name in self._store
+        self._store[self.name] = data
+        # Record whether this write REPLACED an existing object, which is the
+        # case that needs storage.objects.delete.
+        self._log.append(("overwrote" if existed else "created", self.name))
+
+    def download_as_text(self):
+        self._log.append(("download_as_text", self.name))
+        return self._store[self.name]
+
+    def exists(self):
+        self._log.append(("exists", self.name))
+        return self.name in self._store
+
+    def delete(self):  # pragma: no cover - must never be reached
+        self._log.append(("delete", self.name))
+        raise AssertionError("the application deleted a session object")
+
+
+class _RecordingBucket:
+    def __init__(self, store, log):
+        self._store, self._log = store, log
+
+    def blob(self, name):
+        return _RecordingBlob(name, self._store, self._log)
+
+    def get_blob(self, name):
+        self._log.append(("get_blob", name))
+        return _RecordingBlob(name, self._store, self._log) \
+            if name in self._store else None
+
+
+def _fake_gcs(monkeypatch):
+    """Install a recording GCS client over the REAL adapter functions."""
+    import types
+
+    store, log = {}, []
+
+    class _Client:
+        def bucket(self, name):
+            return _RecordingBucket(store, log)
+
+        def list_blobs(self, *a, **k):
+            log.append(("list_blobs", a[0] if a else ""))
+            return []
+
+    module = types.ModuleType("google.cloud.storage")
+    module.Client = _Client
+    monkeypatch.setitem(__import__("sys").modules, "google.cloud.storage",
+                        module)
+    try:
+        import google.cloud as google_cloud
+
+        monkeypatch.setattr(google_cloud, "storage", module, raising=False)
+    except ImportError:  # pragma: no cover
+        pass
+    monkeypatch.setattr(session_store, "GCS_BUCKET_NAME", "fake-bucket")
+    return store, log
+
+
+def test_the_first_save_CREATES_the_session_object(monkeypatch):
+    store, log = _fake_gcs(monkeypatch)
+    session_store._gcs_save_raw("uid-x", "s-1", {"owner_uid": "uid-x"})
+    assert "sessions/uid-x/s-1.json" in store
+    assert ("created", "sessions/uid-x/s-1.json") in log
+    assert ("overwrote", "sessions/uid-x/s-1.json") not in log
+
+
+def test_a_subsequent_save_OVERWRITES_the_same_object(monkeypatch):
+    """THE case that needs storage.objects.delete. The blob NAME is identical,
+    so GCS models this as replacing an existing object."""
+    store, log = _fake_gcs(monkeypatch)
+    session_store._gcs_save_raw("uid-x", "s-1", {"owner_uid": "uid-x", "n": 1})
+    session_store._gcs_save_raw("uid-x", "s-1", {"owner_uid": "uid-x", "n": 2})
+    overwrites = [e for e in log if e[0] == "overwrote"]
+    assert len(overwrites) == 1
+    assert overwrites[0][1] == "sessions/uid-x/s-1.json"
+    # One object, not two: the second write replaced the first.
+    assert list(store) == ["sessions/uid-x/s-1.json"]
+    assert '"n": 2' in store["sessions/uid-x/s-1.json"]
+
+
+def test_the_CAS_overwrite_uses_the_same_object_name(monkeypatch):
+    """`save_if_generation_match` is a CONDITIONAL insert, not a differently
+    permissioned one — same name, same replacement, same requirement."""
+    store, log = _fake_gcs(monkeypatch)
+    session_store._gcs_save_raw("uid-x", "s-2", {"owner_uid": "uid-x"})
+    session_store.save_if_generation_match(
+        "uid-x", "s-2", {"owner_uid": "uid-x", "n": 2}, 1)
+    guarded = [e for e in log
+               if e[0] == "upload_from_string" and e[2] is True]
+    assert guarded, "the CAS path did not pass if_generation_match"
+    assert guarded[0][1] == "sessions/uid-x/s-2.json"
+    assert list(store) == ["sessions/uid-x/s-2.json"]
+
+
+def test_deleting_a_session_is_not_an_application_operation(monkeypatch):
+    """The permission is required by the platform for replacement; the
+    application never exercises it. The recording blob raises on delete, so a
+    full create + overwrite + CAS cycle proves none happens."""
+    store, log = _fake_gcs(monkeypatch)
+    session_store._gcs_save_raw("uid-x", "s-3", {"owner_uid": "uid-x"})
+    session_store._gcs_save_raw("uid-x", "s-3", {"owner_uid": "uid-x", "n": 2})
+    session_store.save_if_generation_match(
+        "uid-x", "s-3", {"owner_uid": "uid-x", "n": 3}, 1)
+    session_store._gcs_load_raw("uid-x", "s-3")
+    assert not [e for e in log if e[0] == "delete"]
+
+
+@pytest.mark.parametrize("operation", iam.FORBIDDEN_OPERATIONS)
+def test_no_parent_module_calls_a_destructive_blob_operation(operation):
+    """Structural, over every shipped module's AST: `blob.delete()` and
+    friends must not appear, so the delete permission can only ever be used
+    implicitly by an overwrite."""
+    for path in sorted((REPO / "api").glob("*.py")) + \
+            sorted((REPO / "genex_core").glob("*.py")):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and \
+                    isinstance(node.func, ast.Attribute) and \
+                    node.func.attr == operation:
+                raise AssertionError(f"{path.name} calls .{operation}()")
+
+
+def test_the_required_permission_set_is_exactly_four():
+    assert set(iam.REQUIRED_PERMISSIONS) == {
+        "storage.objects.get",
+        "storage.objects.list",
+        "storage.objects.create",
+        "storage.objects.delete",
+    }
+
+
+def test_the_delete_permission_is_documented_as_platform_required():
+    reason = iam.REQUIRED_PERMISSIONS["storage.objects.delete"]
+    assert "REQUIRED BY GCS" in reason
+    assert "Never called by the application" in reason
+
+
+def test_no_broad_storage_role_is_proposed():
+    commands = " ".join(iam.gcloud_commands())
+    for broad in ("roles/storage.admin", "roles/storage.objectAdmin",
+                  "roles/editor", "roles/owner", "roles/storage.objectUser"):
+        assert broad not in commands, broad
+
+
+def test_the_binding_is_bucket_scoped_not_project_scoped():
+    create, bind = iam.gcloud_commands()
+    assert f"gs://{iam.STAGING_SESSION_BUCKET}" in bind
+    assert "buckets add-iam-policy-binding" in bind
+    assert "projects add-iam-policy-binding" not in bind
+    # And it is the STAGING bucket, never production's.
+    assert "prod" not in iam.STAGING_SESSION_BUCKET
+
+
+def test_bucket_administration_is_excluded():
+    for excluded in ("storage.buckets.delete", "storage.buckets.setIamPolicy",
+                     "storage.objects.setIamPolicy"):
+        assert excluded in iam.EXCLUDED_PERMISSIONS
+        assert excluded not in iam.REQUIRED_PERMISSIONS
+
+
+# ---------------------------------------------------------------------------
+# 9. CORRECTION 2 — Cloud Run IAM is authoritative
+# ---------------------------------------------------------------------------
+
+def test_the_auth_probe_exists_and_covers_every_required_case():
+    probe = (REPO.parent / "pilot_runtime" / "deploy"
+             / "probe_projection_auth.sh").read_text()
+    assert "allUsers is NOT an invoker" in probe
+    assert "unauthenticated is rejected by the platform" in probe
+    assert "genex-parent-prod-run" in probe
+    assert "compute@developer.gserviceaccount.com" in probe
+    assert "reaches the app" in probe
+    assert "wrong audience is rejected" in probe
+    # Probe 5: the open question, explicitly flagged as deciding the mode.
+    assert "X-Serverless-Authorization" in probe
+    assert "iam_only" in probe
+
+
+def test_the_probe_forbids_inventing_an_alternate_mechanism():
+    probe = (REPO.parent / "pilot_runtime" / "deploy"
+             / "probe_projection_auth.sh").read_text()
+    assert "REMAINS AUTHORITATIVE" in probe
+    assert "No shared secret, no static key, no" in probe
+
+
+def test_the_probe_never_logs_the_token_itself():
+    probe = (REPO.parent / "pilot_runtime" / "deploy"
+             / "probe_projection_auth.sh").read_text()
+    assert "must never log the token itself" in probe

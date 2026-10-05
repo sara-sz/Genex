@@ -27,6 +27,27 @@ browser cannot use this endpoint, so there is nothing to negotiate — and
 nothing that could be widened by editing an origins list. `OPTIONS` is not
 handled; it falls through to 405 like any other method.
 
+## CLOUD RUN IAM IS THE AUTHORITATIVE GATE
+
+`verifier` may be None, and that is a SUPPORTED, EXPLICITLY CHOSEN mode — not a
+degraded one. The projection service is deployed with no `allUsers` and a
+single `roles/run.invoker` binding, so Cloud Run rejects a wrong caller before
+a byte reaches this process. That check is authoritative.
+
+Application-level re-verification of the same Google token is OPTIONAL
+(`iam_plus_token`). It is not a prerequisite for correctness, because it rests
+on an assumption about what Cloud Run delivers to the container: depending on
+header handling — `Authorization` versus `X-Serverless-Authorization` — the
+value the container sees may not remain independently signature-verifiable.
+Making correctness depend on an unproven header assumption would mean a
+deployment could be rejected by its own application despite being authorised
+by IAM.
+
+So the mode is DECLARED at startup and never inferred. In `iam_only` this app
+does not read the header at all; in `iam_plus_token` it verifies and refuses on
+failure. There is no third option, no shared secret, no static key and no
+custom token scheme.
+
 ## WHAT IT WILL NOT DO
 
 No end-user authentication, no `resolve_principal`, no caregiver or provider
@@ -117,12 +138,21 @@ class _TooLarge(ProjectionValidationError):
 class ProjectionApp:
     """WSGI app: verify the caller, then accept one projection."""
 
-    def __init__(self, *, verifier: Any, service_factory: Callable[[], Any],
+    def __init__(self, *, service_factory: Callable[[], Any],
+                 verifier: Any = None,
                  bearer_reader: Optional[Callable[[Mapping], Optional[str]]] = None
                  ) -> None:
+        #: None means IAM-ONLY: Cloud Run is the gate and this app performs no
+        #: token inspection. Keyword-only and explicit at every call site, so
+        #: the mode is always visible where the app is built.
         self._verifier = verifier
         self._service_factory = service_factory
         self._bearer_reader = bearer_reader or bearer_from_environ
+
+    @property
+    def verifies_tokens(self) -> bool:
+        """Whether app-level verification is in force. For tests and probes."""
+        return self._verifier is not None
 
     # -- helpers ----------------------------------------------------------
 
@@ -175,13 +205,22 @@ class ProjectionApp:
             return self._respond(start_response, HTTP_METHOD_NOT_ALLOWED,
                                  {"error": "method not allowed"})
 
-        # 1. The caller, before the body is even read. An unauthenticated or
-        #    wrong caller must not be able to make this process parse JSON.
-        try:
-            self._verifier.verify(self._bearer_reader(environ))
-        except Exception:
-            return self._respond(start_response, HTTP_UNAUTHORIZED,
-                                 {"error": "not permitted"})
+        # 1. The caller — but only when app-level verification is in force.
+        #
+        # In `iam_only` mode the header is not read at all: Cloud Run has
+        # already rejected every caller that is not the one permitted service
+        # account, and inspecting a token this app cannot be sure is
+        # independently verifiable would add a failure mode without adding a
+        # guarantee.
+        #
+        # When verification IS enabled it runs BEFORE the body is read, so a
+        # wrong caller cannot make this process parse JSON.
+        if self._verifier is not None:
+            try:
+                self._verifier.verify(self._bearer_reader(environ))
+            except Exception:
+                return self._respond(start_response, HTTP_UNAUTHORIZED,
+                                     {"error": "not permitted"})
 
         try:
             body = self._read_body(environ)

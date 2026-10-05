@@ -200,14 +200,17 @@ def test_the_error_is_phi_safe():
 # ---------------------------------------------------------------------------
 
 def test_the_entrypoint_requires_an_audience_and_a_caller():
+    """In `iam_plus_token` only — see the auth-mode tests below for why
+    `iam_only` deliberately requires neither."""
+    mode = {"PILOT_PROJECTION_AUTH_MODE": "iam_plus_token"}
     with pytest.raises(ProjectionConfigError):
-        build_projection_application(dict(BASE_ENV))
+        build_projection_application(dict(BASE_ENV, **mode))
     with pytest.raises(ProjectionConfigError):
-        build_projection_application(dict(BASE_ENV, **{
-            AUDIENCE_ENV_VAR: AUDIENCE}))
+        build_projection_application(dict(BASE_ENV, **mode,
+                                          **{AUDIENCE_ENV_VAR: AUDIENCE}))
     with pytest.raises(ProjectionConfigError):
-        build_projection_application(dict(BASE_ENV, **{
-            CALLER_ENV_VAR: PARENT_STAGING_SA}))
+        build_projection_application(dict(
+            BASE_ENV, **mode, **{CALLER_ENV_VAR: PARENT_STAGING_SA}))
 
 
 def test_the_entrypoint_refuses_production():
@@ -225,6 +228,7 @@ def test_the_entrypoint_refuses_production():
         "PILOT_ALLOWED_ORIGINS": "https://example.invalid",
         AUDIENCE_ENV_VAR: AUDIENCE,
         CALLER_ENV_VAR: PARENT_STAGING_SA,
+        "PILOT_PROJECTION_AUTH_MODE": "iam_plus_token",
     }
     # The SPECIFIC error, not any exception: accepting any failure let a
     # mutation that removed this check survive on a different error.
@@ -254,7 +258,8 @@ def test_the_entrypoint_assembles_with_an_injected_verifier():
 
     app = build_projection_application(
         dict(BASE_ENV, **{AUDIENCE_ENV_VAR: AUDIENCE,
-                          CALLER_ENV_VAR: PARENT_STAGING_SA}),
+                          CALLER_ENV_VAR: PARENT_STAGING_SA,
+                          "PILOT_PROJECTION_AUTH_MODE": "iam_plus_token"}),
         verifier=_Always(), firestore_client=_FakeFirestore())
     assert callable(app)
 
@@ -479,3 +484,148 @@ def test_the_serving_image_does_not_serve_the_projection_entrypoint():
     text = (DEPLOY / "Dockerfile").read_text()
     assert "pilot_runtime.server:application" in text
     assert "projection" not in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# 4. CORRECTION 2 — Cloud Run IAM is the authoritative gate
+#
+# App-level re-verification rests on an assumption about what Cloud Run
+# delivers to the container, and that assumption is unproven until the
+# deployment probe runs. So the mode is DECLARED, never defaulted, and
+# `iam_only` is a supported posture rather than a degraded one.
+# ---------------------------------------------------------------------------
+
+from pilot_runtime.projection_server import (  # noqa: E402
+    AUTH_MODE_ENV_VAR,
+    AUTH_MODE_IAM_ONLY,
+    AUTH_MODE_IAM_PLUS_TOKEN,
+    AUTH_MODES,
+)
+
+
+class _FakeFirestore:
+    def collection(self, *a, **k):
+        return self
+
+    def document(self, *a, **k):
+        return self
+
+    def get(self, *a, **k):
+        return None
+
+
+def _build(mode=None, **extra):
+    env = dict(BASE_ENV)
+    if mode is not None:
+        env[AUTH_MODE_ENV_VAR] = mode
+    env.update(extra)
+    return build_projection_application(env, firestore_client=_FakeFirestore())
+
+
+def test_the_auth_mode_has_no_default():
+    """An undeclared posture must not start. The two modes rest on different
+    guarantees, so defaulting either way would hide which one is in force."""
+    with pytest.raises(ProjectionConfigError):
+        _build(None)
+
+
+@pytest.mark.parametrize("mode", ["", "  ", "iam", "token", "IAM_ONLY",
+                                  "iam_only_please", "none", "off"])
+def test_an_unrecognised_auth_mode_is_refused(mode):
+    with pytest.raises(ProjectionConfigError):
+        _build(mode)
+
+
+def test_exactly_two_modes_exist():
+    assert AUTH_MODES == (AUTH_MODE_IAM_ONLY, AUTH_MODE_IAM_PLUS_TOKEN)
+    assert AUTH_MODE_IAM_ONLY == "iam_only"
+    assert AUTH_MODE_IAM_PLUS_TOKEN == "iam_plus_token"
+
+
+def test_iam_only_starts_and_inspects_no_token():
+    """The supported posture until the probe proves the header behaviour.
+    Cloud Run has already refused every caller but the permitted one."""
+    app = _build(AUTH_MODE_IAM_ONLY)
+    assert app.verifies_tokens is False
+
+
+def test_iam_only_requires_no_audience_or_caller():
+    """Demanding them would imply a verification that is not happening."""
+    app = _build(AUTH_MODE_IAM_ONLY)
+    assert app.verifies_tokens is False
+
+
+def test_iam_plus_token_requires_both_audience_and_caller():
+    with pytest.raises(ProjectionConfigError):
+        _build(AUTH_MODE_IAM_PLUS_TOKEN)
+    with pytest.raises(ProjectionConfigError):
+        _build(AUTH_MODE_IAM_PLUS_TOKEN, **{AUDIENCE_ENV_VAR: AUDIENCE})
+    with pytest.raises(ProjectionConfigError):
+        _build(AUTH_MODE_IAM_PLUS_TOKEN,
+               **{CALLER_ENV_VAR: PARENT_STAGING_SA})
+
+
+def test_iam_plus_token_builds_a_verifier_when_configured():
+    app = _build(AUTH_MODE_IAM_PLUS_TOKEN,
+                 **{AUDIENCE_ENV_VAR: AUDIENCE,
+                    CALLER_ENV_VAR: PARENT_STAGING_SA})
+    assert app.verifies_tokens is True
+
+
+def test_an_iam_only_app_accepts_a_request_with_no_authorization_header():
+    """Not a hole: Cloud Run rejected every unauthorised caller before this
+    process saw the request. The app's job here is the projection, not the
+    caller. Proven by reaching the VALIDATOR — a 400 on an empty body — rather
+    than a 401 from an auth layer that is deliberately absent."""
+    import io
+    import json as _json
+
+    app = _build(AUTH_MODE_IAM_ONLY)
+    raw = _json.dumps({"source_session_id": "s",
+                       "source_record_digest": "a" * 64,
+                       "projection": {}}).encode()
+    captured = {}
+    chunks = app(
+        {"REQUEST_METHOD": "POST",
+         "PATH_INFO": "/internal/parent-baseline-projections",
+         "CONTENT_LENGTH": str(len(raw)), "wsgi.input": io.BytesIO(raw)},
+        lambda s, h: captured.setdefault("s", int(s.split(" ")[0])))
+    assert captured["s"] == 400, _json.loads(b"".join(chunks))
+
+
+def test_the_server_documents_why_app_verification_is_optional():
+    """The reasoning must travel with the code: a future reader deciding
+    whether to switch modes needs to know what is unproven and what proves
+    it."""
+    source = (REPO_ROOT / "pilot_runtime" / "projection_server.py").read_text()
+    assert "X-Serverless-Authorization" in source
+    assert "authoritative" in source.lower()
+    assert "probe_projection_auth.sh" in source
+    assert "NO DEFAULT" in source
+
+
+def test_no_alternate_authentication_mechanism_exists():
+    """No shared secret, no static key, no custom token — in either mode."""
+    for relative in ("pilot_runtime/projection_server.py",
+                     "pilot_runtime/google_oidc.py",
+                     "pilot_backend/transport/projection_wsgi.py"):
+        source = (REPO_ROOT / relative).read_text()
+        tree = ast.parse(source)
+        names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+        names |= {n.attr for n in ast.walk(tree)
+                  if isinstance(n, ast.Attribute)}
+        for banned in ("hmac", "shared_secret", "api_key", "API_KEY",
+                       "from_service_account_file", "from_service_account_json",
+                       "service_account_key", "SECRET"):
+            assert banned not in names, (relative, banned)
+
+
+def test_the_probe_script_is_executable_shell_and_runs_nothing_here():
+    probe = REPO_ROOT / "pilot_runtime" / "deploy" / "probe_projection_auth.sh"
+    text = probe.read_text()
+    assert text.startswith("#!/usr/bin/env bash")
+    assert "set -euo pipefail" in text
+    # It must not be wired into CI: it needs a deployed service and IAM.
+    workflow = (REPO_ROOT / ".github" / "workflows"
+                / "parent-2.4-ci.yml").read_text()
+    assert "probe_projection_auth" not in workflow
