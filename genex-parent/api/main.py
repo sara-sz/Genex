@@ -97,6 +97,7 @@ from api.schemas import (
     SwapRequest,
 )
 from api import functional_baseline_api as baseline_api
+from api import parent_baseline_projection_client as projection_client
 from api.session_store import (
     SessionContentionError,
     SessionLoadError,
@@ -3156,3 +3157,87 @@ async def session_baseline_get(
         return baseline_api.view(doc, domain)
     except Exception as exc:
         raise _baseline_http(exc)
+
+
+# ===========================================================================
+# Parent -> Pilot baseline projection (0.5F-A2)
+#
+# A SEPARATE caregiver-authenticated action, deliberately not part of
+# finalization. Finalizing a baseline writes durably to the Parent session and
+# must never depend on the Pilot being reachable: a family completing their
+# calibration cannot be blocked by another system's availability. So the two
+# are different routes, and a failed projection leaves the finalized baseline
+# exactly as it was.
+#
+# The browser sends only this request. It never receives, constructs or sees
+# the projection payload, the Pilot URL or the service identity token — all
+# three live entirely server-side.
+#
+# Retry-safe: the Pilot keys a projection on
+# (source_session_id, domain, source_record_digest) and returns the existing
+# one for an identical replay, so the client may retry a 503 with no
+# bookkeeping. `projected` in the response says whether this call created it.
+# ===========================================================================
+
+
+@app.post(
+    "/api/v1/session/{session_id}/baseline/{domain}/projection",
+    tags=["session"],
+)
+async def session_baseline_projection(
+    session_id: str,
+    domain: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Project this session's FINALIZED baseline to the Pilot.
+
+    Takes no body. Everything it sends is derived server-side from the stored
+    finalized record, so there is nothing for a client to supply and no way
+    for one to influence what is projected.
+
+    Guards:
+      404 session_not_found / 403       — from `_require_session`, unchanged
+      404 unsupported_baseline_domain
+      404 baseline_not_started
+      409 baseline_not_finalized        — projection copies a RESULT
+      501 projection_not_configured     — this deployment may not project
+      403 projection_pairing_forbidden  — declared pairing is not permitted
+      422 projection_rejected           — the Pilot refused it on its merits
+      503 projection_unavailable        — retryable; nothing was written
+    """
+    doc = _require_session(auth.uid, session_id)
+
+    try:
+        record = baseline_api.finalized_record(doc, domain)
+    except baseline_api.BaselineNotFinalized:
+        raise HTTPException(status_code=409, detail="baseline_not_finalized")
+    except Exception as exc:
+        raise _baseline_http(exc)
+
+    try:
+        result = projection_client.project_baseline(
+            source_session_id=session_id, record=record)
+    except projection_client.ProjectionPairingForbidden:
+        raise HTTPException(status_code=403,
+                            detail="projection_pairing_forbidden")
+    except projection_client.ProjectionNotConfigured:
+        # 501, not 500: the deployment is working exactly as configured, and
+        # the configuration says it does not project. An operator reading this
+        # needs to know it is a capability gap, not a fault.
+        raise HTTPException(status_code=501,
+                            detail="projection_not_configured")
+    except projection_client.ProjectionRejected:
+        raise HTTPException(status_code=422, detail="projection_rejected")
+    except projection_client.ProjectionUnavailable:
+        raise HTTPException(status_code=503,
+                            detail="projection_unavailable")
+
+    # The Parent session is NOT modified. Nothing from the Pilot is written
+    # back — the data direction is Parent -> Pilot only, and recording a Pilot
+    # id in a Parent session would make Parent's record depend on Pilot state.
+    return {
+        "domain": baseline_api.require_supported_domain(domain),
+        "projected": True,
+        "created": result["created"],
+        "projection_id": result["projection_id"],
+    }

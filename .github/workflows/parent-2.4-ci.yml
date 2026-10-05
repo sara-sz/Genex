@@ -218,6 +218,21 @@ jobs:
             echo "0.5E-B not present on this branch — nothing to run"
           fi
 
+      - name: October pilot 0.5F-A2 — baseline projection (dependency-pure)
+        # The Pilot half of the trust boundary: the seven-field allowlist,
+        # child resolution through the existing SourceSystemLink, idempotency
+        # versus integrity, and the create-only repository. Dependency-pure
+        # because the identity verifier is injected — no SDK is needed to test
+        # what the boundary refuses.
+        working-directory: .
+        run: |
+          if [ -f pilot_backend/tests/test_parent_baseline_projection.py ]; then
+            python -m pytest \
+              pilot_backend/tests/test_parent_baseline_projection.py -q
+          else
+            echo "0.5F-A2 not present on this branch — nothing to run"
+          fi
+
       - name: October pilot 0.5E-B — generation path + image separation
         # Runs in the dependency-pure job deliberately. It asserts that the
         # SERVED api image still installs exactly its three pins and copies no
@@ -1212,7 +1227,8 @@ jobs:
           python -m compileall -q api \
             tests/test_beta_access.py \
             tests/test_checkin_readiness.py \
-            tests/test_parent_24_baseline_api.py
+            tests/test_parent_24_baseline_api.py \
+            tests/test_parent_24_baseline_projection.py
 
       - name: Parent 2.4 functional baseline — product path (own pytest process)
         # 0.5F-A1. In THIS job rather than the dependency-pure taxonomy job
@@ -1225,6 +1241,21 @@ jobs:
         # import time with incompatible fake-token maps, so whichever imports
         # last wins and the others get 401.
         run: python -m pytest tests/test_parent_24_baseline_api.py -q
+
+      - name: Parent 2.4 baseline PROJECTION (own pytest process)
+        # 0.5F-A2 Parent side: the pairing guard, the seven-field payload, the
+        # trigger route, and the property families depend on — finalizing a
+        # baseline does not require the Pilot to be reachable.
+        #
+        # This step also carries the CROSS-SYSTEM digest check: the test
+        # imports the Pilot's `canonical_source_digest` and asserts both sides
+        # agree byte for byte. If they ever diverged, every projection would
+        # become an integrity conflict — loud, but useless.
+        #
+        # Own process, like the two suites below: these reassign the global
+        # firebase_admin verify_id_token at import time with incompatible
+        # fake-token maps.
+        run: python -m pytest tests/test_parent_24_baseline_projection.py -q
 
       - name: The functional baseline engine is NOT test-only
         # The regression this slice exists to prevent recurring.
@@ -1390,6 +1421,19 @@ jobs:
 
       - name: Firebase Admin adapter (unit)
         run: python -m pytest pilot_runtime/tests/test_firebase_adapter.py -q
+
+      - name: October pilot 0.5F-A2 — projection identity + artifact separation
+        # In the INTEGRATION job because the projection entrypoint constructs a
+        # Firestore store, which needs the cloud SDK. It deliberately does NOT
+        # need firebase-admin — one of the tests proves the import graph is
+        # Firebase-free, which is what makes the projection image (which omits
+        # that SDK) able to start at all.
+        run: |
+          if [ -f pilot_runtime/tests/test_projection_service.py ]; then
+            python -m pytest pilot_runtime/tests/test_projection_service.py -q
+          else
+            echo "0.5F-A2 not present on this branch — nothing to run"
+          fi
 
       - name: Firestore adapter (unit, fake client)
         run: python -m pytest pilot_runtime/tests/test_firestore_adapter.py -q

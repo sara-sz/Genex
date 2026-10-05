@@ -110,6 +110,7 @@ from ..domain.weekly_cycle import (
     WeeklyPlanSnapshot,
 )
 from ..domain.canonical_rung import ActivityFamilyBinding, CanonicalRung
+from ..domain.parent_baseline_projection import ParentBaselineProjection
 from ..domain.goal_anchor import ClinicalGoalAnchor, SuggestionCanonicalAnchor
 from ..domain.goals import (
     CaregiverApprovedGoal,
@@ -634,6 +635,22 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "track_subdomains": STR_TUPLE, "track_families": STR_TUPLE,
         "rung_ref": STR, "track_ref": STR,
         "taxonomy_version": STR, "baseline_version": STR,
+    },
+    # ---- 0.5F-A2 Parent baseline projection ----------------------------
+    #
+    # `has_routing_anchor` is ABSENT: it is a derived property, so there is no
+    # stored copy that could claim a planning anchor the record does not have.
+    # Flattened rather than nesting the seven baseline fields, so the stored
+    # document is directly queryable and this spec stays readable.
+    ParentBaselineProjection: {
+        "projection_id": STR, "child_id": STR,
+        "source_system": _EnumKind(SourceSystem),
+        "source_session_id": STR, "source_record_digest": STR,
+        "domain": STR, "area_id": STR, "entry_choice_id": STR,
+        "status": STR, "baseline_version": STR,
+        "routing_anchor_months": OPT_INT,
+        "not_demonstrated_months": OPT_INT,
+        "projected_at": DT, "schema_version": STR,
     },
     SuggestionCanonicalAnchor: {
         "suggestion_id": STR, "child_id": STR,

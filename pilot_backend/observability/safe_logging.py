@@ -74,6 +74,17 @@ FORBIDDEN_LOG_FIELDS = frozenset({
     "child_name", "name", "display_name", "email", "caregiver_email",
     "diagnosis", "concern", "note", "note_text", "comment", "feedback",
     "message_text", "prompt", "completion", "ai_response", "transcript",
+    # 0.5F-A2 Parent baseline projection. Added to the FORBIDDEN set rather
+    # than the allowed one, deliberately: these are the field names the
+    # projection boundary carries, and none of them is ever worth logging.
+    # `routing_anchor_months` is the clearest case — it is an observed
+    # planning anchor for one child, and in a log line it would read as a
+    # developmental age.
+    "routing_anchor_months", "not_demonstrated_months",
+    "demonstrated_months", "entry_anchor_months", "entry_choice_id",
+    "entry_choice_label", "chronological_months", "milestone",
+    "asked", "baseline", "functional_baseline", "projection",
+    "source_record_digest", "source_session_id", "session_id",
 })
 
 _ID_IN_PATH = re.compile(r"/(prac|prov|cgvr|chld|ccxn|pcxn|audt|revn)_[0-9a-f]{8,}")

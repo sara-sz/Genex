@@ -1,0 +1,102 @@
+# INTERNAL PARENT-BASELINE-PROJECTION service image — October pilot 0.5F-A2.
+#
+# A THIRD image. It does not replace or modify the served API image
+# (`Dockerfile`) or the offline generation image (`Dockerfile.generation`), and
+# neither of their requirements files is touched by this slice.
+#
+# WHY A SEPARATE SERVICE AND NOT A ROUTE
+#
+# The served API has `allUsers` on `run.invoker`, because Lovable browser
+# clients cannot present Google OIDC. With `allUsers`, Cloud Run enforces
+# NOTHING: it forwards the Authorization header and the application becomes the
+# only gate. An internal projection route on that service would therefore be
+# reachable from the internet, protected by application code alone.
+#
+# This service is deployed with NO `allUsers` and a single
+# `roles/run.invoker` binding to the Parent STAGING runtime service account, so
+# Cloud Run refuses a wrong caller before a byte reaches Python. The in-app
+# verification is defence in depth, not the only line.
+#
+# WHAT THIS IMAGE CONTAINS
+#
+#   pilot_backend/   the domain, the projection repository and the internal
+#                    transport. The SAME domain and repository implementation
+#                    the served API uses — no clinical logic is duplicated.
+#   pilot_runtime/   the Google OIDC verifier and this service's entrypoint.
+#
+# WHAT IT DOES NOT CONTAIN
+#
+#   genex-parent/    NOTHING. Unlike the generation image, the projection
+#                    service reads no workbook and no taxonomy: it receives
+#                    seven validated fields. This is the narrowest of the
+#                    three build contexts.
+#   firebase-admin   THE IMPORTANT OMISSION. No end-user authentication exists
+#                    here, so the Firebase SDK is absent and a caregiver or
+#                    provider token cannot be verified even by a future edit.
+#   pandas/openpyxl  no workbook.
+#   openai           no model call.
+
+FROM python:3.11.9-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+COPY pilot_runtime/deploy/requirements-projection.txt /app/requirements.txt
+RUN pip install -r /app/requirements.txt
+
+COPY pilot_backend/ /app/pilot_backend/
+COPY pilot_runtime/ /app/pilot_runtime/
+
+# Tests are not part of a served artifact. Removing the pilot fixtures also
+# removes the in-memory document store from the filesystem, so no fake
+# persistence path is present in a service that writes real records.
+RUN rm -rf /app/pilot_backend/tests /app/pilot_runtime/tests \
+           /app/pilot_backend/fixtures \
+    && find /app -name '__pycache__' -type d -prune -exec rm -rf {} +
+
+# Fail the BUILD rather than a request if the narrowing above regresses. Each
+# of these is a property this file claims in prose, and a claim in a comment is
+# not a guarantee.
+RUN python -c "import importlib.util as u; \
+assert u.find_spec('firebase_admin') is None, 'firebase-admin must be absent: this service has no end-user auth'; \
+assert u.find_spec('pandas') is None, 'no workbook is read here'; \
+assert u.find_spec('openai') is None, 'no model client'; \
+import google.oauth2.id_token, google.cloud.firestore; \
+print('projection image deps OK')"
+RUN test ! -d /app/genex-parent && echo "no Parent content bundled: OK"
+
+# Prove the application assembles, and that it FAILS CLOSED without its two
+# required variables — before any real request can reach it.
+RUN cd /app && python -c "\
+from pilot_runtime.projection_server import build_projection_application as b, ProjectionConfigError; \
+import sys; \
+ok = False; \
+exec('try:\n b({})\nexcept ProjectionConfigError:\n ok = True'); \
+assert ok, 'the projection service started with no audience configured'; \
+print('projection service fails closed when unconfigured: OK')"
+
+RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 pilot
+USER 10001
+
+EXPOSE 8080
+
+# One worker, few threads: this service handles a projection per family, not
+# browser traffic.
+#
+# `--access-logfile -` is deliberately ABSENT, as in the served image. Cloud
+# Run already records the request line at the platform layer, and the route
+# here is identifier-free by design — duplicating it inside the container would
+# add nothing and risk logging more than intended.
+CMD exec gunicorn \
+      --bind 0.0.0.0:${PORT:-8080} \
+      --workers 1 \
+      --threads 4 \
+      --timeout 30 \
+      --graceful-timeout 10 \
+      --preload \
+      --no-sendfile \
+      pilot_runtime.projection_server:application

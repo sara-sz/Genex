@@ -1,0 +1,22 @@
+# Build-context allowlist for the INTERNAL PROJECTION service image.
+#
+# Separate from `gcloudignore` (the served API's context) and
+# `gcloudignore-generation` (the offline job's). Neither is modified.
+#
+# This context is the NARROWEST of the three: the projection service reads no
+# workbook and no taxonomy, so unlike the generation image it admits nothing
+# from genex-parent at all.
+#
+# Ignore everything, then re-admit only the two pilot packages.
+
+*
+
+!pilot_backend/
+!pilot_backend/**
+!pilot_runtime/
+!pilot_runtime/**
+
+pilot_backend/tests/**
+pilot_runtime/tests/**
+**/__pycache__/**
+**/*.pyc

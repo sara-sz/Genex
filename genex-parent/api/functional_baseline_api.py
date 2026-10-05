@@ -394,6 +394,35 @@ def view(doc: Dict[str, Any], domain: str) -> Dict[str, Any]:
     }
 
 
+class BaselineNotFinalized(Exception):
+    """The baseline exists but has not been finalized.
+
+    Projection copies a FINALIZED record. An in-progress baseline has no
+    resolved status and no routing anchor, so projecting it would send a
+    half-answered calibration as though it were a result.
+    """
+
+
+def finalized_record(doc: Dict[str, Any], domain: str) -> Dict[str, Any]:
+    """The canonical finalized record, verbatim, for projection.
+
+    Returns the stored dict as-is — exactly `BaselineRecord.to_state()` — so
+    the digest the caller computes attests the real stored bytes rather than a
+    re-serialisation of a rebuilt object. A copy is returned so a caller
+    cannot mutate session state through the reference.
+
+    This is the ONLY reader that hands out the full record, and it is used by
+    the projection path alone. The client view deliberately exposes far less.
+    """
+    key = require_supported_domain(domain)
+    stored = (doc.get(CANONICAL_STATE_KEY) or {}).get(key)
+    if not stored:
+        raise BaselineNotStarted(key)
+    if not is_finalized(doc, key):
+        raise BaselineNotFinalized(key)
+    return dict(stored)
+
+
 def entry_screen_for(domain: str) -> Dict[str, Any]:
     """The area's reviewed entry descriptors, for the start screen.
 
@@ -406,6 +435,8 @@ def entry_screen_for(domain: str) -> Dict[str, Any]:
 
 __all__ = [
     "API_ENVELOPE_VERSION",
+    "BaselineNotFinalized",
+    "finalized_record",
     "CANONICAL_STATE_KEY",
     "ENVELOPE_STATE_KEY",
     "SUPPORTED_DOMAINS",

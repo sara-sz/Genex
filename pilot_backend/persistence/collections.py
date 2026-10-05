@@ -55,6 +55,11 @@ COLLECTIONS: Mapping[str, str] = {
     # mismatch. Absence of an anchor row IS the unmappable state.
     "suggestion_canonical_anchor": PILOT_COLLECTION_PREFIX + "suggestion_anchors",
     "clinical_goal_anchor": PILOT_COLLECTION_PREFIX + "clinical_goal_anchors",
+    # 0.5F-A2 Parent -> Pilot baseline projection. Written ONLY by the
+    # authenticated Parent service through the internal projection endpoint,
+    # and create-only: Parent remains the system of record, so a projection is
+    # a copy that may never be edited here.
+    "parent_baseline_projection": PILOT_COLLECTION_PREFIX + "parent_baseline_projections",
     "clinical_goal": "pilot_clinical_goals",
     "caregiver_goal": "pilot_caregiver_goals",
     # 0.4C monthly focus plan.

@@ -78,6 +78,9 @@ from ..domain.monthly_plan import (
     MonthlyGoalAllocation,
     MonthlyGoalSnapshot,
 )
+from ..domain.parent_baseline_projection import (
+    ParentBaselineProjection,
+)
 from ..domain.source_link import SourceSystemLink
 from ..domain.connections import CaregiverChildConnection, ProviderChildConnection
 from ..domain.entities import Caregiver, Child, Practice, Provider
@@ -160,7 +163,9 @@ def _own_id(record: Any) -> str:
 #: make the field mean something different from every other `created_at`.
 _TIME_ATTRS = ("created_at", "occurred_at", "snapshot_at", "captured_at",
                "linked_at", "generated_at", "entered_at", "opened_at",
-               "started_at")
+               "started_at",
+               # 0.5F-A2: a Parent baseline projection's own timestamp.
+               "projected_at")
 
 
 def _record_time(record: Any) -> Any:
@@ -581,6 +586,47 @@ class FirestoreSourceSystemLinkRepository(_BaseRepo):
                              ) -> List[SourceSystemLink]:
         found = self._query("external_id", external_id)
         return found if include_ended else [x for x in found if x.is_active]
+
+
+class FirestoreParentBaselineProjectionRepository(_BaseRepo):
+    """Immutable Parent baseline projections. CREATE-ONLY and FIND-ONLY.
+
+    No `update`, no `set`, no `overwrite`, no `delete`. Parent is the system of
+    record for a functional baseline, and an A1 finalized baseline is itself
+    immutable — so there is no legitimate operation here that edits a
+    projection, and the absence of a method is a stronger guarantee than a
+    rule someone has to remember.
+
+    Keyed by `projection_id`, which is a DETERMINISTIC function of
+    (source_session_id, domain, source_record_digest). That is what makes an
+    exact retry idempotent without a pre-check: the second create addresses
+    the same document id.
+    """
+
+    record_type, model = "parent_baseline_projection", ParentBaselineProjection
+
+    def create(self, projection: ParentBaselineProjection
+               ) -> ParentBaselineProjection:
+        return self._create(projection.projection_id, projection)
+
+    def find(self, projection_id: str) -> Optional[ParentBaselineProjection]:
+        """The projection, or None. Absence is a normal state, not an error."""
+        try:
+            return self._get(projection_id)
+        except RecordNotFound:
+            return None
+
+    def list_for_source(self, source_session_id: str, domain: str
+                        ) -> List[ParentBaselineProjection]:
+        """Every projection for one (session, domain), any digest.
+
+        Used ONLY to detect an integrity conflict: more than one digest for an
+        immutable source record means something that cannot legitimately
+        happen has happened. Queried on the session rather than the child,
+        because the session is what the digest attests.
+        """
+        found = self._query("source_session_id", source_session_id)
+        return [p for p in found if p.domain == domain]
 
 
 class FirestoreManagingClinicianRepository(_BaseRepo):
@@ -1288,6 +1334,8 @@ class FirestoreRepositories:
         self.goal_versions = FirestoreGoalVersionRepository(store)
         self.clinical_goals = FirestoreClinicalGoalRepository(store)
         self.suggestion_anchors = FirestoreSuggestionAnchorRepository(store)
+        self.parent_baseline_projections = (
+            FirestoreParentBaselineProjectionRepository(store))
         self.clinical_goal_anchors = FirestoreClinicalGoalAnchorRepository(store)
         self.caregiver_goals = FirestoreCaregiverGoalRepository(store)
         self.focus_plans = FirestoreMonthlyFocusPlanRepository(store)

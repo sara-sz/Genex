@@ -1,0 +1,28 @@
+# Cloud Build config for the INTERNAL PROJECTION service image.
+#
+# A third config beside cloudbuild.yaml (served API) and
+# cloudbuild-generation.yaml (offline job). Neither is modified, and no tag is
+# shared: this publishes `pilot-projection`, never `pilot-api`.
+#
+# Same `-f` reasoning as the other two: `gcloud builds submit --tag` requires
+# the Dockerfile at the context root, and these Dockerfiles live under
+# pilot_runtime/ to satisfy the Parent scope guard (PARENT_ALLOWED_PREFIXES in
+# genex-parent/tests/test_parent_24_integrity.py).
+
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/genex-pilot-staging/pilot/pilot-projection
+  _TAG: dev
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=pilot_runtime/deploy/Dockerfile.projection
+      - --tag=${_IMAGE}:${_TAG}
+      - .
+
+images:
+  - ${_IMAGE}:${_TAG}
+
+options:
+  logging: CLOUD_LOGGING_ONLY

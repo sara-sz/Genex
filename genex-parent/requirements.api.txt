@@ -18,6 +18,21 @@ pydantic>=2.7.0
 firebase-admin>=6.2.0
 
 # ── GCS session persistence ────────────────────────────────────────────────
+# ── Service-to-service identity (0.5F-A2) ─────────────────────────────────
+#
+# DECLARED DIRECTLY because api/parent_baseline_projection_client.py imports
+# `google.auth` and `google.oauth2.id_token` by name. Relying on it arriving
+# transitively would mean a future bump of google-cloud-storage could remove a
+# module this code imports.
+#
+# The range is EXACTLY the constraint google-cloud-storage already imposes
+# (`google-auth<3.0.0,>=2.26.1`), so declaring it cannot change which version
+# resolves and this slice cannot smuggle in a dependency upgrade. An exact pin
+# was considered and rejected: the version actually installed in the deployed
+# serving image could not be read — the image is tagged `:latest` and there is
+# no container runtime available here — so pinning would have been a guess
+# that silently changed the deployed dependency.
+google-auth>=2.26.1,<3.0.0
 google-cloud-storage>=2.10.0
 
 # ── genex_core transitive deps (subset required by the brain pipeline) ─────

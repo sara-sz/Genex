@@ -1,0 +1,43 @@
+# Dependencies for the INTERNAL PARENT-BASELINE-PROJECTION service image.
+#
+# A THIRD image, alongside the served API (requirements.txt) and the offline
+# generation job (requirements-generation.txt). Neither of those is modified.
+#
+# WHAT IS HERE
+#
+#   google-cloud-firestore  2.28.0  the projection repository's store. Same pin
+#                                   as the served API, because the two read and
+#                                   write the same collections and a
+#                                   serialisation difference between them would
+#                                   be invisible until it mattered.
+#   google-auth             2.49.2  verifies the inbound Google service
+#                                   identity token. Declared DIRECTLY because
+#                                   pilot_runtime/auth/google_oidc.py imports
+#                                   google.oauth2.id_token by name; it would
+#                                   otherwise arrive transitively via the
+#                                   Firestore SDK and could vanish on a bump.
+#   requests                2.33.1  google-auth's transport for fetching
+#                                   Google's public signing certificates.
+#   gunicorn                23.0.0  WSGI container. Unlike the generation job
+#                                   this IS a server — it receives requests —
+#                                   but only from one service account.
+#
+# DELIBERATELY ABSENT
+#
+#   firebase-admin  THE IMPORTANT ONE. This service has no end-user
+#                   authentication and no caregiver or provider routes. Without
+#                   the Firebase SDK installed, a Firebase end-user token
+#                   cannot be verified here even if a future edit tried: the
+#                   capability is absent from the image, not merely unused.
+#   pandas, openpyxl        no workbook is read; the projection carries the
+#                           seven fields it needs.
+#   openai, anthropic       no model call, ever.
+#   every analytics, APM, session-replay, error-reporting and tracing client
+#                           an error reporter's job is to upload the context of
+#                           a failure, and this service's context is a
+#                           clinical baseline.
+
+google-cloud-firestore==2.28.0
+google-auth==2.49.2
+requests==2.33.1
+gunicorn==23.0.0
