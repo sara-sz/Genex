@@ -625,7 +625,20 @@ def test_the_probe_script_is_executable_shell_and_runs_nothing_here():
     text = probe.read_text()
     assert text.startswith("#!/usr/bin/env bash")
     assert "set -euo pipefail" in text
-    # It must not be wired into CI: it needs a deployed service and IAM.
+    # It must not be EXECUTED by CI: it needs a deployed service and IAM that
+    # this slice does not apply. CI may READ it — one step asserts the probe
+    # mutates nothing — so the assertion is about invocation, not mention.
     workflow = (REPO_ROOT / ".github" / "workflows"
                 / "parent-2.4-ci.yml").read_text()
-    assert "probe_projection_auth" not in workflow
+    for invocation in ("bash probe_projection_auth",
+                       "./probe_projection_auth",
+                       "sh probe_projection_auth",
+                       "bash pilot_runtime/deploy/probe_projection_auth",
+                       "./pilot_runtime/deploy/probe_projection_auth",
+                       "run: probe_projection_auth"):
+        assert invocation not in workflow, invocation
+    # And it is never made the subject of a `run:` line.
+    for line in workflow.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("run:") and "probe_projection_auth" in stripped:
+            raise AssertionError(f"CI runs the probe: {stripped}")

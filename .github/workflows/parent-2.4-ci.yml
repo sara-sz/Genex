@@ -1977,3 +1977,341 @@ jobs:
           assert "pilot/pilot-api" not in generation
           print("serving publishes pilot-api; generation publishes pilot-generation")
           PY
+
+  pilot-projection-image:
+    name: October pilot 0.5F-A2 projection artifact
+    runs-on: ubuntu-latest
+
+    # The THIRD container-building job pattern in this workflow, after
+    # pilot-generation-image. Same reason it exists: the machine that authored
+    # 0.5F-A2 had no container runtime, so Dockerfile.projection and its
+    # in-build assertions had never executed anywhere.
+    #
+    # It does NOT publish. No registry login, no push, no credential: the image
+    # is built, inspected, run locally and discarded. And it applies no IAM —
+    # a step below asserts no build script embeds an IAM policy or allUsers.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage the narrowed projection build context
+        # Staged from the allowlist in `gcloudignore-projection` rather than
+        # from a list restated here, so a path the allowlist forgets is absent
+        # from the stage and the build fails.
+        #
+        # This context is the NARROWEST of the three: unlike the generation
+        # image it admits nothing from genex-parent, because the projection
+        # service reads no workbook and no taxonomy.
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import pathlib, shutil
+
+          ignore = pathlib.Path(
+              "pilot_runtime/deploy/gcloudignore-projection").read_text()
+          admitted = []
+          for line in ignore.splitlines():
+              line = line.strip()
+              if line.startswith("!") and not line.endswith("**"):
+                  path = line[1:].rstrip("/")
+                  if path:
+                      admitted.append(path)
+          assert admitted, "parsed no allowlist entries"
+          # Container entries (a parent un-ignored only to admit children)
+          # must not be copied wholesale — see the generation job for the case
+          # where that would have dragged in the Parent service.
+          admitted = [p for p in admitted
+                      if not any(q != p and q.startswith(p + "/")
+                                 for q in admitted)]
+          print("allowlist admits:", admitted)
+          assert admitted == ["pilot_backend", "pilot_runtime"], admitted
+
+          stage = pathlib.Path("/tmp/projctx")
+          if stage.exists():
+              shutil.rmtree(stage)
+          stage.mkdir(parents=True)
+
+          def drop(_root, names):
+              return [n for n in names
+                      if n in ("__pycache__", "tests", "fixtures")]
+
+          for rel in admitted:
+              src = pathlib.Path(rel)
+              if src.is_dir():
+                  shutil.copytree(src, stage / rel, ignore=drop)
+
+          for required in (
+              "pilot_runtime/deploy/Dockerfile.projection",
+              "pilot_runtime/deploy/requirements-projection.txt",
+              "pilot_runtime/projection_server.py",
+              "pilot_runtime/google_oidc.py",
+              "pilot_backend/transport/projection_wsgi.py",
+              "pilot_backend/integration/baseline_projection_service.py",
+              "pilot_backend/domain/parent_baseline_projection.py",
+          ):
+              assert (stage / required).is_file(), f"missing: {required}"
+
+          # NOTHING from genex-parent, and no top level beyond the two pilot
+          # packages. The projection service receives seven validated fields;
+          # it has no reason to see Parent content at all.
+          assert not (stage / "genex-parent").exists()
+          top = sorted(p.name for p in stage.iterdir())
+          assert top == ["pilot_backend", "pilot_runtime"], top
+          print("staged context top level:", top)
+
+          # The browser app's own entrypoint and CORS layer are present only
+          # because they live inside pilot_runtime/, which the service needs.
+          # What matters is that the projection entrypoint does not REACH
+          # them — proved by the import-graph test in the suite, and by the
+          # in-image check that pilot_runtime.server cannot even be imported.
+          browser_only = [
+              "pilot_runtime/server.py",
+              "pilot_runtime/http/cors.py",
+          ]
+          present = [p for p in browser_only if (stage / p).is_file()]
+          print("browser-app files present in context (unreachable, not run):",
+                present)
+          PY
+
+      - name: Build the projection image from the narrowed context
+        # The Dockerfile runs its own assertions during the build: firebase-admin,
+        # pandas and openai absent; google-auth and firestore present; no
+        # genex-parent bundled; and the application failing closed with no
+        # auth mode configured.
+        working-directory: .
+        run: |
+          docker build \
+            --file /tmp/projctx/pilot_runtime/deploy/Dockerfile.projection \
+            --tag pilot-projection:ci \
+            /tmp/projctx
+
+      - name: The built image has the right deps and NOT firebase-admin
+        # Re-asserted from OUTSIDE the build against the finished artifact.
+        # firebase-admin's absence is the load-bearing one: this service has no
+        # end-user authentication, so the capability is absent rather than
+        # merely unused — and its absence is what makes the browser app
+        # unstartable here.
+        run: |
+          docker run --rm pilot-projection:ci python -c "
+          import importlib.util as u
+          assert u.find_spec('firebase_admin') is None, 'firebase-admin present'
+          assert u.find_spec('pandas') is None, 'pandas present'
+          assert u.find_spec('openai') is None, 'openai present'
+          import google.oauth2.id_token, google.cloud.firestore, requests
+          print('projection image deps OK: google-auth + firestore, no firebase')
+          "
+
+      - name: The projection image cannot start the browser pilot-api server
+        run: |
+          python3 - <<'PY'
+          import subprocess
+
+          def run(*args):
+              return subprocess.run(
+                  ("docker", "run", "--rm", "pilot-projection:ci") + args,
+                  capture_output=True, text=True)
+
+          # `pilot_runtime.server` imports the composition root, which imports
+          # the Firebase decoder at module level. With firebase-admin absent
+          # the browser entrypoint cannot even be IMPORTED here, let alone
+          # served — so this image cannot become the browser API by
+          # misconfiguring a CMD.
+          out = run("python", "-c", "import pilot_runtime.server")
+          assert out.returncode != 0, "the browser entrypoint imported"
+          assert "firebase_admin" in (out.stderr + out.stdout), out.stderr
+          print("pilot_runtime.server is unimportable here:",
+                out.stderr.strip().splitlines()[-1][:90])
+
+          served = run("gunicorn", "--check-config",
+                       "pilot_runtime.server:application")
+          assert served.returncode != 0, "gunicorn loaded the browser app"
+          print("gunicorn cannot load the browser app either")
+          PY
+
+      - name: The projection entrypoint starts in iam_only and fails closed
+        # Non-secret configuration only: a project id, a database name and the
+        # declared auth mode. No audience and no caller are needed in
+        # `iam_only`, because the app verifies no token in that posture —
+        # Cloud Run IAM is the authoritative gate.
+        run: |
+          docker run --rm \
+            -e PILOT_ENVIRONMENT=dev \
+            -e PILOT_GCP_PROJECT_ID=genex-pilot-staging \
+            -e PILOT_FIREBASE_PROJECT_ID=genex-pilot-staging \
+            -e PILOT_FIRESTORE_DATABASE=pilot-staging \
+            pilot-projection:ci python -c "
+          from pilot_runtime.projection_server import (
+              build_projection_application as build, ProjectionConfigError)
+
+          class FakeFirestore:
+              def collection(self, *a, **k):
+                  return self
+
+          import os
+          env = dict(os.environ)
+
+          # 1. no auth mode declared -> refuses to start
+          try:
+              build(env, firestore_client=FakeFirestore())
+              raise SystemExit('started with no auth mode declared')
+          except ProjectionConfigError:
+              print('no auth mode            -> refused')
+
+          # 2. unknown auth mode -> refuses
+          for bad in ('iam', 'off', 'IAM_ONLY', 'iam_only_please'):
+              try:
+                  build(dict(env, PILOT_PROJECTION_AUTH_MODE=bad),
+                        firestore_client=FakeFirestore())
+                  raise SystemExit('started with auth mode ' + bad)
+              except ProjectionConfigError:
+                  pass
+          print('unknown auth modes      -> refused')
+
+          # 3. iam_plus_token without its verifier configuration -> refuses
+          for partial in ({}, {'PILOT_PROJECTION_AUDIENCE': 'https://x'},
+                          {'PILOT_PROJECTION_CALLER': 'a@b.iam.gserviceaccount.com'}):
+              try:
+                  build(dict(env, PILOT_PROJECTION_AUTH_MODE='iam_plus_token',
+                             **partial), firestore_client=FakeFirestore())
+                  raise SystemExit('iam_plus_token started underconfigured')
+              except ProjectionConfigError:
+                  pass
+          print('iam_plus_token partial  -> refused')
+
+          # 4. iam_only with only non-secret config -> STARTS, verifying nothing
+          app = build(dict(env, PILOT_PROJECTION_AUTH_MODE='iam_only'),
+                      firestore_client=FakeFirestore())
+          assert callable(app)
+          assert app.verifies_tokens is False
+          print('iam_only                -> started, verifies_tokens=False')
+
+          # 5. iam_plus_token fully configured -> starts WITH the verifier
+          app2 = build(dict(env, PILOT_PROJECTION_AUTH_MODE='iam_plus_token',
+                            PILOT_PROJECTION_AUDIENCE='https://example.invalid',
+                            PILOT_PROJECTION_CALLER='genex-parent-staging-run@genex-mvp-2026.iam.gserviceaccount.com'),
+                       firestore_client=FakeFirestore())
+          assert app2.verifies_tokens is True
+          print('iam_plus_token full     -> started, verifies_tokens=True')
+          "
+
+      - name: The serving and generation build surfaces are byte-unchanged
+        # 0.5F-A2 adds a THIRD image. Neither of the first two may move: the
+        # browser-facing API is the PHI-review surface, and the generation
+        # image was frozen at 0.5E-B.
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib
+
+          EXPECTED = {
+              # browser-facing serving image (frozen at 0.5E-B)
+              "Dockerfile":
+                  "b2ef486117944c16812566a636f46be4417ccb079abe849afec7adfbf77ae767",
+              "requirements.txt":
+                  "16f3757abc96a213b20c73cd146ade76b1f2559166a33e62dc3d6474c12070bb",
+              "gcloudignore":
+                  "a3a87be9f6872c0608aafacdf82d8ef6bb911a83ba678e2db12b79eacdd9a43b",
+              "cloudbuild.yaml":
+                  "629fc1ce0608f900cd68f49cb7aa504d85ba64f218904106a65d9743cdb31641",
+              # offline generation image (frozen at 0.5E-B)
+              "Dockerfile.generation":
+                  "e9c81f2a3080ffec4f2ad27bf08b27222f5b26a8f029d3ff04cae94f3a2d97a1",
+              "requirements-generation.txt":
+                  "e6d8fcda91e7c02aa890acc7f21f9c1116fe4423a960ecbca40126f77406da69",
+              "gcloudignore-generation":
+                  "7a14bae0e711f1525a36f6661507cab5f42290d7112694631c7f27c60645c422",
+              "cloudbuild-generation.yaml":
+                  "29d9e2298ce4c07ce5fabf26848980b72355168b224e52b08042faf43faf3c89",
+          }
+          base = pathlib.Path("pilot_runtime/deploy")
+          for name, expected in sorted(EXPECTED.items()):
+              got = hashlib.sha256((base / name).read_bytes()).hexdigest()
+              assert got == expected, f"{name} changed: {got}"
+              print(f"unchanged  {name}")
+
+          # Three images, three tags, no overlap.
+          tags = {}
+          for cfg in ("cloudbuild.yaml", "cloudbuild-generation.yaml",
+                      "cloudbuild-projection.yaml"):
+              text = (base / cfg).read_text()
+              for tag in ("pilot/pilot-api", "pilot/pilot-generation",
+                          "pilot/pilot-projection"):
+                  if tag in text:
+                      tags.setdefault(tag, []).append(cfg)
+          assert tags == {
+              "pilot/pilot-api": ["cloudbuild.yaml"],
+              "pilot/pilot-generation": ["cloudbuild-generation.yaml"],
+              "pilot/pilot-projection": ["cloudbuild-projection.yaml"],
+          }, tags
+          print("three build configs, three distinct images")
+          PY
+
+      - name: No build script embeds or applies IAM
+        # 0.5F-A2 applies NO IAM. The build artifacts must not quietly contain
+        # a policy, an allUsers grant, or a key file — and must not shell out
+        # to gcloud to apply one.
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import pathlib
+
+          # A GRANT is an instruction, not prose. These files deliberately
+          # EXPLAIN in comments why there is no allUsers and which single
+          # invoker binding is expected, so a whole-file substring scan would
+          # flag their own documentation — which is exactly what the first
+          # version of this gate did when dry-run locally.
+          #
+          # So policy tokens are scanned over EFFECTIVE lines only: comments
+          # stripped. Key material is scanned over the whole file, because
+          # there is no legitimate reason to mention a private key or a
+          # credentials filename even in a comment.
+          POLICY_TOKENS = (
+              "allUsers", "allAuthenticatedUsers",
+              "add-iam-policy-binding", "set-iam-policy",
+              "roles/run.invoker", "roles/storage.admin",
+              "roles/storage.objectAdmin", "roles/editor", "roles/owner",
+              "--allow-unauthenticated",
+          )
+          KEY_TOKENS = (
+              "service_account_key", "credentials.json", "key.json",
+              "BEGIN PRIVATE KEY",
+          )
+
+          def effective(text: str) -> str:
+              out = []
+              for line in text.splitlines():
+                  stripped = line.strip()
+                  if stripped.startswith("#") or not stripped:
+                      continue
+                  out.append(line.split(" #", 1)[0])
+              return "\n".join(out)
+
+          deploy = pathlib.Path("pilot_runtime/deploy")
+          checked = 0
+          for path in sorted(deploy.iterdir()):
+              if path.is_dir() or path.name.endswith(".sh"):
+                  # The auth PROBE legitimately reads IAM policy and names the
+                  # invoker role: it is an operator diagnostic, is in no build
+                  # context, and is excluded from CI by name. It is checked
+                  # separately below for MUTATING commands.
+                  continue
+              raw = path.read_text(errors="replace")
+              checked += 1
+              for needle in KEY_TOKENS:
+                  assert needle not in raw, f"{path.name} names {needle!r}"
+              code = effective(raw)
+              for needle in POLICY_TOKENS:
+                  assert needle not in code, \
+                      f"{path.name} APPLIES or embeds {needle!r}"
+          assert checked >= 12, checked
+          print(f"{checked} build/deploy files embed no IAM grant and no key")
+
+          # And the probe, which DOES name IAM, must never apply any.
+          probe = (deploy / "probe_projection_auth.sh").read_text()
+          for mutating in ("add-iam-policy-binding", "set-iam-policy",
+                           "remove-iam-policy-binding", "gcloud run deploy",
+                           "gcloud run services update"):
+              assert mutating not in probe, mutating
+          print("the auth probe reads IAM and mutates nothing")
+          PY
