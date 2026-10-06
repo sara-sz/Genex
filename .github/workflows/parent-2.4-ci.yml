@@ -648,15 +648,43 @@ jobs:
 
           tree = ast.parse(pathlib.Path(
               "pilot_backend/integration/identity_service.py").read_text())
-          link = next(n for n in ast.walk(tree)
-                      if isinstance(n, ast.FunctionDef)
-                      and n.name == "link_parent_session")
-          bridge = next((n for n in ast.walk(link)
+
+          # 0.5F-A3 EXTRACTED the transaction into `_bridge_parent_session` so
+          # the capability path reuses it instead of copying it. The invariant
+          # is unchanged — the three writes and both claims still commit
+          # together, claims first — but it now lives one function out, so this
+          # gate follows it rather than failing on the refactor.
+          #
+          # Both entry points must DELEGATE to that bridge, checked below: an
+          # extraction nobody calls would satisfy the transaction check while
+          # leaving the real path unguarded.
+          host = next((n for n in ast.walk(tree)
+                       if isinstance(n, ast.FunctionDef)
+                       and n.name == "_bridge_parent_session"), None)
+          if host is None:
+              print("the shared bridge _bridge_parent_session is gone")
+              sys.exit(1)
+          bridge = next((n for n in ast.walk(host)
                          if isinstance(n, ast.FunctionDef)
                          and n.name == "_bridge"), None)
           if bridge is None:
-              print("link_parent_session no longer has a transaction body")
+              print("the shared bridge no longer has a transaction body")
               sys.exit(1)
+
+          for entry in ("link_parent_session", "consume_parent_session_claim"):
+              fn = next((n for n in ast.walk(tree)
+                         if isinstance(n, ast.FunctionDef) and n.name == entry),
+                        None)
+              if fn is None:
+                  print("entry point is missing:", entry)
+                  sys.exit(1)
+              calls = {ast.unparse(c.func) for c in ast.walk(fn)
+                       if isinstance(c, ast.Call)
+                       and isinstance(c.func, ast.Attribute)}
+              if "self._bridge_parent_session" not in calls:
+                  print(entry, "does not delegate to the shared bridge")
+                  sys.exit(1)
+          print("both entry points delegate to one shared transaction")
 
           inside = [(ast.unparse(n.func), n.lineno) for n in ast.walk(bridge)
                     if isinstance(n, ast.Call)
@@ -685,7 +713,8 @@ jobs:
                       "create", "connect", "claim"):
                   print("a write bypasses the transaction:", name)
                   sys.exit(1)
-          print("child, relationship, link and both claims commit together; claims first")
+          print("child, relationship, link and the claims commit together; "
+                "claims first; shared by the pull and capability paths")
           PY
 
       - name: October pilot 0.5A — pilot_backend still imports no storage SDK
@@ -2524,12 +2553,32 @@ jobs:
           assert proj.returncode != 0, "the projection app started here"
           print("projection app                -> refuses to start")
 
-          # The GENERATION job needs pandas/openpyxl and the Parent workbook,
-          # none of which are present.
-          gen = run("python", "-c",
-                    "import pilot_runtime.deploy.generate_suggestions_job")
-          assert gen.returncode != 0, "the generation job imported"
-          print("generation job                -> unimportable")
+          # The GENERATION path cannot RUN here, which is the true property —
+          # and not the one a naive import check would test.
+          #
+          # `generate_suggestions_job` and the Parent gold-standard adapter
+          # import FINE in this image: both import pandas lazily, inside the
+          # methods that read a workbook. So "the generation job is
+          # unimportable" is simply false, and asserting it failed this step on
+          # the first hosted run. What is true is that the DATA and the reader
+          # are both absent, so no generation can occur.
+          deps = run("python", "-c",
+                     "import importlib.util as u; "
+                     "assert u.find_spec('pandas') is None; "
+                     "assert u.find_spec('openpyxl') is None; "
+                     "print('no workbook reader installed')")
+          assert deps.returncode == 0, deps.stderr
+          print("workbook reader               -> absent (pandas, openpyxl)")
+
+          data = run("python", "-c",
+                     "import pathlib, sys; "
+                     "root = pathlib.Path('/app'); "
+                     "assert not (root / 'genex-parent').exists(); "
+                     "books = sorted(str(p) for p in root.rglob('*.xlsx')); "
+                     "assert books == [], books; "
+                     "print('no workbook and no Parent tree in the image')")
+          assert data.returncode == 0, data.stderr
+          print("workbook data                 -> absent, no genex-parent tree")
 
           # And the image's own CMD names the bootstrap entrypoint only.
           cmd = subprocess.run(
