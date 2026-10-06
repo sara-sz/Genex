@@ -2416,8 +2416,19 @@ jobs:
     # step below asserts no build script embeds a policy or an allUsers grant.
 
     steps:
-      - name: Checkout
+      - name: Checkout with tags
+        # `fetch-depth: 0` so the FROZEN A2 TAG is present in this checkout.
+        #
+        # The byte-unchanged step below compares each earlier artifact against
+        # `october-pilot-0.5f-a2-parent-baseline-projection:<path>` rather than
+        # against a list of literal hashes. That is deliberately stronger: a
+        # literal would have to be updated by the same edit that broke it, so it
+        # cannot detect the edit it exists to catch. But the default shallow
+        # checkout fetches no tags, which failed that step on the first hosted
+        # run — hence the full fetch here.
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Stage the narrowed bootstrap build context
         # Staged from the allowlist in `gcloudignore-bootstrap` rather than from
@@ -2843,6 +2854,12 @@ jobs:
           )
           # Compared against the TAG rather than a hash list restated here: a
           # literal would have to be updated by the same edit that broke it.
+          probe = subprocess.run(["git", "rev-parse", "--verify", A2_TAG],
+                                 capture_output=True, text=True)
+          assert probe.returncode == 0, (
+              f"the frozen tag {A2_TAG} is not in this checkout; the job needs "
+              f"fetch-depth: 0 so the comparison has something to compare to")
+
           for rel in FROZEN:
               want = subprocess.run(["git", "rev-parse", f"{A2_TAG}:{rel}"],
                                     capture_output=True, text=True, check=True)
