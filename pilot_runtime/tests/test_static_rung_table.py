@@ -1,6 +1,10 @@
 """0.5F-B Option C — the generated rung table and the static browser adapter.
 
-Five things are proved here, in order of how much they would cost to get wrong:
+Five things are proved here, in order of how much they would cost to get wrong.
+(The COMPOSITION proofs live in `test_static_rung_composition.py` instead: they
+import `pilot_runtime.composition`, which imports `firebase_admin` at module
+scope, and the dependency-pure taxonomy CI job installs only pytest, pandas and
+openpyxl. Keeping them here made that whole job fail to collect.)
 
 1. EQUIVALENCE. The static adapter and the live `ParentGoldStandardSource`
    agree on every step input and every rung. This is the test that makes the
@@ -507,53 +511,6 @@ def test_mappable_rungs_are_months_ordered_and_exclude_the_unresolved(
 def test_the_source_exposes_its_verified_digest(static_source, artifact):
     assert static_source.artifact_digest == artifact["artifact_digest"]
     assert static_source.provenance["taxonomy_sha256"] == TAXONOMY_SHA
-
-
-# ---------------------------------------------------------------------------
-# 6. COMPOSITION — the DEPLOYED browser app gets a live rung source
-# ---------------------------------------------------------------------------
-
-
-def test_the_built_runtime_has_a_non_none_rung_source():
-    """The headline of Option C: `rung_source != None` in the real composition.
-
-    Before this slice the deployed app passed nothing, so the generation route
-    failed closed with 403 for a reason unrelated to the request.
-    """
-    from pilot_runtime.composition import build_runtime
-
-    runtime = build_runtime({"PILOT_ENVIRONMENT": "dev",
-                             "PILOT_DEV_AUTH_ENABLED": "true"},
-                            in_memory=True)
-    assert runtime.rung_source is not None
-    assert isinstance(runtime.rung_source, StaticRungTableSource)
-    # And the WSGI application holds the SAME object — not a second one, and
-    # not None.
-    assert runtime.application._rung_source is runtime.rung_source
-
-
-def test_the_served_entrypoint_still_does_not_reach_the_live_adapter():
-    """Composition must use the STATIC source, never the workbook adapter.
-
-    Preserved from 0.5E-B. The live adapter needs pandas and the Parent
-    package; a composition that imported it would reintroduce the dependency
-    Option C exists to avoid, and would fail at runtime in the serving image.
-    """
-    import subprocess
-
-    code = (
-        "import sys, json\n"
-        "import pilot_runtime.composition as C\n"
-        "C.build_runtime({'PILOT_ENVIRONMENT': 'dev',\n"
-        "                 'PILOT_DEV_AUTH_ENABLED': 'true'}, in_memory=True)\n"
-        "print(json.dumps(\n"
-        "    'pilot_runtime.integration.parent_gold_standard_source'\n"
-        "    in sys.modules))\n"
-    )
-    result = subprocess.run([sys.executable, "-c", code],
-                            capture_output=True, text=True, cwd=REPO_ROOT)
-    assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout.strip()) is False
 
 
 # ---------------------------------------------------------------------------

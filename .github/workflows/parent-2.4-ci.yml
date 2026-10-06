@@ -504,6 +504,15 @@ jobs:
         # adapter on every probed step input and every declared-track rung, so
         # the artifact is proven TRUE and not merely self-consistent. Plus the
         # predicate-named population counts.
+        #
+        # ONLY these two modules. This job is dependency-pure by design — it
+        # installs pytest, pandas and openpyxl and nothing else — so anything
+        # importing `pilot_runtime.composition` cannot run here: composition
+        # imports `firebase_admin` at module scope. The first hosted run of
+        # this slice failed exactly that way, and because a collection error
+        # aborts the job it also skipped 28 later steps. The composition and
+        # staged-context suites therefore run in the integration job, which
+        # installs the SDKs.
         working-directory: .
         env:
           PYTHONPATH: genex-parent
@@ -513,21 +522,6 @@ jobs:
             if [ -f "$f" ]; then python -m pytest "$f" -q; else
               echo "not present on this branch: $f"; fi
           done
-
-      - name: October pilot 0.5F-B — the BROWSER artifact context
-        # The gate the 0.5F-B inspection proved was missing. Reconstructs the
-        # staged serving context from deploy/gcloudignore, blocks the exact
-        # dependency set deploy/requirements.txt omits, and services the
-        # 18 -> 24 clinical lookup in there. Needs NO Parent namespace on the
-        # path — that is the point — so PYTHONPATH is deliberately unset.
-        working-directory: .
-        run: |
-          if [ -f pilot_runtime/tests/test_browser_artifact_context.py ]; then
-            python -m pytest \
-              pilot_runtime/tests/test_browser_artifact_context.py -q
-          else
-            echo "0.5F-B Option C not present on this branch — nothing to run"
-          fi
 
       - name: October pilot 0.4B/C — the goal layer reaches no network
         # A second, independent check on the same property: the import graph
@@ -1958,6 +1952,40 @@ jobs:
             python -m pytest pilot_runtime/tests/integration/test_connection_race_determinism.py -q
           else
             echo "0.5B not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5F-B — composition + staged browser context
+        # These two suites live HERE and not in the taxonomy job because they
+        # import `pilot_runtime.composition`, which imports `firebase_admin` at
+        # module scope. The taxonomy job installs pytest, pandas and openpyxl
+        # only — it is the job that proves the pilot touches no cloud SDK — so
+        # a composition test there fails to COLLECT and takes the rest of the
+        # job down with it. That is exactly what happened on the first hosted
+        # run of this slice.
+        #
+        # The staged-context suite additionally spawns subprocesses that build
+        # the runtime, so `sys.modules` blocking cannot stand in for the real
+        # dependency set; the SDKs have to actually be installed.
+        #
+        # PYTHONPATH is deliberately NOT set: neither suite may need the Parent
+        # namespace, and the staged-context suite asserts its absence.
+        run: |
+          for f in pilot_runtime/tests/test_static_rung_composition.py \
+                   pilot_runtime/tests/test_browser_artifact_context.py; do
+            if [ -f "$f" ]; then python -m pytest "$f" -q; else
+              echo "not present on this branch: $f"; fi
+          done
+
+      - name: October pilot 0.5F-B — generation transaction (real emulator)
+        # The 8-way barrier race against real Firestore: one claim, one
+        # suggestion, one anchor, zero orphans. In-memory stores cannot prove
+        # this — the claims-first ordering only matters under real contention.
+        run: |
+          if [ -f pilot_runtime/tests/integration/test_suggestion_generation_emulator.py ]; then
+            python -m pytest \
+              pilot_runtime/tests/integration/test_suggestion_generation_emulator.py -q
+          else
+            echo "0.5F-B not present on this branch — nothing to run"
           fi
 
       - name: 0.5B emulator harness leaks no process
@@ -3488,22 +3516,62 @@ jobs:
           echo "--- emulator log tail ---"
           tail -5 /tmp/emulator.log || true
 
-      - name: Built image — gunicorn can actually boot the server
-        # The entrypoint, not just the library. `--check-config` loads the WSGI
-        # callable through the real `--preload` path and exits, so a
-        # composition that only works under a test harness is caught.
+      - name: Built image — the staging entrypoint and its refusals
+        # CORRECTION to this job's first hosted run. It originally tried to
+        # BOOT `pilot_runtime.server:application` under gunicorn and failed —
+        # not from a defect, but because that entrypoint cannot start in CI BY
+        # DESIGN. `_require` refuses PILOT_DEV_AUTH_ENABLED, refuses
+        # FIRESTORE_EMULATOR_HOST, demands https-only CORS origins, and then
+        # `build_wsgi_application` refuses a FailClosedAuthVerifier — so a
+        # successful boot needs real Identity Platform credentials, which this
+        # job deliberately has none of.
+        #
+        # So the achievable proof is the stronger one: gunicorn is installed
+        # and can IMPORT the entrypoint module, and the entrypoint's refusals
+        # all fire inside the real image. A guard asserted positively is worth
+        # more than a boot attempt that could only ever have been
+        # misconfigured.
         run: |
-          set +e
-          docker run --rm \
-            -e PILOT_ENVIRONMENT=dev \
-            -e PILOT_DEV_AUTH_ENABLED=true \
-            -e PILOT_GCP_PROJECT_ID=pilot-image-proof \
-            -e PILOT_ALLOWED_ORIGINS=http://localhost:3000 \
-            --entrypoint gunicorn pilot-api:ci \
-              --check-config --preload pilot_runtime.server:application \
-            > /tmp/gunicorn.out 2>&1
-          rc=$?
-          set -e
-          cat /tmp/gunicorn.out
-          test "$rc" -eq 0 || { echo "gunicorn refused to load the app"; exit 1; }
-          echo "gunicorn loaded pilot_runtime.server:application (exit 0)"
+          docker run --rm --entrypoint sh pilot-api:ci -c \
+            'gunicorn --version && python -c "import pilot_runtime.server as s; print(\"server module imports; application is resolved lazily via\", s.__getattr__.__name__)"'
+          docker run --rm --entrypoint python pilot-api:ci - <<'PY'
+          from pilot_runtime.server import StagingConfigError, _require
+
+          base = {
+              "PILOT_ENVIRONMENT": "dev",
+              "PILOT_GCP_PROJECT_ID": "p",
+              "PILOT_FIREBASE_PROJECT_ID": "p",
+              "PILOT_FIRESTORE_DATABASE": "(default)",
+              "PILOT_ALLOWED_ORIGINS": "https://app.example.invalid",
+          }
+          _require(base)
+          print("the staging entrypoint ACCEPTS a well-formed configuration")
+
+          cases = {
+              "dev auth enabled": {"PILOT_DEV_AUTH_ENABLED": "true"},
+              "firestore emulator": {"FIRESTORE_EMULATOR_HOST": "127.0.0.1:8080"},
+              "http CORS origin": {"PILOT_ALLOWED_ORIGINS": "http://localhost:3000"},
+              "wildcard CORS": {"PILOT_ALLOWED_ORIGINS": "*"},
+              "prod environment": {"PILOT_ENVIRONMENT": "prod"},
+              "parent bucket set": {"PILOT_PARENT_SESSION_BUCKET": "b"},
+          }
+          for label, overlay in cases.items():
+              env = dict(base)
+              env.update(overlay)
+              try:
+                  _require(env)
+              except StagingConfigError as exc:
+                  print(f"  refused ({label}): {exc}")
+              else:
+                  raise AssertionError(f"the entrypoint ACCEPTED {label}")
+
+          for name in sorted(base):
+              env = {k: v for k, v in base.items() if k != name}
+              try:
+                  _require(env)
+              except StagingConfigError:
+                  print(f"  refused (missing {name})")
+              else:
+                  raise AssertionError(f"the entrypoint started without {name}")
+          print("every staging refusal fires inside the built image")
+          PY
