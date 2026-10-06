@@ -82,6 +82,9 @@ from ..domain.parent_baseline_projection import (
     ParentBaselineProjection,
 )
 from ..domain.parent_session_claim import ParentSessionClaim
+from ..domain.suggestion_generation import (
+    GoalSuggestionGenerationClaim,
+)
 from ..domain.source_link import SourceSystemLink
 from ..domain.connections import CaregiverChildConnection, ProviderChildConnection
 from ..domain.entities import Caregiver, Child, Practice, Provider
@@ -659,6 +662,29 @@ class FirestoreParentSessionClaimRepository(_BaseRepo):
         """The claim, or None. Absence is the normal state for a bad token."""
         try:
             return self._get(token_digest)
+        except RecordNotFound:
+            return None
+
+
+class FirestoreSuggestionGenerationClaimRepository(_BaseRepo):
+    """Deterministic generation claims. CREATE-ONLY and FIND-ONLY.
+
+    No update, no delete, and deliberately no `mark_generated`: a mutable flag
+    would be a read-then-write guard, and the create-only deterministic
+    document id is what makes eight simultaneous requests collide on one.
+    """
+
+    record_type, model = ("suggestion_generation_claim",
+                          GoalSuggestionGenerationClaim)
+
+    def create(self, claim: GoalSuggestionGenerationClaim
+               ) -> GoalSuggestionGenerationClaim:
+        return self._create(claim.claim_id, claim)
+
+    def find(self, claim_id: str) -> Optional[GoalSuggestionGenerationClaim]:
+        """The claim, or None. Absence is the normal first-generation state."""
+        try:
+            return self._get(claim_id)
         except RecordNotFound:
             return None
 
@@ -1372,6 +1398,8 @@ class FirestoreRepositories:
             FirestoreParentBaselineProjectionRepository(store))
         self.parent_session_claims = (
             FirestoreParentSessionClaimRepository(store))
+        self.suggestion_generation_claims = (
+            FirestoreSuggestionGenerationClaimRepository(store))
         self.clinical_goal_anchors = FirestoreClinicalGoalAnchorRepository(store)
         self.caregiver_goals = FirestoreCaregiverGoalRepository(store)
         self.focus_plans = FirestoreMonthlyFocusPlanRepository(store)

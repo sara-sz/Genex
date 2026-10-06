@@ -61,6 +61,7 @@ from pilot_backend.persistence import FakeDocumentStore, FirestoreRepositories
 from pilot_backend.transport import build_application
 
 from .auth.firebase_decoder import FirebaseTokenDecoder, initialize_firebase_app
+from .integration.static_rung_source import build_static_rung_source
 from .integration.parent_gcs_source import (
     BUCKET_ENV_VAR,
     build_parent_session_source,
@@ -98,6 +99,11 @@ class PilotRuntime:
     #: which case the link route refuses rather than inventing a session —
     #: absent is the safe state, so it is not a startup failure.
     parent_source: Any = None
+    #: The canonical-rung source backing 0.5F-B generation. Unlike
+    #: `parent_source` this is NEVER None in a built runtime: it comes from a
+    #: file inside the image, so its absence is a build defect rather than a
+    #: configuration choice, and `build_rung_source` raises instead.
+    rung_source: Any = None
 
     @property
     def is_production(self) -> bool:
@@ -184,6 +190,25 @@ def build_parent_source(env: Mapping[str, str], *, storage_client: Any = None):
                                        client=storage_client)
 
 
+def build_rung_source(artifact_path: Any = None):
+    """The canonical-rung source for the BROWSER image. 0.5F-B, Option C.
+
+    Backed by the generated static table, never by `ParentGoldStandardSource`:
+    the live adapter needs `genex_core`, `parent_taxonomy`, two workbooks and
+    pandas, none of which are in the serving image — proven in the 0.5F-B
+    inspection, where it raised at construction in the real staged context.
+
+    Raises rather than returning None, and that asymmetry with
+    `build_parent_source` is deliberate. An unconfigured Parent bucket is a
+    deployment CHOICE with a safe meaning (sessions cannot be linked). A
+    missing rung table is a BUILD DEFECT: it ships inside the image, so if it
+    is absent the image is wrong. Returning None would reinstate exactly the
+    silent 403 the inspection found — a route that authorises correctly,
+    refuses for an unrelated-sounding reason, and looks configured.
+    """
+    return build_static_rung_source(artifact_path)
+
+
 def build_runtime(env: Mapping[str, str], *,
                   process_env: Optional[Mapping[str, str]] = None,
                   in_memory: bool = False,
@@ -191,6 +216,7 @@ def build_runtime(env: Mapping[str, str], *,
                   decoder: Any = None,
                   credential: Any = None,
                   storage_client: Any = None,
+                  rung_artifact_path: Any = None,
                   log_sink: Optional[list] = None) -> PilotRuntime:
     """Assemble the runtime from an explicit environment mapping.
 
@@ -235,14 +261,15 @@ def build_runtime(env: Mapping[str, str], *,
     child_context = ChildContextService(verifier=verifier, repos=repos, recorder=recorder)
 
     parent_source = build_parent_source(env, storage_client=storage_client)
+    rung_source = build_rung_source(rung_artifact_path)
 
     application = build_application(settings=settings, repos=repos, verifier=verifier,
                                     recorder=recorder, parent_source=parent_source,
-                                    log_sink=log_sink)
+                                    rung_source=rung_source, log_sink=log_sink)
 
     return PilotRuntime(
         settings=settings, store=store, repos=repos, verifier=verifier,
         recorder=recorder, child_context=child_context,
         application=application, cors=cors_policy_for(settings),
-        parent_source=parent_source,
+        parent_source=parent_source, rung_source=rung_source,
     )

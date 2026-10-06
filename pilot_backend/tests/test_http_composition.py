@@ -549,6 +549,9 @@ def test_route_table_and_apisurface_cannot_disagree():
         # public self-registration.
         "/pilot/children/{child_id}/goals": False,
         "/pilot/children/{child_id}/goal-suggestions": False,
+        # 0.5F-B provider generation TRIGGER. Protected, provider-only, and
+        # additionally managing-clinician-only. POST because it writes.
+        "/pilot/children/{child_id}/goal-suggestions/generate": False,
         "/pilot/children/{child_id}/monthly-plan": False,
         "/pilot/children/{child_id}/current-cycle": False,
         "/pilot/children/{child_id}/rtm": False,

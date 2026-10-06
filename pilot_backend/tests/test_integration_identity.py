@@ -1963,7 +1963,7 @@ class _ExplodingInput:
         raise AssertionError("the request body must never be iterated")
 
 
-def build_http(*, parent_source=None):
+def build_http(*, parent_source=None, rung_source=None):
     """Settings, repositories, verifier, recorder and the WSGI application."""
     settings = PilotSettings.from_env({
         "PILOT_ENVIRONMENT": "dev",
@@ -1987,6 +1987,10 @@ def build_http(*, parent_source=None):
     parent = parent_source if parent_source is not None else InMemoryParentSessionSource()
     app = build_application(settings=settings, repos=repos, verifier=verifier,
                             recorder=recorder, parent_source=parent,
+                            # 0.5F-B: optional, defaulted None so every existing
+                            # caller is unaffected and the generation route
+                            # fails closed when no Gold Standard is configured.
+                            rung_source=rung_source,
                             log_sink=logs)
 
     class Bundle:
@@ -1995,6 +1999,7 @@ def build_http(*, parent_source=None):
     bundle = Bundle()
     bundle.app, bundle.repos, bundle.topo = app, repos, topology
     bundle.parent, bundle.logs, bundle.verifier = parent, logs, verifier
+    bundle.settings, bundle.recorder = settings, recorder
     return bundle
 
 

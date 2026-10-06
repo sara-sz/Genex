@@ -65,6 +65,13 @@ COLLECTIONS: Mapping[str, str] = {
     # create-only: redemption is recorded as an identity claim, never as an edit
     # to the pending record. Holds a token DIGEST and no user identifier at all.
     "parent_session_claim": PILOT_COLLECTION_PREFIX + "parent_session_claims",
+    # 0.5F-B deterministic suggestion generation. Create-only: the claim's
+    # existence IS the record that one generation happened, written in the same
+    # transaction as the suggestion and anchor it authorises. A SEPARATE
+    # collection from pilot_identity_claims, which is child-identity scoped —
+    # generation is not an identity constraint and must not borrow that meaning.
+    "suggestion_generation_claim":
+        PILOT_COLLECTION_PREFIX + "suggestion_generation_claims",
     "clinical_goal": "pilot_clinical_goals",
     "caregiver_goal": "pilot_caregiver_goals",
     # 0.4C monthly focus plan.

@@ -314,7 +314,220 @@ jobs:
               "workbook content is restated in non-test pilot code; it must "
               "cross the boundary at runtime:\n  " + "\n  ".join(offenders))
           print("no workbook content restated in pilot_backend/ or pilot_runtime/")
+
+          # 0.5F-B Option C. The scan above covers *.py only, so a GENERATED
+          # data file would have slipped past it silently. That is stated here
+          # rather than left to the extension filter, because "no mirror" is the
+          # property this gate exists for and Option C is a deliberate,
+          # founder-approved exception to it.
+          #
+          # The exception is narrow and conditional: workbook content may live
+          # in the ONE generated artifact, and only because the drift gate in
+          # the next step regenerates it from the frozen workbooks and fails on
+          # any difference. A hand-maintained copy of the same bytes would be
+          # exactly the mirror that was rejected; a regenerated one cannot
+          # diverge without CI going red.
+          ALLOWED_DATA = {"pilot_runtime/data/rung_table_talking_v1.json"}
+          data_offenders = []
+          for root in ("pilot_backend", "pilot_runtime"):
+              base = pathlib.Path(root)
+              if not base.is_dir():
+                  continue
+              for path in base.rglob("*"):
+                  if not path.is_file() or path.suffix == ".py":
+                      continue
+                  if "tests" in path.parts or "__pycache__" in path.parts:
+                      continue
+                  if path.as_posix() in ALLOWED_DATA:
+                      continue
+                  try:
+                      text = path.read_text()
+                  except (UnicodeDecodeError, OSError):
+                      continue
+                  for needle in CONTENT:
+                      if needle in text:
+                          data_offenders.append(f"{path}: {needle!r}")
+          assert not data_offenders, (
+              "workbook content appears in a non-generated data file:\n  "
+              + "\n  ".join(data_offenders))
+
+          # Non-vacuity: the allowance must actually be needed, i.e. the
+          # generated artifact really does carry workbook content. If it did
+          # not, this exception would be dead and should be deleted.
+          artifact = pathlib.Path(
+              "pilot_runtime/data/rung_table_talking_v1.json")
+          if artifact.is_file():
+              text = artifact.read_text()
+              assert any(n in text for n in CONTENT), (
+                  "the generated artifact carries no workbook content, so the "
+                  "no-mirror exception for it is dead and must be removed")
+              print("the one generated artifact is allowed, and is non-empty")
           PY
+
+      - name: October pilot 0.5F-B — rung table DRIFT GATE
+        # LOAD-BEARING. The browser Pilot image answers its canonical-rung
+        # lookups from a committed JSON artifact instead of the workbook, so
+        # that artifact is now clinical content living outside Parent. The only
+        # thing that keeps it honest is this step: regenerate it from the
+        # ACTUAL pinned Parent engine, workbook and taxonomy, and fail on any
+        # difference.
+        #
+        # Concretely, a developer must not be able to hand-edit `18 -> 30` and
+        # still get green. The step below proves that twice — once by comparing
+        # the real artifact, and once by deliberately corrupting a copy and
+        # asserting the comparison REJECTS it. Without the second half, a gate
+        # that silently compared nothing would also pass.
+        #
+        # It lives in this job for the same reason the 0.5E-B bridge does: only
+        # `working-directory: .` plus PYTHONPATH reaches both namespaces, and
+        # this job already installs pandas and openpyxl.
+        working-directory: .
+        env:
+          PYTHONPATH: genex-parent
+        run: |
+          if [ ! -f pilot_runtime/integration/rung_table_generator.py ]; then
+            echo "0.5F-B Option C not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import json, pathlib, sys, tempfile
+
+          from pilot_runtime.integration import rung_table_generator as GEN
+
+          committed_path = pathlib.Path(GEN.ARTIFACT_RELPATH)
+          assert committed_path.is_file(), (
+              f"the committed artifact is missing: {GEN.ARTIFACT_RELPATH}")
+          committed = json.loads(committed_path.read_text(encoding="utf-8"))
+
+          # Regenerated into a TEMPORARY location, so a failing gate cannot
+          # "fix" itself by overwriting the file it is checking.
+          with tempfile.TemporaryDirectory() as tmp:
+              out = pathlib.Path(tmp) / "regenerated.json"
+              regenerated = GEN.write_artifact(out)
+              raw_regenerated = out.read_text(encoding="utf-8")
+
+          # 1. canonical JSON, so reindenting is not a failure but content is
+          if GEN.canonical_json(regenerated) != GEN.canonical_json(committed):
+              print("DRIFT: the committed rung table does not match the "
+                    "artifact regenerated from the frozen workbooks.")
+              for key in sorted(set(regenerated) | set(committed)):
+                  if regenerated.get(key) != committed.get(key):
+                      print(f"  section differs: {key}")
+              sys.exit(1)
+
+          # 2. the self-digest, independently
+          assert regenerated["artifact_digest"] == committed["artifact_digest"], \
+              "the artifact digest drifted"
+          assert GEN.artifact_digest(committed) == committed["artifact_digest"], \
+              "the committed artifact fails its own digest"
+
+          # 3. byte-for-byte against the renderer, so the committed file is not
+          #    merely equivalent but is what the generator emits
+          assert raw_regenerated == committed_path.read_text(encoding="utf-8"), \
+              "the committed artifact is not byte-identical to its renderer"
+
+          print(f"no drift. digest {committed['artifact_digest']}")
+
+          # -- the gate must be able to FAIL -----------------------------------
+          # A corrupted copy, compared the same way. This is the `18 -> 30`
+          # scenario the founder named, and it must be rejected.
+          tampered = json.loads(json.dumps(committed))
+          tampered["steps"]["18"]["target_months"] = 30
+          tampered["artifact_digest"] = GEN.artifact_digest(tampered)
+          assert GEN.canonical_json(tampered) != GEN.canonical_json(regenerated), \
+              "the drift comparison does not reject a hand-edited target month"
+          print("non-vacuous: a hand-edited 18 -> 30 is rejected")
+
+          # And the pinned clinical facts, read from the artifact itself.
+          assert committed["population"] == {
+              "declared_track_rungs": 21,
+              "declared_track_mappable": 17,
+              "declared_track_unresolved": 4,
+          }, committed["population"]
+          step = committed["steps"]["18"]
+          rung = committed["rungs"][step["target_rung_ref"]]
+          assert step["target_months"] == 24, step
+          assert step["target_rung_ref"] == \
+              "rung1:feb590cf2788978b383c11062ce67c1b", step
+          assert rung["track_ref"] == \
+              "track1:5be892494f3e6894a7de24a868084e0f", rung
+          assert rung["subdomain"] == "expressive_language", rung
+          assert [b["family_ref"] for b in rung["family_bindings"]] == [
+              "expressive_vocabulary_growth", "two_word_phrases"], rung
+
+          # Provenance: BOTH workbooks, because the candidate file is the one
+          # every rung actually came from and the snapshot is the frozen
+          # upstream input. Recording only the snapshot would be false
+          # provenance.
+          prov = committed["provenance"]
+          assert prov["rung_workbook_sha256"] == (
+              "a16ce10fe9c932bc7ca6e3275748541b3c8a1e15a0d8a2702b0560a"
+              "56ddc5fd6"), prov
+          assert prov["taxonomy_sha256"] == (
+              "e5835969ead556129530f01d4629c584b823729a1b4e4425e5e3d29"
+              "ddba4d262"), prov
+          assert prov["gold_standard_snapshot_sha256"] == (
+              "c2b6735d9f099c916973c98c1953e7eb1f2ca8e1a60430011f805a3"
+              "bf9c3487c"), prov
+          print("provenance pinned for both workbooks and the taxonomy")
+
+          # No off-track rung admitted, and every ref recomputes.
+          from pilot_backend.domain.canonical_rung import (
+              compute_rung_ref, compute_track_ref)
+
+          declared = set(committed["declared_track"]["track_subdomains"])
+          assert declared == {"expressive_language",
+                              "early_vocalization_and_babbling"}, declared
+          track_ref = compute_track_ref(
+              committed["declared_track"]["domain_key"],
+              committed["declared_track"]["track_subdomains"],
+              committed["declared_track"]["track_families"])
+          mappable = unresolved = 0
+          for ref, entry in committed["rungs"].items():
+              assert entry["subdomain"] in declared, (ref, entry["subdomain"])
+              assert compute_rung_ref(
+                  committed["declared_track"]["domain_key"],
+                  entry["source_rung_months"],
+                  entry["milestone_text"]) == ref, ref
+              if entry["mappable"]:
+                  assert entry["track_ref"] == track_ref, ref
+                  mappable += 1
+              else:
+                  unresolved += 1
+          assert (mappable, unresolved) == (17, 4), (mappable, unresolved)
+          print("21 declared-track rungs = 17 mappable + 4 unresolved; "
+                "all refs recompute; no off-track rung admitted")
+          PY
+
+      - name: October pilot 0.5F-B — rung table suites (cross-system)
+        # The equivalence suite: the static table is compared against the LIVE
+        # adapter on every probed step input and every declared-track rung, so
+        # the artifact is proven TRUE and not merely self-consistent. Plus the
+        # predicate-named population counts.
+        working-directory: .
+        env:
+          PYTHONPATH: genex-parent
+        run: |
+          for f in pilot_runtime/tests/test_static_rung_table.py \
+                   pilot_runtime/tests/test_slp_rung_population_terminology.py; do
+            if [ -f "$f" ]; then python -m pytest "$f" -q; else
+              echo "not present on this branch: $f"; fi
+          done
+
+      - name: October pilot 0.5F-B — the BROWSER artifact context
+        # The gate the 0.5F-B inspection proved was missing. Reconstructs the
+        # staged serving context from deploy/gcloudignore, blocks the exact
+        # dependency set deploy/requirements.txt omits, and services the
+        # 18 -> 24 clinical lookup in there. Needs NO Parent namespace on the
+        # path — that is the point — so PYTHONPATH is deliberately unset.
+        working-directory: .
+        run: |
+          if [ -f pilot_runtime/tests/test_browser_artifact_context.py ]; then
+            python -m pytest \
+              pilot_runtime/tests/test_browser_artifact_context.py -q
+          else
+            echo "0.5F-B Option C not present on this branch — nothing to run"
+          fi
 
       - name: October pilot 0.4B/C — the goal layer reaches no network
         # A second, independent check on the same property: the import graph
@@ -2941,3 +3154,356 @@ jobs:
               assert banned not in iam_src, f"bootstrap_iam.py uses {banned}"
           print("bootstrap_iam.py proposes commands as DATA; executes nothing")
           PY
+
+  pilot-browser-image:
+    name: October pilot 0.5F-B browser serving artifact
+    runs-on: ubuntu-latest
+    # The gap the 0.5F-B inspection exposed and local development could not
+    # close: there was no container runtime on the development machine, so
+    # every Option C proof was an exact-context reconstruction rather than the
+    # literal image. This job builds the REAL pilot-api serving image and runs
+    # the clinical lookup and the generation route inside it.
+    #
+    # It is a separate job on purpose. The taxonomy job installs pandas and
+    # openpyxl and puts `genex-parent` on PYTHONPATH — exactly the environment
+    # this image must NOT have — so proving absence there would prove nothing.
+    #
+    # NO CREDENTIALS. The Firestore emulator authenticates nothing and the
+    # project id is fictional.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Java 21
+        # The Firestore emulator is a Java program and refuses to start on 17.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install the Firestore emulator
+        run: |
+          gcloud components install cloud-firestore-emulator --quiet
+          java -version
+
+      - name: Stage the narrowed browser build context
+        # `docker build` honours `.dockerignore` and knows nothing about
+        # `deploy/gcloudignore`, so building from the repository root would
+        # prove the Dockerfile compiles but NOT that the approved Cloud Build
+        # context is sufficient. The context is therefore staged from the
+        # allowlist ITSELF, parsed out of the ignore file rather than restated.
+        run: |
+          python3 - <<'PY'
+          import pathlib, shutil
+
+          rules = [l.strip() for l in pathlib.Path(
+              "pilot_runtime/deploy/gcloudignore").read_text().splitlines()
+              if l.strip() and not l.startswith("#")]
+          print("gcloudignore rules:", rules)
+          admitted = sorted({l[1:].rstrip("/*").rstrip("/")
+                             for l in rules if l.startswith("!")} - {""})
+          assert admitted == ["pilot_backend", "pilot_runtime"], admitted
+
+          stage = pathlib.Path("/tmp/browserctx")
+          if stage.exists():
+              shutil.rmtree(stage)
+          stage.mkdir(parents=True)
+          for rel in admitted:
+              shutil.copytree(rel, stage / rel,
+                              ignore=shutil.ignore_patterns("__pycache__",
+                                                            "*.pyc"))
+          files = [p for p in stage.rglob("*") if p.is_file()]
+          print(f"staged {len(files)} files")
+          # The Dockerfile itself must be inside the staged context.
+          assert (stage / "pilot_runtime/deploy/Dockerfile").is_file()
+          # The generated artifact must be carried by the allowlist with NO
+          # deploy-config change. That is the whole reason it lives under
+          # pilot_runtime/.
+          assert (stage /
+                  "pilot_runtime/data/rung_table_talking_v1.json").is_file(), \
+              "the generated rung table is not in the Cloud Build context"
+          PY
+
+      - name: Build the LITERAL pilot-api serving image
+        run: |
+          docker build \
+            -f /tmp/browserctx/pilot_runtime/deploy/Dockerfile \
+            -t pilot-api:ci \
+            /tmp/browserctx
+          docker image inspect pilot-api:ci \
+            --format 'built {{.Id}} size {{.Size}} bytes'
+
+      - name: Built image — the generated artifact is PRESENT
+        run: |
+          docker run --rm --entrypoint python pilot-api:ci - <<'PY'
+          import hashlib, json, pathlib, sys
+
+          path = pathlib.Path("/app/pilot_runtime/data/rung_table_talking_v1.json")
+          assert path.is_file(), "the artifact is not in the built image"
+          raw = path.read_bytes()
+          body = json.loads(raw.decode("utf-8"))
+          without = {k: v for k, v in body.items() if k != "artifact_digest"}
+          canonical = json.dumps(without, sort_keys=True,
+                                 separators=(",", ":"), ensure_ascii=False)
+          recomputed = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+          assert recomputed == body["artifact_digest"], "digest mismatch"
+          assert body["artifact_digest"] == (
+              "609fff91ba98b9afbf09d6d1c64cee23c59650d0bd3e8e53841083b1ab"
+              "95b437"), body["artifact_digest"]
+          assert body["population"] == {"declared_track_rungs": 21,
+                                        "declared_track_mappable": 17,
+                                        "declared_track_unresolved": 4}
+          print(f"artifact present: {len(raw)} bytes, file sha256 "
+                f"{hashlib.sha256(raw).hexdigest()}")
+          print(f"self-digest {body['artifact_digest']} verified in-image")
+
+          # The adapter and the normal browser composition/server are present.
+          for module in ("pilot_runtime/integration/static_rung_source.py",
+                         "pilot_runtime/composition.py",
+                         "pilot_runtime/server.py"):
+              assert pathlib.Path("/app", module).is_file(), module
+          print("StaticRungTableSource, composition and server all present")
+          PY
+
+      - name: Built image — workbooks, Parent and spreadsheet libs are ABSENT
+        run: |
+          docker run --rm --entrypoint python pilot-api:ci - <<'PY'
+          import importlib.util, pathlib, sys
+
+          app = pathlib.Path("/app")
+
+          # 1. no spreadsheet anywhere in the image, not just under /app.
+          #    `os.walk` with errors ignored rather than `rglob`: this runs as
+          #    uid 10001, and /proc and /sys are virtual filesystems that would
+          #    otherwise contribute permission noise and minutes of walking.
+          import os
+
+          sheets = []
+          scanned = 0
+          for root, dirs, files in os.walk("/", onerror=lambda _e: None):
+              dirs[:] = [d for d in dirs
+                         if os.path.join(root, d) not in
+                         ("/proc", "/sys", "/dev")]
+              scanned += len(files)
+              for name in files:
+                  if name.lower().endswith((".xlsx", ".xls", ".xlsm",
+                                            ".xlsb", ".ods")):
+                      sheets.append(os.path.join(root, name))
+          assert sheets == [], sheets
+          print(f"no spreadsheet in the image ({scanned} files scanned)")
+
+          # 2. no Parent namespace, by directory or by importability
+          for name in ("genex-parent", "genex_core", "parent_taxonomy"):
+              assert not (app / name).exists(), name
+          for name in ("genex_core", "parent_taxonomy"):
+              assert importlib.util.find_spec(name) is None, name
+          print("genex-parent, genex_core and parent_taxonomy all absent")
+
+          # 3. no spreadsheet reader and no model client. `find_spec` rather
+          #    than a try/except import, so a module that merely fails to
+          #    initialise cannot read as absent.
+          for name in ("pandas", "openpyxl", "xlrd", "openai", "anthropic"):
+              assert importlib.util.find_spec(name) is None, name
+          print("pandas, openpyxl, xlrd, openai, anthropic all absent")
+
+          # 4. the installed distribution set is exactly the three pins plus
+          #    their transitive dependencies — asserted as "no forbidden
+          #    distribution", since transitive closure varies by wheel.
+          from importlib import metadata
+          installed = sorted(d.metadata["Name"].lower()
+                             for d in metadata.distributions()
+                             if d.metadata["Name"])
+          for forbidden in ("pandas", "openpyxl", "xlrd", "openai",
+                            "anthropic", "numpy"):
+              assert forbidden not in installed, (forbidden, installed)
+          for required in ("firebase-admin", "google-cloud-firestore",
+                           "gunicorn"):
+              assert required in installed, (required, installed)
+          print(f"{len(installed)} distributions installed; the three pins "
+                "present, every forbidden one absent")
+          PY
+
+      - name: Built image — composition yields a non-null StaticRungTableSource
+        run: |
+          docker run --rm --entrypoint python pilot-api:ci - <<'PY'
+          import json
+
+          from pilot_runtime.composition import build_runtime
+          from pilot_runtime.integration.static_rung_source import (
+              StaticRungTableSource,
+          )
+
+          runtime = build_runtime({"PILOT_ENVIRONMENT": "dev",
+                                   "PILOT_DEV_AUTH_ENABLED": "true",
+                                   "PILOT_GCP_PROJECT_ID": "pilot-image-proof"},
+                                  in_memory=True)
+          assert runtime.rung_source is not None, \
+              "the built image composed rung_source = None"
+          assert type(runtime.rung_source) is StaticRungTableSource, \
+              type(runtime.rung_source).__name__
+          assert runtime.application._rung_source is runtime.rung_source
+          assert runtime.rung_source.artifact_digest == (
+              "609fff91ba98b9afbf09d6d1c64cee23c59650d0bd3e8e53841083b1ab"
+              "95b437")
+          print(json.dumps({
+              "rung_source": type(runtime.rung_source).__name__,
+              "is_none": False,
+              "artifact_digest": runtime.rung_source.artifact_digest,
+          }, sort_keys=True))
+
+          # The live workbook adapter must remain unreachable here. If this
+          # ever stops raising, pandas or the Parent package has leaked in.
+          from pilot_runtime.integration.parent_gold_standard_source import (
+              ParentGoldStandardSource,
+          )
+          from pilot_backend.integration.gold_standard_source import (
+              GoldStandardSourceError,
+          )
+          try:
+              ParentGoldStandardSource()
+              raise AssertionError("the live workbook adapter CONSTRUCTED")
+          except GoldStandardSourceError as exc:
+              print(f"live adapter still refuses in-image: {exc}")
+          PY
+
+      - name: Built image — a corrupted or missing artifact FAILS composition
+        # The property that makes Option C safe: absent is a BUILD defect, not
+        # a configuration choice. Returning None would reinstate the silent 403
+        # the inspection found. Proved by mounting a bad artifact OVER the good
+        # one, which tests the image's behaviour without altering the image.
+        run: |
+          printf '{"artifact_schema_version":"pilot-rung-table-v1"}' \
+            > /tmp/corrupt.json
+          mkdir -p /tmp/emptydata
+          set +e
+          docker run --rm \
+            -v /tmp/corrupt.json:/app/pilot_runtime/data/rung_table_talking_v1.json:ro \
+            --entrypoint python pilot-api:ci -c '
+          from pilot_runtime.composition import build_runtime
+          r = build_runtime({"PILOT_ENVIRONMENT": "dev",
+                             "PILOT_DEV_AUTH_ENABLED": "true",
+                             "PILOT_GCP_PROJECT_ID": "p"}, in_memory=True)
+          print("COMPOSED ANYWAY", r.rung_source)
+          ' > /tmp/corrupt.out 2>&1
+          corrupt_rc=$?
+          docker run --rm \
+            -v /tmp/emptydata:/app/pilot_runtime/data:ro \
+            --entrypoint python pilot-api:ci -c '
+          from pilot_runtime.composition import build_runtime
+          r = build_runtime({"PILOT_ENVIRONMENT": "dev",
+                             "PILOT_DEV_AUTH_ENABLED": "true",
+                             "PILOT_GCP_PROJECT_ID": "p"}, in_memory=True)
+          print("COMPOSED ANYWAY", r.rung_source)
+          ' > /tmp/missing.out 2>&1
+          missing_rc=$?
+          set -e
+          echo "--- corrupted artifact (exit $corrupt_rc) ---"; cat /tmp/corrupt.out
+          echo "--- missing artifact  (exit $missing_rc) ---"; cat /tmp/missing.out
+          test "$corrupt_rc" -ne 0 || { echo "FAIL: corrupted artifact composed"; exit 1; }
+          test "$missing_rc" -ne 0 || { echo "FAIL: missing artifact composed"; exit 1; }
+          grep -q "COMPOSED ANYWAY" /tmp/corrupt.out && exit 1 || true
+          grep -q "COMPOSED ANYWAY" /tmp/missing.out && exit 1 || true
+          grep -q "StaticRungTableError" /tmp/corrupt.out \
+            || { echo "FAIL: unexpected failure mode"; cat /tmp/corrupt.out; exit 1; }
+          grep -q "StaticRungTableError" /tmp/missing.out \
+            || { echo "FAIL: unexpected failure mode"; cat /tmp/missing.out; exit 1; }
+          echo "both bad-artifact cases fail closed with StaticRungTableError"
+
+      - name: Built image — the 18 -> 24 clinical lookup, artifact only
+        # No injected in-memory rung source. The only source of the ladder here
+        # is the generated table inside the image.
+        run: |
+          docker run --rm --entrypoint python pilot-api:ci - <<'PY'
+          import json
+
+          from pilot_runtime.composition import build_rung_source
+
+          source = build_rung_source()
+          target = source.next_rung_target("talking_and_communicating", 18)
+          rung = source.rung_for_target(target)
+          got = {
+              "target_months": rung.source_rung_months,
+              "rung_ref": rung.rung_ref,
+              "track_ref": rung.track_ref,
+              "milestone": rung.milestone_text,
+              "subdomain": rung.subdomain,
+              "families": list(rung.activity_family_refs),
+              "mappable": rung.is_activity_mappable,
+          }
+          expected = {
+              "target_months": 24,
+              "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+              "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+              "milestone": "says at least two words together like more milk",
+              "subdomain": "expressive_language",
+              "families": ["expressive_vocabulary_growth", "two_word_phrases"],
+              "mappable": True,
+          }
+          assert got == expected, json.dumps({"got": got,
+                                              "expected": expected}, indent=2)
+          print(json.dumps(got, indent=2, sort_keys=True))
+
+          # The reachable fail-closed path: floor 30 steps to a 36m rung the
+          # taxonomy does not reconcile, and must refuse rather than report the
+          # top of the track.
+          from pilot_backend.integration.gold_standard_source import (
+              RungNotMappableError,
+          )
+          unresolved = source.next_rung_target("talking_and_communicating", 30)
+          assert unresolved.source_rung_months == 36
+          try:
+              source.rung_for_target(unresolved)
+              raise AssertionError("the unresolved 36m target did not refuse")
+          except RungNotMappableError:
+              print("floor 30 -> 36m unresolved: refused in-image")
+          PY
+
+      - name: Built image — container HTTP generation against the emulator
+        # The full product path inside the real artifact: compose, authorise as
+        # the managing clinician, POST the generation route, then replay it.
+        # Persistence is the REAL Firestore emulator, reached over the host
+        # network; the only harness inputs are fictional records and one
+        # fictional dev-auth token registered on the image's own verifier.
+        run: |
+          gcloud emulators firestore start --host-port=127.0.0.1:8721 \
+            > /tmp/emulator.log 2>&1 &
+          for i in $(seq 1 60); do
+            if nc -z 127.0.0.1 8721; then echo "emulator up"; break; fi
+            sleep 1
+          done
+          nc -z 127.0.0.1 8721 || { echo "emulator failed"; cat /tmp/emulator.log; exit 1; }
+
+          docker run --rm -i --network host \
+            -e FIRESTORE_EMULATOR_HOST=127.0.0.1:8721 \
+            --entrypoint python pilot-api:ci - \
+            < pilot_runtime/tests/container_generation_proof.py
+          echo "--- emulator log tail ---"
+          tail -5 /tmp/emulator.log || true
+
+      - name: Built image — gunicorn can actually boot the server
+        # The entrypoint, not just the library. `--check-config` loads the WSGI
+        # callable through the real `--preload` path and exits, so a
+        # composition that only works under a test harness is caught.
+        run: |
+          set +e
+          docker run --rm \
+            -e PILOT_ENVIRONMENT=dev \
+            -e PILOT_DEV_AUTH_ENABLED=true \
+            -e PILOT_GCP_PROJECT_ID=pilot-image-proof \
+            -e PILOT_ALLOWED_ORIGINS=http://localhost:3000 \
+            --entrypoint gunicorn pilot-api:ci \
+              --check-config --preload pilot_runtime.server:application \
+            > /tmp/gunicorn.out 2>&1
+          rc=$?
+          set -e
+          cat /tmp/gunicorn.out
+          test "$rc" -eq 0 || { echo "gunicorn refused to load the app"; exit 1; }
+          echo "gunicorn loaded pilot_runtime.server:application (exit 0)"

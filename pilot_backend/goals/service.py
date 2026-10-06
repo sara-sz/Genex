@@ -62,8 +62,13 @@ from ..domain.goals import (
     require_clinical_goal_ref,
 )
 from ..domain.planning_policy import CURRENT_PLANNING_POLICY, PlanningPolicyVersion
+from ..domain.suggestion_generation import (
+    GoalSuggestionGenerationClaim,
+    projection_cycle_month,
+)
 from ..domain.roles import ActorRole
-from ..repository.interface import RecordNotFound
+from ..persistence.document_store import DocumentStoreError
+from ..repository.interface import DuplicateRecord, RecordNotFound
 from .errors import GoalAuthorizationError, GoalConflict, GoalValidationError
 
 
@@ -266,6 +271,154 @@ class GoalService:
                     rule_version=SUGGESTION_RULE_VERSION,
                     policy_version=policy.policy_version)
         return suggestions
+
+    def generate_anchored_suggestion(self, principal, child_id: str, *,
+                                     projection, canonical_rung,
+                                     observed,
+                                     policy: PlanningPolicyVersion = CURRENT_PLANNING_POLICY,
+                                     request_id: str = "") -> Tuple[Tuple[GoalSuggestion, ...], bool]:
+        """0.5F-B. ONE deterministic generation, claim-first and atomic.
+
+        Returns `(suggestions, created)`. `created` is False when another writer
+        already generated this exact (projection, policy, taxonomy, Gold
+        Standard, domain, target) tuple — the caller then gets THAT result, not
+        a second equivalent one.
+
+        ## Why this is a new method and not a flag on `generate_suggestions`
+
+        `generate_suggestions` is the 0.4B/0.5E-A boundary and is correct for
+        what it does: it creates unconditionally, from a snapshot the caller
+        assembled, with no idempotency of its own. 0.5F-B needs the opposite
+        default — at most once per immutable projection, under concurrency — so
+        bolting a mode onto that method would give one function two contradictory
+        contracts. The frozen one is left exactly as it is, and every existing
+        caller with it.
+
+        ## Claims FIRST, and all three writes together
+
+        The generation claim, the suggestion and its canonical anchor commit in
+        ONE transaction, claim first. That ordering is the same one
+        `link_parent_session` had to adopt after the emulator produced eight
+        orphan children: acquiring the mutex last means the earlier writes are
+        already committed when the loser discovers it lost.
+
+        Here the equivalent failure would be eight suggestions for one baseline,
+        or a suggestion with no anchor — which `allocate_goal` would later refuse,
+        surfacing as a mysterious dead goal rather than as a refused generation.
+
+        ## The suggestion is still Genex-authored
+
+        `actor_id` on the suggestion records WHO TRIGGERED generation, because
+        the audit trail needs it. It does NOT make the provider the author of the
+        developmental target: the target came from the frozen algorithm, the
+        suggestion's status stays OFFERED, and no ClinicalGoal is created here.
+        Approval remains the only path to a goal.
+        """
+        self._authorize(principal, child_id)
+        if getattr(projection, "child_id", None) != child_id:
+            # A projection for a different child than the authorized one.
+            # Refused rather than trusted: the caller's authorization was
+            # checked against `child_id`, so generating from a projection
+            # naming someone else would write across that boundary.
+            raise GoalValidationError(
+                "the baseline projection is for a different child")
+        if canonical_rung.domain_key != observed.domain_key:
+            raise GoalValidationError(
+                "canonical rung does not match its observed domain")
+        if not canonical_rung.is_activity_mappable:
+            # Belt and braces: the generation service already refused this.
+            # Restated here because this method is the only place an anchor is
+            # written, and an unmappable anchor is worse than none.
+            raise GoalValidationError(
+                "the canonical target is not activity-mappable")
+
+        claim = GoalSuggestionGenerationClaim.build(
+            projection_id=projection.projection_id,
+            child_id=child_id,
+            domain_key=canonical_rung.domain_key,
+            target_rung_ref=canonical_rung.rung_ref,
+            target_rung_months=canonical_rung.source_rung_months,
+            taxonomy_version=canonical_rung.taxonomy_version,
+            gold_standard_version=canonical_rung.baseline_version,
+            requested_by_actor_id=principal.application_id,
+            now=self._stamp())
+
+        # --- idempotent replay, BEFORE building anything ------------------
+        #
+        # A repeat is the common case: the Therapist workspace triggers
+        # generation every time Hannah opens the child. Resolving an existing
+        # claim turns that into one read instead of a guaranteed collision.
+        existing = self._repos.suggestion_generation_claims.find(claim.claim_id)
+        if existing is not None:
+            return self._suggestions_for_claim(existing), False
+
+        snapshot = ObservationSnapshot(
+            child_id=child_id,
+            cycle_month=projection_cycle_month(projection),
+            domains=(observed,))
+        built = build_suggestions(
+            snapshot, policy=policy, actor_id=principal.application_id,
+            now=self._stamp())
+        if not built:
+            # The engine found nothing to offer. No claim is written, so a
+            # later run with better evidence is still free to generate.
+            raise GoalValidationError(
+                "the generation engine produced no suggestion")
+
+        persisted = replace(claim,
+                            suggestion_ids=tuple(s.suggestion_id for s in built))
+
+        def _commit(store):
+            tx = self._repos_factory(store)
+            # CLAIM FIRST, so a loser writes nothing at all.
+            tx.suggestion_generation_claims.create(persisted)
+            for suggestion in built:
+                tx.goal_suggestions.create(suggestion)
+                tx.suggestion_anchors.create(SuggestionCanonicalAnchor(
+                    suggestion_id=suggestion.suggestion_id,
+                    child_id=child_id,
+                    rung=canonical_rung,
+                    created_at=self._stamp()))
+            return built
+
+        try:
+            created = self._repos.store.run_in_transaction(_commit)
+        except (DuplicateRecord, DocumentStoreError):
+            # Another writer won between the advisory read and here. NOTHING
+            # was written by us; converge on their result rather than adding a
+            # second equivalent set.
+            winner = self._repos.suggestion_generation_claims.find(
+                claim.claim_id)
+            if winner is None:  # pragma: no cover - defensive
+                raise GoalConflict(
+                    "generation contention could not be resolved") from None
+            return self._suggestions_for_claim(winner), False
+
+        self._audit(AuditAction.GOAL_SUGGESTIONS_GENERATED, AuditResult.SUCCESS,
+                    RESOURCE_SUGGESTION, principal=principal, child_id=child_id,
+                    resource_id=persisted.claim_id, request_id=request_id,
+                    # `suggestion_count` only. Audit metadata keys are
+                    # allowlisted, and widening that allowlist for a version
+                    # string is not worth it — the generation claim itself
+                    # records the policy, and `resource_id` points at it.
+                    suggestion_count=len(created))
+        return tuple(created), True
+
+    def _suggestions_for_claim(self, claim) -> Tuple[GoalSuggestion, ...]:
+        """The suggestions a generation claim names, in its own order.
+
+        Read by ID from the claim's own lineage rather than by querying the
+        child's suggestions, so a replay cannot pick up a suggestion some other
+        generation created.
+        """
+        found = []
+        for suggestion_id in claim.suggestion_ids:
+            try:
+                found.append(self._repos.goal_suggestions.get_by_id(
+                    suggestion_id))
+            except RecordNotFound:  # pragma: no cover - defensive
+                continue
+        return tuple(found)
 
     def list_suggestions(self, principal, child_id: str, *,
                          cycle_month: Optional[str] = None

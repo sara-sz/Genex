@@ -139,6 +139,18 @@ CONNECTION_ACTIONS = {
 #: `read_json_body`, which refuses identity fields outright.
 CHILD_GOALS_ROUTE = "/pilot/children/{child_id}/goals"
 CHILD_SUGGESTIONS_ROUTE = "/pilot/children/{child_id}/goal-suggestions"
+
+#: 0.5F-B. The provider TRIGGER for deterministic anchored generation.
+#:
+#: POST, never GET: it writes a GoalSuggestion, an anchor and a generation
+#: claim. A GET that mutated would be cacheable, prefetchable and retried by
+#: intermediaries that assume it is safe.
+#:
+#: A SUBROUTE of the existing read rather than a new top-level resource, so the
+#: thing Hannah reads and the thing that fills it stay visibly the same
+#: resource. The read endpoint is unchanged.
+GENERATE_SUGGESTIONS_ROUTE = (
+    "/pilot/children/{child_id}/goal-suggestions/generate")
 CHILD_MONTHLY_PLAN_ROUTE = "/pilot/children/{child_id}/monthly-plan"
 CHILD_CURRENT_CYCLE_ROUTE = "/pilot/children/{child_id}/current-cycle"
 CHILD_RTM_ROUTE = "/pilot/children/{child_id}/rtm"
@@ -177,6 +189,7 @@ ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
     ("GET", CHILD_GOALS_ROUTE, False),
     ("POST", CHILD_GOALS_ROUTE, False),
     ("GET", CHILD_SUGGESTIONS_ROUTE, False),
+    ("POST", GENERATE_SUGGESTIONS_ROUTE, False),
     ("GET", CHILD_MONTHLY_PLAN_ROUTE, False),
     ("POST", CHILD_MONTHLY_PLAN_ROUTE, False),
     ("GET", CHILD_CURRENT_CYCLE_ROUTE, False),
@@ -227,6 +240,23 @@ def _match_child_route(path: str) -> Optional[str]:
     if len(parts) != 4:
         return None
     if parts[0] != "pilot" or parts[1] != "children" or parts[3] != "access-check":
+        return None
+    return parts[2]
+
+
+def _match_generate_suggestions_route(path: str) -> Optional[str]:
+    """Return the child id for `/pilot/children/{id}/goal-suggestions/generate`.
+
+    Five exact segments, hand-matched like every other route here. Deliberately
+    NOT folded into the `_match_resource_subroute` table: that table pairs a
+    collection with ONE tail segment, and bending it to accept a two-segment
+    tail would make every route in it harder to read for the sake of one.
+    """
+    parts = [p for p in path.split("/") if p != ""]
+    if len(parts) != 5:
+        return None
+    if (parts[0] != "pilot" or parts[1] != "children"
+            or parts[3] != "goal-suggestions" or parts[4] != "generate"):
         return None
     return parts[2]
 
@@ -714,6 +744,7 @@ class PilotWSGIApplication:
 
     def __init__(self, *, settings, verifier, repos, recorder=None,
                  parent_source=None,
+                 rung_source=None,
                  log_sink: Optional[List[str]] = None) -> None:
         self._settings = settings
         self._verifier = verifier
@@ -723,6 +754,15 @@ class PilotWSGIApplication:
         #: link route refuses rather than inventing a session, and the rest of
         #: the application is unaffected.
         self._parent_source = parent_source
+        #: 0.5F-B. The Gold Standard canonical-rung source, or None.
+        #:
+        #: Optional and defaulted so every pre-0.5F-B caller is unaffected, and
+        #: None FAILS the generation route closed: without the real workbook no
+        #: canonical target can be resolved, and an unanchored suggestion would
+        #: become a goal `allocate_goal` refuses. Same posture
+        #: `build_parent_source` takes — unconfigured means the capability is
+        #: simply absent, which is a safe state.
+        self._rung_source = rung_source
         #: Tests capture emitted lines here. Production would hand these to a
         #: logging handler; either way they pass through `format_log` first,
         #: so an unsafe field raises rather than being written.
@@ -870,6 +910,15 @@ class PilotWSGIApplication:
                 return 405, _ERROR_BODIES[405], GOAL_REVISIONS_ROUTE
             return self._handle_goal_revision(environ, revision[0],
                                               revision[1], request_id)
+
+        # 0.5F-B generation trigger. Tested BEFORE the four-segment table so
+        # the five-segment form cannot be swallowed by a prefix match.
+        generate_child = _match_generate_suggestions_route(path)
+        if generate_child is not None:
+            if method != "POST":
+                return 405, _ERROR_BODIES[405], GENERATE_SUGGESTIONS_ROUTE
+            return self._handle_generate_suggestions(environ, generate_child,
+                                                     request_id)
 
         for collection, tail, route, verbs in (
                 ("children", "goals", CHILD_GOALS_ROUTE, ("GET", "POST")),
@@ -1845,6 +1894,108 @@ class PilotWSGIApplication:
                          "created": result.created,
                          "request_id": request_id}, CONSUME_CLAIM_ROUTE
 
+    def _handle_generate_suggestions(self, environ: Mapping[str, object],
+                                     child_id: str, request_id: str
+                                     ) -> Tuple[int, Mapping, str]:
+        """0.5F-B. Provider-triggered deterministic anchored generation.
+
+        ## The authorization rule, in order
+
+          1. a verified Pilot principal (the protected-route gate above)
+          2. `principal.role is ActorRole.PROVIDER` — a caregiver is refused
+             here, before any service call, so a family can never trigger
+             clinical target selection for their own child
+          3. active child access, via `GoalService._authorize`
+          4. the caller must BE this child's current managing clinician, via the
+             EXISTING `_require_managing_clinician` — no second authorization
+             model is introduced for this route
+
+        Step 4 is what makes "provider-triggered" narrow rather than "any
+        connected clinician triggered". It reuses the 0.4A assignment service,
+        which already refuses when there is no active assignment and when there
+        is more than one.
+
+        ## Hannah triggers; she does not author
+
+        Nothing here creates a ClinicalGoal, and the suggestion's status stays
+        OFFERED. The developmental target came from the frozen algorithm over the
+        immutable projection — her identity is not in the generation key at all.
+
+        ## No body
+
+        The route takes no request body. Every input is derived server-side from
+        the child's active Parent source link and its projection, so there is
+        nothing a client could supply and no way for one to influence the target.
+        """
+        from ..domain.roles import ActorRole
+        from ..goals.errors import (
+            GoalAuthorizationError,
+            GoalConflict,
+            GoalValidationError,
+        )
+        from ..integration.baseline_suggestion_generation import (
+            BaselineSuggestionGenerationService,
+        )
+        from ..domain.suggestion_generation import SuggestionGenerationError
+
+        principal, status = self._principal(environ)
+        if principal is None:
+            self._log(request_id, GENERATE_SUGGESTIONS_ROUTE, "POST", status,
+                      None)
+            return status, _ERROR_BODIES[status], GENERATE_SUGGESTIONS_ROUTE
+
+        if principal.role is not ActorRole.PROVIDER:
+            # A caregiver must not trigger clinical generation for their own
+            # child. Refused before any service call.
+            self._log_principal(request_id, GENERATE_SUGGESTIONS_ROUTE, "POST",
+                                HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    GENERATE_SUGGESTIONS_ROUTE)
+
+        goals, _plans, _weekly, _rtm = self._services()
+        rung_source = self._rung_source
+        if rung_source is None:
+            # No Gold Standard source is configured. A capability gap, and it
+            # fails closed: without the real workbook no canonical target can be
+            # resolved, and generating an unanchored suggestion here would
+            # produce a goal `allocate_goal` later refuses.
+            self._log_principal(request_id, GENERATE_SUGGESTIONS_ROUTE, "POST",
+                                HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    GENERATE_SUGGESTIONS_ROUTE)
+
+        try:
+            goals._authorize(principal, child_id)
+            # The EXISTING managing-clinician gate. Reused, not reimplemented.
+            goals._require_managing_clinician(principal, child_id)
+            outcome = BaselineSuggestionGenerationService(
+                repos=self._repos, goals=goals, rung_source=rung_source
+            ).generate_for_child(principal, child_id, request_id=request_id)
+        except (GoalAuthorizationError, GoalConflict, GoalValidationError,
+                SuggestionGenerationError):
+            # Every refusal renders as the SAME constant 403, following the
+            # 0.5C rule: a finer status would tell a prober which gate stopped
+            # them, and the services already collapse absent-versus-not-yours.
+            self._log_principal(request_id, GENERATE_SUGGESTIONS_ROUTE, "POST",
+                                HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    GENERATE_SUGGESTIONS_ROUTE)
+
+        self._log_principal(request_id, GENERATE_SUGGESTIONS_ROUTE, "POST",
+                            HTTP_OK, principal)
+        # The response carries ids and the canonical target only — no milestone
+        # text, no family-facing wording, nothing clinical. Hannah reads the
+        # suggestion itself through the existing unchanged GET.
+        return HTTP_OK, {
+            "child_id": child_id,
+            "created": outcome.created,
+            "projection_id": outcome.projection_id,
+            "target_rung_ref": outcome.target_rung_ref,
+            "target_rung_months": outcome.target_rung_months,
+            "suggestion_ids": [s.suggestion_id for s in outcome.suggestions],
+            "request_id": request_id,
+        }, GENERATE_SUGGESTIONS_ROUTE
+
     # -- logging ------------------------------------------------------------
 
     def _log(self, request_id: str, route_template: str, method: str,
@@ -1893,6 +2044,7 @@ class PilotWSGIApplication:
 
 def build_application(*, settings, repos, verifier, recorder=None,
                       parent_source=None,
+                      rung_source=None,
                       log_sink: Optional[List[str]] = None) -> PilotWSGIApplication:
     """Composition root for the proof.
 
@@ -1902,6 +2054,7 @@ def build_application(*, settings, repos, verifier, recorder=None,
     """
     return PilotWSGIApplication(settings=settings, verifier=verifier, repos=repos,
                                 recorder=recorder, parent_source=parent_source,
+                                rung_source=rung_source,
                                 log_sink=log_sink)
 
 

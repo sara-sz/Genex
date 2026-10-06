@@ -1,0 +1,614 @@
+{
+  "artifact_digest": "609fff91ba98b9afbf09d6d1c64cee23c59650d0bd3e8e53841083b1ab95b437",
+  "artifact_schema_version": "pilot-rung-table-v1",
+  "declared_track": {
+    "domain_key": "talking_and_communicating",
+    "track_families": [],
+    "track_subdomains": [
+      "early_vocalization_and_babbling",
+      "expressive_language"
+    ]
+  },
+  "generator_version": "pilot-rung-table-generator-v1",
+  "population": {
+    "declared_track_mappable": 17,
+    "declared_track_rungs": 21,
+    "declared_track_unresolved": 4
+  },
+  "provenance": {
+    "baseline_version": "parent-2.4-functional-baseline-v1",
+    "gold_standard_snapshot_relpath": "data/cdc_milestones_with_bridges_family_cleaned_final_app_ready.xlsx",
+    "gold_standard_snapshot_sha256": "c2b6735d9f099c916973c98c1953e7eb1f2ca8e1a60430011f805a3bf9c3487c",
+    "rung_workbook_relpath": "data/parent_2_4/cdc_milestones_parent_2_4_candidate.xlsx",
+    "rung_workbook_sha256": "a16ce10fe9c932bc7ca6e3275748541b3c8a1e15a0d8a2702b0560a56ddc5fd6",
+    "taxonomy_relpath": "data/parent_2_4/activity_family_taxonomy_v1.xlsx",
+    "taxonomy_sha256": "e5835969ead556129530f01d4629c584b823729a1b4e4425e5e3d29ddba4d262",
+    "taxonomy_version": "activity_family_taxonomy_v1"
+  },
+  "rungs": {
+    "rung1:09fcd11542e4abbc37af4b0bb3552f6d": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "sentence_building"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "says sentences with four or more words",
+      "rung_ref": "rung1:09fcd11542e4abbc37af4b0bb3552f6d",
+      "source_rung_months": 48,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:133ada8636f1886a70f3b92789f8fdfe": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "two_word_phrases"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "say two or more words together with one action word like doggie run",
+      "rung_ref": "rung1:133ada8636f1886a70f3b92789f8fdfe",
+      "source_rung_months": 30,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:1b2914e8b21011ba7657b6cc99ed5c5f": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "expressive_first_words"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "calls parents mama or dada or another special name",
+      "rung_ref": "rung1:1b2914e8b21011ba7657b6cc99ed5c5f",
+      "source_rung_months": 12,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:3e5d2391b40eb08d048d87b196949bdd": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "early_vocalizations"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "takes turns making sounds with you",
+      "rung_ref": "rung1:3e5d2391b40eb08d048d87b196949bdd",
+      "source_rung_months": 6,
+      "subdomain": "early_vocalization_and_babbling",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:400e98b935c22a7995e82b91a0f213da": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "expressive_first_words"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "tries to say two or more words besides mama or dada like ba for ball or da for dog",
+      "rung_ref": "rung1:400e98b935c22a7995e82b91a0f213da",
+      "source_rung_months": 15,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:431020f1dccb8b2adbcad72db2d51160": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "book_object_naming"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "name things in a book when you point and ask what is this",
+      "rung_ref": "rung1:431020f1dccb8b2adbcad72db2d51160",
+      "source_rung_months": 30,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:46378a17002642f50efa858d5f95fbcd": {
+      "family_bindings": [],
+      "mappable": false,
+      "milestone_text": "says words like I me or we",
+      "rung_ref": "rung1:46378a17002642f50efa858d5f95fbcd",
+      "source_rung_months": 30,
+      "subdomain": "expressive_language",
+      "track_ref": null,
+      "unresolved_reason": "RungNotMappableError"
+    },
+    "rung1:4e1877a1f264bb1c6d13e3823d15668f": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "learning_and_thinking",
+            "talking_and_communicating"
+          ],
+          "family_ref": "narration_storytelling"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "tells a story she heard or made up with at least two events for example cat was stuck in a tree and firefighter saved it",
+      "rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f",
+      "source_rung_months": 60,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:62fcd6936694b6594daa698caee26c93": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "early_vocalizations"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "makes squealing noises",
+      "rung_ref": "rung1:62fcd6936694b6594daa698caee26c93",
+      "source_rung_months": 6,
+      "subdomain": "early_vocalization_and_babbling",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:6a360697f70191b8f20080d011bbd277": {
+      "family_bindings": [],
+      "mappable": false,
+      "milestone_text": "says first name when asked",
+      "rung_ref": "rung1:6a360697f70191b8f20080d011bbd277",
+      "source_rung_months": 36,
+      "subdomain": "expressive_language",
+      "track_ref": null,
+      "unresolved_reason": "RungNotMappableError"
+    },
+    "rung1:6c8e17d12c4ca2ab1d583e94635100d3": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "expressive_first_words"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "tries to say three or more words besides mama or dada",
+      "rung_ref": "rung1:6c8e17d12c4ca2ab1d583e94635100d3",
+      "source_rung_months": 18,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:7bf3e02b257b7567edbd5e8b8722346f": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "early_vocalizations"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "makes a lot of different sounds like mamamamama and bababababa",
+      "rung_ref": "rung1:7bf3e02b257b7567edbd5e8b8722346f",
+      "source_rung_months": 9,
+      "subdomain": "early_vocalization_and_babbling",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:7e2d83e180f52c6facc9d29ff36ab25d": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "early_vocalizations"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "blows raspberries or sticks tongue out and blows",
+      "rung_ref": "rung1:7e2d83e180f52c6facc9d29ff36ab25d",
+      "source_rung_months": 6,
+      "subdomain": "early_vocalization_and_babbling",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:9993f7881ea0041be4813976973f77e6": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "expressive_vocabulary_growth"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "says about 50 words",
+      "rung_ref": "rung1:9993f7881ea0041be4813976973f77e6",
+      "source_rung_months": 30,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:a83c6fbaa347f2613790ea6f663ac6cb": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "learning_and_thinking",
+            "talking_and_communicating"
+          ],
+          "family_ref": "function_question_answering"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "answers simple questions like what is a coat for or what is crayon for",
+      "rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb",
+      "source_rung_months": 48,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:af84d949a7b2abb83583ad9280717705": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "action_picture_labeling"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "says what action is happening in a picture or book when asked like running or eating or playing",
+      "rung_ref": "rung1:af84d949a7b2abb83583ad9280717705",
+      "source_rung_months": 36,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:b8bfbe44eeecf8752020b639b2af3fdd": {
+      "family_bindings": [],
+      "mappable": false,
+      "milestone_text": "ask who or what or where or why questions like where is mommy or where is daddy",
+      "rung_ref": "rung1:b8bfbe44eeecf8752020b639b2af3fdd",
+      "source_rung_months": 36,
+      "subdomain": "expressive_language",
+      "track_ref": null,
+      "unresolved_reason": "RungNotMappableError"
+    },
+    "rung1:b96066b98cb53fe54c3487cd17ac72c8": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "early_vocalizations"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "makes cooing sounds like ooooo or aahhh",
+      "rung_ref": "rung1:b96066b98cb53fe54c3487cd17ac72c8",
+      "source_rung_months": 4,
+      "subdomain": "early_vocalization_and_babbling",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:cd52cc03555f837529599a918c4ae6b0": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "early_vocalizations"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "makes sounds other than crying",
+      "rung_ref": "rung1:cd52cc03555f837529599a918c4ae6b0",
+      "source_rung_months": 2,
+      "subdomain": "early_vocalization_and_babbling",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    },
+    "rung1:fa5c92858a2ae846de14314785f8aa93": {
+      "family_bindings": [],
+      "mappable": false,
+      "milestone_text": "makes sounds back when you talk to him",
+      "rung_ref": "rung1:fa5c92858a2ae846de14314785f8aa93",
+      "source_rung_months": 4,
+      "subdomain": "early_vocalization_and_babbling",
+      "track_ref": null,
+      "unresolved_reason": "RungNotMappableError"
+    },
+    "rung1:feb590cf2788978b383c11062ce67c1b": {
+      "family_bindings": [
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "expressive_vocabulary_growth"
+        },
+        {
+          "allowed_domains": [
+            "talking_and_communicating"
+          ],
+          "family_ref": "two_word_phrases"
+        }
+      ],
+      "mappable": true,
+      "milestone_text": "says at least two words together like more milk",
+      "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+      "source_rung_months": 24,
+      "subdomain": "expressive_language",
+      "track_ref": "track1:5be892494f3e6894a7de24a868084e0f",
+      "unresolved_reason": null
+    }
+  },
+  "step_domain": {
+    "highest_from_months_with_target": 59,
+    "max_probed_from_months": 120,
+    "min_from_months": 0
+  },
+  "steps": {
+    "0": {
+      "target_months": 4,
+      "target_rung_ref": "rung1:b96066b98cb53fe54c3487cd17ac72c8"
+    },
+    "1": {
+      "target_months": 4,
+      "target_rung_ref": "rung1:b96066b98cb53fe54c3487cd17ac72c8"
+    },
+    "10": {
+      "target_months": 12,
+      "target_rung_ref": "rung1:1b2914e8b21011ba7657b6cc99ed5c5f"
+    },
+    "11": {
+      "target_months": 12,
+      "target_rung_ref": "rung1:1b2914e8b21011ba7657b6cc99ed5c5f"
+    },
+    "12": {
+      "target_months": 15,
+      "target_rung_ref": "rung1:400e98b935c22a7995e82b91a0f213da"
+    },
+    "13": {
+      "target_months": 15,
+      "target_rung_ref": "rung1:400e98b935c22a7995e82b91a0f213da"
+    },
+    "14": {
+      "target_months": 15,
+      "target_rung_ref": "rung1:400e98b935c22a7995e82b91a0f213da"
+    },
+    "15": {
+      "target_months": 18,
+      "target_rung_ref": "rung1:6c8e17d12c4ca2ab1d583e94635100d3"
+    },
+    "16": {
+      "target_months": 18,
+      "target_rung_ref": "rung1:6c8e17d12c4ca2ab1d583e94635100d3"
+    },
+    "17": {
+      "target_months": 18,
+      "target_rung_ref": "rung1:6c8e17d12c4ca2ab1d583e94635100d3"
+    },
+    "18": {
+      "target_months": 24,
+      "target_rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b"
+    },
+    "19": {
+      "target_months": 24,
+      "target_rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b"
+    },
+    "2": {
+      "target_months": 4,
+      "target_rung_ref": "rung1:b96066b98cb53fe54c3487cd17ac72c8"
+    },
+    "20": {
+      "target_months": 24,
+      "target_rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b"
+    },
+    "21": {
+      "target_months": 24,
+      "target_rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b"
+    },
+    "22": {
+      "target_months": 24,
+      "target_rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b"
+    },
+    "23": {
+      "target_months": 24,
+      "target_rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b"
+    },
+    "24": {
+      "target_months": 30,
+      "target_rung_ref": "rung1:431020f1dccb8b2adbcad72db2d51160"
+    },
+    "25": {
+      "target_months": 30,
+      "target_rung_ref": "rung1:431020f1dccb8b2adbcad72db2d51160"
+    },
+    "26": {
+      "target_months": 30,
+      "target_rung_ref": "rung1:431020f1dccb8b2adbcad72db2d51160"
+    },
+    "27": {
+      "target_months": 30,
+      "target_rung_ref": "rung1:431020f1dccb8b2adbcad72db2d51160"
+    },
+    "28": {
+      "target_months": 30,
+      "target_rung_ref": "rung1:431020f1dccb8b2adbcad72db2d51160"
+    },
+    "29": {
+      "target_months": 30,
+      "target_rung_ref": "rung1:431020f1dccb8b2adbcad72db2d51160"
+    },
+    "3": {
+      "target_months": 4,
+      "target_rung_ref": "rung1:b96066b98cb53fe54c3487cd17ac72c8"
+    },
+    "30": {
+      "target_months": 36,
+      "target_rung_ref": "rung1:b8bfbe44eeecf8752020b639b2af3fdd"
+    },
+    "31": {
+      "target_months": 36,
+      "target_rung_ref": "rung1:b8bfbe44eeecf8752020b639b2af3fdd"
+    },
+    "32": {
+      "target_months": 36,
+      "target_rung_ref": "rung1:b8bfbe44eeecf8752020b639b2af3fdd"
+    },
+    "33": {
+      "target_months": 36,
+      "target_rung_ref": "rung1:b8bfbe44eeecf8752020b639b2af3fdd"
+    },
+    "34": {
+      "target_months": 36,
+      "target_rung_ref": "rung1:b8bfbe44eeecf8752020b639b2af3fdd"
+    },
+    "35": {
+      "target_months": 36,
+      "target_rung_ref": "rung1:b8bfbe44eeecf8752020b639b2af3fdd"
+    },
+    "36": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "37": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "38": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "39": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "4": {
+      "target_months": 6,
+      "target_rung_ref": "rung1:7e2d83e180f52c6facc9d29ff36ab25d"
+    },
+    "40": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "41": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "42": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "43": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "44": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "45": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "46": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "47": {
+      "target_months": 48,
+      "target_rung_ref": "rung1:a83c6fbaa347f2613790ea6f663ac6cb"
+    },
+    "48": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "49": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "5": {
+      "target_months": 6,
+      "target_rung_ref": "rung1:7e2d83e180f52c6facc9d29ff36ab25d"
+    },
+    "50": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "51": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "52": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "53": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "54": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "55": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "56": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "57": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "58": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "59": {
+      "target_months": 60,
+      "target_rung_ref": "rung1:4e1877a1f264bb1c6d13e3823d15668f"
+    },
+    "6": {
+      "target_months": 9,
+      "target_rung_ref": "rung1:7bf3e02b257b7567edbd5e8b8722346f"
+    },
+    "7": {
+      "target_months": 9,
+      "target_rung_ref": "rung1:7bf3e02b257b7567edbd5e8b8722346f"
+    },
+    "8": {
+      "target_months": 9,
+      "target_rung_ref": "rung1:7bf3e02b257b7567edbd5e8b8722346f"
+    },
+    "9": {
+      "target_months": 12,
+      "target_rung_ref": "rung1:1b2914e8b21011ba7657b6cc99ed5c5f"
+    }
+  }
+}

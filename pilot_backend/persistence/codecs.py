@@ -112,6 +112,9 @@ from ..domain.weekly_cycle import (
 from ..domain.canonical_rung import ActivityFamilyBinding, CanonicalRung
 from ..domain.parent_baseline_projection import ParentBaselineProjection
 from ..domain.parent_session_claim import ParentSessionClaim
+from ..domain.suggestion_generation import (
+    GoalSuggestionGenerationClaim,
+)
 from ..domain.goal_anchor import ClinicalGoalAnchor, SuggestionCanonicalAnchor
 from ..domain.goals import (
     CaregiverApprovedGoal,
@@ -663,6 +666,21 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "source_system": _EnumKind(SourceSystem),
         "source_session_id": STR,
         "issued_at": DT, "expires_at": DT,
+        "schema_version": STR,
+    },
+    # ---- 0.5F-B deterministic generation claim -------------------------
+    #
+    # `suggestion_ids` is the lineage: projection -> claim -> suggestions. The
+    # requester is stored for AUDIT only and is deliberately not part of the
+    # generation key, so two authorized providers converge on one claim.
+    GoalSuggestionGenerationClaim: {
+        "claim_id": STR, "generation_key": STR,
+        "projection_id": STR, "child_id": STR, "domain_key": STR,
+        "target_rung_ref": STR, "target_rung_months": INT,
+        "generation_policy": STR, "taxonomy_version": STR,
+        "gold_standard_version": STR,
+        "suggestion_ids": STR_TUPLE,
+        "created_at": DT, "requested_by_actor_id": OPT_STR,
         "schema_version": STR,
     },
     SuggestionCanonicalAnchor: {

@@ -326,6 +326,51 @@ class ParentGoldStandardSource:
             raise refusal
         raise RungNotFoundError("no such canonical rung")
 
+    def next_rung_target(self, domain_key: str, from_months: int):
+        """One rung harder on the declared track, via the FROZEN Parent step.
+
+        0.5F-B. This method implements NO ordering of its own. It calls the
+        Parent engine's `_step(domain, months, +1, subdomains, families)` and
+        `question_at(...)` — the exact two functions that produced the baseline
+        questions whose answers are now being planned from. So the step that
+        chose the question and the step that chooses the goal are the same code,
+        and a second developmental traversal never comes into existence.
+
+        The declared track comes from `BaselineArea.track_subdomains` plus the
+        union of its choices' `track_families`, which is the same definition
+        `_declared_tracks` already uses for `track_ref` — not a second notion of
+        what the track is.
+
+        Returns a TARGET. Whether that target is usable stays
+        `rung_for_target`'s decision, so an unmappable or track-undeclared next
+        rung is still refused there rather than skipped here.
+        """
+        _milestones, _families, functional_baseline = self._import_parent()
+        wanted = (domain_key or "").strip()
+        area = functional_baseline.area_for_domain(wanted)
+        if area is None:
+            return None
+
+        subdomains = tuple(area.track_subdomains)
+        declared_families: List[str] = []
+        for choice in getattr(area, "choices", ()):
+            declared_families.extend(choice.track_families)
+        families = tuple(sorted(set(declared_families)))
+
+        months = functional_baseline._step(
+            wanted, int(from_months), +1, subdomains, families)
+        if months is None:
+            # The top of the declared track. Refused upstream rather than
+            # wrapped around or clamped.
+            return None
+
+        question = functional_baseline.question_at(
+            wanted, months, subdomains=subdomains, families=families)
+        if question is None:  # pragma: no cover - a rung with no question
+            return None
+        return RungTarget(domain_key=wanted, source_rung_months=months,
+                          milestone_text=question["milestone"])
+
     def mappable_rungs_for_domain(self, domain_key: str
                                   ) -> Tuple[CanonicalRung, ...]:
         self._load()

@@ -165,6 +165,30 @@ class GoldStandardRungSource(Protocol):
         """
         ...
 
+    def next_rung_target(self, domain_key: str, from_months: int
+                         ) -> Optional[RungTarget]:
+        """The TARGET one rung harder on the declared track, or None at the top.
+
+        Added by 0.5F-B. It exists so the Pilot never implements a second
+        developmental traversal: the live adapter answers this by calling the
+        FROZEN Parent `_step(domain, months, +1, declared_track)` and
+        `question_at(...)` — the same two functions that chose the baseline
+        questions in the first place. Restating that ordering here would be a
+        mirror of clinical sequencing, which is the mirror this port was
+        created to avoid.
+
+        Returns a TARGET, not a rung, and deliberately so: whether the next
+        rung is usable is `rung_for_target`'s decision, which can still refuse
+        it as unmappable or track-undeclared. A step that returned a resolved
+        rung would have to swallow those refusals to produce anything.
+
+        None means the end of the declared track. It is never a nearby rung,
+        never two steps, and never a skip to the next MAPPABLE rung — skipping
+        forward to find a convenient activity is precisely what the frozen
+        rules forbid.
+        """
+        ...
+
 
 class InMemoryGoldStandardRungSource:
     """Explicit rungs for `pilot_backend` tests and fictional runs.
@@ -211,6 +235,37 @@ class InMemoryGoldStandardRungSource:
             (r for r in self._rungs
              if r.domain_key == wanted and r.is_activity_mappable),
             key=lambda r: (r.source_rung_months, r.rung_ref)))
+
+    def next_rung_target(self, domain_key: str, from_months: int
+                         ) -> Optional[RungTarget]:
+        """One rung harder among EVERY configured rung, mappable or not.
+
+        Mappability is deliberately ignored here. The fixture must be able to
+        hand back an unmappable next target so a test can prove the generation
+        path refuses it — a fixture that silently skipped to the next mappable
+        rung would make the fail-closed test impossible to write.
+        """
+        wanted = (domain_key or "").strip()
+        ladder = sorted({r.source_rung_months for r in self._rungs
+                         if r.domain_key == wanted}
+                        | {t.source_rung_months for t in self._unmappable
+                           if t.domain_key == wanted})
+        higher = [m for m in ladder if m > from_months]
+        if not higher:
+            return None
+        months = higher[0]
+        for rung in sorted((r for r in self._rungs
+                            if r.domain_key == wanted
+                            and r.source_rung_months == months),
+                           key=lambda r: r.milestone_text):
+            return RungTarget(domain_key=wanted, source_rung_months=months,
+                              milestone_text=rung.milestone_text)
+        for target in sorted((t for t in self._unmappable
+                              if t.domain_key == wanted
+                              and t.source_rung_months == months),
+                             key=lambda t: t.milestone_text):
+            return target
+        return None
 
 
 def try_rung_for_target(source: GoldStandardRungSource, target: RungTarget
