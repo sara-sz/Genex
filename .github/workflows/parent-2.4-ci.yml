@@ -2647,15 +2647,25 @@ jobs:
           assert app.verifies_tokens is False
           print('iam_only                -> started, verifies_tokens=False')
 
-          # 5. production is refused outright, even fully configured
+          # 5. production is refused outright, even FULLY and VALIDLY configured.
+          #
+          # The ids are overridden to prod-shaped names on purpose. Reusing the
+          # container's staging ids makes PilotSettings refuse first — 'prod
+          # PILOT_GCP_PROJECT_ID names a non-production resource (contains
+          # staging)' — and that ConfigError arrives BEFORE the bootstrap
+          # service's own prod guard ever runs. Catching it would make this
+          # check pass without testing the thing it names.
           prod = dict(env, PILOT_ENVIRONMENT='prod',
-                      PILOT_BOOTSTRAP_AUTH_MODE='iam_only',
-                      PILOT_ALLOWED_ORIGINS='https://example.invalid')
+                      PILOT_GCP_PROJECT_ID='genex-pilot-prod',
+                      PILOT_FIREBASE_PROJECT_ID='genex-pilot-prod',
+                      PILOT_FIRESTORE_DATABASE='pilot-prod',
+                      PILOT_ALLOWED_ORIGINS='https://example.invalid',
+                      PILOT_BOOTSTRAP_AUTH_MODE='iam_only')
           try:
               build(prod, firestore_client=FakeFirestore())
               raise SystemExit('the bootstrap service started in prod')
           except BootstrapConfigError:
-              print('prod environment        -> refused')
+              print('prod environment        -> refused by the service itself')
           "
 
       - name: The raw claim token is never persisted and never loggable
