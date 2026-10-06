@@ -98,6 +98,7 @@ from api.schemas import (
 )
 from api import functional_baseline_api as baseline_api
 from api import parent_baseline_projection_client as projection_client
+from api import parent_session_handoff_client as handoff_client
 from api.session_store import (
     SessionContentionError,
     SessionLoadError,
@@ -3240,4 +3241,73 @@ async def session_baseline_projection(
         "projected": True,
         "created": result["created"],
         "projection_id": result["projection_id"],
+    }
+
+
+# ===========================================================================
+# 0.5F-A3. Parent session -> Pilot canonical child: PHASE A (mint)
+#
+# The caregiver finishes onboarding in the Parent app and needs the SAME child
+# to exist canonically in the Pilot, so a therapist can be invited. Parent and
+# Pilot authenticate against different Firebase user directories, so there is
+# no shared uid to join on — and federating them is precisely what this design
+# refuses to do.
+#
+# Instead Parent mints a short-lived, single-use CAPABILITY over a session it
+# has just proven this caregiver owns. The capability names a SESSION, never a
+# person, so no uid crosses in either direction.
+#
+# This route returns the raw token to the authenticated browser. It is the only
+# place the raw token exists outside that browser: nothing persists it, nothing
+# logs it, and only its digest is sent to the Pilot.
+# ===========================================================================
+
+
+@app.post(
+    "/api/v1/session/{session_id}/pilot-claim",
+    tags=["session"],
+)
+async def session_pilot_claim(
+    session_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Mint a one-time Pilot handoff capability for this Parent session.
+
+    Takes no body. The session comes from the path and is verified against the
+    authenticated caregiver by `_require_session`, which 404s on a session that
+    does not exist and 403s on one owned by somebody else — so possession of a
+    returned token IS proof of ownership at mint time.
+
+    Guards:
+      404 session_not_found / 403       - from `_require_session`, unchanged
+      501 claim_not_configured          - this deployment may not mint claims
+      403 claim_pairing_forbidden       - declared pairing is not permitted
+      422 claim_rejected                - the Pilot refused it on its merits
+      503 claim_unavailable             - retryable; nothing was handed out
+    """
+    # Ownership proof. This is the whole authorization for the capability, and
+    # it happens in Parent's OWN directory where the uid is meaningful.
+    _require_session(auth.uid, session_id)
+
+    try:
+        result = handoff_client.mint_session_claim(source_session_id=session_id)
+    except handoff_client.ClaimPairingForbidden:
+        raise HTTPException(status_code=403, detail="claim_pairing_forbidden")
+    except handoff_client.ClaimNotConfigured:
+        # 501, not 500: the deployment is working exactly as configured, and
+        # the configuration says it does not mint claims. An operator reading
+        # this needs to know it is a capability gap, not a fault.
+        raise HTTPException(status_code=501, detail="claim_not_configured")
+    except handoff_client.ClaimRejected:
+        raise HTTPException(status_code=422, detail="claim_rejected")
+    except handoff_client.ClaimUnavailable:
+        raise HTTPException(status_code=503, detail="claim_unavailable")
+
+    # The Parent session is NOT modified. No token, digest or Pilot identifier
+    # is written back into it: the data direction is Parent -> Pilot only, and
+    # storing the capability would give Parent a replayable copy of a
+    # credential it has no reason to keep.
+    return {
+        "claim_token": result["claim_token"],
+        "expires_at": result["expires_at"],
     }

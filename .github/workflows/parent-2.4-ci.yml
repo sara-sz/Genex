@@ -1257,6 +1257,26 @@ jobs:
         # fake-token maps.
         run: python -m pytest tests/test_parent_24_baseline_projection.py -q
 
+      - name: Parent 2.4 session HANDOFF mint (own pytest process)
+        # 0.5F-A3 Parent side: the pairing guard, the 256-bit token, the
+        # three-field registration payload, and the mint route whose ownership
+        # proof is `_require_session`.
+        #
+        # This step also carries the CROSS-SYSTEM digest check: the test imports
+        # the Pilot's `claim_digest` and `CLAIM_DIGEST_DOMAIN` and asserts both
+        # sides agree byte for byte. If they diverged, every minted capability
+        # would be unredeemable.
+        #
+        # The module is named *session_handoff* rather than *session_claim*
+        # because `test_parent_24_integrity.py` bans a Parent module whose
+        # filename contains "claim" — in the Parent/RTM vocabulary a CLAIM is a
+        # BILLING claim, and that guard must not be widened to admit this one.
+        #
+        # Own process, like the suites around it: these reassign the global
+        # firebase_admin verify_id_token at import time with incompatible
+        # fake-token maps.
+        run: python -m pytest tests/test_parent_24_session_handoff.py -q
+
       - name: The functional baseline engine is NOT test-only
         # The regression this slice exists to prevent recurring.
         #
@@ -1433,6 +1453,43 @@ jobs:
             python -m pytest pilot_runtime/tests/test_projection_service.py -q
           else
             echo "0.5F-A2 not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.5F-A3 — bootstrap identity + artifact separation
+        # In the INTEGRATION job for the same reason as the A2 step above: the
+        # bootstrap entrypoint constructs a Firestore store, which needs the
+        # cloud SDK. It deliberately does NOT need firebase-admin — a test
+        # proves the import graph is Firebase-free, which is what lets the
+        # bootstrap image (which omits that SDK) start at all.
+        #
+        # This suite also pins the CLARIFICATION-1 distinction: the IAM boundary
+        # (two `datastore.entities.*` permissions, DATABASE-scoped because
+        # Firestore server-side IAM is not per-collection) versus the
+        # application boundary (one repository reached, asserted empirically
+        # against a recording store).
+        run: |
+          if [ -f pilot_runtime/tests/test_bootstrap_service.py ]; then
+            python -m pytest pilot_runtime/tests/test_bootstrap_service.py -q
+          else
+            echo "0.5F-A3 not present on this branch — nothing to run"
+          fi
+
+      - name: 0.5F-A3 capability contention against the REAL emulator
+        # The ONLY place the single-use guarantee can be proved. The
+        # pilot_backend suite runs this service code over a plain dict, which is
+        # not thread-safe, so every CONTENTION claim is made here:
+        # eight simultaneous redemptions of one capability must leave exactly
+        # one child, one link, one connection and zero orphans.
+        #
+        # A `consumed` boolean would be a read-then-write guard and would let
+        # several through — the same shape as the defect that once produced
+        # eight canonical children with eight active caregiver relationships.
+        run: |
+          if [ -f pilot_runtime/tests/integration/test_session_claim_emulator.py ]; then
+            python -m pytest \
+              pilot_runtime/tests/integration/test_session_claim_emulator.py -q
+          else
+            echo "0.5F-A3 not present on this branch — nothing to run"
           fi
 
       - name: Firestore adapter (unit, fake client)
@@ -2314,4 +2371,497 @@ jobs:
                            "gcloud run services update"):
               assert mutating not in probe, mutating
           print("the auth probe reads IAM and mutates nothing")
+          PY
+
+  pilot-bootstrap-image:
+    name: October pilot 0.5F-A3 bootstrap artifact
+    runs-on: ubuntu-latest
+
+    # The FOURTH container-building job, after pilot-generation-image and
+    # pilot-projection-image. Same reason all three exist: the machine that
+    # authored this slice has no container runtime, so Dockerfile.bootstrap and
+    # its in-build assertions had never executed anywhere.
+    #
+    # It does NOT publish. No registry login, no push, no credential: the image
+    # is built, inspected, run locally and discarded. And it applies no IAM — a
+    # step below asserts no build script embeds a policy or an allUsers grant.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage the narrowed bootstrap build context
+        # Staged from the allowlist in `gcloudignore-bootstrap` rather than from
+        # a list restated here, so a path the allowlist forgets is absent from
+        # the stage and the build fails.
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import pathlib, shutil
+
+          ignore = pathlib.Path(
+              "pilot_runtime/deploy/gcloudignore-bootstrap").read_text()
+          admitted = []
+          for line in ignore.splitlines():
+              line = line.strip()
+              if line.startswith("!") and not line.endswith("**"):
+                  path = line[1:].rstrip("/")
+                  if path:
+                      admitted.append(path)
+          assert admitted, "parsed no allowlist entries"
+          admitted = [p for p in admitted
+                      if not any(q != p and q.startswith(p + "/")
+                                 for q in admitted)]
+          print("allowlist admits:", admitted)
+          assert admitted == ["pilot_backend", "pilot_runtime"], admitted
+
+          stage = pathlib.Path("/tmp/bootctx")
+          if stage.exists():
+              shutil.rmtree(stage)
+          stage.mkdir(parents=True)
+
+          def drop(_root, names):
+              return [n for n in names
+                      if n in ("__pycache__", "tests", "fixtures")]
+
+          for rel in admitted:
+              src = pathlib.Path(rel)
+              if src.is_dir():
+                  shutil.copytree(src, stage / rel, ignore=drop)
+
+          for required in (
+              "pilot_runtime/deploy/Dockerfile.bootstrap",
+              "pilot_runtime/deploy/requirements-bootstrap.txt",
+              "pilot_runtime/bootstrap_server.py",
+              "pilot_runtime/bootstrap_iam.py",
+              "pilot_runtime/google_oidc.py",
+              "pilot_backend/transport/bootstrap_wsgi.py",
+              "pilot_backend/integration/parent_session_claim_service.py",
+              "pilot_backend/domain/parent_session_claim.py",
+          ):
+              assert (stage / required).is_file(), f"missing: {required}"
+
+          # NOTHING from genex-parent, and no top level beyond the two pilot
+          # packages. The bootstrap service receives a digest, a session id and
+          # an integer; it has no reason to see Parent content at all.
+          assert not (stage / "genex-parent").exists()
+          top = sorted(p.name for p in stage.iterdir())
+          assert top == ["pilot_backend", "pilot_runtime"], top
+          print("staged context top level:", top)
+          PY
+
+      - name: Build the bootstrap image from the narrowed context
+        # The Dockerfile runs its own assertions during the build: firebase-admin,
+        # pandas and openai absent; google-auth and firestore present; no
+        # genex-parent bundled; the application failing closed with no auth mode;
+        # and the registration validator refusing a raw token.
+        working-directory: .
+        run: |
+          docker build \
+            --file /tmp/bootctx/pilot_runtime/deploy/Dockerfile.bootstrap \
+            --tag pilot-bootstrap:ci \
+            /tmp/bootctx
+
+      - name: The built image has the right deps and NOT firebase-admin
+        # Re-asserted from OUTSIDE the build against the finished artifact.
+        # firebase-admin's absence is load-bearing: this service has no end-user
+        # authentication, so the capability is absent rather than merely unused
+        # — and its absence is what makes the browser app unstartable here.
+        run: |
+          docker run --rm pilot-bootstrap:ci python -c "
+          import importlib.util as u
+          assert u.find_spec('firebase_admin') is None, 'firebase-admin present'
+          assert u.find_spec('pandas') is None, 'pandas present'
+          assert u.find_spec('openpyxl') is None, 'openpyxl present'
+          assert u.find_spec('openai') is None, 'openai present'
+          assert u.find_spec('anthropic') is None, 'anthropic present'
+          import google.oauth2.id_token, google.cloud.firestore, requests
+          print('bootstrap image deps OK: google-auth + firestore, no firebase')
+          "
+
+      - name: The bootstrap image runs no other service entrypoint
+        # Four images now exist. This one must be unable to serve any of the
+        # other three, so a misconfigured CMD cannot turn it into the browser
+        # API, the projection service or the generation job.
+        run: |
+          python3 - <<'PY'
+          import subprocess
+
+          def run(*args):
+              return subprocess.run(
+                  ("docker", "run", "--rm", "pilot-bootstrap:ci") + args,
+                  capture_output=True, text=True)
+
+          # The BROWSER app: `pilot_runtime.server` imports the composition
+          # root, which imports the Firebase decoder at module level. With
+          # firebase-admin absent it cannot even be imported here.
+          out = run("python", "-c", "import pilot_runtime.server")
+          assert out.returncode != 0, "the browser entrypoint imported"
+          assert "firebase_admin" in (out.stderr + out.stdout), out.stderr
+          print("pilot_runtime.server          -> unimportable")
+
+          served = run("gunicorn", "--check-config",
+                       "pilot_runtime.server:application")
+          assert served.returncode != 0, "gunicorn loaded the browser app"
+          print("gunicorn browser app          -> cannot load")
+
+          # The CORS layer the browser app wraps itself in must not be
+          # reachable as a served application either.
+          cors = run("python", "-c",
+                     "from pilot_runtime.http.cors import CorsMiddleware; "
+                     "import pilot_runtime.server")
+          assert cors.returncode != 0, "the CORS browser stack assembled"
+          print("browser CORS stack            -> cannot assemble")
+
+          # The PROJECTION service: a separate, frozen A2 artifact. Its module
+          # is present in the context (it lives under pilot_runtime/), but this
+          # image must not be deployable as it — the CMD names the bootstrap
+          # entrypoint, asserted below, and the two services have separate
+          # runtime identities and invoker bindings.
+          proj = run("python", "-c",
+                     "import pilot_runtime.projection_server as p; "
+                     "p.build_projection_application({})")
+          assert proj.returncode != 0, "the projection app started here"
+          print("projection app                -> refuses to start")
+
+          # The GENERATION job needs pandas/openpyxl and the Parent workbook,
+          # none of which are present.
+          gen = run("python", "-c",
+                    "import pilot_runtime.deploy.generate_suggestions_job")
+          assert gen.returncode != 0, "the generation job imported"
+          print("generation job                -> unimportable")
+
+          # And the image's own CMD names the bootstrap entrypoint only.
+          cmd = subprocess.run(
+              ("docker", "inspect", "-f", "{{json .Config.Cmd}}",
+               "pilot-bootstrap:ci"), capture_output=True, text=True, check=True)
+          assert "bootstrap_server:application" in cmd.stdout, cmd.stdout
+          assert "projection_server" not in cmd.stdout
+          assert "pilot_runtime.server:" not in cmd.stdout
+          print("image CMD                     ->", cmd.stdout.strip()[:88])
+          PY
+
+      - name: The bootstrap entrypoint starts in iam_only and fails closed
+        # Non-secret configuration only: a project id, a database name and the
+        # declared auth mode. No audience and no caller are needed in
+        # `iam_only`, because the app verifies no token in that posture —
+        # Cloud Run IAM is the authoritative gate.
+        run: |
+          docker run --rm \
+            -e PILOT_ENVIRONMENT=dev \
+            -e PILOT_GCP_PROJECT_ID=genex-pilot-staging \
+            -e PILOT_FIREBASE_PROJECT_ID=genex-pilot-staging \
+            -e PILOT_FIRESTORE_DATABASE=pilot-staging \
+            pilot-bootstrap:ci python -c "
+          from pilot_runtime.bootstrap_server import (
+              build_bootstrap_application as build, BootstrapConfigError)
+
+          class FakeFirestore:
+              def collection(self, *a, **k):
+                  return self
+
+          import os
+          env = dict(os.environ)
+
+          # 1. no auth mode declared -> refuses to start
+          try:
+              build(env, firestore_client=FakeFirestore())
+              raise SystemExit('started with no auth mode declared')
+          except BootstrapConfigError:
+              print('no auth mode            -> refused')
+
+          # 2. unknown auth mode -> refuses
+          for bad in ('iam', 'off', 'IAM_ONLY', 'iam_only_please', ''):
+              try:
+                  build(dict(env, PILOT_BOOTSTRAP_AUTH_MODE=bad),
+                        firestore_client=FakeFirestore())
+                  raise SystemExit('started with auth mode ' + repr(bad))
+              except BootstrapConfigError:
+                  pass
+          print('unknown auth modes      -> refused')
+
+          # 3. iam_plus_token without its verifier configuration -> refuses
+          for partial in ({}, {'PILOT_BOOTSTRAP_AUDIENCE': 'https://x'},
+                          {'PILOT_BOOTSTRAP_CALLER': 'a@b.iam.gserviceaccount.com'}):
+              try:
+                  build(dict(env, PILOT_BOOTSTRAP_AUTH_MODE='iam_plus_token',
+                             **partial), firestore_client=FakeFirestore())
+                  raise SystemExit('iam_plus_token started underconfigured')
+              except BootstrapConfigError:
+                  pass
+          print('iam_plus_token partial  -> refused')
+
+          # 4. iam_only with only non-secret config -> STARTS, verifying nothing
+          app = build(dict(env, PILOT_BOOTSTRAP_AUTH_MODE='iam_only'),
+                      firestore_client=FakeFirestore())
+          assert callable(app)
+          assert app.verifies_tokens is False
+          print('iam_only                -> started, verifies_tokens=False')
+
+          # 5. production is refused outright, even fully configured
+          prod = dict(env, PILOT_ENVIRONMENT='prod',
+                      PILOT_BOOTSTRAP_AUTH_MODE='iam_only',
+                      PILOT_ALLOWED_ORIGINS='https://example.invalid')
+          try:
+              build(prod, firestore_client=FakeFirestore())
+              raise SystemExit('the bootstrap service started in prod')
+          except BootstrapConfigError:
+              print('prod environment        -> refused')
+          "
+
+      - name: The raw claim token is never persisted and never loggable
+        # The central guarantee of the capability design: the Pilot stores a
+        # DIGEST, so a compromise of its storage or its logs yields nothing
+        # redeemable. Asserted inside the finished image, against the real
+        # codec and the real log validator.
+        run: |
+          docker run --rm pilot-bootstrap:ci python -c "
+          import json
+          from datetime import datetime, timezone
+
+          from pilot_backend.domain.parent_session_claim import (
+              ParentSessionClaim, claim_digest, generate_claim_token)
+          from pilot_backend.persistence.codecs import encode
+          from pilot_backend.observability.safe_logging import (
+              ALLOWED_LOG_FIELDS, FORBIDDEN_LOG_FIELDS, format_log)
+          from pilot_backend.integration.parent_session_claim_service import (
+              FORBIDDEN_REGISTRATION_FIELDS, validate_registration_payload)
+
+          token = generate_claim_token()
+          assert len(token) >= 43, 'token too short for 256 bits'
+          digest = claim_digest(token)
+
+          # 1. the ENCODED document carries no preimage
+          claim = ParentSessionClaim.issue(
+              digest, 'fictional-session', now=datetime.now(timezone.utc))
+          document = encode(claim)
+          rendered = json.dumps(document, default=str)
+          assert token not in rendered, 'the raw token reached the document'
+          assert digest in rendered
+          assert set(document) == {
+              'claim_digest', 'source_system', 'source_session_id',
+              'issued_at', 'expires_at', 'schema_version'}, sorted(document)
+          print('stored document         -> digest only, 6 fields')
+
+          # 2. no uid of either system is storable on a claim
+          for forbidden in ('owner_uid', 'parent_uid', 'pilot_uid',
+                            'auth_subject', 'caregiver_id', 'child_id',
+                            'external_owner_ref', 'email'):
+              assert forbidden not in document, forbidden
+          print('stored document         -> no uid of either system')
+
+          # 3. the registration validator refuses a raw token outright
+          assert 'claim_token' in FORBIDDEN_REGISTRATION_FIELDS
+          try:
+              validate_registration_payload({
+                  'claim_digest': digest,
+                  'source_session_id': 'fictional-session',
+                  'claim_token': token})
+              raise SystemExit('a raw token was accepted for registration')
+          except Exception as exc:
+              assert 'claim_token' not in str(exc), 'the error quoted the token'
+              print('registration validator  -> refuses a raw token')
+
+          # 4. the token is UNLOGGABLE under every plausible field name
+          for name in ('claim_token', 'claim_digest', 'raw_token',
+                       'capability', 'capability_token', 'handoff_token',
+                       'token'):
+              assert name in FORBIDDEN_LOG_FIELDS, name
+              assert name not in ALLOWED_LOG_FIELDS, name
+              try:
+                  format_log(request_id='r', event='http_request',
+                             route='/pilot/parent-session-claims',
+                             method='POST', status=200, environment='dev',
+                             **{name: token})
+                  raise SystemExit('a log line accepted ' + name)
+              except SystemExit:
+                  raise
+              except Exception:
+                  pass
+          print('log validator           -> refuses every token field name')
+          "
+
+      - name: The bootstrap IAM proposal is minimal and applies nothing
+        # CLARIFICATION 1. Two boundaries, stated separately because they are
+        # different: Firestore server-side IAM is `datastore.entities.*` at the
+        # DATABASE level and is NOT a per-collection authorization boundary.
+        # The single-collection restriction is an APPLICATION property.
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          from pilot_runtime import bootstrap_iam as iam
+
+          # --- the IAM boundary: as narrow as GCP permits -----------------
+          assert set(iam.REQUIRED_PERMISSIONS) == {
+              "datastore.entities.create", "datastore.entities.get"}, \
+              sorted(iam.REQUIRED_PERMISSIONS)
+          for excluded in ("datastore.entities.update",
+                           "datastore.entities.delete",
+                           "datastore.entities.list"):
+              assert excluded not in iam.REQUIRED_PERMISSIONS, excluded
+              assert excluded in iam.EXCLUDED_PERMISSIONS, excluded
+          print("IAM permissions         ->", sorted(iam.REQUIRED_PERMISSIONS))
+
+          for role in ("roles/datastore.user", "roles/datastore.owner",
+                       "roles/editor", "roles/owner"):
+              assert role in iam.REJECTED_ROLES, role
+          commands = " ".join(iam.gcloud_commands())
+          for broad in ("roles/datastore.user", "roles/datastore.owner",
+                        "roles/editor", "roles/owner",
+                        "roles/datastore.importExportAdmin"):
+              assert broad not in commands, broad
+          print("broad roles             -> none proposed")
+
+          # a DEDICATED identity, not the A2 projection one
+          assert iam.BOOTSTRAP_SERVICE_ACCOUNT.startswith(
+              "pilot-bootstrap-staging-run@")
+          assert "pilot-projection-staging-run@" not in commands
+          assert "pilot-staging-run@" not in commands
+          print("runtime identity        ->", iam.BOOTSTRAP_SERVICE_ACCOUNT)
+
+          # exactly one invoker, and no public access
+          assert iam.PERMITTED_INVOKER == (
+              "genex-parent-staging-run@genex-mvp-2026.iam.gserviceaccount.com")
+          assert "allUsers" not in commands
+          assert "allAuthenticatedUsers" not in commands
+          assert "--allow-unauthenticated" not in commands
+          print("invoker                 -> one SA, no allUsers")
+
+          # the correction itself is recorded, so the wrong mental model
+          # cannot be re-acquired from this module
+          doc = iam.__doc__ or ""
+          assert "NOT PER-COLLECTION" in doc.upper()
+          assert "only on the claims collection" not in doc
+          print("IAM scope               -> documented as database-level")
+
+          # --- the APPLICATION boundary: where collection scoping lives ---
+          assert iam.PERMITTED_REPOSITORIES == ("parent_session_claims",)
+          for forbidden in ("children", "caregiver_child", "source_links",
+                            "identity_claims", "goal_suggestions",
+                            "clinical_goals", "focus_plans", "weekly_cycles",
+                            "observation_events", "rtm_episodes",
+                            "rtm_periods", "parent_baseline_projections"):
+              assert forbidden in iam.FORBIDDEN_REPOSITORIES, forbidden
+          print("repositories reached    ->", iam.PERMITTED_REPOSITORIES)
+          PY
+
+      - name: The three earlier build surfaces are byte-unchanged
+        # 0.5F-A3 adds a FOURTH image. None of the first three may move: the
+        # browser-facing API is the PHI-review surface, the generation image was
+        # frozen at 0.5E-B, and the projection image was frozen at 0.5F-A2.
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib, subprocess
+
+          A2_TAG = "october-pilot-0.5f-a2-parent-baseline-projection"
+          FROZEN = (
+              # browser-facing serving image (frozen at 0.5E-B)
+              "pilot_runtime/deploy/Dockerfile",
+              "pilot_runtime/deploy/requirements.txt",
+              "pilot_runtime/deploy/gcloudignore",
+              "pilot_runtime/deploy/cloudbuild.yaml",
+              # offline generation image (frozen at 0.5E-B)
+              "pilot_runtime/deploy/Dockerfile.generation",
+              "pilot_runtime/deploy/requirements-generation.txt",
+              "pilot_runtime/deploy/gcloudignore-generation",
+              "pilot_runtime/deploy/cloudbuild-generation.yaml",
+              # internal projection service (frozen at 0.5F-A2)
+              "pilot_runtime/deploy/Dockerfile.projection",
+              "pilot_runtime/deploy/requirements-projection.txt",
+              "pilot_runtime/deploy/gcloudignore-projection",
+              "pilot_runtime/deploy/cloudbuild-projection.yaml",
+              "pilot_runtime/deploy/probe_projection_auth.sh",
+              "pilot_runtime/projection_server.py",
+              "pilot_runtime/google_oidc.py",
+              "pilot_backend/transport/projection_wsgi.py",
+              "pilot_backend/integration/baseline_projection_service.py",
+              "pilot_backend/domain/parent_baseline_projection.py",
+              "genex-parent/api/parent_baseline_projection_client.py",
+              "genex-parent/api/session_store.py",
+              "genex-parent/api/session_store_iam.py",
+              "genex-parent/api/functional_baseline_api.py",
+          )
+          # Compared against the TAG rather than a hash list restated here: a
+          # literal would have to be updated by the same edit that broke it.
+          for rel in FROZEN:
+              want = subprocess.run(["git", "rev-parse", f"{A2_TAG}:{rel}"],
+                                    capture_output=True, text=True, check=True)
+              got = subprocess.run(["git", "hash-object", rel],
+                                   capture_output=True, text=True, check=True)
+              assert got.stdout.strip() == want.stdout.strip(), \
+                  f"{rel} differs from {A2_TAG}"
+              print(f"unchanged  {rel}")
+          print(f"{len(FROZEN)} earlier artifacts byte-identical to {A2_TAG}")
+
+          # Four images, four tags, no overlap.
+          base = pathlib.Path("pilot_runtime/deploy")
+          tags = {}
+          for cfg in ("cloudbuild.yaml", "cloudbuild-generation.yaml",
+                      "cloudbuild-projection.yaml", "cloudbuild-bootstrap.yaml"):
+              text = (base / cfg).read_text()
+              for tag in ("pilot/pilot-api", "pilot/pilot-generation",
+                          "pilot/pilot-projection", "pilot/pilot-bootstrap"):
+                  if tag in text:
+                      tags.setdefault(tag, []).append(cfg)
+          assert tags == {
+              "pilot/pilot-api": ["cloudbuild.yaml"],
+              "pilot/pilot-generation": ["cloudbuild-generation.yaml"],
+              "pilot/pilot-projection": ["cloudbuild-projection.yaml"],
+              "pilot/pilot-bootstrap": ["cloudbuild-bootstrap.yaml"],
+          }, tags
+          print("four build configs, four distinct images")
+          PY
+
+      - name: No bootstrap build script embeds or applies IAM
+        # 0.5F-A3 applies NO IAM. The build artifacts must not contain a policy,
+        # an allUsers grant or key material — and must not shell out to gcloud
+        # to apply one.
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import pathlib
+
+          # A GRANT is an instruction, not prose. Dockerfile.bootstrap
+          # deliberately EXPLAINS in comments why there is no allUsers, so a
+          # whole-file substring scan would flag its own documentation — the
+          # trap the A2 version of this gate hit when dry-run locally.
+          #
+          # Policy tokens are therefore scanned over EFFECTIVE lines (comments
+          # stripped); key material is scanned over the whole file, because
+          # there is no legitimate reason to name a private key even in a
+          # comment.
+          POLICY_TOKENS = (
+              "allUsers", "allAuthenticatedUsers",
+              "add-iam-policy-binding", "set-iam-policy",
+              "roles/run.invoker", "roles/datastore.user", "roles/editor",
+              "roles/owner", "--allow-unauthenticated",
+          )
+          KEY_TOKENS = (
+              "service_account_key", "credentials.json", "key.json",
+              "BEGIN PRIVATE KEY",
+          )
+          FILES = (
+              "pilot_runtime/deploy/Dockerfile.bootstrap",
+              "pilot_runtime/deploy/requirements-bootstrap.txt",
+              "pilot_runtime/deploy/cloudbuild-bootstrap.yaml",
+              "pilot_runtime/deploy/gcloudignore-bootstrap",
+          )
+          for rel in FILES:
+              text = pathlib.Path(rel).read_text()
+              effective = "\n".join(line.split("#", 1)[0]
+                                    for line in text.splitlines())
+              for token in POLICY_TOKENS:
+                  assert token not in effective, f"{rel} applies {token}"
+              for token in KEY_TOKENS:
+                  assert token not in text, f"{rel} names {token}"
+              print(f"no IAM, no key material  {rel}")
+
+          # `bootstrap_iam.py` PROPOSES commands as data and must never run
+          # them: no subprocess, no os.system, no gcloud invocation.
+          iam_src = pathlib.Path("pilot_runtime/bootstrap_iam.py").read_text()
+          for banned in ("subprocess", "os.system", "os.popen", "shutil.which",
+                         "check_call", "check_output", "Popen"):
+              assert banned not in iam_src, f"bootstrap_iam.py uses {banned}"
+          print("bootstrap_iam.py proposes commands as DATA; executes nothing")
           PY

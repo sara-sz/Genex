@@ -60,6 +60,11 @@ COLLECTIONS: Mapping[str, str] = {
     # and create-only: Parent remains the system of record, so a projection is
     # a copy that may never be edited here.
     "parent_baseline_projection": PILOT_COLLECTION_PREFIX + "parent_baseline_projections",
+    # 0.5F-A3 Parent session handoff capability. Written ONLY by the
+    # authenticated Parent service through the internal bootstrap endpoint, and
+    # create-only: redemption is recorded as an identity claim, never as an edit
+    # to the pending record. Holds a token DIGEST and no user identifier at all.
+    "parent_session_claim": PILOT_COLLECTION_PREFIX + "parent_session_claims",
     "clinical_goal": "pilot_clinical_goals",
     "caregiver_goal": "pilot_caregiver_goals",
     # 0.4C monthly focus plan.

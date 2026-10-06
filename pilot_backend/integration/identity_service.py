@@ -114,7 +114,16 @@ from ..domain.auth_identity import (
 from ..domain.connections import CaregiverChildConnection
 from ..domain.entities import Caregiver, Child
 from ..domain.enums import CaregiverRelationship
-from ..domain.identity_claims import ClaimKind, IdentityClaim, key_digest
+from ..domain.identity_claims import (
+    ClaimKind,
+    IdentityClaim,
+    claim_document_id,
+    key_digest,
+)
+from ..domain.parent_session_claim import (
+    ParentSessionClaimError,
+    claim_digest,
+)
 from ..domain.roles import ActorRole
 from ..domain.source_link import SourceSystem, SourceSystemLink
 from ..persistence.document_store import DocumentStoreError
@@ -125,6 +134,7 @@ from ..repository.interface import (
 )
 from .errors import (
     AmbiguousSubjectState,
+    ParentSessionClaimUnusable,
     ParentSessionLinkContended,
     ParentSessionUnavailable,
     SecondSessionUnresolved,
@@ -462,6 +472,45 @@ class IntegrationIdentityService:
         #
         # Checked BEFORE ownership so a retry costs no Parent read, and before
         # the second-session rule so a repeat never trips it.
+        replay = self._existing_parent_link(caregiver_id, external)
+        if replay is not None:
+            return replay
+
+        # --- ownership, against the VERIFIED subject --------------------
+        facts = self._parent.fetch_session_facts(
+            external, requesting_subject=principal.auth_subject)
+        if facts is None or not facts.is_owned_by(principal.auth_subject):
+            # Absent and not-owned collapse to ONE outcome, deliberately.
+            self._audit(AuditAction.PARENT_SESSION_LINKED, AuditResult.FAILURE,
+                        RESOURCE_PARENT_LINK, principal=principal,
+                        request_id=request_id, source_system=SourceSystem.PARENT.value)
+            raise ParentSessionUnavailable(
+                "no such Parent session for this account")
+
+        # --- create: child, relationship and source link, ATOMICALLY ----
+        #
+        # The second-session rule lives in the shared bridge, which applies it
+        # BEFORE any write — same position in the sequence as before, stated
+        # once instead of twice.
+        #
+        # Shared with the 0.5F-A3 claim path. Extracted rather than copied: this
+        # transaction is the emulator-proven fix for the eight-orphan-children
+        # defect described in the module docstring, and two copies of it would
+        # be two things to keep correct.
+        return self._bridge_parent_session(principal, external,
+                                           request_id=request_id)
+
+    def _existing_parent_link(self, caregiver_id: str, external: str):
+        """An already-linked Parent session for this caregiver, or None.
+
+        Shared by both entry points so "a retry returns the same child" and
+        "somebody else's session is indistinguishable from an absent one" are
+        decided in ONE place rather than twice.
+
+        Raises `ParentSessionUnavailable` when the session IS linked but to a
+        child this caregiver has no active relationship with. That is the same
+        error an absent session produces, deliberately — see errors.py.
+        """
         for link in self._repos.source_links.list_for_external_id(external):
             if link.source_system is not SourceSystem.PARENT:
                 continue
@@ -474,17 +523,32 @@ class IntegrationIdentityService:
                 child_id=link.child_id, source_link_id=link.link_id,
                 connection_id=connection.connection_id if connection else "",
                 created=False)
+        return None
 
-        # --- ownership, against the VERIFIED subject --------------------
-        facts = self._parent.fetch_session_facts(
-            external, requesting_subject=principal.auth_subject)
-        if facts is None or not facts.is_owned_by(principal.auth_subject):
-            # Absent and not-owned collapse to ONE outcome, deliberately.
-            self._audit(AuditAction.PARENT_SESSION_LINKED, AuditResult.FAILURE,
-                        RESOURCE_PARENT_LINK, principal=principal,
-                        request_id=request_id, source_system=SourceSystem.PARENT.value)
-            raise ParentSessionUnavailable(
-                "no such Parent session for this account")
+    def _bridge_parent_session(self, principal, external: str, *,
+                               request_id: str = "",
+                               consumption_digest: str = "") -> ParentLinkResult:
+        """Mint the canonical child for an ALREADY-ATTESTED Parent session.
+
+        "Attested" means ownership has been established by the caller, by
+        whichever means that entry point uses:
+
+            link_parent_session            the Pilot read the Parent blob and
+                                           compared owner_uid to the verified
+                                           subject (0.5A; same-directory only)
+            consume_parent_session_claim   Parent proved ownership in its OWN
+                                           directory before minting a
+                                           capability (0.5F-A3)
+
+        This method performs no ownership check of its own and must not be
+        given an unattested session id.
+
+        `consumption_digest`, when present, adds a
+        `ClaimKind.PARENT_SESSION_CLAIM` claim to the SAME transaction, which is
+        what makes a handoff capability single-use: the capability is spent
+        exactly when the bridge commits, and not at all when it does not.
+        """
+        caregiver_id = principal.application_id
 
         # --- second-session rule: fail closed, persist nothing ----------
         already = self._linked_parent_sessions(caregiver_id)
@@ -538,6 +602,18 @@ class IntegrationIdentityService:
             # Claims FIRST, so a loser does nothing else at all.
             tx.identity_claims.claim(external_claim)
             tx.identity_claims.claim(child_claim)
+            if consumption_digest:
+                # The capability is spent HERE, inside the same transaction as
+                # the writes it authorises. A second redeemer of the same token
+                # computes this identical document id and collides, so two
+                # redemptions can never both mint a child.
+                #
+                # Generation is fixed at 0: a spent capability is never
+                # released, so no later generation can exist.
+                tx.identity_claims.claim(IdentityClaim.build(
+                    ClaimKind.PARENT_SESSION_CLAIM, (consumption_digest,), 0,
+                    holder_ref=draft.link_id, child_id=child.child_id,
+                    actor_id=caregiver_id, now=self._stamp()))
             persisted = replace(
                 draft,
                 external_identity_claim_id=external_claim.claim_id,
@@ -585,6 +661,80 @@ class IntegrationIdentityService:
                                 source_link_id=link.link_id,
                                 connection_id=connection.connection_id,
                                 created=True)
+
+    # =====================================================================
+    # 0.5F-A3. Parent session CLAIM -> canonical child
+    # =====================================================================
+
+    def consume_parent_session_claim(self, principal, claim_token: str, *,
+                                     request_id: str = "") -> ParentLinkResult:
+        """Redeem a Parent handoff capability as the authenticated caregiver.
+
+        The SIBLING of `link_parent_session`, for the cross-directory case the
+        0.5A pull path structurally cannot serve: Parent and Pilot authenticate
+        against different Firebase user directories, so comparing the Parent
+        document's `owner_uid` to this principal's subject can never succeed.
+
+        Ownership was proven on the PARENT side, in Parent's own directory,
+        before the capability was minted. This method establishes the other
+        half — caregiver authority — from the Pilot's own verified principal.
+        No uid crosses either way.
+
+        The caller supplies ONLY an opaque token. The session id comes from the
+        stored claim, and the child id is minted here, so a browser can neither
+        name a session it does not hold a capability for nor choose a child.
+        """
+        if principal.role is not ActorRole.CAREGIVER:
+            # A provider must not acquire a family's child this way, and a
+            # service account resolves to no principal at all.
+            raise SubjectAlreadyHeld(
+                "redeeming a Parent session claim requires a caregiver")
+
+        try:
+            digest = claim_digest(claim_token)
+        except ParentSessionClaimError:
+            # A malformed token is refused with the SAME error as a wrong one,
+            # so length and shape cannot be probed.
+            raise ParentSessionClaimUnusable(
+                "this claim cannot be redeemed") from None
+
+        claim = self._repos.parent_session_claims.find(digest)
+        if claim is None:
+            raise ParentSessionClaimUnusable("this claim cannot be redeemed")
+
+        external = claim.source_session_id
+
+        # --- idempotent replay, BEFORE expiry and spent-ness -------------
+        #
+        # Deliberately first. A caregiver who already completed this handoff is
+        # retrying, and the answer is their existing child — it must not depend
+        # on whether the capability has since expired or been marked spent,
+        # because they hold no capability any more and need none: they already
+        # own the child. A different caregiver hits
+        # `ParentSessionUnavailable` here, which is the fail-closed outcome.
+        replay = self._existing_parent_link(principal.application_id, external)
+        if replay is not None:
+            return replay
+
+        if claim.is_expired_at(self._stamp()):
+            raise ParentSessionClaimUnusable("this claim cannot be redeemed")
+
+        # --- already spent, but no link this caregiver owns --------------
+        #
+        # Reachable when another caregiver redeemed this token and the
+        # `_existing_parent_link` check above did not fire because the link was
+        # ended. The capability is gone either way.
+        #
+        # Generation 0 is not a guess: a `PARENT_SESSION_CLAIM` is never
+        # released, so generation 0 is the only one that can exist.
+        spent_id = claim_document_id(
+            ClaimKind.PARENT_SESSION_CLAIM, key_digest(digest), 0)
+        if self._repos.identity_claims.exists(spent_id):
+            raise ParentSessionClaimUnusable("this claim cannot be redeemed")
+
+        return self._bridge_parent_session(principal, external,
+                                           request_id=request_id,
+                                           consumption_digest=digest)
 
     def _linked_parent_sessions(self, caregiver_id: str) -> List[str]:
         """External ids of Parent sessions already linked for this caregiver."""

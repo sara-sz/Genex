@@ -85,6 +85,13 @@ FORBIDDEN_LOG_FIELDS = frozenset({
     "entry_choice_label", "chronological_months", "milestone",
     "asked", "baseline", "functional_baseline", "projection",
     "source_record_digest", "source_session_id", "session_id",
+    # 0.5F-A3 Parent session handoff capability. A raw token must never be
+    # logged under ANY name, so every plausible spelling is forbidden rather
+    # than only the one this code happens to use. `claim_digest` is forbidden
+    # too: it is the storage key for a credential, and a log line pairing it
+    # with a timestamp would help an attacker who already had database read.
+    "claim_token", "claim_digest", "raw_token", "capability",
+    "capability_token", "handoff_token",
 })
 
 _ID_IN_PATH = re.compile(r"/(prac|prov|cgvr|chld|ccxn|pcxn|audt|revn)_[0-9a-f]{8,}")

@@ -75,6 +75,23 @@ MY_CHILDREN_ROUTE = "/pilot/me/children"
 BOOTSTRAP_CAREGIVER_ROUTE = "/pilot/bootstrap/caregiver"
 LINK_CHILD_ROUTE = "/pilot/parent-sessions/{session_id}/link-child"
 
+#: 0.5F-A3. Redeem a Parent handoff capability as the authenticated caregiver.
+#:
+#: The token is the ONE identifier in this application that travels in a BODY
+#: rather than a path segment, and that is deliberate: Cloud Run records the
+#: request path in its own logs, so a capability in the URL would be written to
+#: a log this application cannot redact. A path segment is right for a child id
+#: and wrong for a credential.
+#:
+#: There is no `{session_id}` in the template either. The session comes from the
+#: stored claim, so a browser cannot name a session it holds no capability for.
+CONSUME_CLAIM_ROUTE = "/pilot/parent-session-claims"
+
+#: The body allowlist for that route. One field. `read_json_body` refuses every
+#: `IDENTITY_FIELDS` name — including `child_id` — so this body cannot carry
+#: identity or select a canonical child.
+CONSUME_CLAIM_FIELDS = ("claim_token",)
+
 #: 0.5B provider connection surface. Protected, like everything but `/health`.
 #:
 #: Every identifier a caller supplies travels in the PATH, never in a body. No
@@ -783,6 +800,11 @@ class PilotWSGIApplication:
             if method != "POST":
                 return 405, _ERROR_BODIES[405], LINK_CHILD_ROUTE
             return self._handle_link_child(environ, session_id, request_id)
+
+        if path.rstrip("/") == CONSUME_CLAIM_ROUTE:
+            if method != "POST":
+                return 405, _ERROR_BODIES[405], CONSUME_CLAIM_ROUTE
+            return self._handle_consume_claim(environ, request_id)
 
         # --- 0.5B provider connection surface ---------------------------
         #
@@ -1759,6 +1781,69 @@ class PilotWSGIApplication:
                          "source_link_id": result.source_link_id,
                          "created": result.created,
                          "request_id": request_id}, LINK_CHILD_ROUTE
+
+    def _handle_consume_claim(self, environ: Mapping[str, object],
+                              request_id: str) -> Tuple[int, Mapping, str]:
+        """Redeem a Parent handoff capability (0.5F-A3).
+
+        The caregiver is resolved from the verified token, exactly as every
+        other route resolves it. The body supplies ONE field, and
+        `read_json_body` rejects every identity field by name — so this endpoint
+        cannot be handed a `child_id`, a `caregiver_id` or an `auth_subject`.
+
+        Every unusable-capability state collapses to ONE response. A caller
+        cannot tell "no such token" from "expired" from "already spent" from
+        "that child is somebody else's", which is what stops this becoming an
+        oracle for which Parent sessions exist.
+        """
+        from ..transport.body import BodyError, read_json_body
+
+        principal, status = self._principal(environ)
+        if principal is None:
+            self._log(request_id, CONSUME_CLAIM_ROUTE, "POST", status, None)
+            return status, _ERROR_BODIES[status], CONSUME_CLAIM_ROUTE
+
+        try:
+            body = read_json_body(environ, allowed=CONSUME_CLAIM_FIELDS,
+                                  required=("claim_token",))
+        except BodyError:
+            # The SAME constant 403 as every other refusal here, following the
+            # 0.5C rule: a 400 naming the offending field would tell a caller
+            # which fields this server recognises. It also means a missing,
+            # malformed and simply-wrong token are one response.
+            self._log_principal(request_id, CONSUME_CLAIM_ROUTE, "POST",
+                                HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    CONSUME_CLAIM_ROUTE)
+
+        try:
+            result = self._identity_service().consume_parent_session_claim(
+                principal, str(body.get("claim_token") or ""),
+                request_id=request_id)
+        except SecondSessionUnresolved:
+            # The one refusal that returns its code: a product state the client
+            # must act on, disclosing only that THIS account already has a
+            # linked session — which that account already knows.
+            self._log_principal(request_id, CONSUME_CLAIM_ROUTE, "POST", 409,
+                                principal)
+            return 409, {"error": "parent session ambiguous",
+                         "code": SecondSessionUnresolved.code}, CONSUME_CLAIM_ROUTE
+        except IntegrationError:
+            # ParentSessionClaimUnusable, ParentSessionUnavailable,
+            # SubjectAlreadyHeld and ParentSessionLinkContended all land here
+            # with ONE status and ONE body, so the distinctions that exist for
+            # auditing are not readable from outside.
+            self._log_principal(request_id, CONSUME_CLAIM_ROUTE, "POST",
+                                HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    CONSUME_CLAIM_ROUTE)
+
+        self._log_principal(request_id, CONSUME_CLAIM_ROUTE, "POST", HTTP_OK,
+                            principal)
+        return HTTP_OK, {"child_id": result.child_id,
+                         "source_link_id": result.source_link_id,
+                         "created": result.created,
+                         "request_id": request_id}, CONSUME_CLAIM_ROUTE
 
     # -- logging ------------------------------------------------------------
 

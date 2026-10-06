@@ -81,6 +81,7 @@ from ..domain.monthly_plan import (
 from ..domain.parent_baseline_projection import (
     ParentBaselineProjection,
 )
+from ..domain.parent_session_claim import ParentSessionClaim
 from ..domain.source_link import SourceSystemLink
 from ..domain.connections import CaregiverChildConnection, ProviderChildConnection
 from ..domain.entities import Caregiver, Child, Practice, Provider
@@ -147,7 +148,10 @@ def _own_id(record: Any) -> str:
                  "period_id", "episode_id",
                  "allocation_id", "link_id", "cycle_id", "focus_plan_id",
                  "practice_id", "provider_id",
-                 "caregiver_id", "child_id"):
+                 "caregiver_id", "child_id",
+                 # 0.5F-A3. A claim's identity IS its digest; it has no id
+                 # field of the usual shape.
+                 "claim_digest"):
         value = getattr(record, attr, None)
         if value:
             return str(value)
@@ -165,7 +169,11 @@ _TIME_ATTRS = ("created_at", "occurred_at", "snapshot_at", "captured_at",
                "linked_at", "generated_at", "entered_at", "opened_at",
                "started_at",
                # 0.5F-A2: a Parent baseline projection's own timestamp.
-               "projected_at")
+               "projected_at",
+               # 0.5F-A3: a pending Parent-session claim is ISSUED. Registered
+               # even though the claim repository performs no query today, so a
+               # later one cannot fail with an AttributeError at runtime.
+               "issued_at")
 
 
 def _record_time(record: Any) -> Any:
@@ -627,6 +635,32 @@ class FirestoreParentBaselineProjectionRepository(_BaseRepo):
         """
         found = self._query("source_session_id", source_session_id)
         return [p for p in found if p.domain == domain]
+
+
+class FirestoreParentSessionClaimRepository(_BaseRepo):
+    """Pending Parent-session handoff capabilities. CREATE-ONLY and FIND-ONLY.
+
+    No `update`, no `set`, no `delete`, and deliberately no `consume`. A
+    capability is spent by creating a `ClaimKind.PARENT_SESSION_CLAIM` identity
+    claim in the same transaction as the bridge it authorises — so redemption is
+    a separate immutable fact and this record is written exactly once.
+
+    Keyed by the token DIGEST, which makes issuance idempotent by construction:
+    a replayed registration of the same token addresses the same document and
+    the second `create` collides instead of producing a second claim.
+    """
+
+    record_type, model = "parent_session_claim", ParentSessionClaim
+
+    def create(self, claim: ParentSessionClaim) -> ParentSessionClaim:
+        return self._create(claim.claim_digest, claim)
+
+    def find(self, token_digest: str) -> Optional[ParentSessionClaim]:
+        """The claim, or None. Absence is the normal state for a bad token."""
+        try:
+            return self._get(token_digest)
+        except RecordNotFound:
+            return None
 
 
 class FirestoreManagingClinicianRepository(_BaseRepo):
@@ -1336,6 +1370,8 @@ class FirestoreRepositories:
         self.suggestion_anchors = FirestoreSuggestionAnchorRepository(store)
         self.parent_baseline_projections = (
             FirestoreParentBaselineProjectionRepository(store))
+        self.parent_session_claims = (
+            FirestoreParentSessionClaimRepository(store))
         self.clinical_goal_anchors = FirestoreClinicalGoalAnchorRepository(store)
         self.caregiver_goals = FirestoreCaregiverGoalRepository(store)
         self.focus_plans = FirestoreMonthlyFocusPlanRepository(store)

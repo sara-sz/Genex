@@ -52,6 +52,23 @@ class ParentSessionUnavailable(IntegrationError):
     """
 
 
+class ParentSessionClaimUnusable(IntegrationError):
+    """The presented handoff capability cannot be redeemed.
+
+    ONE error covering every unusable state: no such token, expired, already
+    spent, or malformed. The cases are deliberately indistinguishable.
+
+    Separating them would turn this route into an oracle. "Expired" versus "no
+    such token" tells a holder of a guessed value that the value once existed,
+    and "already consumed" tells them somebody else redeemed it — which also
+    reveals that the Parent session behind it is real. A single refusal
+    discloses only that this attempt did not work.
+
+    `ParentSessionUnavailable` stays separate because it means something
+    different: the capability was fine and the CHILD belongs to somebody else.
+    """
+
+
 class ParentSessionLinkContended(IntegrationError):
     """Another writer is linking this same Parent session right now.
 

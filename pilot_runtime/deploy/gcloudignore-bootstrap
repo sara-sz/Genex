@@ -1,0 +1,23 @@
+# Build-context allowlist for the INTERNAL BOOTSTRAP service image.
+#
+# Separate from `gcloudignore` (the served API), `gcloudignore-generation`
+# (the offline job) and `gcloudignore-projection` (the frozen A2 service).
+# None of those three is modified.
+#
+# Identical narrowing to the A2 projection context, and for the same reason:
+# the bootstrap service reads no workbook and no taxonomy, so it admits
+# nothing from genex-parent at all.
+#
+# Ignore everything, then re-admit only the two pilot packages.
+
+*
+
+!pilot_backend/
+!pilot_backend/**
+!pilot_runtime/
+!pilot_runtime/**
+
+pilot_backend/tests/**
+pilot_runtime/tests/**
+**/__pycache__/**
+**/*.pyc

@@ -111,6 +111,7 @@ from ..domain.weekly_cycle import (
 )
 from ..domain.canonical_rung import ActivityFamilyBinding, CanonicalRung
 from ..domain.parent_baseline_projection import ParentBaselineProjection
+from ..domain.parent_session_claim import ParentSessionClaim
 from ..domain.goal_anchor import ClinicalGoalAnchor, SuggestionCanonicalAnchor
 from ..domain.goals import (
     CaregiverApprovedGoal,
@@ -651,6 +652,18 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "routing_anchor_months": OPT_INT,
         "not_demonstrated_months": OPT_INT,
         "projected_at": DT, "schema_version": STR,
+    },
+    # ---- 0.5F-A3 Parent session handoff claim ---------------------------
+    #
+    # SIX fields and not one more. There is no `consumed` flag: redemption is a
+    # separate create-only identity claim, so this record is written once and
+    # never edited. There is no uid of either system, and no clinical field.
+    ParentSessionClaim: {
+        "claim_digest": STR,
+        "source_system": _EnumKind(SourceSystem),
+        "source_session_id": STR,
+        "issued_at": DT, "expires_at": DT,
+        "schema_version": STR,
     },
     SuggestionCanonicalAnchor: {
         "suggestion_id": STR, "child_id": STR,

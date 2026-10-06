@@ -124,6 +124,18 @@ class ClaimKind(str, Enum):
     #: depend on which row a query happened to return, and would let one be
     #: revoked while the other silently kept access.
     PROVIDER_CONNECTION = "provider_connection"
+    #: 0.5F-A3. One redemption per Parent-session claim token.
+    #:
+    #: The SINGLE-USE enforcement for the Parent -> Pilot handoff capability,
+    #: keyed on the token's digest. It is a claim rather than a `consumed` flag
+    #: on the claim record for the reason this module exists: a read-then-write
+    #: guard is right almost always and wrong exactly when two writers redeem
+    #: the same token at once, and two redemptions would mint two canonical
+    #: children for one Parent session.
+    #:
+    #: Never released. A spent capability stays spent, so there is no
+    #: generation beyond 0 and the document id is fully deterministic.
+    PARENT_SESSION_CLAIM = "parent_session_claim"
 
 
 class ClaimError(ValueError):

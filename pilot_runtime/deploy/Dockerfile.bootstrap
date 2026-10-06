@@ -1,0 +1,126 @@
+# INTERNAL PARENT-SESSION-CLAIM BOOTSTRAP service image — October pilot 0.5F-A3.
+#
+# A FOURTH image. It does not replace or modify the served API image
+# (`Dockerfile`), the offline generation image (`Dockerfile.generation`), or the
+# FROZEN A2 projection image (`Dockerfile.projection`). None of their
+# requirements files is touched by this slice, and a CI step asserts all three
+# remain byte-identical.
+#
+# WHY NOT A ROUTE ON THE A2 PROJECTION SERVICE
+#
+# The projection service is deliberately single-purpose, and its narrowness is
+# asserted rather than merely intended: one route, a three-key body, an 8 KiB
+# cap, and a create-only repository with no update or delete. Its runtime
+# identity holds exactly three Firestore permissions.
+#
+# Identity bootstrap is a different operation. It is not a copy of a clinical
+# result — it registers a capability that will later mint canonical identity, and
+# redeeming one writes transactionally across four collections. Adding that to
+# the projection service would widen a reviewed PHI boundary and would need
+# Firestore access the projection identity should not hold.
+#
+# So: separate image, separate runtime service account, separate invoker
+# binding, separate blast radius.
+#
+# WHY NOT A ROUTE ON THE SERVED API
+#
+# The served API has `allUsers` on `run.invoker`, because Lovable browser
+# clients cannot present Google OIDC. With `allUsers`, Cloud Run enforces
+# NOTHING: it forwards the Authorization header and the application becomes the
+# only gate. An internet-reachable identity-registration endpoint protected by
+# application code alone is exactly what this slice must not build.
+#
+# This service is deployed with NO `allUsers` and a single `roles/run.invoker`
+# binding to the Parent STAGING runtime service account.
+#
+# WHAT THIS IMAGE CONTAINS
+#
+#   pilot_backend/   the claim domain, the create-only claim repository and the
+#                    internal bootstrap transport. The SAME domain and
+#                    repository implementation the served API uses.
+#   pilot_runtime/   the Google OIDC verifier and this service's entrypoint.
+#
+# WHAT IT DOES NOT CONTAIN
+#
+#   genex-parent/    NOTHING. The bootstrap service reads no workbook and no
+#                    taxonomy: it receives a digest, a session id and an
+#                    integer.
+#   firebase-admin   THE IMPORTANT OMISSION. No end-user authentication exists
+#                    here, so the Firebase SDK is absent and a caregiver or
+#                    provider token cannot be verified even by a future edit.
+#                    Redemption — which DOES need a caregiver — happens on the
+#                    browser API, not here.
+#   pandas/openpyxl  no workbook.
+#   openai           no model call.
+
+FROM python:3.11.9-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+COPY pilot_runtime/deploy/requirements-bootstrap.txt /app/requirements.txt
+RUN pip install -r /app/requirements.txt
+
+COPY pilot_backend/ /app/pilot_backend/
+COPY pilot_runtime/ /app/pilot_runtime/
+
+# Tests are not part of a served artifact. Removing the pilot fixtures also
+# removes the in-memory document store from the filesystem, so no fake
+# persistence path is present in a service that writes real records.
+RUN rm -rf /app/pilot_backend/tests /app/pilot_runtime/tests \
+           /app/pilot_backend/fixtures \
+    && find /app -name '__pycache__' -type d -prune -exec rm -rf {} +
+
+# Fail the BUILD rather than a request if the narrowing above regresses. Each of
+# these is a property this file claims in prose, and a claim in a comment is not
+# a guarantee.
+RUN python -c "import importlib.util as u; \
+assert u.find_spec('firebase_admin') is None, 'firebase-admin must be absent: this service has no end-user auth'; \
+assert u.find_spec('pandas') is None, 'no workbook is read here'; \
+assert u.find_spec('openai') is None, 'no model client'; \
+import google.oauth2.id_token, google.cloud.firestore; \
+print('bootstrap image deps OK')"
+RUN test ! -d /app/genex-parent && echo "no Parent content bundled: OK"
+
+# Prove the application assembles, and that it FAILS CLOSED with no declared
+# auth mode — before any real request can reach it.
+RUN cd /app && python -c "\
+from pilot_runtime.bootstrap_server import build_bootstrap_application as b, BootstrapConfigError; \
+ok = False; \
+exec('try:\n b({})\nexcept BootstrapConfigError:\n ok = True'); \
+assert ok, 'the bootstrap service started with no auth mode declared'; \
+print('bootstrap service fails closed when unconfigured: OK')"
+
+# The raw capability token must never be constructible here. The Pilot receives
+# only digests, so the generator has no business in this image's reachable
+# surface — asserted as a property rather than trusted as a convention.
+RUN cd /app && python -c "\
+from pilot_backend.integration.parent_session_claim_service import FORBIDDEN_REGISTRATION_FIELDS as F; \
+assert 'claim_token' in F, 'a raw token must be refused by the registration validator'; \
+assert 'parent_uid' in F and 'child_id' in F, 'uid and child_id must be refused'; \
+print('registration validator refuses raw tokens and identity: OK')"
+
+RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 pilot
+USER 10001
+
+EXPOSE 8080
+
+# One worker, few threads: this service handles one registration per family
+# onboarding, not browser traffic.
+#
+# `--access-logfile -` is deliberately ABSENT, as in the other images. Cloud Run
+# already records the request line at the platform layer, and the route here is
+# identifier-free by design.
+CMD exec gunicorn \
+      --bind 0.0.0.0:${PORT:-8080} \
+      --workers 1 \
+      --threads 4 \
+      --timeout 30 \
+      --graceful-timeout 10 \
+      --preload \
+      --no-sendfile \
+      pilot_runtime.bootstrap_server:application
