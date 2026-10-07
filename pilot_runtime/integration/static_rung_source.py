@@ -313,6 +313,32 @@ class StaticRungTableSource:
                           source_rung_months=int(entry["source_rung_months"]),
                           milestone_text=entry["milestone_text"])
 
+    def declared_band_roster(self, domain_key: str, months: int
+                             ) -> Tuple[str, ...]:
+        """EVERY declared-track rung ref at this band, mappable or not.
+
+        0.6A-1F. The INDEPENDENT denominator for band completeness, derived
+        from the same frozen artifact that canonicalises the evidence — so the
+        count and the identities come from one source and cannot disagree.
+
+        Exists because trusting Parent's `total_skills` on its own is
+        exploitable in the one direction that matters: a baseline declaring
+        `total_skills=3` for the 30-month band and sending three valid rows
+        would read as fully assessed while a fourth declared skill was never
+        asked, turning missing evidence into mastery.
+
+        Returns refs rather than a count, so the caller can check MEMBERSHIP
+        too: a right-sized band made of the wrong skills is still wrong.
+        """
+        if (domain_key or "").strip() != self._domain:
+            raise StaticActivityIdentityError(
+                "this artifact does not cover the requested domain")
+        if isinstance(months, bool) or not isinstance(months, int):
+            raise StaticActivityIdentityError("months must be an integer")
+        return tuple(sorted(
+            ref for ref, entry in self._rungs.items()
+            if int(entry["source_rung_months"]) == months))
+
     def canonical_identity(self, domain_key: str, months: int,
                            milestone_text: str) -> Tuple[str, str]:
         """(rung_ref, subdomain) for a source skill, MAPPABLE OR NOT.

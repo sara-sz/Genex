@@ -438,3 +438,114 @@ def test_the_legacy_helper_refuses_a_v2_projection(rungs):
     projection = project(parent_baseline(), rungs)
     with pytest.raises(ProjectionV2Error):
         legacy_projection_has_skill_evidence(projection)
+
+
+# ---------------------------------------------------------------------------
+# 0.6A-1F — the band denominator is verified against the CANONICAL roster
+# ---------------------------------------------------------------------------
+
+
+def test_the_canonical_band_roster_is_independent_of_parent(rungs):
+    """The denominator source. Derived from the same artifact that canonicalises
+    the evidence, so count and identity cannot come from two disagreeing places.
+    """
+    assert len(rungs.declared_band_roster(DOMAIN, 24)) == 1
+    assert len(rungs.declared_band_roster(DOMAIN, 30)) == 4
+    assert len(rungs.declared_band_roster(DOMAIN, 36)) == 3
+    assert len(rungs.declared_band_roster(DOMAIN, 48)) == 2
+    for ref in rungs.declared_band_roster(DOMAIN, 30):
+        assert ref.startswith("rung1:")
+
+
+def test_an_understated_band_total_cannot_manufacture_completeness(rungs):
+    """THE ATTACK. 30m canonically holds four skills.
+
+    A baseline claiming `total_skills=3` with three valid rows would otherwise
+    derive `assessment_complete(30) == True` while a fourth declared skill was
+    never asked — missing evidence becoming mastery.
+    """
+    record = parent_baseline()
+    three = [s for s in record.skills.values() if PRONOUNS not in s.milestone]
+    lying = [(m, 3 if m == 30 else n) for m, n in band_totals_of(record)]
+    with pytest.raises(SkillCanonicalisationError) as caught:
+        project(record, rungs, skills=three, band_totals=lying)
+    assert "canonical declared-track roster" in str(caught.value)
+
+
+def test_an_overstated_band_total_is_also_refused(rungs):
+    """Wrong in the other direction hides a real target instead."""
+    record = parent_baseline()
+    high = [(m, 5 if m == 30 else n) for m, n in band_totals_of(record)]
+    with pytest.raises(SkillCanonicalisationError):
+        project(record, rungs, band_totals=high)
+
+
+def test_duplicate_band_total_entries_are_refused(rungs):
+    record = parent_baseline()
+    with pytest.raises(SkillCanonicalisationError) as caught:
+        project(record, rungs, band_totals=band_totals_of(record) + [(30, 4)])
+    assert "same band" in str(caught.value)
+
+
+def test_a_skill_outside_its_canonical_band_is_refused(rungs):
+    """Membership, not just count: a right-SIZED band of wrong skills is wrong.
+
+    Exercises `verify_band_denominators` directly, because an inconsistent
+    (months, milestone) pair is already refused earlier at canonicalisation —
+    so without this the membership branch would be unreachable and untested.
+    """
+    from pilot_backend.integration.baseline_skill_projection import (
+        verify_band_denominators,
+    )
+    from pilot_backend.domain.parent_baseline_projection_v2 import (
+        ProjectedBandTotal as BT,
+    )
+
+    roster_30 = rungs.declared_band_roster(DOMAIN, 30)
+    foreign = rungs.declared_band_roster(DOMAIN, 36)[0]
+    assert foreign not in roster_30
+
+    evidence = [ProjectedSkillEvidence(rung_ref=ref, months=30,
+                                       state="demonstrated")
+                for ref in roster_30[:3]]
+    evidence.append(ProjectedSkillEvidence(rung_ref=foreign, months=30,
+                                           state="demonstrated"))
+    with pytest.raises(SkillCanonicalisationError) as caught:
+        verify_band_denominators(rungs, evidence, [BT(months=30,
+                                                      total_skills=4)],
+                                 domain=DOMAIN)
+    assert "not a member" in str(caught.value)
+
+
+def test_the_same_canonical_skill_twice_in_a_band_is_refused(rungs):
+    from pilot_backend.integration.baseline_skill_projection import (
+        verify_band_denominators,
+    )
+    from pilot_backend.domain.parent_baseline_projection_v2 import (
+        ProjectedBandTotal as BT,
+    )
+
+    ref = rungs.declared_band_roster(DOMAIN, 30)[0]
+    evidence = [ProjectedSkillEvidence(rung_ref=ref, months=30,
+                                       state="demonstrated")] * 2
+    with pytest.raises(SkillCanonicalisationError) as caught:
+        verify_band_denominators(rungs, evidence,
+                                 [BT(months=30, total_skills=4)],
+                                 domain=DOMAIN)
+    assert "twice" in str(caught.value)
+
+
+def test_an_evidence_bearing_band_without_a_total_is_refused(rungs):
+    record = parent_baseline()
+    totals = [(m, n) for m, n in band_totals_of(record) if m != 30]
+    with pytest.raises(SkillCanonicalisationError) as caught:
+        project(record, rungs, band_totals=totals)
+    assert "no band-total declaration" in str(caught.value)
+
+
+def test_an_honest_projection_still_succeeds(rungs):
+    """Non-vacuity for every refusal above."""
+    projection = project(parent_baseline(), rungs)
+    assert projection.assessment_complete(30) is True
+    assert projection.band_mastered(30) is True
+    assert len(projection.assessed_in_band(30)) == 4

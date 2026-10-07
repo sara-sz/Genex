@@ -142,6 +142,75 @@ def band_totals_from_parent(totals: Sequence[Tuple[int, int]]
                         key=lambda b: b.months))
 
 
+def verify_band_denominators(rung_source: Any,
+                             evidence: Sequence[ProjectedSkillEvidence],
+                             totals: Sequence[ProjectedBandTotal],
+                             *, domain: str) -> None:
+    """Check Parent's denominator against the CANONICAL declared-track roster.
+
+    0.6A-1F. Parent's `total_skills` is no longer trusted on its own.
+
+    ## The attack this closes
+
+    The canonical 30-month band holds four declared-track skills. A baseline
+    could send `total_skills=3` with three genuinely valid 30-month rows, and
+    the derived `assessment_complete(30)` would be TRUE while a fourth declared
+    skill had never been asked. Missing evidence would become mastery — the one
+    failure this whole repair exists to prevent, reintroduced through the
+    denominator instead of the questioning.
+
+    A wrong-in-the-other-direction claim is refused too: `total_skills=5` would
+    make a complete band look incomplete and silently suppress a real target.
+
+    ## Count is not enough; MEMBERSHIP is checked
+
+    A band of the right SIZE made of the wrong skills is still wrong. Evidence
+    refs must be a subset of that band's exact canonical roster, so a 30-month
+    row carrying a 36-month rung's ref cannot pad the count.
+
+    The roster comes from `declared_band_roster`, i.e. the same frozen artifact
+    that canonicalised the evidence — so the identities and the count cannot
+    come from two sources that disagree.
+    """
+    by_month: Dict[int, ProjectedBandTotal] = {}
+    for band in totals:
+        if band.months in by_month:
+            raise SkillCanonicalisationError(
+                "two band-total entries name the same band")
+        by_month[band.months] = band
+
+    evidence_months = {item.months for item in evidence}
+    missing = sorted(evidence_months - set(by_month))
+    if missing:
+        raise SkillCanonicalisationError(
+            "an evidence-bearing band has no band-total declaration")
+
+    for months, band in sorted(by_month.items()):
+        try:
+            roster = set(rung_source.declared_band_roster(domain, months))
+        except Exception as exc:
+            raise SkillCanonicalisationError(
+                "the canonical declared-track roster for a band could not be "
+                "resolved") from exc
+        if not roster:
+            raise SkillCanonicalisationError(
+                "a declared band total names a band with no canonical skills")
+        if band.total_skills != len(roster):
+            # Too low AND too high are both refused: one manufactures mastery,
+            # the other hides a target.
+            raise SkillCanonicalisationError(
+                "Parent's declared band total disagrees with the canonical "
+                "declared-track roster")
+        refs = [item.rung_ref for item in evidence if item.months == months]
+        if len(set(refs)) != len(refs):
+            raise SkillCanonicalisationError(
+                "the same canonical skill appears twice in one band")
+        stray = sorted(set(refs) - roster)
+        if stray:
+            raise SkillCanonicalisationError(
+                "a projected skill is not a member of its canonical band")
+
+
 def project_baseline_v2(*, rung_source: Any, child_id: str,
                         source_session_id: str, source_record_digest: str,
                         summary: Dict[str, Any], skills: Iterable[Any],
@@ -163,12 +232,8 @@ def project_baseline_v2(*, rung_source: Any, child_id: str,
 
     evidence = canonicalise_skills(rung_source, skills)
     totals = band_totals_from_parent(band_totals)
-
-    declared = {b.months for b in totals}
-    for item in evidence:
-        if item.months not in declared:
-            raise SkillCanonicalisationError(
-                "a resolved skill names a band Parent declared no total for")
+    verify_band_denominators(rung_source, evidence, totals,
+                             domain=summary["domain"])
     return ParentBaselineProjectionV2.build(
         child_id=child_id, source_session_id=source_session_id,
         source_record_digest=source_record_digest, summary=summary,
