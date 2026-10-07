@@ -98,6 +98,16 @@ _REFUSALS = {
 }
 
 
+class StaticActivityIdentityError(GoldStandardSourceError):
+    """A source skill could not be canonicalised to exactly one rung.
+
+    Deliberately NOT `RungNotMappableError`: that means "this rung exists but
+    its activity families are unreconciled", which is a planning limit. This
+    means "I cannot tell which rung you mean", which is an identity failure and
+    must never be resolved by picking one.
+    """
+
+
 class StaticRungTableError(GoldStandardSourceError):
     """The artifact is absent, malformed, or fails its own integrity check.
 
@@ -302,6 +312,47 @@ class StaticRungTableSource:
         return RungTarget(domain_key=self._domain,
                           source_rung_months=int(entry["source_rung_months"]),
                           milestone_text=entry["milestone_text"])
+
+    def canonical_identity(self, domain_key: str, months: int,
+                           milestone_text: str) -> Tuple[str, str]:
+        """(rung_ref, subdomain) for a source skill, MAPPABLE OR NOT.
+
+        0.6A-1E. Separate from `rung_for_target` on purpose: that method's
+        contract is "a rung it returns is USABLE for activity planning", so it
+        refuses the four declared-track rungs whose activity families the
+        taxonomy has not reconciled.
+
+        Canonicalisable and activity-mappable are different questions. A
+        baseline skill such as `pronouns` or `wh_question_asking` is perfectly
+        real — the Gold Standard names it and the generated table carries its
+        ref — it simply has no activity family yet. Baseline EVIDENCE about it
+        must survive projection; only the later decision to build an anchored
+        suggestion from it needs mappability.
+
+        Fails closed on zero or multiple matches rather than choosing: a source
+        skill that cannot be identified uniquely must not be projected under a
+        guess, and the artifact's own uniqueness check means >1 should be
+        impossible.
+        """
+        if (domain_key or "").strip() != self._domain:
+            raise StaticActivityIdentityError(
+                "this artifact does not cover the requested domain")
+        if isinstance(months, bool) or not isinstance(months, int):
+            raise StaticActivityIdentityError("months must be an integer")
+        wanted = normalize_milestone_text(milestone_text)
+        matches = [
+            (ref, entry) for ref, entry in self._rungs.items()
+            if int(entry["source_rung_months"]) == months
+            and normalize_milestone_text(entry["milestone_text"]) == wanted
+        ]
+        if not matches:
+            raise StaticActivityIdentityError(
+                "no canonical rung matches this source skill")
+        if len(matches) > 1:
+            raise StaticActivityIdentityError(
+                "this source skill matches more than one canonical rung")
+        ref, entry = matches[0]
+        return ref, str(entry["subdomain"])
 
     def mappable_rungs_for_domain(self, domain_key: str
                                   ) -> Tuple[CanonicalRung, ...]:

@@ -109,15 +109,41 @@ class BaselineV2Error(Exception):
     PHI_SAFE_MESSAGE = True
 
 
-def skill_key(domain: str, months: int, milestone: str) -> str:
-    """The canonical identity triple of one skill, joined injectively.
+def skill_key(domain: str, subdomain: str, months: int,
+              milestone: str) -> str:
+    """The complete SOURCE identity of one Parent baseline skill.
 
-    These are exactly the three fields the pilot's `compute_rung_ref` hashes,
-    in that order, with the FULL milestone text. Not a hash: Parent does not
-    own the ref scheme and must not mint one.
+    Four fields, joined with a separator that cannot occur in the data.
+
+    ## Why subdomain is present even though it adds no uniqueness
+
+    Measured over the frozen workbook: 369 rows collapse to 163 distinct
+    `(domain, months, milestone)` rungs, and ZERO of those rungs carries more
+    than one subdomain — subdomain is functionally determined. So the three-field
+    key is already unique and the four-field key yields the same 163 keys.
+
+    It is included because it makes the key SELF-VALIDATING at the A2 boundary.
+    A2 must fail closed on a mismatched subdomain, and a key that carries the
+    subdomain lets that check compare like with like instead of trusting a
+    separate field to have travelled with the right skill.
+
+    ## It is deliberately NOT a hash, and NOT the pilot's rung_ref
+
+    `compute_rung_ref` lives in `pilot_backend`, which is not importable from
+    `genex-parent` and must not be: the Pilot depends on Parent, never the
+    reverse. Copying the hash here would create two implementations of one
+    identity and an eventual drift. Parent therefore stores its own source
+    identity and A2 converts.
+
+    Note that `compute_rung_ref` deliberately EXCLUDES subdomain, for the same
+    functional-determination reason plus robustness to a relabel. That asymmetry
+    is intentional and safe: A2 resolves on `(domain, months, milestone)` and
+    then VERIFIES subdomain, so a relabel fails loudly rather than silently
+    mapping to the wrong rung.
     """
     return _UNIT_SEP.join((
         (domain or "").strip(),
+        (subdomain or "").strip(),
         str(int(months)),
         " ".join((milestone or "").split()),
     ))
@@ -140,6 +166,10 @@ class BaselineSkillEvidence:
     state: str
 
     def __post_init__(self) -> None:
+        if not (self.subdomain or "").strip():
+            # Required because the key includes it: a blank subdomain would
+            # make two different skills collapse onto one key.
+            raise BaselineV2Error("skill evidence requires a subdomain")
         if self.state not in ASSESSED_STATES:
             raise BaselineV2Error(
                 f"{self.state!r} is not an assessed state; `unassessed` is the "
@@ -153,7 +183,8 @@ class BaselineSkillEvidence:
 
     @property
     def key(self) -> str:
-        return skill_key(self.domain, self.months, self.milestone)
+        return skill_key(self.domain, self.subdomain, self.months,
+                         self.milestone)
 
     @property
     def is_unresolved(self) -> bool:
@@ -252,7 +283,8 @@ def band_assessment(record: BaselineRecordV2, months: int) -> BandAssessment:
     rows = band_skill_rows(record, months)
     assessed = []
     for row in rows:
-        key = skill_key(record.domain, months, row["milestone"])
+        key = skill_key(record.domain, row["subdomain"], months,
+                        row["milestone"])
         evidence = record.skills.get(key)
         if evidence is not None:
             assessed.append(evidence)
@@ -327,7 +359,8 @@ def next_question_v2(record: BaselineRecordV2) -> Optional[Dict[str, Any]]:
     assessment = band_assessment(record, current)
     if not assessment.assessment_complete:
         for row in band_skill_rows(record, current):
-            key = skill_key(record.domain, current, row["milestone"])
+            key = skill_key(record.domain, row["subdomain"], current,
+                            row["milestone"])
             if key not in record.skills:
                 return _question(record, current, row)
         return None  # pragma: no cover - completeness implies a row was found
@@ -375,7 +408,8 @@ def _question(record: BaselineRecordV2, months: int,
     so could collide between two milestones sharing a prefix.
     """
     return {
-        "skill_key": skill_key(record.domain, months, row["milestone"]),
+        "skill_key": skill_key(record.domain, row["subdomain"], months,
+                               row["milestone"]),
         "baseline_version": BASELINE_VERSION_V2,
         "domain": record.domain,
         "months": months,
@@ -458,8 +492,8 @@ def unassessed_skills_in_band(record: BaselineRecordV2, months: int
                               ) -> Tuple[Dict[str, Any], ...]:
     """Band skills with NO evidence record — distinct from `unknown`."""
     return tuple(row for row in band_skill_rows(record, months)
-                 if skill_key(record.domain, months, row["milestone"])
-                 not in record.skills)
+                 if skill_key(record.domain, row["subdomain"], months,
+                              row["milestone"]) not in record.skills)
 
 
 def legacy_record_is_band_complete(record: Any) -> bool:
@@ -476,3 +510,31 @@ def legacy_record_is_band_complete(record: Any) -> bool:
             "this helper answers for LEGACY records; a v2 record should be "
             "asked about a specific band via `band_assessment`")
     return False
+
+
+def assert_skill_keys_are_unique(domain: str, subdomains: Tuple[str, ...] = (),
+                                 families: Tuple[str, ...] = ()) -> int:
+    """Two different declared-track source skills must never share a key.
+
+    A construction-time invariant rather than a comment. If the frozen source
+    ever gained two rungs whose four identity fields agree, every band
+    assessment built on `skill_key` would silently merge them and one skill's
+    evidence would overwrite the other's.
+
+    Returns the number of distinct skills checked, so a caller can assert the
+    check was not vacuous.
+    """
+    seen: Dict[str, Tuple[int, str]] = {}
+    rungs = {}
+    for row in v1._rows_for_domain(domain, subdomains, families):
+        # Rows are bridge steps; a RUNG is one (months, milestone). Fold first,
+        # or the duplicate-row structure would look like a key collision.
+        rungs[(row["months"], row["milestone"])] = row["subdomain"]
+    for (months, milestone), subdomain in rungs.items():
+        key = skill_key(domain, subdomain, months, milestone)
+        if key in seen:
+            raise BaselineV2Error(
+                "two declared-track source skills collapse to one skill key "
+                f"at {months} months")
+        seen[key] = (months, milestone)
+    return len(seen)

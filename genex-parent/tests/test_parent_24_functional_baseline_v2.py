@@ -315,16 +315,59 @@ def test_the_alphabetically_last_30m_skill_is_still_assessed():
 # ---------------------------------------------------------------------------
 
 
-def test_skill_identity_is_the_canonical_triple_not_truncated_text():
-    """v1's `question_id` embedded `milestone[:48]` and could collide."""
+def test_skill_identity_is_the_full_source_tuple_not_truncated_text():
+    """v1's `question_id` embedded `milestone[:48]` and could collide.
+
+    0.6A-1E hardened the key to four fields. Every field must participate, or
+    two different declared-track skills could share one key and one skill's
+    evidence would overwrite the other's.
+    """
+    SUB = "expressive_language"
     long_a = "a" * 48 + " first tail"
     long_b = "a" * 48 + " second tail"
     assert v1.BASELINE_VERSION not in V2.BASELINE_VERSION_V2
-    assert V2.skill_key(DOMAIN, 30, long_a) != V2.skill_key(DOMAIN, 30, long_b)
-    # The triple participates in full.
-    assert V2.skill_key(DOMAIN, 30, PRONOUNS) != V2.skill_key(DOMAIN, 36, PRONOUNS)
-    assert V2.skill_key("fine_motor", 30, PRONOUNS) != \
-        V2.skill_key(DOMAIN, 30, PRONOUNS)
+
+    # FULL milestone text, so a shared 48-char prefix does not collide.
+    assert V2.skill_key(DOMAIN, SUB, 30, long_a) != \
+        V2.skill_key(DOMAIN, SUB, 30, long_b)
+    # months participates.
+    assert V2.skill_key(DOMAIN, SUB, 30, PRONOUNS) != \
+        V2.skill_key(DOMAIN, SUB, 36, PRONOUNS)
+    # domain participates.
+    assert V2.skill_key("fine_motor", SUB, 30, PRONOUNS) != \
+        V2.skill_key(DOMAIN, SUB, 30, PRONOUNS)
+    # subdomain participates.
+    assert V2.skill_key(DOMAIN, "receptive_language", 30, PRONOUNS) != \
+        V2.skill_key(DOMAIN, SUB, 30, PRONOUNS)
+
+
+def test_two_declared_track_source_skills_never_share_a_key():
+    """The construction-time invariant, run over the real frozen source.
+
+    Measured and non-vacuous: 21 declared-track skills, 40 across the whole
+    Talking domain, 14 in fine_motor — all distinct.
+    """
+    area = v1.area_for_domain(DOMAIN)
+    subdomains = area.track_subdomains
+    families = tuple(sorted({f for c in area.choices for f in c.track_families}))
+    assert V2.assert_skill_keys_are_unique(DOMAIN, subdomains, families) == 21
+    assert V2.assert_skill_keys_are_unique(DOMAIN) == 40
+    assert V2.assert_skill_keys_are_unique("fine_motor") == 14
+
+
+def test_subdomain_adds_no_uniqueness_but_is_carried_deliberately():
+    """Measured: subdomain is functionally determined by the rung.
+
+    Recorded as a test because it is the reason the pilot's `compute_rung_ref`
+    EXCLUDES subdomain while the Parent key INCLUDES it — an asymmetry a future
+    reader would otherwise read as a bug.
+    """
+    rungs = {}
+    for row in v1._rows_for_domain(DOMAIN):
+        rungs.setdefault((row["months"], row["milestone"]), set()).add(
+            row["subdomain"])
+    assert len(rungs) == 40
+    assert all(len(subs) == 1 for subs in rungs.values())
 
 
 def test_skill_evidence_stores_no_raw_caregiver_answer():
