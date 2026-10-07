@@ -75,9 +75,17 @@ from pilot_backend.config.settings import PilotSettings
 from pilot_backend.integration.baseline_projection_service import (
     BaselineProjectionService,
 )
+from pilot_backend.integration.baseline_projection_v2_service import (
+    BaselineProjectionV2Service,
+)
 from pilot_backend.persistence import FirestoreRepositories
+from pilot_backend.transport.projection_v2_wsgi import (
+    InternalProjectionRouter,
+    ProjectionV2App,
+)
 from pilot_backend.transport.projection_wsgi import ProjectionApp
 from pilot_runtime.google_oidc import GoogleServiceIdentityVerifier
+from pilot_runtime.integration.static_rung_source import build_static_rung_source
 from pilot_runtime.persistence.firestore_store import (
     FirestoreDocumentStore,
     build_firestore_client,
@@ -169,11 +177,34 @@ def build_projection_application(env: Optional[Mapping[str, str]] = None, *,
         # already refused every caller but the one permitted service account.
         identity = None
 
-    # A factory, not an instance: the service holds no cross-request state and
-    # building it per request keeps it that way by construction.
-    return ProjectionApp(verifier=identity,
-                         service_factory=lambda: BaselineProjectionService(
-                             repos=repos))
+    # 0.6A-1F. The frozen rung table, loaded ONCE at startup rather than per
+    # request: it is a read-only static artifact, and `build_static_rung_source`
+    # raises rather than returning a degraded source — so a missing or corrupt
+    # artifact refuses the deployment at startup instead of failing the first
+    # projection. The v2 boundary cannot canonicalise without it, and a service
+    # that accepted identities it could not verify would be worse than one that
+    # does not start.
+    #
+    # This is a LOOKUP-ONLY adapter over a static JSON file. It imports no
+    # spreadsheet reader, no Parent package and no model client; the CI drift
+    # gate regenerates the artifact from the frozen source and compares.
+    rung_source = build_static_rung_source()
+
+    # Factories, not instances: neither service holds cross-request state, and
+    # building per request keeps it that way by construction.
+    v1_app = ProjectionApp(verifier=identity,
+                           service_factory=lambda: BaselineProjectionService(
+                               repos=repos))
+    v2_app = ProjectionV2App(
+        verifier=identity,
+        service_factory=lambda: BaselineProjectionV2Service(
+            repos=repos, rung_source=rung_source))
+
+    # The router delegates every non-v2 path to the v1 app, so v1's route,
+    # validation, size cap, status mapping and 404/405 behaviour are unchanged by
+    # this slice. Both apps share the one declared auth mode: there is no path on
+    # this service that is verified while another is not.
+    return InternalProjectionRouter(v1_app=v1_app, v2_app=v2_app)
 
 
 def __getattr__(name: str):

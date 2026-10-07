@@ -166,6 +166,59 @@ class BaselineAnswerRequest(BaseModel):
     answer: Literal["yes", "sometimes", "with_help", "no", "not_sure"]
 
 
+# ---------------------------------------------------------------------------
+# Parent 2.4 functional baseline v2 (0.6A-1F)
+#
+# SEPARATE models from the v1 pair above, not a widened version of them. The
+# answer body differs in its identity field — v2 echoes a full canonical
+# `skill_key` where v1 echoed a truncated `question_id` — and one model
+# accepting either would let a client post a v1 id to a v2 route and have the
+# mistake surface as a confusing engine error instead of a 422.
+#
+# Everything clinical is still DERIVED by the frozen v2 engine from observed
+# answers: which band to enter, which sibling to ask next, each skill's state,
+# band completeness, mastery, the status and the compatibility months. A client
+# may choose an entry descriptor, and answer the question it was actually asked.
+# ---------------------------------------------------------------------------
+
+
+class BaselineV2StartRequest(BaseModel):
+    """Begin a v2 functional baseline from a structured entry descriptor.
+
+    Identical in shape to `BaselineStartRequest`, and deliberately a separate
+    class: the two routes are separate contracts, and sharing a model would
+    couple a later change to one generation into the other.
+
+    Chronological age is ABSENT, exactly as in v1 — it is read from the session
+    the parent already completed, so a client cannot shift the starting band by
+    restating the child's age here.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    entry_choice_id: str = Field(..., min_length=1, max_length=64)
+
+
+class BaselineV2AnswerRequest(BaseModel):
+    """One structured answer to the skill the v2 engine actually asked.
+
+    `skill_key` is the engine's full canonical identity for one skill, echoed
+    back from the question the client was just served. It replaces v1's
+    `question_id`, which embedded `milestone[:48]` and so could collide between
+    two milestones sharing a 48-character prefix.
+
+    The length bound is generous because the key carries the complete milestone
+    text, and bounded anyway so an unbounded string never reaches the engine.
+    The same five-value answer vocabulary as v1, because it is the same
+    vocabulary the engine's `_classify` accepts.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    skill_key: str = Field(..., min_length=1, max_length=1024)
+    answer: Literal["yes", "sometimes", "with_help", "no", "not_sure"]
+
+
 class FeedbackRequest(BaseModel):
     """
     One activity feedback record submitted by the parent via Lovable.

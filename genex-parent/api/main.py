@@ -87,6 +87,8 @@ from api.schemas import (
     AnswerRequest,
     BaselineAnswerRequest,
     BaselineStartRequest,
+    BaselineV2AnswerRequest,
+    BaselineV2StartRequest,
     FeedbackRequest,
     InterviewCompleteResponse,
     MilestoneCheckinResponseRequest,
@@ -97,7 +99,9 @@ from api.schemas import (
     SwapRequest,
 )
 from api import functional_baseline_api as baseline_api
+from api import functional_baseline_v2_api as baseline_v2_api
 from api import parent_baseline_projection_client as projection_client
+from api import parent_baseline_projection_v2_client as projection_v2_client
 from api import parent_session_handoff_client as handoff_client
 from api.session_store import (
     SessionContentionError,
@@ -3238,6 +3242,340 @@ async def session_baseline_projection(
     # id in a Parent session would make Parent's record depend on Pilot state.
     return {
         "domain": baseline_api.require_supported_domain(domain),
+        "projected": True,
+        "created": result["created"],
+        "projection_id": result["projection_id"],
+    }
+
+
+# ===========================================================================
+# Parent 2.4 functional baseline v2 (0.6A-1F)
+#
+# A SEPARATE VERSIONED SURFACE under /api/v2/..., not a change to the v1 routes
+# above. Six operations, mirroring v1's six exactly:
+#
+#   GET  /api/v2/session/{id}/baseline/{domain}/entry-screen
+#   POST /api/v2/session/{id}/baseline/{domain}/start
+#   POST /api/v2/session/{id}/baseline/{domain}/answer
+#   POST /api/v2/session/{id}/baseline/{domain}/finalize
+#   GET  /api/v2/session/{id}/baseline/{domain}
+#   POST /api/v2/session/{id}/baseline/{domain}/projection
+#
+# `/api/v2` rather than a `/baseline-v2/` segment because the GENERATION is what
+# changed, not the resource: it is the same clinical object assessed under
+# repaired rules. A v2-shaped path segment would make the next change a third
+# naming convention.
+#
+# WHY THE PROJECTION IS STILL ITS OWN ROUTE (and not automatic on finalize):
+# finalizing writes durably to the Parent session and must never depend on the
+# Pilot being reachable. A family completing their calibration cannot be blocked
+# by another system's availability, and coupling the two would mean either a
+# finalize that fails after it has already committed, or a rollback of a record
+# the engine considers immutable. So the two remain different routes and a failed
+# projection leaves the finalized baseline exactly as it was.
+#
+# Guards, shared by all six and IDENTICAL to v1's:
+#   404 session_not_found / 403 session_not_owned_by_user — `_require_session`
+#   404 unsupported_baseline_domain — only talking_and_communicating is wired
+#   404 baseline_not_started
+#   409 baseline_already_finalized
+#   409 baseline_not_in_progress
+#   422 — Pydantic (unknown field, bad answer) or a skill-key mismatch
+#
+# No LLM call, no diagnosis read, no free-text read, and `doc["qna"]` is neither
+# read nor written by any of them. `dev_age` is never written: the engine's
+# `attach_to_state_v2` is additive and touches only `functional_baseline_v2`.
+# ===========================================================================
+
+
+def _baseline_v2_http(exc: Exception) -> HTTPException:
+    """Translate a v2 baseline refusal into this API's conventions.
+
+    A SEPARATE translator from `_baseline_http`, because the exception types are
+    separate — but deliberately the SAME status code for each equivalent
+    condition, so a client migrating from v1 to v2 does not have to relearn the
+    lifecycle. Kept in one place so the six routes cannot drift into giving one
+    condition two different codes.
+    """
+    if isinstance(exc, baseline_v2_api.BaselineV2DomainUnsupported):
+        return HTTPException(status_code=404,
+                             detail="unsupported_baseline_domain")
+    if isinstance(exc, baseline_v2_api.BaselineV2NotStarted):
+        return HTTPException(status_code=404, detail="baseline_not_started")
+    if isinstance(exc, baseline_v2_api.BaselineV2AlreadyFinalized):
+        return HTTPException(status_code=409,
+                             detail="baseline_already_finalized")
+    if isinstance(exc, baseline_v2_api.BaselineV2NotInProgress):
+        return HTTPException(status_code=409,
+                             detail="baseline_not_in_progress")
+    if isinstance(exc, baseline_v2_api.BaselineV2EntryChoiceUnknown):
+        return HTTPException(status_code=422, detail="unknown_entry_choice")
+    if isinstance(exc, baseline_v2_api.BaselineV2SkillMismatch):
+        # The expected key is echoed so a client can recover by answering the
+        # right skill. It is the client's OWN previous question, so this reveals
+        # nothing it was not already served — and it contains no child data.
+        return HTTPException(
+            status_code=422,
+            detail=(
+                f"Unexpected skill_key {exc.received!r}. "
+                f"Expected {exc.expected!r}. Answers must be submitted "
+                f"in order."
+            ),
+        )
+    # A v2 engine refusal, or a stored-shape refusal from the versioned decoder.
+    # Both carry PHI-safe messages by construction: `BaselineV2Error` declares
+    # `PHI_SAFE_MESSAGE`, and the engine's `BaselineError` names the field and
+    # the allowed vocabulary, never a child.
+    if isinstance(exc, (baseline_v2_api.BaselineV2Error,
+                        baseline_v2_api.BaselineError)):
+        return HTTPException(status_code=422, detail=str(exc))
+    raise exc
+
+
+@app.get(
+    "/api/v2/session/{session_id}/baseline/{domain}/entry-screen",
+    tags=["session"],
+)
+async def session_baseline_v2_entry_screen(
+    session_id: str,
+    domain: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """The area's reviewed entry descriptors for the v2 start screen.
+
+    The same descriptors v1 serves, because they describe the AREA rather than
+    the assessment algorithm: v2 repaired how a band is assessed, not where a
+    caregiver says to begin.
+
+    Session ownership is still enforced. The descriptor list is not secret, but
+    an endpoint that answered for an unowned session would be an existence
+    oracle.
+    """
+    _require_session(auth.uid, session_id)
+    try:
+        return baseline_v2_api.entry_screen_for(domain)
+    except Exception as exc:
+        raise _baseline_v2_http(exc)
+
+
+@app.post(
+    "/api/v2/session/{session_id}/baseline/{domain}/start",
+    tags=["session"],
+)
+async def session_baseline_v2_start(
+    session_id: str,
+    domain: str,
+    body: BaselineV2StartRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Begin the v2 functional baseline for one domain.
+
+    The entry descriptor says where to START ASKING. It is not an ability claim
+    and not an age; the engine then assesses every declared-track skill in that
+    band before deciding whether to move.
+
+    Idempotent while in progress: calling again returns the current state and
+    does NOT restart, because restarting would discard evidence the parent
+    already gave. A finalized baseline is refused with 409.
+    """
+    doc = _require_session(auth.uid, session_id)
+    try:
+        result, mutated = baseline_v2_api.start(doc, domain,
+                                               body.entry_choice_id)
+    except Exception as exc:
+        raise _baseline_v2_http(exc)
+
+    if mutated:
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500,
+                                detail=f"Failed to save session: {exc}")
+    return result
+
+
+@app.post(
+    "/api/v2/session/{session_id}/baseline/{domain}/answer",
+    tags=["session"],
+)
+async def session_baseline_v2_answer(
+    session_id: str,
+    domain: str,
+    body: BaselineV2AnswerRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Record one skill's evidence against the skill the engine asked.
+
+    `skill_key` must match the engine's expected next skill. That is what makes
+    a retry safe, and it matters MORE here than in v1: the v2 engine's
+    `record_answer_v2` REPLACES evidence for a skill rather than appending, so
+    without this guard a late retry could overwrite a corrected answer. Once
+    evidence lands the expected key changes, so the stale retry is refused.
+
+    Every sibling in a band is asked before the engine moves. A demonstrated
+    skill never carries its siblings with it, and an `unknown` never advances
+    the ladder — that is the whole correction v2 exists for.
+    """
+    doc = _require_session(auth.uid, session_id)
+    try:
+        result = baseline_v2_api.answer(doc, domain, body.skill_key,
+                                       body.answer)
+    except Exception as exc:
+        raise _baseline_v2_http(exc)
+
+    try:
+        store_save(auth.uid, session_id, doc)
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500,
+                            detail=f"Failed to save session: {exc}")
+    return result
+
+
+@app.post(
+    "/api/v2/session/{session_id}/baseline/{domain}/finalize",
+    tags=["session"],
+)
+async def session_baseline_v2_finalize(
+    session_id: str,
+    domain: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Derive the compatibility months from evidence and make the record immutable.
+
+    Takes no body: everything it needs is the stored evidence. Accepting one
+    would invite a client to think it could influence the outcome.
+
+    Idempotent: finalizing twice returns the stored state and rewrites nothing,
+    so an immutable record never looks edited.
+
+    Finalizing early is allowed, and the ENGINE decides what the evidence
+    supports — with nothing usable it returns UNRESOLVED and no anchor rather
+    than a fabricated level. An early finalize can leave a band incomplete, and
+    that is reported honestly rather than rounded up to mastery.
+    """
+    doc = _require_session(auth.uid, session_id)
+    try:
+        result, mutated = baseline_v2_api.finalize_baseline(doc, domain)
+    except Exception as exc:
+        raise _baseline_v2_http(exc)
+
+    if mutated:
+        try:
+            store_save(auth.uid, session_id, doc)
+        except SessionSaveError as exc:
+            raise HTTPException(status_code=500,
+                                detail=f"Failed to save session: {exc}")
+    return result
+
+
+@app.get(
+    "/api/v2/session/{session_id}/baseline/{domain}",
+    tags=["session"],
+)
+async def session_baseline_v2_get(
+    session_id: str,
+    domain: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """The v2 baseline's per-band progress and current question.
+
+    Returns band COUNTS and the two derived booleans — `complete` and
+    `mastered`, which v2 exists to keep apart — never the per-skill clinical
+    states and never `routing_anchor_months`, `demonstrated_months` or
+    `not_demonstrated_months`. Those are server-side provenance for the
+    projection path; a raw anchor number in a parent UI would read as a
+    developmental age, which is what that field's own naming comment prevents.
+
+    This route WRITES NOTHING, even though the engine's `next_question_v2`
+    advances a record when it enters a band. The service computes the question on
+    a copy rebuilt from stored state and discards it, so a read can never
+    persist a traversal decision.
+    """
+    doc = _require_session(auth.uid, session_id)
+    try:
+        return baseline_v2_api.view(doc, domain)
+    except Exception as exc:
+        raise _baseline_v2_http(exc)
+
+
+# ===========================================================================
+# Parent -> Pilot baseline projection v2 (0.6A-1F / A2 v2)
+#
+# EXPLICIT, exactly as A2 v1 is, and for the reason stated at the top of this
+# section: a finalized Parent baseline must never depend on the Pilot being
+# reachable. The chosen semantics, stated plainly:
+#
+#   1. the Parent baseline is committed by `/finalize` and is immutable
+#   2. projection is a SEPARATE authenticated caregiver action
+#   3. a projection failure writes nothing to the Parent session
+#   4. the Pilot keys on (session, domain, digest), so a retry is idempotent
+#   5. the browser holds no Pilot credential and never sees the payload
+#
+# The browser sends only this request. It never receives, constructs or sees the
+# projection body, the Pilot URL or the service identity token — all three live
+# entirely server-side.
+# ===========================================================================
+
+
+@app.post(
+    "/api/v2/session/{session_id}/baseline/{domain}/projection",
+    tags=["session"],
+)
+async def session_baseline_v2_projection(
+    session_id: str,
+    domain: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Project this session's FINALIZED v2 baseline to the Pilot.
+
+    Takes no body. Everything sent is derived server-side from the stored
+    finalized record, so there is nothing for a client to supply and no way for
+    one to influence what is projected.
+
+    Guards:
+      404 session_not_found / 403       — from `_require_session`, unchanged
+      404 unsupported_baseline_domain
+      404 baseline_not_started
+      409 baseline_not_finalized        — projection copies a RESULT
+      501 projection_not_configured     — this deployment may not project v2
+      403 projection_pairing_forbidden  — declared pairing is not permitted
+      422 projection_rejected           — the Pilot refused it on its merits
+      503 projection_unavailable        — retryable; nothing was written
+    """
+    doc = _require_session(auth.uid, session_id)
+
+    try:
+        record = baseline_v2_api.finalized_record(doc, domain)
+        payload = baseline_v2_api.projection_payload(doc, domain)
+    except baseline_v2_api.BaselineV2NotFinalized:
+        raise HTTPException(status_code=409, detail="baseline_not_finalized")
+    except Exception as exc:
+        raise _baseline_v2_http(exc)
+
+    try:
+        result = projection_v2_client.project_baseline_v2(
+            source_session_id=session_id, record=record, payload=payload)
+    except projection_v2_client.ProjectionPairingForbidden:
+        raise HTTPException(status_code=403,
+                            detail="projection_pairing_forbidden")
+    except projection_v2_client.ProjectionNotConfigured:
+        # 501, not 500: the deployment is working exactly as configured, and the
+        # configuration says it does not project v2. An operator reading this
+        # needs to know it is a capability gap, not a fault.
+        raise HTTPException(status_code=501,
+                            detail="projection_not_configured")
+    except projection_v2_client.ProjectionRejected:
+        raise HTTPException(status_code=422, detail="projection_rejected")
+    except projection_v2_client.ProjectionUnavailable:
+        raise HTTPException(status_code=503,
+                            detail="projection_unavailable")
+
+    # The Parent session is NOT modified. Nothing from the Pilot is written back
+    # — the data direction is Parent -> Pilot only, and recording a Pilot id in a
+    # Parent session would make Parent's record depend on Pilot state and create
+    # a second master for something Parent owns.
+    return {
+        "domain": baseline_v2_api.require_supported_domain(domain),
         "projected": True,
         "created": result["created"],
         "projection_id": result["projection_id"],

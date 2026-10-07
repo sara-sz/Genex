@@ -164,6 +164,30 @@ jobs:
         # a contradiction. It also holds Daily Living "Not sure" to UNRESOLVED.
         run: python -m pytest tests/test_parent_24_functional_baseline.py -q
 
+      - name: Parent 2.4 functional baseline v2 — band-complete engine
+        # 0.6A-1D/1E, and it had NO CI GATE before 0.6A-1F.
+        #
+        # v1 is a binary search over MONTHS: one answer retires a whole band, so
+        # a child answering yes four times was anchored at 48 months with six
+        # declared-track skills never asked. v2 assesses every declared skill in
+        # a band before deciding whether to move, and this suite pins the
+        # properties that fail SILENTLY if broken — `unknown` counts as assessed
+        # but never as mastery, assessment-completeness and mastery stay separate
+        # questions, a v1 record is never read as band-complete, and two source
+        # skills never collapse to one key.
+        #
+        # 0.6A-1F adds the versioned serialisation to the same suite: a v1 stored
+        # record and a v2 stored record must be mutually undecodable.
+        #
+        # In the dependency-pure job: the engine needs the taxonomy workbook
+        # (pandas, openpyxl) and nothing else. No fastapi, no firebase.
+        run: |
+          if [ -f tests/test_parent_24_functional_baseline_v2.py ]; then
+            python -m pytest tests/test_parent_24_functional_baseline_v2.py -q
+          else
+            echo "0.6A-1D not present on this branch — nothing to run"
+          fi
+
       - name: October pilot backend — identity foundation
         # Runs from the repository root, not genex-parent/, because
         # pilot_backend/ is a top-level shared namespace (Parent + Therapist +
@@ -651,6 +675,53 @@ jobs:
             python -m pytest pilot_runtime/tests/test_static_activity_bank.py -q
           else
             echo "0.6A-1 not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.6A-1E/1F — A2 v2 skill projection + denominators
+        # CROSS-SYSTEM, and it had NO CI GATE before 0.6A-1F. It drives a REAL
+        # Parent v2 baseline through the REAL frozen rung table, so neither side
+        # can be a fake agreeing with itself. Only `.` plus PYTHONPATH reaches
+        # both packages — the Parent steps run from `genex-parent/`, where
+        # `pilot_backend` is not importable, and the pilot steps run from the
+        # root, where `parent_taxonomy` is not.
+        #
+        # It carries 0.6A-1F Part A's band-denominator hardening: the check that
+        # stops an understated `total_skills` turning missing evidence into
+        # mastery. Ungated, that protection could have rotted silently.
+        #
+        # In THIS job because the dependency set it needs — pandas, openpyxl,
+        # pytest — is exactly what `requirements-parent24-ci.txt` installs. No
+        # firebase, no firestore, no model client.
+        working-directory: .
+        env:
+          PYTHONPATH: genex-parent
+        run: |
+          if [ -f pilot_runtime/tests/test_baseline_skill_projection_v2.py ]; then
+            python -m pytest \
+              pilot_runtime/tests/test_baseline_skill_projection_v2.py -q
+          else
+            echo "0.6A-1E not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.6A-1F — A2 v2 private route, codec and router
+        # The Pilot half of the v2 trust boundary: the strict request codec, the
+        # accepting service, the private route, the router that leaves A2 v1
+        # untouched, and the LOGGING AUDIT — a planted milestone must not reach a
+        # log on success, on a codec failure, or on a canonicalisation failure.
+        #
+        # Dependency-pure: the rung source and the identity verifier are both
+        # injected, so no SDK is needed to test what the boundary refuses.
+        #
+        # Named explicitly even though `pilot_backend/tests` already runs as a
+        # directory earlier in this workflow, because this suite is precisely what
+        # would be missed if that directory step were ever narrowed.
+        working-directory: .
+        run: |
+          if [ -f pilot_backend/tests/test_parent_baseline_projection_v2_transport.py ]; then
+            python -m pytest \
+              pilot_backend/tests/test_parent_baseline_projection_v2_transport.py -q
+          else
+            echo "0.6A-1F not present on this branch — nothing to run"
           fi
 
       - name: October pilot 0.5F-B — rung table suites (cross-system)
@@ -1618,7 +1689,8 @@ jobs:
             tests/test_beta_access.py \
             tests/test_checkin_readiness.py \
             tests/test_parent_24_baseline_api.py \
-            tests/test_parent_24_baseline_projection.py
+            tests/test_parent_24_baseline_projection.py \
+            tests/test_parent_24_baseline_v2_api.py
 
       - name: Parent 2.4 functional baseline — product path (own pytest process)
         # 0.5F-A1. In THIS job rather than the dependency-pure taxonomy job
@@ -1646,6 +1718,30 @@ jobs:
         # firebase_admin verify_id_token at import time with incompatible
         # fake-token maps.
         run: python -m pytest tests/test_parent_24_baseline_projection.py -q
+
+      - name: Parent 2.4 baseline v2 — product path + A2 v2 trigger (own process)
+        # 0.6A-1F. The six versioned `/api/v2/...` routes, driven as a client
+        # would drive them. The band-complete proof is made HERE rather than
+        # against the engine, because v1's defect was invisible at the engine
+        # level too: the engine was correct about what it was asked to do, and the
+        # product still asked one skill per band.
+        #
+        # It also carries the two properties families depend on:
+        #   * a finalized v2 baseline stays finalized and byte-identical through
+        #     an unavailable Pilot, a refused payload and a forbidden pairing —
+        #     so completing a calibration is never blocked by another system;
+        #   * v1's routes, stored record and payload contract are unchanged, and
+        #     a v2 stored record can never be decoded as a v1 one.
+        #
+        # Own process, like the steps around it: these suites reassign the global
+        # `firebase_admin.verify_id_token` at import time with incompatible
+        # fake-token maps, so whichever imports last wins and the others get 401.
+        run: |
+          if [ -f tests/test_parent_24_baseline_v2_api.py ]; then
+            python -m pytest tests/test_parent_24_baseline_v2_api.py -q
+          else
+            echo "0.6A-1F not present on this branch — nothing to run"
+          fi
 
       - name: Parent 2.4 session HANDOFF mint (own pytest process)
         # 0.5F-A3 Parent side: the pairing guard, the 256-bit token, the

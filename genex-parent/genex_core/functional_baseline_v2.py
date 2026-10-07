@@ -512,6 +512,147 @@ def legacy_record_is_band_complete(record: Any) -> bool:
     return False
 
 
+# ---------------------------------------------------------------------------
+# 0.6A-1F — VERSIONED serialisation
+#
+# v1 stores `BaselineRecord.to_state()` under `functional_baseline[domain]`.
+# v2 stores `BaselineRecordV2.to_state()` under a DIFFERENT key, and the two
+# shapes are not interchangeable by construction:
+#
+#     v1 has `asked` (append-only month history) and `entry_choice_label`
+#     v2 has `skills` (per-skill evidence) and `bands_entered`, no `asked`
+#
+# plus an explicit `record_schema` discriminator that `record_from_state_v2`
+# REQUIRES. So no field ever means one thing in v1 and another in v2, and a
+# decoder handed the wrong generation refuses instead of guessing.
+# ---------------------------------------------------------------------------
+
+#: The stored-record discriminator. Distinct from `baseline_version` because
+#: they answer different questions: `baseline_version` names the CLINICAL rules
+#: that produced the assessment, this names the SERIALISATION. A later v2.1
+#: rule change could keep this shape, and a later shape change must not be
+#: mistaken for a rule change.
+RECORD_SCHEMA_V2 = "parent-2.4-functional-baseline-v2-record"
+
+#: Session-document keys this generation owns. Siblings of v1's, never shared.
+STATE_KEY_V2 = "functional_baseline_v2"
+
+
+def _skill_to_state(evidence: BaselineSkillEvidence) -> Dict[str, Any]:
+    """One evidence record as a plain dict. Five fields, no raw answer."""
+    return {
+        "domain": evidence.domain,
+        "subdomain": evidence.subdomain,
+        "months": int(evidence.months),
+        "milestone": evidence.milestone,
+        "state": evidence.state,
+    }
+
+
+def record_to_state_v2(record: BaselineRecordV2) -> Dict[str, Any]:
+    """The canonical stored form of a v2 record.
+
+    ## Skills are a SORTED LIST, not a keyed mapping
+
+    `skill_key` joins on `\\x1f`, which is legal in neither a Firestore field
+    name nor a readable JSON key, and a mapping's iteration order is not part of
+    its value — so a dict would give two byte-different serialisations of one
+    identical assessment. The digest A2 keys its idempotency on is computed over
+    these bytes, so an unstable order would make an exact replay look like a
+    changed source record and fail closed against itself.
+
+    Sorted by `(months, subdomain, milestone)`: total, deterministic, and
+    derived only from the identity fields.
+    """
+    skills = sorted((_skill_to_state(e) for e in record.skills.values()),
+                    key=lambda s: (s["months"], s["subdomain"], s["milestone"]))
+    return {
+        "record_schema": RECORD_SCHEMA_V2,
+        "baseline_version": record.baseline_version,
+        "area_id": record.area_id,
+        "domain": record.domain,
+        "entry_choice_id": record.entry_choice_id,
+        "entry_anchor_months": record.entry_anchor_months,
+        "chronological_months": int(record.chronological_months),
+        "skills": skills,
+        "bands_entered": [int(m) for m in record.bands_entered],
+        "status": record.status,
+        "routing_anchor_months": record.routing_anchor_months,
+        "demonstrated_months": record.demonstrated_months,
+        "not_demonstrated_months": record.not_demonstrated_months,
+    }
+
+
+def record_from_state_v2(stored: Dict[str, Any]) -> BaselineRecordV2:
+    """Rebuild a v2 record, or refuse. The inverse of `record_to_state_v2`.
+
+    Field names are read EXPLICITLY rather than splatted, for the same reason
+    v1's loader does: an unexpected stored key becomes a visible failure here
+    instead of a confusing TypeError inside the dataclass.
+
+    Both discriminators are checked. A v1 dict has neither, so it is refused
+    before a single field is read — which is the guarantee that one stored shape
+    can never be decoded as the other generation.
+    """
+    if not isinstance(stored, dict):
+        raise BaselineV2Error("a stored v2 baseline must be a mapping")
+    if stored.get("record_schema") != RECORD_SCHEMA_V2:
+        raise BaselineV2Error(
+            "this stored record is not a v2 baseline record; v1 and v2 are "
+            "separate shapes and are never decoded interchangeably")
+    if stored.get("baseline_version") != BASELINE_VERSION_V2:
+        raise BaselineV2Error("this stored record is not a v2 baseline")
+
+    record = BaselineRecordV2(
+        baseline_version=stored["baseline_version"],
+        area_id=stored["area_id"],
+        domain=stored["domain"],
+        entry_choice_id=stored["entry_choice_id"],
+        entry_anchor_months=stored.get("entry_anchor_months"),
+        chronological_months=int(stored["chronological_months"]),
+        bands_entered=[int(m) for m in (stored.get("bands_entered") or [])],
+        status=stored["status"],
+        routing_anchor_months=stored.get("routing_anchor_months"),
+        demonstrated_months=stored.get("demonstrated_months"),
+        not_demonstrated_months=stored.get("not_demonstrated_months"),
+    )
+    for row in (stored.get("skills") or []):
+        evidence = BaselineSkillEvidence(
+            domain=row["domain"],
+            months=int(row["months"]),
+            milestone=row["milestone"],
+            subdomain=row["subdomain"],
+            state=row["state"],
+        )
+        if evidence.key in record.skills:
+            # Two stored rows collapsing to one key would mean one skill's
+            # evidence silently overwrote another's. Refused rather than
+            # last-write-wins.
+            raise BaselineV2Error(
+                "two stored skills collapse to one skill key")
+        record.skills[evidence.key] = evidence
+    return record
+
+
+def attach_to_state_v2(state: Dict[str, Any],
+                       record: BaselineRecordV2) -> Dict[str, Any]:
+    """Store a v2 baseline on the session state. Additive only.
+
+    Writes under `functional_baseline_v2[domain]` and NEVER touches `dev_age`,
+    for exactly the reason v1's `attach_to_state` does not: `dev_age` is what
+    the parent planner reads to choose activity targets, so writing it here
+    would change which activities a live Beta session generates. A routing
+    anchor must never be mistaken downstream for a scored developmental age.
+
+    It also never touches `functional_baseline`, so a session may legitimately
+    carry a v1 and a v2 baseline side by side without either overwriting the
+    other.
+    """
+    baselines = state.setdefault(STATE_KEY_V2, {})
+    baselines[record.domain] = record_to_state_v2(record)
+    return state
+
+
 def assert_skill_keys_are_unique(domain: str, subdomains: Tuple[str, ...] = (),
                                  families: Tuple[str, ...] = ()) -> int:
     """Two different declared-track source skills must never share a key.

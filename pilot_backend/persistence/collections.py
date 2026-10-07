@@ -60,6 +60,17 @@ COLLECTIONS: Mapping[str, str] = {
     # and create-only: Parent remains the system of record, so a projection is
     # a copy that may never be edited here.
     "parent_baseline_projection": PILOT_COLLECTION_PREFIX + "parent_baseline_projections",
+    # 0.6A-1F A2 v2 skill-level projection. A DEDICATED collection, never a
+    # schema-polymorphic document shared with v1.
+    #
+    # The mechanical reason is that the codec refuses any key-set mismatch in
+    # both directions, so one collection holding two shapes would be
+    # undecodable. The semantic reason is stronger: a v1 projection evidences at
+    # most ONE skill per band and a v2 projection evidences every sibling, so a
+    # query that could return either would make band completeness unanswerable
+    # unless every caller remembered to check a discriminator first.
+    "parent_baseline_projection_v2":
+        PILOT_COLLECTION_PREFIX + "parent_baseline_projections_v2",
     # 0.5F-A3 Parent session handoff capability. Written ONLY by the
     # authenticated Parent service through the internal bootstrap endpoint, and
     # create-only: redemption is recorded as an identity claim, never as an edit

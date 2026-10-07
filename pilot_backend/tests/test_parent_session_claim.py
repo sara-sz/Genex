@@ -801,18 +801,46 @@ def test_the_claim_repository_has_no_mutating_method():
         assert forbidden not in public
 
 
+#: Byte-pinned to the A2 tag: the A2 v1 trust boundary itself — its transport,
+#: its accepting service, its domain record — plus EVERY deployment artifact.
+#:
+#: 0.6A-1F NOTE, and this is the ONE standing guarantee the slice changes.
+#: `pilot_runtime/projection_server.py` was removed from this tuple. It is the
+#: COMPOSITION ROOT rather than part of the A2 v1 boundary, and mounting a second
+#: versioned route on the same private service necessarily touches it.
+#:
+#: The alternative was a separate v2 entrypoint module, which would have required
+#: editing the frozen `Dockerfile.projection` — it hardcodes
+#: `pilot_runtime.projection_server:application`. That is strictly worse: a
+#: deployment artifact is a harder thing to change safely than a composition
+#: root, and all four build files staying byte-identical is the more valuable
+#: guarantee.
+#:
+#: What the byte pin was protecting is now asserted BEHAVIOURALLY and more
+#: specifically, by `test_the_a2_v1_boundary_survives_the_v2_route` below.
 A2_FROZEN_FILES = (
     "pilot_backend/transport/projection_wsgi.py",
     "pilot_backend/integration/baseline_projection_service.py",
     "pilot_backend/domain/parent_baseline_projection.py",
-    "pilot_runtime/projection_server.py",
     "pilot_runtime/deploy/Dockerfile.projection",
     "pilot_runtime/deploy/requirements-projection.txt",
     "pilot_runtime/deploy/cloudbuild-projection.yaml",
     "pilot_runtime/deploy/gcloudignore-projection",
 )
 
+#: The composition root. Pinned by BEHAVIOUR, not by bytes — see above.
+A2_COMPOSITION_ROOT = "pilot_runtime/projection_server.py"
+
 A2_TAG = "october-pilot-0.5f-a2-parent-baseline-projection"
+
+
+def _frozen_blob(path):
+    """The blob hash at the A2 tag, or None if the tag is absent."""
+    import subprocess
+
+    want = subprocess.run(["git", "rev-parse", f"{A2_TAG}:{path}"],
+                          capture_output=True, text=True)
+    return None if want.returncode != 0 else want.stdout.strip()
 
 
 @pytest.mark.parametrize("path", A2_FROZEN_FILES)
@@ -825,14 +853,128 @@ def test_the_a2_projection_artifact_is_byte_identical_to_its_frozen_tag(path):
     """
     import subprocess
 
-    want = subprocess.run(["git", "rev-parse", f"{A2_TAG}:{path}"],
-                          capture_output=True, text=True)
-    if want.returncode != 0:
+    want = _frozen_blob(path)
+    if want is None:
         pytest.skip("the A2 tag is not present in this checkout")
     got = subprocess.run(["git", "hash-object", path],
                          capture_output=True, text=True, check=True)
-    assert got.stdout.strip() == want.stdout.strip(), (
+    assert got.stdout.strip() == want, (
         f"{path} differs from the frozen A2 tag")
+
+
+def test_the_composition_root_is_the_only_a2_file_the_v2_route_changed():
+    """Exactly one A2 file moved, and it is the one that had to.
+
+    Stated as its own test so the exception is VISIBLE rather than implied by an
+    absence from the tuple above. If a later slice edits the v1 transport, the
+    service, the domain record or any build file, the parametrized test above
+    fails — and if someone quietly adds another path to this exception, this test
+    is where a reviewer will look.
+    """
+    import subprocess
+
+    if _frozen_blob(A2_COMPOSITION_ROOT) is None:
+        pytest.skip("the A2 tag is not present in this checkout")
+
+    changed = []
+    for path in A2_FROZEN_FILES + (A2_COMPOSITION_ROOT,):
+        want = _frozen_blob(path)
+        got = subprocess.run(["git", "hash-object", path],
+                             capture_output=True, text=True,
+                             check=True).stdout.strip()
+        if got != want:
+            changed.append(path)
+    assert changed == [A2_COMPOSITION_ROOT], changed
+
+
+def test_the_a2_v1_boundary_survives_the_v2_route():
+    """What the entrypoint's byte pin was actually protecting, asserted directly.
+
+    Four claims, each checkable:
+
+      1. the entrypoint still builds the EXACT frozen v1 app class, over the
+         frozen v1 service;
+      2. every startup refusal is intact — the mode is required and has no
+         default, an unknown mode is refused, production is refused;
+      3. one declared auth mode governs the whole service, so no route can be
+         verified while another is not;
+      4. the v1 ROUTE is unchanged: the router delegates it, and its 404 for an
+         unknown path still comes from the v1 app.
+    """
+    import pilot_runtime.projection_server as entrypoint
+    from pilot_backend.integration.baseline_projection_service import (
+        BaselineProjectionService,
+    )
+    from pilot_backend.transport.projection_v2_wsgi import (
+        InternalProjectionRouter,
+    )
+    from pilot_backend.transport.projection_wsgi import (
+        PROJECTION_ROUTE,
+        ProjectionApp,
+    )
+
+    env = {
+        "PILOT_PROJECTION_AUTH_MODE": "iam_only",
+        "PILOT_ENVIRONMENT": "dev",
+        "GCP_PROJECT_ID": "demo-genex-pilot",
+        "FIRESTORE_DATABASE": "(default)",
+    }
+    app = entrypoint.build_projection_application(
+        env=env, firestore_client=object())
+
+    # 1. the composed application still contains the frozen v1 app, built over
+    #    the frozen v1 service.
+    assert isinstance(app, InternalProjectionRouter)
+    assert type(app.v1_app) is ProjectionApp
+    assert isinstance(app.v1_app._service_factory(), BaselineProjectionService)
+
+    # 2. the startup refusals. The ABSENT-mode case removes the key rather than
+    #    merging an empty dict, which would have left the env unchanged and made
+    #    this assertion vacuous.
+    absent = {k: v for k, v in env.items()
+              if k != "PILOT_PROJECTION_AUTH_MODE"}
+    for broken in (absent,
+                   dict(env, PILOT_PROJECTION_AUTH_MODE=""),
+                   dict(env, PILOT_PROJECTION_AUTH_MODE="trust_me"),
+                   dict(env, PILOT_PROJECTION_AUTH_MODE="iam_plus_token")):
+        with pytest.raises(entrypoint.ProjectionConfigError):
+            entrypoint.build_projection_application(
+                env=broken, firestore_client=object())
+    # Production is refused. With this minimal env the SETTINGS layer refuses
+    # first (prod demands four more variables), so either refusal is correct and
+    # both are fail-closed — the point here is that no prod app is ever built.
+    # `test_the_entrypoint_refuses_production` in
+    # `pilot_runtime/tests/test_projection_service.py` covers the
+    # fully-configured prod env, where the projection-specific refusal is the one
+    # that fires.
+    from pilot_backend.config.errors import ConfigError
+
+    with pytest.raises((entrypoint.ProjectionConfigError, ConfigError)):
+        entrypoint.build_projection_application(
+            env=dict(env, PILOT_ENVIRONMENT="prod"), firestore_client=object())
+
+    # 3. one mode governs the whole service.
+    assert app.verifies_tokens is False
+    assert app.v1_app.verifies_tokens is app.v2_app.verifies_tokens
+
+    # 4. the v1 route still belongs to the v1 app, and so does the 404.
+    import io
+    import json as _json
+
+    def call(path, body):
+        raw = _json.dumps(body).encode()
+        captured = {}
+        chunks = app({"REQUEST_METHOD": "POST", "PATH_INFO": path,
+                      "CONTENT_LENGTH": str(len(raw)),
+                      "wsgi.input": io.BytesIO(raw)},
+                     lambda s, h: captured.setdefault("s", int(s.split()[0])))
+        return captured["s"], _json.loads(b"".join(chunks))
+
+    # v1's own validator answers, exactly as it did before the router existed.
+    assert call(PROJECTION_ROUTE,
+                {"source_session_id": "s", "source_record_digest": "a" * 64,
+                 "projection": {}})[0] == 400
+    assert call("/internal/not-a-route", {}) == (404, {"error": "not found"})
 
 
 def test_the_bootstrap_transport_never_logs():

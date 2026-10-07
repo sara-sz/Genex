@@ -81,6 +81,9 @@ from ..domain.monthly_plan import (
 from ..domain.parent_baseline_projection import (
     ParentBaselineProjection,
 )
+from ..domain.parent_baseline_projection_v2 import (
+    ParentBaselineProjectionV2,
+)
 from ..domain.parent_session_claim import ParentSessionClaim
 from ..domain.suggestion_generation import (
     GoalSuggestionGenerationClaim,
@@ -635,6 +638,58 @@ class FirestoreParentBaselineProjectionRepository(_BaseRepo):
         immutable source record means something that cannot legitimately
         happen has happened. Queried on the session rather than the child,
         because the session is what the digest attests.
+        """
+        found = self._query("source_session_id", source_session_id)
+        return [p for p in found if p.domain == domain]
+
+
+class FirestoreParentBaselineProjectionV2Repository(_BaseRepo):
+    """Immutable v2 skill-level projections. CREATE-ONLY and FIND-ONLY.
+
+    0.6A-1F. A SEPARATE repository over a SEPARATE collection; the v1 repository
+    above is untouched and neither ever reads the other's documents.
+
+    No `update`, no `set`, no `overwrite`, no `delete` — the same shape as v1,
+    and the reasons bind harder here. Parent is the system of record for a
+    functional baseline, a finalized v2 record is immutable, and this stored
+    evidence is what a later clinical decision appeals to. There is no legitimate
+    operation that edits a projection, and the absence of a method is a stronger
+    guarantee than a rule someone has to remember.
+
+    Keyed by `projection_id`, a DETERMINISTIC function of
+    (source_session_id, domain, source_record_digest). That is what makes an
+    exact retry idempotent without a pre-check: the second create addresses the
+    same document id and collides.
+
+    Note what the key does NOT include — the evidence itself. The Parent record
+    digest already covers every per-skill row, so CHANGED evidence produces a
+    different digest, hence a different id, hence a NEW document. Existing
+    evidence is never overwritten in place, not even by a well-meaning
+    re-projection.
+    """
+
+    record_type = "parent_baseline_projection_v2"
+    model = ParentBaselineProjectionV2
+
+    def create(self, projection: ParentBaselineProjectionV2
+               ) -> ParentBaselineProjectionV2:
+        return self._create(projection.projection_id, projection)
+
+    def find(self, projection_id: str) -> Optional[ParentBaselineProjectionV2]:
+        """The projection, or None. Absence is a normal state, not an error."""
+        try:
+            return self._get(projection_id)
+        except RecordNotFound:
+            return None
+
+    def list_for_source(self, source_session_id: str, domain: str
+                        ) -> List[ParentBaselineProjectionV2]:
+        """Every v2 projection for one (session, domain), any digest.
+
+        Used ONLY to detect an integrity conflict: more than one digest for an
+        immutable source record means something that cannot legitimately happen
+        has happened. Queried on the session rather than the child, because the
+        session is what the digest attests.
         """
         found = self._query("source_session_id", source_session_id)
         return [p for p in found if p.domain == domain]
@@ -1396,6 +1451,8 @@ class FirestoreRepositories:
         self.suggestion_anchors = FirestoreSuggestionAnchorRepository(store)
         self.parent_baseline_projections = (
             FirestoreParentBaselineProjectionRepository(store))
+        self.parent_baseline_projections_v2 = (
+            FirestoreParentBaselineProjectionV2Repository(store))
         self.parent_session_claims = (
             FirestoreParentSessionClaimRepository(store))
         self.suggestion_generation_claims = (

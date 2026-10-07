@@ -111,6 +111,11 @@ from ..domain.weekly_cycle import (
 )
 from ..domain.canonical_rung import ActivityFamilyBinding, CanonicalRung
 from ..domain.parent_baseline_projection import ParentBaselineProjection
+from ..domain.parent_baseline_projection_v2 import (
+    ParentBaselineProjectionV2,
+    ProjectedBandTotal,
+    ProjectedSkillEvidence,
+)
 from ..domain.parent_session_claim import ParentSessionClaim
 from ..domain.suggestion_generation import (
     GoalSuggestionGenerationClaim,
@@ -655,6 +660,48 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "routing_anchor_months": OPT_INT,
         "not_demonstrated_months": OPT_INT,
         "projected_at": DT, "schema_version": STR,
+    },
+    # ---- 0.6A-1F A2 v2 skill-level projection ---------------------------
+    #
+    # A SEPARATE spec and a separate collection; the v1 spec above is untouched.
+    #
+    # `assessment_complete`, `band_mastered`, `unresolved_skills` and
+    # `has_routing_anchor` are ABSENT because they are DERIVED. Storing a
+    # completeness boolean beside the evidence it summarises is exactly how a
+    # record ends up claiming a band is complete while carrying three rows for a
+    # four-skill band — the codec drives off dataclass fields, and a method is
+    # not a field, so the omission is structural rather than a choice someone has
+    # to keep making.
+    #
+    # NOTHING HERE CAN HOLD CLINICAL PROSE. The evidence spec is three fields and
+    # the milestone text is not among them: it was consumed at the canonicalisation
+    # boundary to find `rung_ref` and discarded. A stored document therefore cannot
+    # leak a milestone even if the whole collection were exported.
+    ProjectedSkillEvidence: {
+        "rung_ref": STR, "months": INT, "state": STR,
+    },
+    ProjectedBandTotal: {
+        "months": INT, "total_skills": INT,
+    },
+    ParentBaselineProjectionV2: {
+        "projection_id": STR, "child_id": STR,
+        "source_system": _EnumKind(SourceSystem),
+        "source_session_id": STR, "source_record_digest": STR,
+        "domain": STR, "area_id": STR, "entry_choice_id": STR,
+        "status": STR, "baseline_version": STR,
+        "routing_anchor_months": OPT_INT,
+        "not_demonstrated_months": OPT_INT,
+        # Nested tuples rather than flattened: per-skill evidence has no
+        # independent lifetime and is meaningless apart from the projection it
+        # belongs to. Each element inherits the exact-key-set strictness, so a
+        # field added to either nested type cannot half-land.
+        "skill_evidence": _NestedTuple(ProjectedSkillEvidence),
+        "band_totals": _NestedTuple(ProjectedBandTotal),
+        "projected_at": DT, "schema_version": STR,
+        # The wire discriminator, stored. A reader that somehow held a document
+        # from the wrong collection can tell which generation it has without
+        # inferring it from the presence of `skill_evidence`.
+        "projection_schema": STR,
     },
     # ---- 0.5F-A3 Parent session handoff claim ---------------------------
     #

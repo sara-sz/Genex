@@ -255,12 +255,22 @@ def test_the_bootstrap_graph_never_reaches_the_projection_app():
 # 4. the A2 artifact is frozen, and this is a FOURTH set of deploy files
 # ---------------------------------------------------------------------------
 
+#: 0.6A-1F. `pilot_runtime/projection_server.py` was removed from this tuple —
+#: the same single exception recorded in
+#: `pilot_backend/tests/test_parent_session_claim.py`, where the reasoning and
+#: the replacement behavioural assertions live
+#: (`test_the_a2_v1_boundary_survives_the_v2_route`).
+#:
+#: It is the COMPOSITION ROOT, and mounting the A2 v2 route on the same private
+#: service necessarily touches it. Every BUILD SURFACE below stays byte-pinned,
+#: which is the guarantee this list is really for: the projection image's
+#: Dockerfile, its pinned dependencies, its build config and its build context
+#: are unchanged — so the v2 route needed no packaging expansion at all.
 A2_FROZEN = (
     "pilot_runtime/deploy/Dockerfile.projection",
     "pilot_runtime/deploy/requirements-projection.txt",
     "pilot_runtime/deploy/cloudbuild-projection.yaml",
     "pilot_runtime/deploy/gcloudignore-projection",
-    "pilot_runtime/projection_server.py",
 )
 SERVING_AND_GENERATION = (
     "pilot_runtime/deploy/Dockerfile",
