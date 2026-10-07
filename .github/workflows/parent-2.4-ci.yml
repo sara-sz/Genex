@@ -499,6 +499,160 @@ jobs:
                 "all refs recompute; no off-track rung admitted")
           PY
 
+      - name: October pilot 0.6A-1 — activity bank DRIFT GATE
+        # The activity bank is clinical CONTENT living outside Parent, so the
+        # same discipline as the rung table applies: regenerate from the frozen
+        # curated pools and fail on any difference.
+        #
+        # It additionally enforces the content gate the founder set. Tier 3 —
+        # the Parent engine's generic placeholder template — must never be
+        # admitted, and a REQUIRED family with no reviewed cards must leave
+        # `release_ready` false rather than silently shipping half a goal.
+        working-directory: .
+        env:
+          PYTHONPATH: genex-parent
+        run: |
+          if [ ! -f pilot_runtime/integration/activity_bank_generator.py ]; then
+            echo "0.6A-1 not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          import json, pathlib, sys, tempfile
+
+          from pilot_runtime.integration import activity_bank_generator as GEN
+
+          committed_path = pathlib.Path(GEN.ARTIFACT_RELPATH)
+          assert committed_path.is_file(), GEN.ARTIFACT_RELPATH
+          committed = json.loads(committed_path.read_text(encoding="utf-8"))
+
+          with tempfile.TemporaryDirectory() as tmp:
+              out = pathlib.Path(tmp) / "regenerated.json"
+              regenerated = GEN.write_artifact(out)
+              raw = out.read_text(encoding="utf-8")
+
+          if GEN.canonical_json(regenerated) != GEN.canonical_json(committed):
+              print("DRIFT: the committed activity bank does not match the "
+                    "artifact regenerated from the curated source.")
+              for key in sorted(set(regenerated) | set(committed)):
+                  if regenerated.get(key) != committed.get(key):
+                      print(f"  section differs: {key}")
+              sys.exit(1)
+          assert regenerated["artifact_digest"] == committed["artifact_digest"]
+          assert GEN.artifact_digest(committed) == committed["artifact_digest"]
+          assert raw == committed_path.read_text(encoding="utf-8")
+          print(f"no drift. digest {committed['artifact_digest']}")
+
+          # -- the content gate -------------------------------------------
+          prov = committed["provenance"]
+          assert prov["llm_used"] is False, prov
+          assert prov["admitted_source_tiers"] == ["family_curated",
+                                                   "bucket_curated"], prov
+          assert prov["forbidden_source_tier"] == "generic_fallback", prov
+          for entry in committed["templates"].values():
+              assert entry["source_tier"] in ("family_curated",
+                                              "bucket_curated"), entry
+
+          # No placeholder wording anywhere. These are the exact phrases the
+          # Parent validator flags as `placeholder_wording`.
+          blob = json.dumps(committed["templates"]).lower()
+          for phrase in ("set up a quick", "show your child one small step",
+                         "your child tries at least once",
+                         "(from around the home)",
+                         "with a sibling or friend, take turns"):
+              assert phrase not in blob, phrase
+          print("generic tier-3 placeholder content is absent")
+
+          # The bucket-reuse guard: ONLY the approved family may hold
+          # bucket-derived cards. Without this, making any new family canonical
+          # would silently hand it the 12 single-word vocabulary cards, because
+          # `_family_bucket` resolves pronouns / wh_question_asking /
+          # expressive_name_response / book_object_naming all to
+          # `expressive_word`.
+          assert prov["bucket_reuse_approved"] == {
+              "expressive_vocabulary_growth": "expressive_word"}, prov
+          for tid, entry in committed["templates"].items():
+              if entry["source_tier"] == "bucket_curated":
+                  assert entry["activity_family_ref"] == \
+                      "expressive_vocabulary_growth", (tid, entry)
+                  assert entry["source_pool_ref"] == \
+                      "_BUCKET_VARIANTS[expressive_word]", (tid, entry)
+              else:
+                  assert "reviewed_cards/" in entry["source_pool_ref"], (tid,)
+          print("bucket reuse is approved for exactly one family; every other "
+                "served family uses explicit reviewed cards")
+
+          # Every admitted card re-validated by PARENT'S OWN validator.
+          from genex_core.activity_validator import validate_activity
+          from pilot_backend.domain.activity_template import (
+              CARD_FIELDS, compute_template_id)
+
+          for tid, entry in committed["templates"].items():
+              card = {f: entry[f] for f in CARD_FIELDS}
+              ok, problems = validate_activity(
+                  GEN._assembled_for_validation(
+                      card, entry["activity_family_ref"]), GEN.DOMAIN_KEY)
+              assert ok, (tid, problems)
+              assert compute_template_id(
+                  entry["activity_family_ref"], card) == tid, tid
+          print(f"{len(committed['templates'])} templates re-validated; "
+                "every template id recomputes")
+
+          # NON-VACUITY: the validator gate must be able to reject.
+          assert committed["population"]["rejected"] >= 1, \
+              "no card was rejected, so the validator gate may be vacuous"
+          print("rejected cards recorded:",
+                [r["reason"] for r in committed["rejected_cards"]])
+
+          # The release gate, while reviewed sentence content is absent.
+          assert committed["required_families"] == [
+              "expressive_vocabulary_growth", "two_word_phrases"], committed
+          assert committed["served_families"] == [
+              "book_object_naming", "expressive_vocabulary_growth",
+              "sentence_building", "two_word_phrases"], committed
+          assert committed["unserved_required_families"] == [], committed
+          assert committed["release_ready"] is True
+          assert committed["population"]["by_family"] == {
+              "book_object_naming": 6,
+              "expressive_vocabulary_growth": 12,
+              "sentence_building": 6,
+              "two_word_phrases": 6}, committed["population"]
+          # The six sentence cards must come from the REVIEWED FILE, never
+          # from a bucket pool: `_BUCKET_VARIANTS["sentence"]` does not exist,
+          # and the generic tier that would otherwise fill it is refused.
+          for entry in committed["templates"].values():
+              fam = entry["activity_family_ref"]
+              if fam in ("two_word_phrases", "sentence_building",
+                         "book_object_naming"):
+                  assert entry["source_pool_ref"] == \
+                      f"reviewed_cards/{fam}.json", entry
+          # The reviewed file is identified by digest, not merely named.
+          import hashlib
+          expected_reviewed = {}
+          for fam in ("two_word_phrases", "sentence_building",
+                      "book_object_naming"):
+              reviewed = pathlib.Path(
+                  f"pilot_runtime/data/reviewed_cards/{fam}.json")
+              assert reviewed.is_file(), reviewed
+              expected_reviewed[fam] = hashlib.sha256(
+                  reviewed.read_bytes()).hexdigest()
+          assert committed["provenance"]["reviewed_card_files"] == \
+              expected_reviewed, committed["provenance"]
+          print("release gate OPEN: both REQUIRED families served "
+                "(12 vocabulary + 6 reviewed two-word); sentence_building "
+                "served but not required")
+          PY
+
+      - name: October pilot 0.6A-1 — activity bank suites
+        working-directory: .
+        env:
+          PYTHONPATH: genex-parent
+        run: |
+          if [ -f pilot_runtime/tests/test_static_activity_bank.py ]; then
+            python -m pytest pilot_runtime/tests/test_static_activity_bank.py -q
+          else
+            echo "0.6A-1 not present on this branch — nothing to run"
+          fi
+
       - name: October pilot 0.5F-B — rung table suites (cross-system)
         # The equivalence suite: the static table is compared against the LIVE
         # adapter on every probed step input and every declared-track rung, so

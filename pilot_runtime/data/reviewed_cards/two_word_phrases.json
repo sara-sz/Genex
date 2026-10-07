@@ -1,0 +1,68 @@
+[
+  {
+    "title": "More Bubbles",
+    "theme": "requesting during play",
+    "materials": "bubbles or another favorite repeatable toy",
+    "instructions": "Play for a few turns, then pause before starting again. Model a short phrase such as 'more bubbles' and wait a few seconds. Accept a close attempt, then immediately continue the activity. Repeat naturally for 3-5 opportunities.",
+    "success_criteria": "The child attempts a meaningful two-word request such as 'more bubbles' or 'more please.'",
+    "make_easier": "Accept one word and expand it aloud. If the child says 'bubbles,' respond with 'more bubbles' and continue right away.",
+    "make_harder": "Offer two choices and model a specific two-word request for the preferred item.",
+    "group_play_line": "One person can ask for more before the next person gets the bubbles.",
+    "what_to_avoid": "Do not repeatedly demand the phrase or withhold the activity while waiting for perfect speech."
+  },
+  {
+    "title": "Want + Choice",
+    "theme": "choosing and requesting",
+    "materials": "two preferred toys, books, snacks, or activities",
+    "instructions": "Show two choices and name them simply. Ask which one the child wants. When the child reaches, points, looks, or says a word, model a two-word phrase such as 'want car' or 'want book.' Pause briefly, then give the chosen item.",
+    "success_criteria": "The child attempts a two-word request combining 'want' with the chosen item.",
+    "make_easier": "Accept the item name alone and expand it aloud, such as 'car' to 'want car.'",
+    "make_harder": "Model one additional word naturally, such as 'I want car,' without requiring the longer phrase.",
+    "group_play_line": "Let two people choose different items and model a short request for each choice.",
+    "what_to_avoid": "Do not make access to food, comfort, or essential items depend on producing the phrase."
+  },
+  {
+    "title": "My Turn",
+    "theme": "turn-taking language",
+    "materials": "a favorite shared toy, simple game, blocks, cars, or another play item",
+    "instructions": "Share a favorite toy and model 'my turn' and 'your turn' when the toy changes hands. Pause briefly before passing it so the child has an opportunity to use the phrase. Keep the exchange quick and playful.",
+    "success_criteria": "The child attempts 'my turn,' 'your turn,' or another meaningful two-word turn-taking phrase.",
+    "make_easier": "Model the whole phrase and immediately give the child the turn. A single word or gesture is also accepted and expanded aloud.",
+    "make_harder": "Model one extra word naturally, such as 'my turn please,' without requiring it.",
+    "group_play_line": "Use the same short phrases while two children share one favorite toy.",
+    "what_to_avoid": "Do not take away a toy simply to force speech or require repeated imitation before giving the child a turn."
+  },
+  {
+    "title": "Help Me",
+    "theme": "asking for help",
+    "materials": "a toy container, zipper, puzzle, jar, wind-up toy, or another safe task where help may naturally be useful",
+    "instructions": "Choose something the child enjoys and may naturally need a little help with. When the child shows they need assistance, model 'help me.' Pause briefly for an attempt, then help right away.",
+    "success_criteria": "The child attempts a two-word help request such as 'help me' or 'help please.'",
+    "make_easier": "Respond to any clear request for help and expand a single word aloud, such as 'help' to 'help me.'",
+    "make_harder": "Model a more specific short request such as 'help open' or 'help please.'",
+    "group_play_line": "Have another familiar person model 'help me' naturally during shared play.",
+    "what_to_avoid": "Do not intentionally frustrate the child, create unsafe obstacles, or withhold needed help to elicit speech."
+  },
+  {
+    "title": "Action + Object",
+    "theme": "combining an action with an object",
+    "materials": "toy cars, toy animals, blocks, toy food, or other familiar play objects",
+    "instructions": "Choose a simple action with a familiar object and model a short combination such as 'push car,' 'feed bear,' 'wash doll,' or 'open box.' Pause before doing the action and give the child a chance to attempt the two-word combination.",
+    "success_criteria": "The child attempts a meaningful two-word combination containing an action and an object or person.",
+    "make_easier": "Use one predictable combination repeatedly during the activity and model it before each action.",
+    "make_harder": "Change the object or action and model a new two-word combination during the same play routine.",
+    "group_play_line": "Let another person choose an object and model a short action phrase for it.",
+    "what_to_avoid": "Do not repeatedly correct word order when the child's two words clearly communicate the intended meaning."
+  },
+  {
+    "title": "All Done and Stop",
+    "theme": "boundaries and self-advocacy",
+    "materials": "an ordinary play activity or daily routine",
+    "instructions": "During play or a routine, model short phrases the child can use to finish, refuse, or pause something, such as 'all done,' 'no more,' or 'please stop.' When the child communicates that they are finished, respond promptly so they learn that their communication has meaning.",
+    "success_criteria": "The child attempts a two-word phrase to stop, finish, refuse, or set a boundary.",
+    "make_easier": "Accept a gesture or one word such as 'stop' or 'done,' then model the two-word version without requiring repetition.",
+    "make_harder": "Model a slightly longer functional phrase such as 'I'm all done,' 'I need break,' or 'please stop now' without making the longer phrase mandatory.",
+    "group_play_line": "During shared play, model respecting another person's 'all done' or 'please stop.'",
+    "what_to_avoid": "Never ignore a clear 'stop,' 'no,' or 'all done' merely to get a longer phrase."
+  }
+]

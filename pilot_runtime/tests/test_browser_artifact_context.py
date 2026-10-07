@@ -285,3 +285,95 @@ def test_the_staged_context_imports_no_blocked_module_at_all(staged):
         f"    if name.split('.')[0] in {list(BLOCKED_MODULES)!r}\n"
         "    and mod is not None)))\n"))
     assert json.loads(out.strip()) == []
+
+
+# ---------------------------------------------------------------------------
+# 0.6A-1 — the activity bank in the serving context
+# ---------------------------------------------------------------------------
+
+
+def test_the_serving_context_contains_the_activity_bank(staged):
+    """It ships with no deploy-config change, like the rung table.
+
+    Both live under `pilot_runtime/data/`, which the existing allowlist already
+    admits — that is the whole reason the artifacts are placed there.
+    """
+    artifact = staged / "pilot_runtime/data/activity_bank_talking_v1.json"
+    assert artifact.is_file()
+    adapter = staged / "pilot_runtime/integration/static_activity_bank.py"
+    assert adapter.is_file()
+    committed = json.loads(
+        (REPO_ROOT / "pilot_runtime/data/activity_bank_talking_v1.json")
+        .read_text(encoding="utf-8"))
+    assert json.loads(artifact.read_text(encoding="utf-8"))[
+        "artifact_digest"] == committed["artifact_digest"]
+
+
+def test_the_activity_bank_generator_is_not_needed_at_runtime(staged):
+    """The generator ships (it is under pilot_runtime/) but is never imported.
+
+    What matters is that the serving path does not reach it: it imports
+    `genex_core`, `parent_taxonomy` and the validator, none of which exist in
+    the image.
+    """
+    out = _run_in_staged(staged, (
+        "import sys, json\n"
+        "from pilot_runtime.integration.static_activity_bank import (\n"
+        "    build_static_activity_bank)\n"
+        "bank = build_static_activity_bank()\n"
+        "print(json.dumps({\n"
+        "    'generator_imported':\n"
+        "        'pilot_runtime.integration.activity_bank_generator'\n"
+        "        in sys.modules,\n"
+        "    'release_ready': bank.release_ready,\n"
+        "    'served': list(bank.served_families()),\n"
+        "    'unserved': list(bank.unserved_required_families),\n"
+        "    'digest': bank.artifact_digest,\n"
+        "}))\n"))
+    result = json.loads(out.strip())
+    assert result["generator_imported"] is False
+    assert result["served"] == ["book_object_naming",
+                                "expressive_vocabulary_growth",
+                                "sentence_building", "two_word_phrases"]
+    assert result["unserved"] == []
+    assert result["release_ready"] is True
+
+
+def test_the_staged_bank_serves_the_pair_and_refuses_an_unserved_family(staged):
+    """Both halves, proven inside the serving context rather than in-repo."""
+    out = _run_in_staged(staged, (
+        "import json\n"
+        "from pilot_backend.integration.activity_bank import FamilyNotServed\n"
+        "from pilot_runtime.integration.static_activity_bank import (\n"
+        "    build_static_activity_bank)\n"
+        "bank = build_static_activity_bank()\n"
+        "pair = bank.templates_for_families(['expressive_vocabulary_growth',\n"
+        "                                    'two_word_phrases'])\n"
+        "try:\n"
+        "    bank.templates_for_families(['function_question_answering'])\n"
+        "    gap = 'RETURNED'\n"
+        "except FamilyNotServed as exc:\n"
+        "    gap = f'REFUSED: {exc}'\n"
+        "print(json.dumps({'pair_count': len(pair),\n"
+        "                  'families': sorted({t.activity_family_ref\n"
+        "                                      for t in pair}),\n"
+        "                  'unserved_family': gap}))\n"))
+    result = json.loads(out.strip())
+    assert result["pair_count"] == 18
+    assert result["families"] == ["expressive_vocabulary_growth",
+                                  "two_word_phrases"]
+    assert result["unserved_family"].startswith("REFUSED")
+
+
+def test_the_staged_context_has_no_validator_and_no_curated_pools(staged):
+    """Validation is build-time. The image must not be able to re-run it."""
+    out = _run_in_staged(staged, (
+        "import importlib.util, json\n"
+        "print(json.dumps({\n"
+        "    'activity_validator': importlib.util.find_spec(\n"
+        "        'genex_core') is not None,\n"
+        "    'parent_taxonomy': importlib.util.find_spec(\n"
+        "        'parent_taxonomy') is not None,\n"
+        "}))\n"))
+    result = json.loads(out.strip())
+    assert result == {"activity_validator": False, "parent_taxonomy": False}

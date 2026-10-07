@@ -1,0 +1,68 @@
+[
+  {
+    "title": "What's on This Page?",
+    "theme": "naming objects in a familiar book",
+    "materials": "a picture book with clear single objects, one per page",
+    "instructions": "Sit together and open to a clear page. Point to one object and ask 'What's this?' Wait about five seconds. Accept any word attempt, then say the name clearly once and turn the page. Do 5-6 pages.",
+    "success_criteria": "The child attempts to name at least two pictured objects.",
+    "make_easier": "Name the object yourself first, then point again and ask.",
+    "make_harder": "Ask about a smaller detail on a busier page.",
+    "group_play_line": "Two children take turns, one pointing and one naming.",
+    "what_to_avoid": "Do not turn the page before waiting the full five seconds."
+  },
+  {
+    "title": "Find and Name",
+    "theme": "searching a page then naming",
+    "materials": "a familiar picture book or a simple picture card set",
+    "instructions": "Choose a page with several familiar objects. Say 'Can you find the cup?' and wait. When the child points, ask 'What's this?' and give them a moment to name it. Repeat with three or four objects.",
+    "success_criteria": "The child locates an object and attempts to name it.",
+    "make_easier": "Point near the object yourself, then ask for the name.",
+    "make_harder": "Ask the child to find two objects before naming either.",
+    "group_play_line": "One child finds while the other names, then swap.",
+    "what_to_avoid": "Do not correct a close attempt; repeat the clear name once and move on."
+  },
+  {
+    "title": "Same Book, Every Day",
+    "theme": "a repeated favourite book",
+    "materials": "one favourite book the child already knows",
+    "instructions": "Use the same book each day this week. Point to the same two or three objects and ask 'What's this?' Pause for an attempt, then name it. Familiarity makes naming easier, so repetition is the point.",
+    "success_criteria": "The child names a familiar pictured object more readily than earlier in the week.",
+    "make_easier": "Ask about only one object per sitting.",
+    "make_harder": "Add one new object to the set.",
+    "group_play_line": "Read the same book with a sibling and let each name one object.",
+    "what_to_avoid": "Do not swap books mid-week in search of novelty."
+  },
+  {
+    "title": "Photo Album Names",
+    "theme": "naming objects in family photos",
+    "materials": "printed family photos or photos on a phone showing clear single objects",
+    "instructions": "Look at photos together. Point to one clear object - a cup, a ball, a dog - and ask 'What's this?' Wait, accept any attempt, and say the name clearly once.",
+    "success_criteria": "The child attempts to name at least two objects in the photos.",
+    "make_easier": "Offer a choice: 'Is this a ball or a cup?'",
+    "make_harder": "Ask the child to find an object you name before asking them to name another.",
+    "group_play_line": "Pass the album and take turns naming one thing each.",
+    "what_to_avoid": "Do not move quickly through many photos; two or three is enough."
+  },
+  {
+    "title": "Lift the Flap, Name It",
+    "theme": "naming with a reveal",
+    "materials": "a lift-the-flap book, or a book with a cloth laid over part of the page",
+    "instructions": "Cover or close a flap over one object. Say 'What's under here?' and lift it together. Pause for an attempt, then name it clearly. Do four or five reveals.",
+    "success_criteria": "The child attempts to name the revealed object.",
+    "make_easier": "Lift the flap first, then ask for the name.",
+    "make_harder": "Ask the child to guess before lifting.",
+    "group_play_line": "Let one child lift while the other names.",
+    "what_to_avoid": "Do not hold the flap shut while waiting for a word."
+  },
+  {
+    "title": "Point and Tell",
+    "theme": "the child leads the naming",
+    "materials": "any familiar picture book",
+    "instructions": "Let the child turn the pages and point to whatever interests them. When they point, ask 'What's this?' and wait. Follow their lead rather than your own page order.",
+    "success_criteria": "The child points to an object of their own choosing and attempts to name it.",
+    "make_easier": "Name what they pointed at and invite them to say it with you.",
+    "make_harder": "Ask one follow-up, such as 'What colour is it?'",
+    "group_play_line": "Each child points to one thing per page and names it.",
+    "what_to_avoid": "Do not redirect the child to the object you wanted to practise."
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "title": "I Want Bubbles",
+    "theme": "requesting with a short sentence",
+    "materials": "bubbles, a wind-up toy, or another favorite repeatable activity",
+    "instructions": "Play for a turn, then pause and model a short sentence such as 'I want bubbles.' Wait a few seconds and accept any closer attempt, then continue right away. Offer 3-5 natural openings during the activity.",
+    "success_criteria": "The child attempts a three-to-four word request such as 'I want bubbles.'",
+    "make_easier": "Accept a two-word version such as 'want bubbles' and expand it aloud once.",
+    "make_harder": "Model a slightly fuller sentence such as 'I want more bubbles' without requiring it.",
+    "group_play_line": "Each person takes a turn asking for the activity in their own words.",
+    "what_to_avoid": "Do not withhold the activity while waiting for the full sentence."
+  },
+  {
+    "title": "Can I Play?",
+    "theme": "joining in",
+    "materials": "a shared game, blocks, or any activity already underway",
+    "instructions": "Start playing with something inviting. When the child shows interest, model 'Can I play?' and pause briefly. Welcome them in immediately after any attempt.",
+    "success_criteria": "The child attempts a short question such as 'Can I play?' to join an activity.",
+    "make_easier": "Accept 'play' or a gesture and expand it aloud.",
+    "make_harder": "Model 'Can I play too?' without requiring the extra word.",
+    "group_play_line": "Take turns asking to join each other's play.",
+    "what_to_avoid": "Do not exclude the child from play to prompt the phrase."
+  },
+  {
+    "title": "Help Me Open",
+    "theme": "asking for specific help",
+    "materials": "a container with a lid, a zipped bag, a jar, or a wrapped snack",
+    "instructions": "Offer something the child wants that needs opening. When they bring it to you, model 'Help me open.' Pause briefly, then open it right away.",
+    "success_criteria": "The child attempts a three-word request naming the help needed, such as 'help me open.'",
+    "make_easier": "Accept 'help' or 'open' and expand it aloud once.",
+    "make_harder": "Model naming the object too, such as 'Help me open box.'",
+    "group_play_line": "Another familiar person models the same request during shared play.",
+    "what_to_avoid": "Do not create difficult or unsafe containers, or delay help to extend practice."
+  },
+  {
+    "title": "My Turn Please",
+    "theme": "polite turn-taking",
+    "materials": "one favorite shared toy or a simple turn-taking game",
+    "instructions": "Pass a favorite toy back and forth. Model 'My turn please' before you take it and pause before passing it so the child has an opening. Keep each turn short.",
+    "success_criteria": "The child attempts a three-word turn-taking phrase such as 'my turn please.'",
+    "make_easier": "Accept 'my turn' and expand it aloud without requiring repetition.",
+    "make_harder": "Model 'Can I have a turn?' without making the longer form mandatory.",
+    "group_play_line": "Two children use the same phrase while sharing one toy.",
+    "what_to_avoid": "Do not withhold a turn until the phrase is produced correctly."
+  },
+  {
+    "title": "I Need a Break",
+    "theme": "self-advocacy and boundaries",
+    "materials": "an ordinary play activity or daily routine",
+    "instructions": "During an activity, model short sentences the child can use to pause or stop, such as 'I need a break' or 'All done now.' When the child communicates this, respond promptly so they learn the words work.",
+    "success_criteria": "The child attempts a three-to-four word phrase to pause, stop, or finish.",
+    "make_easier": "Accept 'break,' 'done,' or a gesture and model the fuller sentence once.",
+    "make_harder": "Model 'I need a break please' without requiring the extra word.",
+    "group_play_line": "Model respecting another person's request for a break during shared play.",
+    "what_to_avoid": "Never ignore a clear request to stop in order to get a longer sentence."
+  },
+  {
+    "title": "Who Is Doing What",
+    "theme": "subject, action, and object together",
+    "materials": "toy animals, dolls, toy cars, or familiar play figures",
+    "instructions": "Act out a simple scene with two familiar figures and model a short sentence naming who, the action, and the object, such as 'Dog eats the food' or 'Baby drinks milk.' Pause before acting so the child can try the sentence.",
+    "success_criteria": "The child attempts a three-to-four word sentence combining a subject, an action, and an object.",
+    "make_easier": "Use the same scene repeatedly and model the sentence before each action.",
+    "make_harder": "Change one element and model the new sentence during the same play.",
+    "group_play_line": "Let another person set up a scene and describe it in a short sentence.",
+    "what_to_avoid": "Do not correct word order when the meaning is already clear."
+  }
+]
