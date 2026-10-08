@@ -38,6 +38,7 @@ from pilot_backend.domain.goals import EditType, GoalKind, GoalRef, GoalStatus
 from pilot_backend.domain.weekly_plan_document import (
     FORBIDDEN_PARENT_FIELDS,
     PARENT_ACTIVITY_CONTENT_FIELDS,
+    PARENT_ACTIVITY_IDENTITY_FIELDS,
     PARENT_WEEK_VIEW_SCHEMA,
     WEEKLY_PLAN_DOCUMENT_SCHEMA,
     WeeklyPlanDocumentError,
@@ -141,7 +142,7 @@ class Chain:
         self.bank = bank if bank is not None else StaticActivityBank()
         self.service = WeekOneReleaseService(
             repos=self.repos, goals=self.goals, plans=self.plans,
-            weekly=self.weekly, activity_bank=self.bank)
+            weekly=self.weekly, activity_bank=self.bank, now=lambda: NOW)
         self.suggestions = self.world.generate()
 
     def approve(self, index=0):
@@ -151,11 +152,13 @@ class Chain:
             self.principal, CHILD, edit_type=EditType.ACCEPTED_VERBATIM,
             suggestion_id=suggestion_id)
 
-    def release(self, capacity=DEMO_CAPACITY, principal=None):
+    def release(self, capacity=DEMO_CAPACITY, principal=None,
+                local_date=None):
         return self.service.release_week_one(
             principal or self.principal, CHILD,
             family_declared_capacity=capacity,
-            timezone_of_record=TZ, cycle_month=CYCLE_MONTH)
+            timezone_of_record=TZ, cycle_month=CYCLE_MONTH,
+            local_date=local_date)
 
     def this_week(self, principal=None):
         return self.service.this_week(principal or self.principal, CHILD)
@@ -199,12 +202,11 @@ def test_an_approved_mappable_goal_releases_week_one_with_three_activities():
 def test_the_count_follows_capacity_and_nothing_else():
     """1 coverage floor + (capacity - 1) emphasis, from the EXISTING allocator.
 
-    The sweep stops at 4 because Week 1 of October 2026 is a FOUR-DAY partial
-    cycle — the month starts on a Thursday — and the one-per-day rendering rule
-    refuses to double up. That interaction is the subject of its own test below;
-    here the point is that the count tracks capacity exactly.
+    The clock is pinned to Oct 7 2026, which the calendar rule resolves to cycle
+    2 (Oct 5-11) — a FULL seven-day week — so the whole reviewed pool of six is
+    renderable one-per-day. The partial-cycle interaction has its own test below.
     """
-    for capacity, expected in ((1, 1), (2, 2), (3, 3), (4, 4)):
+    for capacity, expected in ((1, 1), (2, 2), (3, 3), (6, 6), (9, 6)):
         chain = Chain()
         chain.approve()
         outcome = chain.release(capacity=capacity)
@@ -214,15 +216,15 @@ def test_the_count_follows_capacity_and_nothing_else():
 def test_capacity_beyond_the_cycles_day_count_refuses_rather_than_doubling_up():
     """A REAL interaction, surfaced rather than papered over.
 
-    Week 1 of October 2026 runs Oct 1-4 (the month starts midweek), so a declared
-    capacity of 6 cannot be rendered one-per-day. The release REFUSES and writes
-    no snapshot, instead of silently placing two activities on one day — which
-    would be a density decision nobody approved.
+    Cycle 1 of October 2026 runs Oct 1-4 (the month starts midweek), so a
+    declared capacity of 6 cannot be rendered one-per-day. The release REFUSES
+    and writes no snapshot, instead of silently placing two activities on one day
+    — which would be a density decision nobody approved.
     """
     chain = Chain()
     chain.approve()
     with pytest.raises(WeeklyPlanDocumentError):
-        chain.release(capacity=6)
+        chain.release(capacity=6, local_date="2026-10-02")
     assert chain.docs("pilot_weekly_plan_snapshots") == []
 
 
@@ -258,9 +260,16 @@ def test_every_activity_comes_from_the_approved_goals_family():
 
     bank_templates = {t.activity_template_id: t
                       for t in chain.bank.templates_for_families(sorted(bound))}
+    # Provenance is read from the INTERNAL snapshot: the Parent view no longer
+    # carries `activity_template_id`, so the join goes through the stored
+    # document, keyed by the opaque instance ref the family does see.
+    document = chain.repos.weekly_plan_snapshots.list_for_cycle(
+        outcome.cycle_id)[0].document()
+    by_ref = {row["activity_ref"]: row for row in document["activities"]}
     for day in outcome.parent_week["days"]:
         for activity in day["activities"]:
-            template = bank_templates[activity["activity_template_id"]]
+            row = by_ref[activity["activity_ref"]]
+            template = bank_templates[row["activity_template_id"]]
             assert template.activity_family_ref in bound
             # The content is the REVIEWED content, byte for byte.
             assert activity["title"] == template.title
@@ -494,7 +503,7 @@ def test_the_parent_view_carries_only_reviewed_content_and_identifiers():
     for day in week["days"]:
         for activity in day["activities"]:
             assert sorted(activity) == sorted(
-                ("activity_instance_ref", "activity_template_id", "goal_id")
+                PARENT_ACTIVITY_IDENTITY_FIELDS
                 + PARENT_ACTIVITY_CONTENT_FIELDS)
     # `duration_minutes` and `why` do not exist in the reviewed source and are
     # NOT invented; `theme` and `group_play_line` are authoring metadata.
@@ -502,6 +511,43 @@ def test_the_parent_view_carries_only_reviewed_content_and_identifiers():
     for absent in ("duration_minutes", "why", "theme", "group_play_line"):
         assert absent not in blob, absent
     assert_no_forbidden_fields(week)
+
+
+def test_the_template_id_is_internal_provenance_and_never_reaches_the_parent():
+    """Founder review, 0.6A-2. It stays in the snapshot; it does not cross.
+
+    Three assertions, because the field could leak at three different depths:
+    the identity allowlist, the rendered activity, and the serialised payload.
+    """
+    chain = Chain()
+    chain.approve()
+    outcome = chain.release()
+
+    assert "activity_template_id" not in PARENT_ACTIVITY_IDENTITY_FIELDS
+    assert "activity_template_id" in FORBIDDEN_PARENT_FIELDS
+
+    for day in outcome.parent_week["days"]:
+        for activity in day["activities"]:
+            assert "activity_template_id" not in activity
+            assert "activity_family_ref" not in activity
+            # The OPAQUE handle is present — it is the product's reference —
+            # and the allocator's raw instance ref, which embeds the template
+            # digest, is not.
+            assert activity["activity_ref"].startswith("pact1:")
+            assert "activity_instance_ref" not in activity
+
+    blob = json.dumps(outcome.parent_week)
+    assert "activity_template_id" not in blob
+    assert "atpl1:" not in blob, "a template digest leaked into the Parent view"
+    # And the same holds for the route-level read.
+    assert "atpl1:" not in json.dumps(chain.this_week())
+
+    # It is STILL in the immutable snapshot, which is the point.
+    document = chain.repos.weekly_plan_snapshots.list_for_cycle(
+        outcome.cycle_id)[0].document()
+    assert all(row["activity_template_id"].startswith("atpl1:")
+               for row in document["activities"])
+    assert all(row["goal_version_id"] for row in document["goals"])
 
 
 def test_no_internal_planning_data_reaches_the_parent_view():
@@ -641,6 +687,47 @@ def test_the_week_is_deterministic_across_two_independent_chains():
 # ===========================================================================
 
 
+def test_current_resolves_to_the_cycle_that_covers_today():
+    """0.6A-2 founder review. "Current" is a calendar question, now asked.
+
+    Previously `current` was the hardcoded sequence 1 — Oct 1-4 for October 2026
+    — so a release on the 7th would have handed a family a week that had already
+    ended. The bounds come from the existing `plan_cycle_bounds`; the correction
+    is to select by coverage instead of assuming the first.
+    """
+    from pilot_backend.integration.week_one_release import (
+        CurrentCycleUnresolved,
+    )
+
+    expected = {"2026-10-01": 1, "2026-10-04": 1, "2026-10-05": 2,
+                "2026-10-07": 2, "2026-10-08": 2, "2026-10-11": 2,
+                "2026-10-12": 3, "2026-10-26": 5, "2026-11-01": 5}
+    for day, sequence in expected.items():
+        assert WeekOneReleaseService.current_sequence_for(
+            "2026-10", day) == sequence, day
+
+    # A date outside the month belongs to no cycle of it, and is refused rather
+    # than falling back to cycle 1.
+    for outside in ("2026-09-30", "2026-11-02"):
+        with pytest.raises(CurrentCycleUnresolved):
+            WeekOneReleaseService.current_sequence_for("2026-10", outside)
+
+
+def test_the_released_week_is_the_week_the_family_is_actually_in():
+    """The demo date. Oct 7 -> cycle 2, Oct 5-11, and NOT the past Oct 1-4."""
+    chain = Chain()
+    chain.approve()
+    outcome = chain.release()
+    week = outcome.parent_week["week"]
+    assert (week["starts_on"], week["ends_on"]) == ("2026-10-05", "2026-10-11")
+    assert week["starts_on"] <= "2026-10-07" <= week["ends_on"]
+    # Seven days listed, three of them populated.
+    assert len(outcome.parent_week["days"]) == 7
+    populated = [d for d in outcome.parent_week["days"] if d["activities"]]
+    assert [d["local_date"] for d in populated] == [
+        "2026-10-05", "2026-10-06", "2026-10-07"]
+
+
 def test_activities_are_laid_out_one_per_day_from_the_cycle_start():
     chain = Chain()
     chain.approve()
@@ -690,7 +777,12 @@ def test_release_creates_no_week_two_and_no_rtm():
     chain.approve()
     outcome = chain.release()
     cycles = chain.weekly.list_cycles(chain.principal, outcome.focus_plan_id)
-    assert [c.sequence_in_month for c in cycles] == [1]
+    # EXACTLY ONE cycle — the current one. Oct 7 resolves to sequence 2 under
+    # the existing calendar rules, and no further week is generated.
+    assert [c.sequence_in_month for c in cycles] == [2]
+    assert cycles[0].starts_on == "2026-10-05"
+    assert cycles[0].ends_on == "2026-10-11"
+    assert cycles[0].is_partial is False
     for collection in ("pilot_rtm_episodes", "pilot_rtm_periods",
                        "pilot_adaptation_records", "pilot_defer_records"):
         assert chain.docs(collection) == [], collection

@@ -71,6 +71,7 @@ day, and days beyond the placed activities simply carry none.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -99,12 +100,53 @@ PARENT_ACTIVITY_CONTENT_FIELDS: Tuple[str, ...] = (
     "what_to_avoid",
 )
 
-#: Identifiers the product needs on a Parent-facing activity. `activity_template_id`
-#: is included because the founder named template identity as a permitted product
-#: identifier, and because it is what makes a released activity traceable.
+#: Domain tag for the Parent-facing activity handle, so a value from this
+#: namespace can never be confused with a template id, a rung ref or an
+#: allocator instance ref.
+PARENT_ACTIVITY_REF_SCHEME = "pact1:"
+
+
+def parent_activity_ref(activity_instance_ref: str) -> str:
+    """An OPAQUE family-facing handle for one placement.
+
+    0.6A-2 founder review found a leak that removing a field could not close:
+    the allocator derives `activity_instance_ref` as
+    `{cycle_id}::{activity_identity_ref}::{occurrence}`, and
+    `activity_identity_ref` IS the reviewed template's content digest. So the
+    template id was reaching the family EMBEDDED in the instance ref even after
+    the explicit field was removed.
+
+    The allocator's format is a frozen 0.4D surface and is NOT changed — every
+    stored alignment references it. Instead the Parent view carries this digest
+    of it: stable for the life of the placement, so a later feedback or
+    completion call has something to name, and content-free, so it reveals
+    neither the template nor the cycle.
+
+    The stored document keeps BOTH, which is what makes the handle resolvable
+    back to its placement internally.
+    """
+    value = (activity_instance_ref or "").strip()
+    if not value:
+        raise WeeklyPlanDocumentError(
+            "a parent activity ref requires an instance ref")
+    digest = hashlib.sha256(
+        (PARENT_ACTIVITY_REF_SCHEME + value).encode("utf-8")).hexdigest()
+    return PARENT_ACTIVITY_REF_SCHEME + digest[:32]
+
+
+#: Identifiers a Parent-facing activity carries. TWO, and deliberately not three.
+#:
+#: `activity_template_id` is INTERNAL PROVENANCE and is excluded. It is a content
+#: digest of the reviewed card — an identifier of our authoring pipeline, not of
+#: anything a family acts on — and `activity_instance_ref` already gives the
+#: product a stable handle for "this placement in this week", which is what a
+#: later feedback or completion call would reference.
+#:
+#: The template id stays in the immutable internal snapshot, beside the
+#: materialised content, so a clinician can still ask which approved template
+#: produced a released activity. It simply does not cross to the family.
 PARENT_ACTIVITY_IDENTITY_FIELDS: Tuple[str, ...] = (
-    "activity_instance_ref",
-    "activity_template_id",
+    "activity_ref",
     "goal_id",
 )
 
@@ -118,6 +160,11 @@ FORBIDDEN_PARENT_FIELDS: Tuple[str, ...] = (
     "milestone_refs", "difficulty_tier", "placed_in_stage",
     "alignment_source", "role", "theme", "group_play_line",
     "source_tier", "source_pool_ref", "duration_minutes", "why",
+    # 0.6A-2 founder review: internal provenance, kept in the snapshot only.
+    "activity_template_id", "activity_family_ref", "goal_version_id",
+    # The allocator's instance ref EMBEDS the template digest, so the raw ref is
+    # internal too — the family gets `activity_ref`, an opaque digest of it.
+    "activity_instance_ref", "activity_identity_ref",
 )
 
 
@@ -158,6 +205,9 @@ class ReleasedActivity:
     def to_document(self) -> Dict[str, Any]:
         return {
             "activity_instance_ref": self.activity_instance_ref,
+            # The family-facing handle, stored BESIDE the real ref so the
+            # mapping stays resolvable internally.
+            "activity_ref": parent_activity_ref(self.activity_instance_ref),
             "activity_template_id": self.activity_template_id,
             "activity_family_ref": self.activity_family_ref,
             "goal_id": self.goal_id,
@@ -274,9 +324,10 @@ def parent_week_view(document: Mapping[str, Any], *,
             raise WeeklyPlanDocumentError(
                 "a released activity falls outside its cycle")
         content = row["content"]
+        # Built from PARENT_ACTIVITY_IDENTITY_FIELDS by name, so adding an
+        # internal identifier to the stored document cannot start shipping it.
         activity: Dict[str, Any] = {
-            "activity_instance_ref": str(row["activity_instance_ref"]),
-            "activity_template_id": str(row["activity_template_id"]),
+            "activity_ref": str(row["activity_ref"]),
             "goal_id": str(row["goal_id"]),
         }
         for name in PARENT_ACTIVITY_CONTENT_FIELDS:
@@ -322,6 +373,8 @@ def assert_no_forbidden_fields(payload: Any) -> None:
 
 __all__ = [
     "FORBIDDEN_PARENT_FIELDS",
+    "PARENT_ACTIVITY_REF_SCHEME",
+    "parent_activity_ref",
     "PARENT_ACTIVITY_CONTENT_FIELDS",
     "PARENT_ACTIVITY_IDENTITY_FIELDS",
     "PARENT_WEEK_VIEW_SCHEMA",

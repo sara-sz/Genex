@@ -71,6 +71,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..domain.goals import GoalKind, GoalRef, GoalStatus
+from ..domain.weekly_cycle import WeeklyCycleError, plan_cycle_bounds
 from ..domain.source_link import SourceSystem
 from ..domain.weekly_plan_document import (
     build_document,
@@ -78,9 +79,15 @@ from ..domain.weekly_plan_document import (
 )
 from .activity_bank import candidates_for_goal, require_all_families_served
 
-#: Week 1. This slice releases the FIRST cycle of the active month only; Week 2+
-#: is 0.6A-3 and `generate_next_cycle` already exists for it.
+#: Week 1 of a month. Retained as the FIRST cycle's sequence number, which is
+#: what `plan_cycle_bounds` numbers from — not as the sequence this route
+#: releases. See `current_sequence_for`.
 WEEK_ONE = 1
+
+#: The highest cycle sequence `plan_cycle_bounds` will produce for any month. It
+#: raises past the month end, so the scan below is bounded by the calendar rather
+#: than by a guess.
+MAX_CYCLES_PER_MONTH = 6
 
 #: The source system recorded on the snapshot. THERAPIST because the Pilot — the
 #: therapist platform — now AUTHORS this week. v1 snapshots captured PARENT's
@@ -92,6 +99,16 @@ class WeekOneReleaseError(Exception):
     """Week 1 could not be released. PHI-safe: never quotes activity content."""
 
     PHI_SAFE_MESSAGE = True
+
+
+class CurrentCycleUnresolved(WeekOneReleaseError):
+    """Today does not fall inside any cycle of the plan's month.
+
+    Reachable when a release is attempted for a month that is not the current
+    one. Refused rather than defaulted to cycle 1: releasing a week that has
+    already ended would put a "this week" in front of a family that is in the
+    past.
+    """
 
 
 class CapacityRequired(WeekOneReleaseError):
@@ -155,7 +172,12 @@ class WeekOneReleaseService:
     """Compose the existing transitions into one provider action."""
 
     def __init__(self, *, repos: Any, goals: Any, plans: Any, weekly: Any,
-                 activity_bank: Any) -> None:
+                 activity_bank: Any, now: Any = None) -> None:
+        #: Injectable clock, the same seam every other service takes. "Current"
+        #: is a calendar question, so a test must be able to pin the date.
+        from ..domain.entities import utc_now  # noqa: WPS433
+
+        self._now = now or utc_now
         self._repos = repos
         self._goals = goals
         self._plans = plans
@@ -202,6 +224,7 @@ class WeekOneReleaseService:
                          family_declared_capacity: Optional[int],
                          timezone_of_record: str = "UTC",
                          cycle_month: Optional[str] = None,
+                         local_date: Optional[str] = None,
                          request_id: str = "") -> WeekOneOutcome:
         """Create, allocate, snapshot and release Week 1. Or return it.
 
@@ -220,7 +243,8 @@ class WeekOneReleaseService:
                                   timezone_of_record=timezone_of_record,
                                   cycle_month=cycle_month,
                                   request_id=request_id)
-        cycle = self._resolve_cycle(principal, plan, request_id=request_id)
+        cycle = self._resolve_cycle(principal, plan, request_id=request_id,
+                                    local_date=local_date)
 
         if cycle.is_released:
             # REPLAY. The existing released week is returned unchanged, and the
@@ -310,13 +334,55 @@ class WeekOneReleaseService:
                 principal, plan.focus_plan_id, row.ref,
                 priority_rank=rank, request_id=request_id)
 
-    def _resolve_cycle(self, principal, plan, *, request_id: str):
-        """Week 1 of the active plan, created if it does not exist yet."""
+    @staticmethod
+    def current_sequence_for(cycle_month: str, local_date: str) -> int:
+        """The cycle sequence whose EXISTING bounds cover `local_date`.
+
+        0.6A-2 founder review. The route is `.../weekly-cycles/current/release`,
+        and "current" previously resolved to the hardcoded sequence 1 — which for
+        October 2026 is Oct 1-4, a week already in the past by the 7th. A family
+        would have been shown a "this week" that had ended.
+
+        No new policy is introduced. `plan_cycle_bounds` already defines every
+        cycle of a month, and `WeeklyCycle.covers` already exists for exactly
+        this question; the correction is to ASK it instead of assuming the first.
+
+        October 2026 under the existing rules:
+
+            cycle 1   Oct 1 - Oct 4    partial, month_starts_midweek
+            cycle 2   Oct 5 - Oct 11
+            cycle 3   Oct 12 - Oct 18
+            cycle 4   Oct 19 - Oct 25
+            cycle 5   Oct 26 - Nov 1   spans the month boundary
+
+        So a release on Oct 7 or Oct 8 resolves to cycle 2, Oct 5 - Oct 11.
+        """
+        for sequence in range(WEEK_ONE, MAX_CYCLES_PER_MONTH + 1):
+            try:
+                starts_on, ends_on, _partial, _reason = plan_cycle_bounds(
+                    cycle_month, sequence)
+            except WeeklyCycleError:
+                # Past the month end. The scan is bounded by the calendar.
+                break
+            if starts_on <= local_date <= ends_on:
+                return sequence
+        raise CurrentCycleUnresolved(
+            "today does not fall inside any cycle of this plan's month")
+
+    def _resolve_cycle(self, principal, plan, *, request_id: str,
+                       local_date: Optional[str] = None):
+        """The CURRENT cycle of the active plan, created if it does not exist.
+
+        Resolved from the calendar rather than hardcoded, so the week a family is
+        shown is the week they are actually in.
+        """
+        today = local_date or self._today()
+        sequence = self.current_sequence_for(plan.cycle_month, today)
         for cycle in self._weekly.list_cycles(principal, plan.focus_plan_id):
-            if cycle.sequence_in_month == WEEK_ONE:
+            if cycle.sequence_in_month == sequence:
                 return cycle
         return self._weekly.create_cycle(
-            principal, plan.focus_plan_id, sequence_in_month=WEEK_ONE,
+            principal, plan.focus_plan_id, sequence_in_month=sequence,
             request_id=request_id)
 
     def _candidate_templates(self, goals) -> Dict[str, Any]:
@@ -423,7 +489,8 @@ class WeekOneReleaseService:
 
     # -- the Parent read ---------------------------------------------------
 
-    def this_week(self, principal, child_id: str) -> Optional[Dict[str, Any]]:
+    def this_week(self, principal, child_id: str, *,
+                  local_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """The released Week 1 for a child, or None. Authorized read.
 
         Returns None — not a draft — when nothing has been released. A draft
@@ -437,8 +504,16 @@ class WeekOneReleaseService:
                                        self._current_cycle_month())
         if plan is None:
             return None
+        # The cycle the family is actually in, by the same calendar rule the
+        # release used — so a released week that has ended is not still shown as
+        # "this week".
+        try:
+            sequence = self.current_sequence_for(plan.cycle_month,
+                                                 local_date or self._today())
+        except CurrentCycleUnresolved:
+            return None
         for cycle in self._weekly.list_cycles(principal, plan.focus_plan_id):
-            if cycle.sequence_in_month != WEEK_ONE or not cycle.is_released:
+            if cycle.sequence_in_month != sequence or not cycle.is_released:
                 continue
             snapshots = self._repos.weekly_plan_snapshots.list_for_cycle(
                 cycle.cycle_id)
@@ -448,17 +523,20 @@ class WeekOneReleaseService:
                                     released_at=cycle.released_to_parent_at)
         return None
 
-    @staticmethod
-    def _current_cycle_month() -> str:
-        """The calendar month to plan, when the caller does not name one."""
-        from ..domain.entities import utc_now  # noqa: WPS433
+    def _today(self) -> str:
+        """Today's local date, ISO. Injectable so a test can pin the calendar."""
+        return self._now().date().isoformat()
 
-        stamp = utc_now()
+    def _current_cycle_month(self) -> str:
+        """The calendar month to plan, when the caller does not name one."""
+        stamp = self._now()
         return f"{stamp.year:04d}-{stamp.month:02d}"
 
 
 __all__ = [
     "CapacityRequired",
+    "CurrentCycleUnresolved",
+    "MAX_CYCLES_PER_MONTH",
     "ReleasableGoal",
     "GoalNotReleasable",
     "SNAPSHOT_SOURCE_SYSTEM",
