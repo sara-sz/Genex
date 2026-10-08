@@ -151,6 +151,21 @@ CHILD_SUGGESTIONS_ROUTE = "/pilot/children/{child_id}/goal-suggestions"
 #: resource. The read endpoint is unchanged.
 GENERATE_SUGGESTIONS_ROUTE = (
     "/pilot/children/{child_id}/goal-suggestions/generate")
+#: 0.6A-1G. The EVIDENCE-DRIVEN trigger, as its own route rather than a mode on
+#: the one above.
+#:
+#: The two are different clinical contracts, not two settings of one. v1 answers
+#: "what is one rung up from where this child is", from a month-level summary, and
+#: produces at most one suggestion. v2 answers "which skills was this child
+#: actually shown not to have", from per-skill evidence, and produces zero, one or
+#: several — plus a list of canonical deficits it cannot yet support.
+#:
+#: A `?policy=v2` flag on one route would make the first thing the handler does a
+#: branch on client-supplied data deciding which clinical algorithm runs, and a
+#: client that omitted the flag would silently get the alphabetical-winner
+#: behaviour this slice exists to retire.
+GENERATE_SUGGESTIONS_V2_ROUTE = (
+    "/pilot/children/{child_id}/goal-suggestions/generate-v2")
 CHILD_MONTHLY_PLAN_ROUTE = "/pilot/children/{child_id}/monthly-plan"
 CHILD_CURRENT_CYCLE_ROUTE = "/pilot/children/{child_id}/current-cycle"
 CHILD_RTM_ROUTE = "/pilot/children/{child_id}/rtm"
@@ -190,6 +205,7 @@ ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
     ("POST", CHILD_GOALS_ROUTE, False),
     ("GET", CHILD_SUGGESTIONS_ROUTE, False),
     ("POST", GENERATE_SUGGESTIONS_ROUTE, False),
+    ("POST", GENERATE_SUGGESTIONS_V2_ROUTE, False),
     ("GET", CHILD_MONTHLY_PLAN_ROUTE, False),
     ("POST", CHILD_MONTHLY_PLAN_ROUTE, False),
     ("GET", CHILD_CURRENT_CYCLE_ROUTE, False),
@@ -257,6 +273,23 @@ def _match_generate_suggestions_route(path: str) -> Optional[str]:
         return None
     if (parts[0] != "pilot" or parts[1] != "children"
             or parts[3] != "goal-suggestions" or parts[4] != "generate"):
+        return None
+    return parts[2]
+
+
+def _match_generate_suggestions_v2_route(path: str) -> Optional[str]:
+    """Return the child id for `.../goal-suggestions/generate-v2`. 0.6A-1G.
+
+    A SEPARATE matcher with its own exact final segment, not a prefix test. The
+    two tails differ by a suffix, so `startswith("generate")` would make the v1
+    matcher swallow the v2 path and silently run the v1 algorithm — the one
+    failure mode a versioned route exists to prevent.
+    """
+    parts = [p for p in path.split("/") if p != ""]
+    if len(parts) != 5:
+        return None
+    if (parts[0] != "pilot" or parts[1] != "children"
+            or parts[3] != "goal-suggestions" or parts[4] != "generate-v2"):
         return None
     return parts[2]
 
@@ -919,6 +952,15 @@ class PilotWSGIApplication:
                 return 405, _ERROR_BODIES[405], GENERATE_SUGGESTIONS_ROUTE
             return self._handle_generate_suggestions(environ, generate_child,
                                                      request_id)
+
+        # 0.6A-1G evidence-driven generation. Its own matcher, so the v1 tail
+        # cannot prefix-match the v2 path and quietly run the v1 algorithm.
+        generate_v2_child = _match_generate_suggestions_v2_route(path)
+        if generate_v2_child is not None:
+            if method != "POST":
+                return 405, _ERROR_BODIES[405], GENERATE_SUGGESTIONS_V2_ROUTE
+            return self._handle_generate_suggestions_v2(
+                environ, generate_v2_child, request_id)
 
         for collection, tail, route, verbs in (
                 ("children", "goals", CHILD_GOALS_ROUTE, ("GET", "POST")),
@@ -1995,6 +2037,121 @@ class PilotWSGIApplication:
             "suggestion_ids": [s.suggestion_id for s in outcome.suggestions],
             "request_id": request_id,
         }, GENERATE_SUGGESTIONS_ROUTE
+
+    def _handle_generate_suggestions_v2(self, environ: Mapping[str, object],
+                                        child_id: str, request_id: str
+                                        ) -> Tuple[int, Mapping, str]:
+        """0.6A-1G. Provider-triggered EVIDENCE-DRIVEN generation.
+
+        ## Authorization is byte-for-byte v1's, and deliberately so
+
+          1. a verified Pilot principal (the protected-route gate above)
+          2. `principal.role is ActorRole.PROVIDER` — a caregiver is refused
+             here, before any service call, so a family can never trigger
+             clinical target selection for their own child
+          3. active child access, via `GoalService._authorize`
+          4. the caller must BE this child's current managing clinician, via the
+             EXISTING `_require_managing_clinician`
+
+        No new authorization model, no widened gate, and no separate role for v2.
+        A richer answer is not a reason to let more people ask the question.
+
+        ## Every refusal is the SAME constant 403
+
+        The 0.5C no-oracle rule. A finer status would tell a prober which gate
+        stopped them, and the services already collapse absent-versus-not-yours.
+
+        ## The response can say "nothing to generate" WITHOUT that being a refusal
+
+        Three of the four outcomes produce zero suggestions and are still 200:
+        every band mastered, a band unresolved only by `unknown`, and a band whose
+        known deficits are all canonically unmappable. Rendering those as 403
+        would tell Hannah her request failed when in fact it answered — and would
+        push her to retry something that will give the same true result.
+
+        ## No body, and nothing clinical in the response
+
+        Every input is derived server-side from the child's active Parent source
+        link and its v2 projection. The response carries canonical refs, ids and
+        counts only: no milestone prose from the transient A2 request, no
+        caregiver answer, no Parent identifier, and no generation claim id.
+        """
+        from ..domain.roles import ActorRole
+        from ..domain.suggestion_generation import SuggestionGenerationError
+        from ..domain.suggestion_generation_v2 import GenerationV2Error
+        from ..goals.errors import (
+            GoalAuthorizationError,
+            GoalConflict,
+            GoalValidationError,
+        )
+        from ..integration.baseline_suggestion_generation_v2 import (
+            BaselineSuggestionGenerationV2Service,
+        )
+
+        principal, status = self._principal(environ)
+        if principal is None:
+            self._log(request_id, GENERATE_SUGGESTIONS_V2_ROUTE, "POST", status,
+                      None)
+            return status, _ERROR_BODIES[status], GENERATE_SUGGESTIONS_V2_ROUTE
+
+        if principal.role is not ActorRole.PROVIDER:
+            self._log_principal(request_id, GENERATE_SUGGESTIONS_V2_ROUTE,
+                                "POST", HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    GENERATE_SUGGESTIONS_V2_ROUTE)
+
+        goals, _plans, _weekly, _rtm = self._services()
+        rung_source = self._rung_source
+        if rung_source is None:
+            # No Gold Standard source is configured. A capability gap, and it
+            # fails closed: without the frozen table no canonical ref can be
+            # verified, and anchoring to an unverified ref would produce a goal
+            # `allocate_goal` later refuses.
+            self._log_principal(request_id, GENERATE_SUGGESTIONS_V2_ROUTE,
+                                "POST", HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    GENERATE_SUGGESTIONS_V2_ROUTE)
+
+        try:
+            goals._authorize(principal, child_id)
+            # The EXISTING managing-clinician gate. Reused, not reimplemented.
+            goals._require_managing_clinician(principal, child_id)
+            outcome = BaselineSuggestionGenerationV2Service(
+                repos=self._repos, goals=goals, rung_source=rung_source
+            ).generate_for_child(principal, child_id, request_id=request_id)
+        except (GoalAuthorizationError, GoalConflict, GoalValidationError,
+                SuggestionGenerationError, GenerationV2Error):
+            self._log_principal(request_id, GENERATE_SUGGESTIONS_V2_ROUTE,
+                                "POST", HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    GENERATE_SUGGESTIONS_V2_ROUTE)
+
+        self._log_principal(request_id, GENERATE_SUGGESTIONS_V2_ROUTE, "POST",
+                            HTTP_OK, principal)
+        return HTTP_OK, {
+            "child_id": child_id,
+            "outcome": outcome.outcome,
+            "generation_policy": outcome.generation_policy,
+            "projection_id": outcome.projection_id,
+            "target_band_months": outcome.target_band_months,
+            # One entry per generated target, each with its own `created` flag,
+            # so a replay is distinguishable per target rather than collapsed to
+            # one boolean for the whole request.
+            "generated": [
+                {"rung_ref": target.rung_ref,
+                 "months": target.months,
+                 "created": target.created,
+                 "suggestion_ids": list(target.suggestion_ids)}
+                for target in outcome.generated],
+            "suggestion_ids": list(outcome.suggestion_ids),
+            # Canonical deficits with no reconciled activity family. Reported
+            # rather than dropped, and NOT rendered as suggestions — a suggestion
+            # with no valid anchor would become a goal allocation later refuses.
+            "unsupported_target_refs": list(outcome.unsupported_target_refs),
+            # Assessed-but-unanswerable skills keeping the band off "mastered".
+            "unknown_refs": list(outcome.unknown_refs),
+            "request_id": request_id,
+        }, GENERATE_SUGGESTIONS_V2_ROUTE
 
     # -- logging ------------------------------------------------------------
 

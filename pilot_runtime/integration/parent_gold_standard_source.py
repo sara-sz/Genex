@@ -100,6 +100,8 @@ from typing import Dict, List, Optional, Tuple
 from pilot_backend.domain.canonical_rung import (
     ActivityFamilyBinding,
     CanonicalRung,
+    RungError,
+    compute_rung_ref,
     normalize_milestone_text,
 )
 from pilot_backend.integration.gold_standard_source import (
@@ -325,6 +327,73 @@ class ParentGoldStandardSource:
         if refusal is not None:
             raise refusal
         raise RungNotFoundError("no such canonical rung")
+
+    def rung_by_ref(self, domain_key: str, rung_ref: str,
+                    expected_months: Optional[int] = None) -> CanonicalRung:
+        """The canonical rung with exactly this ref. 0.6A-1G.
+
+        Implemented here for PORT COMPLETENESS rather than for the serving path:
+        F-B v2 runs in the browser image, which carries the static table and not
+        this adapter — this one reads the workbook and lives in the offline
+        generation image. Leaving it unimplemented would make the port a claim
+        only one implementation honours, and the next reader would have no way to
+        tell which methods are real.
+
+        Scans the already-assembled rungs by ref instead of keeping a second
+        index: this adapter builds every rung eagerly in `_load`, the SLP domain
+        has 21 declared-track rungs, and a parallel index would be a second
+        thing to keep in step with `self._rungs` for no measurable gain.
+
+        Refusals mirror `rung_for_target` exactly — a ref whose families are
+        unreconciled raises its RECORDED refusal rather than reporting "not
+        found", so the two methods cannot disagree about why a rung is unusable.
+        """
+        self._load()
+        wanted_domain = (domain_key or "").strip()
+        ref = (rung_ref or "").strip()
+        if expected_months is not None:
+            if isinstance(expected_months, bool) or \
+                    not isinstance(expected_months, int):
+                raise GoldStandardSourceError(
+                    "expected months must be an integer")
+
+        for (domain, months, _milestone), rung in self._rungs.items():
+            if domain != wanted_domain or rung.rung_ref != ref:
+                continue
+            if expected_months is not None and months != expected_months:
+                raise RungNotFoundError(
+                    "the canonical rung is not at the expected band")
+            return rung
+
+        # Not among the usable rungs. It may still be a KNOWN rung whose
+        # families are unreconciled, and that is a different answer from
+        # "no such rung" — so the recorded refusal is replayed.
+        for (domain, months, milestone), refusal in self._refusals.items():
+            if domain != wanted_domain:
+                continue
+            try:
+                # The key's milestone is already normalised, and
+                # `compute_rung_ref` normalises again — idempotent. Guarded
+                # because the key's domain comes from the workbook and a
+                # non-canonical one would raise rather than simply not match.
+                candidate = compute_rung_ref(domain, months, milestone)
+            except RungError:
+                continue
+            if candidate != ref:
+                continue
+            if expected_months is not None and months != expected_months:
+                raise RungNotFoundError(
+                    "the canonical rung is not at the expected band")
+            raise refusal
+        raise RungNotFoundError("no such canonical rung")
+
+    def is_mappable_ref(self, domain_key: str, rung_ref: str) -> bool:
+        """Whether this ref resolves to a usable activity family. 0.6A-1G."""
+        try:
+            self.rung_by_ref(domain_key, rung_ref)
+        except Exception:
+            return False
+        return True
 
     def next_rung_target(self, domain_key: str, from_months: int):
         """One rung harder on the declared track, via the FROZEN Parent step.

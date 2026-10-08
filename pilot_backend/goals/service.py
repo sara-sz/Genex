@@ -63,6 +63,7 @@ from ..domain.goals import (
 )
 from ..domain.planning_policy import CURRENT_PLANNING_POLICY, PlanningPolicyVersion
 from ..domain.suggestion_generation import (
+    GENERATION_POLICY_VERSION,
     GoalSuggestionGenerationClaim,
     projection_cycle_month,
 )
@@ -276,8 +277,28 @@ class GoalService:
                                      projection, canonical_rung,
                                      observed,
                                      policy: PlanningPolicyVersion = CURRENT_PLANNING_POLICY,
+                                     generation_policy: str = GENERATION_POLICY_VERSION,
                                      request_id: str = "") -> Tuple[Tuple[GoalSuggestion, ...], bool]:
         """0.5F-B. ONE deterministic generation, claim-first and atomic.
+
+        ## 0.6A-1G: `generation_policy` is ADDITIVE, and v1's default is unchanged
+
+        F-B v2 calls this method once per evidence-derived target, passing its own
+        policy version. Everything else — the claim-first ordering, the single
+        transaction, the advisory replay read, the contention convergence — is
+        reused exactly rather than reimplemented, because that logic is the part
+        the emulator had to teach us and a second copy would be a second chance
+        to get it wrong.
+
+        The parameter defaults to v1's constant, so every existing caller and
+        every stored v1 claim is byte-for-byte unaffected. Because
+        `generation_policy` is already part of the generation KEY, passing a
+        different value yields a different claim id — which is precisely what
+        keeps a v1 claim from being resurfaced as a v2 generation.
+
+        Note that it is the CALLER's policy, not a mode flag: this method still
+        does one target per call and knows nothing about bands, multiple
+        suggestions, or unmappable deficits.
 
         Returns `(suggestions, created)`. `created` is False when another writer
         already generated this exact (projection, policy, taxonomy, Gold
@@ -340,6 +361,7 @@ class GoalService:
             target_rung_months=canonical_rung.source_rung_months,
             taxonomy_version=canonical_rung.taxonomy_version,
             gold_standard_version=canonical_rung.baseline_version,
+            generation_policy=generation_policy,
             requested_by_actor_id=principal.application_id,
             now=self._stamp())
 

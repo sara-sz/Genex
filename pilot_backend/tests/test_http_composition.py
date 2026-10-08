@@ -552,6 +552,11 @@ def test_route_table_and_apisurface_cannot_disagree():
         # 0.5F-B provider generation TRIGGER. Protected, provider-only, and
         # additionally managing-clinician-only. POST because it writes.
         "/pilot/children/{child_id}/goal-suggestions/generate": False,
+        # 0.6A-1G EVIDENCE-DRIVEN generation trigger. The SAME three gates as the
+        # route above — protected, provider-only, managing-clinician-only — and a
+        # separate path rather than a flag, so a client cannot reach the v1
+        # algorithm by omitting a parameter.
+        "/pilot/children/{child_id}/goal-suggestions/generate-v2": False,
         "/pilot/children/{child_id}/monthly-plan": False,
         "/pilot/children/{child_id}/current-cycle": False,
         "/pilot/children/{child_id}/rtm": False,

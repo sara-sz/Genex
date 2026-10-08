@@ -60,7 +60,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Protocol, Tuple, runtime_checkable
 
-from ..domain.canonical_rung import CanonicalRung
+from ..domain.canonical_rung import CanonicalRung, compute_rung_ref
 
 
 class GoldStandardSourceError(Exception):
@@ -154,6 +154,36 @@ class GoldStandardRungSource(Protocol):
         """
         ...
 
+    def rung_by_ref(self, domain_key: str, rung_ref: str,
+                    expected_months: Optional[int] = None) -> CanonicalRung:
+        """The canonical rung with exactly this ref. A LOOKUP, not a traversal.
+
+        Added by 0.6A-1G (F-B v2), and what it does NOT do is the point.
+
+        F-B v1 chose its target by TRAVERSAL: observed floor -> the frozen
+        `_step(+1)` -> `question_at` -> whichever same-month rung sorted first.
+        That was reasonable for a month-level summary, which is all v1 had. But a
+        v2 projection already carries the EXACT canonical identity of every
+        assessed skill, so re-deriving a target from a month would discard that
+        and reintroduce the alphabetical tiebreak this slice exists to remove.
+
+        So the caller supplies the ref the EVIDENCE named, and this method only
+        verifies and resolves it:
+
+          * the ref exists in the Gold Standard
+          * `domain_key` matches the rung's own domain
+          * `expected_months`, when given, matches the rung's band — so evidence
+            claiming a 30-month skill cannot anchor a 36-month rung
+          * the rung is activity-mappable
+
+        Raises `RungNotFoundError`, `RungNotMappableError` or
+        `RungTrackUndeclaredError` exactly as `rung_for_target` does, so an
+        unmappable ref is refused HERE rather than discovered at allocation. It
+        never returns a nearest ref, a rung at an adjacent month, or a rung with
+        a reduced family set.
+        """
+        ...
+
     def mappable_rungs_for_domain(self, domain_key: str
                                   ) -> Tuple[CanonicalRung, ...]:
         """Every rung in this domain that resolves completely, months-ordered.
@@ -227,6 +257,78 @@ class InMemoryGoldStandardRungSource:
                          rung.milestone_text) == wanted:
                 return rung
         raise RungNotFoundError("no such canonical rung")
+
+    def rung_by_ref(self, domain_key: str, rung_ref: str,
+                    expected_months: Optional[int] = None) -> CanonicalRung:
+        """The rung with exactly this ref. 0.6A-1G.
+
+        Resolves `unmappable` targets to their refs first, so a fixture can hand
+        back an UNMAPPABLE ref and a test can prove F-B v2 reports it as an
+        unsupported target instead of generating from it. A fixture that reported
+        "not found" for an unmappable ref would make that test impossible to
+        write, and would hide the difference between "we have never heard of this
+        skill" and "we know it and have no activities for it".
+        """
+        wanted_domain = (domain_key or "").strip()
+        ref = (rung_ref or "").strip()
+        if expected_months is not None:
+            if isinstance(expected_months, bool) or \
+                    not isinstance(expected_months, int):
+                raise GoldStandardSourceError(
+                    "expected months must be an integer")
+
+        for blocked in self._unmappable:
+            if blocked.domain_key.strip() != wanted_domain:
+                continue
+            if compute_rung_ref(blocked.domain_key, blocked.source_rung_months,
+                                blocked.milestone_text) != ref:
+                continue
+            if expected_months is not None and \
+                    blocked.source_rung_months != expected_months:
+                raise RungNotFoundError(
+                    "the canonical rung is not at the expected band")
+            raise RungNotMappableError(
+                "the rung's activity families are not reconciled")
+
+        for rung in self._rungs:
+            if rung.domain_key != wanted_domain or rung.rung_ref != ref:
+                continue
+            if expected_months is not None and \
+                    rung.source_rung_months != expected_months:
+                raise RungNotFoundError(
+                    "the canonical rung is not at the expected band")
+            if not rung.is_activity_mappable:
+                raise RungNotMappableError(
+                    "an activity family does not permit this domain")
+            return rung
+        raise RungNotFoundError("no such canonical rung")
+
+    def is_mappable_ref(self, domain_key: str, rung_ref: str) -> bool:
+        """Whether this ref resolves to a usable activity family. 0.6A-1G."""
+        try:
+            self.rung_by_ref(domain_key, rung_ref)
+        except Exception:
+            return False
+        return True
+
+    def declared_band_roster(self, domain_key: str, months: int
+                             ) -> Tuple[str, ...]:
+        """Every configured ref at this band, MAPPABLE OR NOT. 0.6A-1G.
+
+        Includes the `unmappable` fixtures, because a band's canonical roster is
+        what the Gold Standard DECLARES — not what we happen to have activities
+        for. Excluding them would make an all-unmappable band look incomplete
+        rather than unsupported, which are different findings.
+        """
+        wanted = (domain_key or "").strip()
+        refs = {r.rung_ref for r in self._rungs
+                if r.domain_key == wanted and r.source_rung_months == months}
+        refs |= {compute_rung_ref(t.domain_key, t.source_rung_months,
+                                  t.milestone_text)
+                 for t in self._unmappable
+                 if t.domain_key.strip() == wanted
+                 and t.source_rung_months == months}
+        return tuple(sorted(refs))
 
     def mappable_rungs_for_domain(self, domain_key: str
                                   ) -> Tuple[CanonicalRung, ...]:

@@ -283,6 +283,65 @@ class StaticRungTableSource:
             raise refusal("the rung's activity families are not reconciled")
         return self._build(ref, entry)
 
+    def rung_by_ref(self, domain_key: str, rung_ref: str,
+                    expected_months: Optional[int] = None) -> CanonicalRung:
+        """The canonical rung with exactly this ref. 0.6A-1G.
+
+        A pure LOOKUP. No step, no `question_at`, no ordering, and no tiebreak —
+        the ref IS the identity, so there is nothing left to choose. That is what
+        makes F-B v2's target set independent of milestone wording and of how
+        same-month rungs happen to sort.
+
+        The month check is not redundant with the ref. A ref uniquely identifies
+        a rung, so a MATCHING ref at a mismatched month means the caller's
+        evidence disagrees with the frozen table about which band the skill is in
+        — and silently trusting the table would anchor a goal at a band the
+        assessment never covered.
+        """
+        if (domain_key or "").strip() != self._domain:
+            raise RungNotFoundError(
+                "this artifact does not cover the requested domain")
+        ref = (rung_ref or "").strip()
+        entry = self._rungs.get(ref)
+        if entry is None:
+            raise RungNotFoundError("no such canonical rung")
+        if expected_months is not None:
+            if isinstance(expected_months, bool) or \
+                    not isinstance(expected_months, int):
+                raise GoldStandardSourceError(
+                    "expected months must be an integer")
+            if int(entry["source_rung_months"]) != expected_months:
+                raise RungNotFoundError(
+                    "the canonical rung is not at the expected band")
+        if not entry.get("mappable"):
+            # The recorded refusal from the frozen adapter, replayed — read from
+            # the artifact rather than assumed, exactly as `rung_for_target`
+            # does, so one refusal silently becoming a different one shows up in
+            # the drift gate's diff.
+            refusal = _REFUSALS.get(str(entry.get("unresolved_reason") or ""))
+            if refusal is None:
+                raise StaticRungTableError(
+                    "the rung table artifact records an unknown refusal")
+            raise refusal("the rung's activity families are not reconciled")
+        return self._build(ref, entry)
+
+    def is_mappable_ref(self, domain_key: str, rung_ref: str) -> bool:
+        """Whether this ref resolves to a usable activity family. 0.6A-1G.
+
+        A QUESTION, not a refusal, and that distinction is the founder rule in
+        item 5: a canonical-but-unmappable deficit must be REPORTED as an
+        unsupported target rather than dropped, substituted, or allowed to block
+        its mappable siblings. Asking first lets F-B v2 separate the two
+        populations without using an exception for control flow.
+
+        Answers False for a ref this artifact does not carry, because "not a
+        usable target here" is the honest answer for an unknown ref too.
+        """
+        if (domain_key or "").strip() != self._domain:
+            return False
+        entry = self._rungs.get((rung_ref or "").strip())
+        return bool(entry is not None and entry.get("mappable"))
+
     def next_rung_target(self, domain_key: str, from_months: int
                          ) -> Optional[RungTarget]:
         """The frozen `_step(+1)` result for this floor, READ FROM THE TABLE.

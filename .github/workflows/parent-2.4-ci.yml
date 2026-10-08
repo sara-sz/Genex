@@ -703,6 +703,44 @@ jobs:
             echo "0.6A-1E not present on this branch — nothing to run"
           fi
 
+      - name: October pilot 0.6A-1G — F-B v2 evidence-driven target selection
+        # CROSS-SYSTEM, and the gate that would catch the v1 defect returning.
+        #
+        # It drives a REAL Parent v2 baseline through the REAL frozen rung table
+        # and asserts that the TARGET SET is a function of the projected per-skill
+        # evidence: each of the four real 30-month skills, failed in turn, yields
+        # that skill as the target. v1 planned for whichever same-month rung
+        # sorted first by milestone text, so a regression toward an alphabetical
+        # tiebreak fails here rather than in a clinician's workspace.
+        #
+        # Also pins the three zero-suggestion outcomes against the real ladder —
+        # unknown-only, all-unmappable, and fully mastered — each of which must
+        # refuse to step upward to a band it has no evidence for.
+        working-directory: .
+        env:
+          PYTHONPATH: genex-parent
+        run: |
+          if [ -f pilot_runtime/tests/test_fb_v2_product_path.py ]; then
+            python -m pytest pilot_runtime/tests/test_fb_v2_product_path.py -q
+          else
+            echo "0.6A-1G not present on this branch — nothing to run"
+          fi
+
+      - name: October pilot 0.6A-1G — F-B v2 service, claim and route
+        # Dependency-pure: the rung source and the verifier are injected. Covers
+        # band classification, the state-to-target rules, multi-suggestion
+        # generation, unsupported-target reporting, replay, the v1-claim
+        # disjointness proof, and the PROVIDER plus managing-clinician gates —
+        # which are byte-for-byte v1's and must not have been widened.
+        working-directory: .
+        run: |
+          if [ -f pilot_backend/tests/test_evidence_driven_generation_v2.py ]; then
+            python -m pytest \
+              pilot_backend/tests/test_evidence_driven_generation_v2.py -q
+          else
+            echo "0.6A-1G not present on this branch — nothing to run"
+          fi
+
       - name: October pilot 0.6A-1F — A2 v2 private route, codec and router
         # The Pilot half of the v2 trust boundary: the strict request codec, the
         # accepting service, the private route, the router that leaves A2 v1
