@@ -85,6 +85,13 @@ TZ = "America/New_York"
 #: file — there is deliberately no module-level default a test could lean on.
 DEMO_CAPACITY = 3
 
+#: The wording Hannah types in the demo, replacing the generic domain-level
+#: suggestion. It is DEMO INPUT, not product content: nothing in
+#: `pilot_backend` stores it, the suggestion engine does not know it, and the
+#: activity bank is not keyed on it.
+HANNAH_WORDING = ("Help {child} name familiar objects in books during "
+                  "shared reading.")
+
 #: The real bank's families, bound to the real milestones.
 FAMILY_BY_MILESTONE = {
     AT_24: "expressive_vocabulary_growth",
@@ -152,6 +159,18 @@ class Chain:
         return self.goals.approve_clinical_goal(
             self.principal, CHILD, edit_type=EditType.ACCEPTED_VERBATIM,
             suggestion_id=suggestion_id)
+
+    def approve_modified(self, text=HANNAH_WORDING, index=0,
+                         reason="clinician reworded for this child's target"):
+        """Hannah REWORDS the generic suggestion, then approves it.
+
+        The existing `edit_type=modified` path — no new route, no new field, and
+        no demo wording anywhere in the engine.
+        """
+        suggestion_id = self.suggestions.generated[index].suggestion_ids[0]
+        return self.goals.approve_clinical_goal(
+            self.principal, CHILD, edit_type=EditType.MODIFIED,
+            suggestion_id=suggestion_id, text=text, reason=reason)
 
     def release(self, capacity=DEMO_CAPACITY, principal=None,
                 local_date=None):
@@ -914,3 +933,130 @@ def test_goals_this_month_remains_independently_readable():
     # And the goal's text is still reachable without going through the week.
     assert chain.goals.current_text(
         chain.principal, GoalRef(GoalKind.CLINICAL, goal.clinical_goal_id))
+
+
+# ===========================================================================
+# 0.6A-2 founder review, item 3 / option C.
+#
+# The clinician may reword a suggestion before approving it. This proves that
+# rewording changes the WORDING and nothing else — not the canonical target,
+# not the activity family, not the released activities.
+# ===========================================================================
+
+
+def test_a_clinician_reword_does_not_retarget_the_goal_or_its_family():
+    """The whole invariant, end to end, in one pass.
+
+    generic GoalSuggestion -> Hannah modifies the wording -> the approved
+    ClinicalGoal/GoalVersion keeps the exact canonical rung_ref -> the
+    ClinicalGoalAnchor keeps family_bindings == ["book_object_naming"] -> the
+    allocator still selects only reviewed book_object_naming activities -> the
+    immutable snapshot freezes the clinician-edited GoalVersion.
+
+    This is guaranteed by construction rather than by care: `_anchor_for_approval`
+    COPIES the anchor the generation boundary persisted, keyed on the suggestion,
+    and its docstring states that goal TEXT is never consulted — "the wording a
+    clinician chose and the target the goal is anchored to are independent
+    facts". `edit_type` never enters that path. This test holds that line.
+    """
+    chain = Chain()
+
+    # The suggestion F-B v2 actually produced, and the rung it targets.
+    target_ref = chain.suggestions.generated[0].rung_ref
+    assert target_ref.startswith("rung1:")
+
+    # Hannah rewords it. The generic domain template is NOT what gets stored.
+    goal = chain.approve_modified()
+    ref = GoalRef(GoalKind.CLINICAL, goal.clinical_goal_id)
+    stored_text = chain.goals.current_text(chain.principal, ref)
+    assert stored_text == HANNAH_WORDING
+    assert "combine words to ask for what they want" not in stored_text
+
+    # 1. the GoalVersion records the EDIT, with its reason.
+    version = chain.repos.goal_versions.get_by_id(goal.current_version_id)
+    assert version.edit_type is EditType.MODIFIED
+    assert version.text == HANNAH_WORDING
+    assert version.reason
+    assert version.derived_from_suggestion_id == (
+        chain.suggestions.generated[0].suggestion_ids[0])
+
+    # 2. the anchor retains the EXACT canonical rung ref the evidence named.
+    anchor = chain.goals.goal_anchor(chain.principal, ref)
+    assert anchor is not None, "rewording must not drop the anchor"
+    assert anchor.rung.rung_ref == target_ref
+    assert anchor.rung.source_rung_months == 30
+    assert BOOK in anchor.rung.milestone_text
+
+    # 3. the family bindings are unchanged.
+    assert [b.family_ref for b in anchor.rung.family_bindings] == [
+        "book_object_naming"]
+    assert anchor.is_activity_mappable is True
+
+    # 4. the allocator still selects ONLY reviewed book_object_naming cards.
+    outcome = chain.release()
+    assert outcome.activity_count == DEMO_CAPACITY
+    document = chain.repos.weekly_plan_snapshots.list_for_cycle(
+        outcome.cycle_id)[0].document()
+    assert {row["activity_family_ref"] for row in document["activities"]} == {
+        "book_object_naming"}
+    served = {t.activity_template_id for t in
+              chain.bank.templates_for_families(["book_object_naming"])}
+    assert {row["activity_template_id"]
+            for row in document["activities"]} <= served
+
+    # 5. the snapshot freezes the CLINICIAN-EDITED version, not the generic one.
+    frozen = document["goals"]
+    assert len(frozen) == 1
+    assert frozen[0]["goal_version_id"] == goal.current_version_id
+    assert frozen[0]["text"] == HANNAH_WORDING
+
+    # And that is exactly what the family reads.
+    week = chain.this_week()
+    assert [g["text"] for g in week["goals"]] == [HANNAH_WORDING]
+
+
+def test_the_reworded_goal_yields_the_same_activities_as_the_verbatim_one():
+    """Rewording changes the TEXT and nothing about the plan.
+
+    Two identical fictional children, one approved verbatim and one reworded.
+    Same canonical target, same family, same three reviewed activities, same
+    days — only the goal text differs.
+    """
+    verbatim = Chain()
+    verbatim.approve()
+    reworded = Chain()
+    reworded.approve_modified()
+
+    def plan_of(chain):
+        week = chain.release().parent_week
+        return [(day["local_date"], activity["title"])
+                for day in week["days"] for activity in day["activities"]]
+
+    assert plan_of(verbatim) == plan_of(reworded)
+    assert (verbatim.this_week()["goals"][0]["text"]
+            != reworded.this_week()["goals"][0]["text"])
+    assert reworded.this_week()["goals"][0]["text"] == HANNAH_WORDING
+
+
+def test_the_demo_wording_appears_nowhere_in_the_product_code():
+    """Option C adds no content to the engine, the bank or the taxonomy.
+
+    Structural, over the shipped source tree: the demo sentence is TEST INPUT.
+    If it ever appears in product code, someone hardcoded the demo.
+    """
+    import pathlib as _pathlib
+
+    needles = ("name familiar objects in books", "shared reading")
+    roots = (PILOT_ROOT, PILOT_ROOT.parent / "pilot_runtime")
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if "/tests/" in str(path) or "__pycache__" in str(path):
+                continue
+            source = path.read_text(encoding="utf-8")
+            for needle in needles:
+                assert needle not in source, f"{needle!r} in {path}"
+    # Nor in the frozen activity bank or rung table artifacts.
+    for artifact in (PILOT_ROOT.parent
+                     / "pilot_runtime/data").glob("*.json"):
+        blob = artifact.read_text(encoding="utf-8")
+        assert "name familiar objects in books" not in blob, artifact

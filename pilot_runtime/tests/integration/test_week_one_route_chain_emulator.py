@@ -36,6 +36,10 @@ PRONOUNS = "says words like i me or we"
 TAXONOMY_VERSION = "activity_family_taxonomy_v1"
 GOLD_STANDARD_VERSION = "parent-2.4-functional-baseline-v1"
 BASELINE_VERSION_V2 = "parent-2.4-functional-baseline-v2"
+#: What Hannah types in the demo. DEMO INPUT, never product content.
+HANNAH_WORDING = ("Help {child} name familiar objects in books during "
+                  "shared reading.")
+
 FAMILIES = {AT_24: "expressive_vocabulary_growth",
             BOOK: "book_object_naming",
             TWO_WORD: "two_word_phrases",
@@ -186,18 +190,24 @@ def test_the_whole_chain_through_the_real_routes(stack):
                  f"unsupported={body['unsupported_target_refs']}  "
                  f"unknown={len(body['unknown_refs'])}")
 
-    # 2. Hannah approves verbatim, over the route.
+    # 2. Hannah REWORDS the generic domain-level suggestion, then approves.
+    #    The EXISTING `edit_type=modified` path — no new route, no new field,
+    #    and no demo wording anywhere in the engine.
     status, body = _call(
         stack.app, stack.goals_route, method="POST",
         bearer="Bearer token-provider",
         # The route's allowlist is exactly edit_type/suggestion_id/text/reason
         # — `goal_kind` is not accepted, because the route IS the clinical one.
-        body=json.dumps({"edit_type": "accepted_verbatim",
-                         "suggestion_id": suggestion_id}).encode())
+        body=json.dumps({"edit_type": "modified",
+                         "suggestion_id": suggestion_id,
+                         "text": HANNAH_WORDING,
+                         "reason": "clinician reworded for this child's "
+                                   "target"}).encode())
     assert status == 200, body
     goal_id = body["goal"]["goal_id"]
     goal_text = body["goal"]["text"]
-    trace.append(f"POST goals -> 200  goal={goal_id[:18]}…")
+    assert goal_text == HANNAH_WORDING
+    trace.append(f"POST goals edit_type=modified -> 200  goal={goal_id[:18]}…")
 
     # 3. The caregiver cannot release.
     capacity_body = json.dumps(
@@ -265,6 +275,17 @@ def test_the_whole_chain_through_the_real_routes(stack):
     # Exactly 3 reviewed activities, all from the ONE approved goal.
     goal_ids = {a["goal_id"] for d in days for a in d["activities"]}
     assert goal_ids == {goal_id}
+
+    # The reword changed the WORDING and nothing else: the family reads
+    # Hannah's text, and the activities are still the book-naming family.
+    assert [g["text"] for g in parent["week"]["goals"]] == [HANNAH_WORDING]
+    document = [d for _i, d in stack.repos.store.list_all(
+        "pilot_weekly_plan_snapshots")
+        if d["cycle_id"] == body["cycle_id"]][0]
+    frozen = json.loads(document["resolved_plan_document"])
+    assert {row["activity_family_ref"]
+            for row in frozen["activities"]} == {"book_object_naming"}
+    assert frozen["goals"][0]["text"] == HANNAH_WORDING
 
     # Minimum necessary: the opaque handle, never the template digest.
     blob = json.dumps(parent)
