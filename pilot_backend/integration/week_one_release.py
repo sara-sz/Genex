@@ -71,7 +71,11 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..domain.goals import GoalKind, GoalRef, GoalStatus
-from ..domain.weekly_cycle import WeeklyCycleError, plan_cycle_bounds
+from ..domain.weekly_cycle import (
+    WeeklyCycleError,
+    starter_cycle_bounds,
+    starter_sequence_for,
+)
 from ..domain.source_link import SourceSystem
 from ..domain.weekly_plan_document import (
     build_document,
@@ -83,11 +87,6 @@ from .activity_bank import candidates_for_goal, require_all_families_served
 #: what `plan_cycle_bounds` numbers from — not as the sequence this route
 #: releases. See `current_sequence_for`.
 WEEK_ONE = 1
-
-#: The highest cycle sequence `plan_cycle_bounds` will produce for any month. It
-#: raises past the month end, so the scan below is bounded by the calendar rather
-#: than by a guess.
-MAX_CYCLES_PER_MONTH = 6
 
 #: The source system recorded on the snapshot. THERAPIST because the Pilot — the
 #: therapist platform — now AUTHORS this week. v1 snapshots captured PARENT's
@@ -335,54 +334,66 @@ class WeekOneReleaseService:
                 priority_rank=rank, request_id=request_id)
 
     @staticmethod
-    def current_sequence_for(cycle_month: str, local_date: str) -> int:
-        """The cycle sequence whose EXISTING bounds cover `local_date`.
+    def first_plan_date_for(cycles) -> Optional[str]:
+        """The child's first-plan date, READ BACK from cycle 1's own start.
 
-        0.6A-2 founder review. The route is `.../weekly-cycles/current/release`,
-        and "current" previously resolved to the hardcoded sequence 1 — which for
-        October 2026 is Oct 1-4, a week already in the past by the 7th. A family
-        would have been shown a "this week" that had ended.
-
-        No new policy is introduced. `plan_cycle_bounds` already defines every
-        cycle of a month, and `WeeklyCycle.covers` already exists for exactly
-        this question; the correction is to ASK it instead of assuming the first.
-
-        October 2026 under the existing rules:
-
-            cycle 1   Oct 1 - Oct 4    partial, month_starts_midweek
-            cycle 2   Oct 5 - Oct 11
-            cycle 3   Oct 12 - Oct 18
-            cycle 4   Oct 19 - Oct 25
-            cycle 5   Oct 26 - Nov 1   spans the month boundary
-
-        So a release on Oct 7 or Oct 8 resolves to cycle 2, Oct 5 - Oct 11.
+        No new field and no new storage: the starter cycle's `starts_on` IS the
+        first-plan date, because that is how `starter_cycle_bounds` built it. So
+        the anchor survives restarts and is impossible to drift away from the
+        cycle it describes.
         """
-        for sequence in range(WEEK_ONE, MAX_CYCLES_PER_MONTH + 1):
-            try:
-                starts_on, ends_on, _partial, _reason = plan_cycle_bounds(
-                    cycle_month, sequence)
-            except WeeklyCycleError:
-                # Past the month end. The scan is bounded by the calendar.
-                break
-            if starts_on <= local_date <= ends_on:
-                return sequence
-        raise CurrentCycleUnresolved(
-            "today does not fall inside any cycle of this plan's month")
+        for cycle in cycles:
+            if cycle.sequence_in_month == WEEK_ONE:
+                return cycle.starts_on
+        return None
 
     def _resolve_cycle(self, principal, plan, *, request_id: str,
                        local_date: Optional[str] = None):
         """The CURRENT cycle of the active plan, created if it does not exist.
 
-        Resolved from the calendar rather than hardcoded, so the week a family is
-        shown is the week they are actually in.
+        0.6A-2, restoring the frozen Genex starter-week invariant.
+
+        ## FIRST release for this plan
+
+        No cycle exists yet, so TODAY is the first-plan date and the starter
+        cycle runs from today to that week's Sunday. A release on Wednesday
+        Oct 7 2026 yields Oct 7-11 — never Oct 5-11, which would date activities
+        before the family entered the care loop.
+
+        ## SUBSEQUENT releases
+
+        The anchor is read back from cycle 1's own `starts_on`, and the current
+        cycle is the starter-anchored one covering today: week 2 onward is Monday
+        to Sunday. An ALREADY-CREATED starter cycle is returned unchanged, so a
+        replay can never shift it.
         """
         today = local_date or self._today()
-        sequence = self.current_sequence_for(plan.cycle_month, today)
-        for cycle in self._weekly.list_cycles(principal, plan.focus_plan_id):
+        cycles = list(self._weekly.list_cycles(principal, plan.focus_plan_id))
+        anchor = self.first_plan_date_for(cycles)
+
+        if anchor is None:
+            # The child's first plan. Today IS the anchor.
+            return self._weekly.create_cycle(
+                principal, plan.focus_plan_id, sequence_in_month=WEEK_ONE,
+                first_plan_date=today, request_id=request_id)
+
+        try:
+            sequence = starter_sequence_for(anchor, today)
+        except WeeklyCycleError as exc:
+            # Today precedes the first plan. Refused rather than resolved to the
+            # starter week, which would backdate the family's activities.
+            raise CurrentCycleUnresolved(
+                "today does not fall inside any cycle of this plan") from exc
+
+        for cycle in cycles:
             if cycle.sequence_in_month == sequence:
                 return cycle
+        predecessor = next(
+            (c.cycle_id for c in cycles
+             if c.sequence_in_month == sequence - 1), None)
         return self._weekly.create_cycle(
             principal, plan.focus_plan_id, sequence_in_month=sequence,
+            first_plan_date=anchor, predecessor_cycle_id=predecessor,
             request_id=request_id)
 
     def _candidate_templates(self, goals) -> Dict[str, Any]:
@@ -504,15 +515,19 @@ class WeekOneReleaseService:
                                        self._current_cycle_month())
         if plan is None:
             return None
-        # The cycle the family is actually in, by the same calendar rule the
-        # release used — so a released week that has ended is not still shown as
-        # "this week".
-        try:
-            sequence = self.current_sequence_for(plan.cycle_month,
-                                                 local_date or self._today())
-        except CurrentCycleUnresolved:
+        # The cycle the family is actually in, by the same STARTER-ANCHORED rule
+        # the release used — so a released week that has ended is not still
+        # shown as "this week", and the anchor cannot disagree between the two.
+        cycles = list(self._weekly.list_cycles(principal, plan.focus_plan_id))
+        anchor = self.first_plan_date_for(cycles)
+        if anchor is None:
             return None
-        for cycle in self._weekly.list_cycles(principal, plan.focus_plan_id):
+        try:
+            sequence = starter_sequence_for(anchor,
+                                            local_date or self._today())
+        except WeeklyCycleError:
+            return None
+        for cycle in cycles:
             if cycle.sequence_in_month != sequence or not cycle.is_released:
                 continue
             snapshots = self._repos.weekly_plan_snapshots.list_for_cycle(
@@ -536,7 +551,6 @@ class WeekOneReleaseService:
 __all__ = [
     "CapacityRequired",
     "CurrentCycleUnresolved",
-    "MAX_CYCLES_PER_MONTH",
     "ReleasableGoal",
     "GoalNotReleasable",
     "SNAPSHOT_SOURCE_SYSTEM",

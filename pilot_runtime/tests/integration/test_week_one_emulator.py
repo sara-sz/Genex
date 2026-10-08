@@ -265,10 +265,14 @@ def test_eight_concurrent_releases_produce_exactly_one_released_week(world):
     assert all(w.parent_week == first for w in winners)
     assert sum(1 for w in winners if w.created) <= 1
 
-    # The current cycle, not a past one.
-    assert cycles[0]["sequence_in_month"] == 2
-    assert cycles[0]["starts_on"] == "2026-10-05"
+    # The STARTER cycle under the frozen Genex rule: the clock is pinned to Wed
+    # Oct 7 2026, so the child's first week runs Oct 7-11 and is partial. NOT
+    # Oct 5-11, which would backdate activities before onboarding.
+    assert cycles[0]["sequence_in_month"] == 1
+    assert cycles[0]["starts_on"] == "2026-10-07"
     assert cycles[0]["ends_on"] == "2026-10-11"
+    assert cycles[0]["is_partial"] is True
+    assert cycles[0]["partial_reason"] == "plan_activated_midweek"
 
 
 def test_a_concurrent_replay_after_release_adds_nothing(world):

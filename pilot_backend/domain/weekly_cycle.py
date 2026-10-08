@@ -226,6 +226,91 @@ def plan_cycle_bounds(cycle_month: str, sequence_in_month: int, *,
             (start + timedelta(days=week_length - 1)).isoformat(), False, None)
 
 
+def starter_cycle_bounds(first_plan_date: str, sequence_in_month: int, *,
+                         week_length: int = 7
+                         ) -> Tuple[str, str, bool, Optional[PartialReason]]:
+    """Cycle bounds anchored to the child's FIRST PLAN DATE. The Genex rule.
+
+    0.6A-2, restoring a FROZEN Genex invariant that this layer declared and
+    never wired: `PartialReason.PLAN_ACTIVATED_MIDWEEK` has existed in this
+    module since 0.4D and was referenced nowhere.
+
+    ## The rule, as frozen in `genex-parent/api/planning_period.py`
+
+        plan_start_date = the first-plan date itself
+        plan_end_date   = the SUNDAY of that local week
+        plan_type       = "starter_partial_week" unless it starts on a Monday
+        week 2 onward   = Monday through Sunday
+
+    So onboarding on Wednesday Oct 7 2026 yields Oct 7-11, not Oct 5-11.
+
+    ## Why this is NOT `plan_cycle_bounds`
+
+    `plan_cycle_bounds` anchors cycle 1 to the first of the MONTH and clips it
+    to that week's Sunday. The shape is identical; the anchor is not. For a
+    brand-new child the month's first day is not when the family entered the
+    care loop, so anchoring there BACKDATES activities to before onboarding —
+    which is exactly the defect this function exists to prevent.
+
+    Both are kept. `plan_cycle_bounds` remains correct for a month-anchored
+    sequence and is unchanged; this one is correct for a child's first plan.
+
+    Cycle 1 is clipped at its START only. Later cycles are whole Monday weeks
+    and may run past the month end, which is what `spans_month_boundary` and
+    the local-date attribution rule already handle.
+    """
+    if sequence_in_month < 1:
+        raise WeeklyCycleError("sequence_in_month starts at 1")
+    if week_length < 1:
+        raise WeeklyCycleError("a week must be at least one day")
+    try:
+        start = date.fromisoformat(first_plan_date)
+    except ValueError:
+        raise WeeklyCycleError(
+            "a first plan date must be an ISO local date") from None
+
+    # The Sunday of the first plan's own local week. `weekday()` is Monday=0,
+    # so a Sunday start yields a ZERO-day offset — a one-day starter week,
+    # which is the frozen rule's own stated case.
+    days_to_sunday = (6 - start.weekday()) % 7
+    starter_end = start + timedelta(days=days_to_sunday)
+
+    if sequence_in_month == 1:
+        partial = days_to_sunday != week_length - 1
+        return (start.isoformat(), starter_end.isoformat(), partial,
+                PartialReason.PLAN_ACTIVATED_MIDWEEK if partial else None)
+
+    # Week 2 begins the Monday after the starter week's Sunday; every later
+    # cycle is a whole week from there.
+    week_start = starter_end + timedelta(
+        days=1 + week_length * (sequence_in_month - 2))
+    return (week_start.isoformat(),
+            (week_start + timedelta(days=week_length - 1)).isoformat(),
+            False, None)
+
+
+def starter_sequence_for(first_plan_date: str, local_date: str, *,
+                         week_length: int = 7) -> int:
+    """Which starter-anchored cycle covers `local_date`.
+
+    Returns 1 for any date inside the starter week. Refuses a date BEFORE the
+    first plan: there is no cycle then, and answering 1 would place activities
+    before the family entered the care loop.
+    """
+    if local_date < first_plan_date:
+        raise WeeklyCycleError(
+            "a local date before the first plan belongs to no cycle")
+    sequence = 1
+    while True:
+        starts_on, ends_on, _partial, _reason = starter_cycle_bounds(
+            first_plan_date, sequence, week_length=week_length)
+        if starts_on <= local_date <= ends_on:
+            return sequence
+        sequence += 1
+        if sequence > 400:  # pragma: no cover - a year of weeks is the bound
+            raise WeeklyCycleError("no cycle covers this local date")
+
+
 @dataclass(frozen=True)
 class WeeklyPlanLink:
     """Binds a cycle to a plan in a source system, by external id."""

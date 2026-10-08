@@ -50,6 +50,7 @@ from pilot_backend.integration.gold_standard_source import (
     InMemoryGoldStandardRungSource,
     RungTarget,
 )
+from pilot_backend.domain.weekly_cycle import WeeklyCycleError
 from pilot_backend.integration.week_one_release import (
     CapacityRequired,
     GoalNotReleasable,
@@ -160,8 +161,9 @@ class Chain:
             timezone_of_record=TZ, cycle_month=CYCLE_MONTH,
             local_date=local_date)
 
-    def this_week(self, principal=None):
-        return self.service.this_week(principal or self.principal, CHILD)
+    def this_week(self, principal=None, local_date=None):
+        return self.service.this_week(principal or self.principal, CHILD,
+                                      local_date=local_date)
 
     def docs(self, collection):
         return [d for _i, d in self.repos.store.list_all(collection)]
@@ -202,11 +204,11 @@ def test_an_approved_mappable_goal_releases_week_one_with_three_activities():
 def test_the_count_follows_capacity_and_nothing_else():
     """1 coverage floor + (capacity - 1) emphasis, from the EXISTING allocator.
 
-    The clock is pinned to Oct 7 2026, which the calendar rule resolves to cycle
-    2 (Oct 5-11) — a FULL seven-day week — so the whole reviewed pool of six is
-    renderable one-per-day. The partial-cycle interaction has its own test below.
+    The clock is pinned to Wed Oct 7 2026, so the STARTER week is Oct 7-11 —
+    five days under the frozen Genex rule. The sweep therefore stops at 5; the
+    day-count interaction has its own test below.
     """
-    for capacity, expected in ((1, 1), (2, 2), (3, 3), (6, 6), (9, 6)):
+    for capacity, expected in ((1, 1), (2, 2), (3, 3), (5, 5)):
         chain = Chain()
         chain.approve()
         outcome = chain.release(capacity=capacity)
@@ -216,15 +218,15 @@ def test_the_count_follows_capacity_and_nothing_else():
 def test_capacity_beyond_the_cycles_day_count_refuses_rather_than_doubling_up():
     """A REAL interaction, surfaced rather than papered over.
 
-    Cycle 1 of October 2026 runs Oct 1-4 (the month starts midweek), so a
-    declared capacity of 6 cannot be rendered one-per-day. The release REFUSES
-    and writes no snapshot, instead of silently placing two activities on one day
-    — which would be a density decision nobody approved.
+    A first plan on SUNDAY Oct 11 2026 is a one-day starter week under the frozen
+    rule, so a declared capacity of 3 cannot be rendered one-per-day. The release
+    REFUSES and writes no snapshot, instead of silently placing three activities
+    on one day — which would be a density decision nobody approved.
     """
     chain = Chain()
     chain.approve()
     with pytest.raises(WeeklyPlanDocumentError):
-        chain.release(capacity=6, local_date="2026-10-02")
+        chain.release(capacity=3, local_date="2026-10-11")
     assert chain.docs("pilot_weekly_plan_snapshots") == []
 
 
@@ -687,45 +689,155 @@ def test_the_week_is_deterministic_across_two_independent_chains():
 # ===========================================================================
 
 
-def test_current_resolves_to_the_cycle_that_covers_today():
-    """0.6A-2 founder review. "Current" is a calendar question, now asked.
+def test_the_frozen_genex_starter_week_invariant():
+    """RESTORED FROZEN INVARIANT — do not lose this again.
 
-    Previously `current` was the hardcoded sequence 1 — Oct 1-4 for October 2026
-    — so a release on the 7th would have handed a family a week that had already
-    ended. The bounds come from the existing `plan_cycle_bounds`; the correction
-    is to select by coverage instead of assuming the first.
+    The Genex starter-week rule, frozen in
+    `genex-parent/api/planning_period.py` (`compute_plan_period` /
+    `next_week_available_from`) and declared-but-unwired in this layer as
+    `PartialReason.PLAN_ACTIVATED_MIDWEEK`:
+
+        the child's FIRST weekly plan starts on the actual first-plan date and
+        runs through that SUNDAY; it is an explicit partial starter week when
+        onboarding is midweek; week 2 begins the FOLLOWING MONDAY; from week 2
+        onward cycles are Monday-Sunday.
+
+    The failure this prevents is specific: anchoring cycle 1 to the first of the
+    MONTH backdates a family's activities to before they entered the care loop.
     """
-    from pilot_backend.integration.week_one_release import (
-        CurrentCycleUnresolved,
+    from pilot_backend.domain.weekly_cycle import (
+        PartialReason,
+        starter_cycle_bounds,
+        starter_sequence_for,
     )
 
-    expected = {"2026-10-01": 1, "2026-10-04": 1, "2026-10-05": 2,
-                "2026-10-07": 2, "2026-10-08": 2, "2026-10-11": 2,
-                "2026-10-12": 3, "2026-10-26": 5, "2026-11-01": 5}
-    for day, sequence in expected.items():
-        assert WeekOneReleaseService.current_sequence_for(
-            "2026-10", day) == sequence, day
+    # The founder's own examples, verbatim.
+    assert starter_cycle_bounds("2026-10-07", 1)[:2] == ("2026-10-07",
+                                                        "2026-10-11")
+    assert starter_cycle_bounds("2026-10-08", 1)[:2] == ("2026-10-08",
+                                                        "2026-10-11")
+    # A Sunday first plan is a ONE-DAY starter week.
+    assert starter_cycle_bounds("2026-10-11", 1)[:2] == ("2026-10-11",
+                                                        "2026-10-11")
+    # Week 2 begins the following Monday, whatever the starter was.
+    for first in ("2026-10-07", "2026-10-08", "2026-10-11"):
+        assert starter_cycle_bounds(first, 2)[:2] == ("2026-10-12",
+                                                      "2026-10-18")
+        assert starter_cycle_bounds(first, 3)[:2] == ("2026-10-19",
+                                                      "2026-10-25")
 
-    # A date outside the month belongs to no cycle of it, and is refused rather
-    # than falling back to cycle 1.
-    for outside in ("2026-09-30", "2026-11-02"):
-        with pytest.raises(CurrentCycleUnresolved):
-            WeekOneReleaseService.current_sequence_for("2026-10", outside)
+    # A midweek start is PARTIAL, and says why with the declared reason.
+    for first in ("2026-10-07", "2026-10-08", "2026-10-11"):
+        _s, _e, partial, reason = starter_cycle_bounds(first, 1)
+        assert partial is True, first
+        assert reason is PartialReason.PLAN_ACTIVATED_MIDWEEK, first
+
+    # A MONDAY first plan is a full week and NOT partial.
+    starts, ends, partial, reason = starter_cycle_bounds("2026-10-05", 1)
+    assert (starts, ends) == ("2026-10-05", "2026-10-11")
+    assert partial is False and reason is None
+
+    # Established Monday-Sunday behaviour thereafter, for several weeks.
+    for sequence, expected in ((2, ("2026-10-12", "2026-10-18")),
+                               (3, ("2026-10-19", "2026-10-25")),
+                               (4, ("2026-10-26", "2026-11-01")),
+                               (5, ("2026-11-02", "2026-11-08"))):
+        assert starter_cycle_bounds("2026-10-07", sequence)[:2] == expected
+        assert starter_cycle_bounds("2026-10-07", sequence)[2] is False
+
+    # Coverage, and the refusal that stops backdating.
+    for day, sequence in (("2026-10-07", 1), ("2026-10-09", 1),
+                          ("2026-10-11", 1), ("2026-10-12", 2),
+                          ("2026-10-18", 2), ("2026-10-19", 3)):
+        assert starter_sequence_for("2026-10-07", day) == sequence, day
+    with pytest.raises(WeeklyCycleError):
+        starter_sequence_for("2026-10-07", "2026-10-06")
 
 
-def test_the_released_week_is_the_week_the_family_is_actually_in():
-    """The demo date. Oct 7 -> cycle 2, Oct 5-11, and NOT the past Oct 1-4."""
+def test_no_activity_is_ever_dated_before_the_first_plan():
+    """The whole point of the invariant, asserted on a released week."""
+    chain = Chain()
+    chain.approve()
+    outcome = chain.release()      # clock pinned to Wed Oct 7
+
+    week = outcome.parent_week["week"]
+    assert (week["starts_on"], week["ends_on"]) == ("2026-10-07",
+                                                    "2026-10-11")
+    dates = [day["local_date"] for day in outcome.parent_week["days"]
+             for _a in day["activities"]]
+    assert dates, "no activity was placed"
+    assert min(dates) >= "2026-10-07", dates
+    assert max(dates) <= "2026-10-11", dates
+    # And the old month-anchored answer is gone for good.
+    assert "2026-10-05" not in dates and "2026-10-06" not in dates
+
+
+def test_the_starter_cycle_is_recorded_as_a_partial_plan_activated_midweek():
+    from pilot_backend.domain.weekly_cycle import PartialReason
+
     chain = Chain()
     chain.approve()
     outcome = chain.release()
-    week = outcome.parent_week["week"]
-    assert (week["starts_on"], week["ends_on"]) == ("2026-10-05", "2026-10-11")
-    assert week["starts_on"] <= "2026-10-07" <= week["ends_on"]
-    # Seven days listed, three of them populated.
-    assert len(outcome.parent_week["days"]) == 7
-    populated = [d for d in outcome.parent_week["days"] if d["activities"]]
-    assert [d["local_date"] for d in populated] == [
-        "2026-10-05", "2026-10-06", "2026-10-07"]
+    cycle = chain.weekly.get_cycle(chain.principal, outcome.cycle_id)
+    assert cycle.sequence_in_month == 1
+    assert cycle.starts_on == "2026-10-07"
+    assert cycle.ends_on == "2026-10-11"
+    assert cycle.is_partial is True
+    assert cycle.partial_reason is PartialReason.PLAN_ACTIVATED_MIDWEEK
+    assert cycle.day_count == 5
+
+
+def test_a_replay_does_not_shift_the_already_created_starter_cycle():
+    """Even when the replay happens on a LATER day of the starter week."""
+    chain = Chain()
+    chain.approve()
+    first = chain.release(local_date="2026-10-07")
+    assert first.parent_week["week"]["starts_on"] == "2026-10-07"
+
+    for later in ("2026-10-08", "2026-10-09", "2026-10-11"):
+        again = chain.release(local_date=later)
+        assert again.created is False
+        assert again.cycle_id == first.cycle_id
+        assert again.snapshot_id == first.snapshot_id
+        assert again.parent_week == first.parent_week
+    cycles = chain.weekly.list_cycles(chain.principal, first.focus_plan_id)
+    assert [c.starts_on for c in cycles] == ["2026-10-07"]
+
+
+def test_the_following_cycle_begins_the_next_monday():
+    """Week 2 is created Monday-anchored, and the starter is left alone.
+
+    Driven through the orchestrator's own cycle resolution with the clock moved
+    into week 2, so this is the real path rather than a bounds calculation.
+    """
+    chain = Chain()
+    chain.approve()
+    first = chain.release(local_date="2026-10-07")
+
+    goals = chain.service.releasable_goals(chain.principal, CHILD)
+    plan = chain.service._resolve_plan(
+        chain.principal, CHILD, goals, timezone_of_record=TZ,
+        cycle_month=CYCLE_MONTH, request_id="")
+    week_two = chain.service._resolve_cycle(
+        chain.principal, plan, request_id="", local_date="2026-10-14")
+
+    assert week_two.sequence_in_month == 2
+    assert (week_two.starts_on, week_two.ends_on) == ("2026-10-12",
+                                                      "2026-10-18")
+    assert week_two.is_partial is False
+    assert week_two.partial_reason is None
+    assert week_two.cycle_id != first.cycle_id
+
+    # The released starter week is untouched, and still what the family saw.
+    starter = chain.weekly.get_cycle(chain.principal, first.cycle_id)
+    assert (starter.starts_on, starter.ends_on) == ("2026-10-07",
+                                                    "2026-10-11")
+    assert starter.is_released is True
+    # Week 2 is a DRAFT, so the family still sees only the released starter.
+    assert week_two.is_released is False
+    assert chain.service.this_week(
+        chain.principal, CHILD,
+        local_date="2026-10-09") == first.parent_week
 
 
 def test_activities_are_laid_out_one_per_day_from_the_cycle_start():
@@ -777,12 +889,12 @@ def test_release_creates_no_week_two_and_no_rtm():
     chain.approve()
     outcome = chain.release()
     cycles = chain.weekly.list_cycles(chain.principal, outcome.focus_plan_id)
-    # EXACTLY ONE cycle — the current one. Oct 7 resolves to sequence 2 under
-    # the existing calendar rules, and no further week is generated.
-    assert [c.sequence_in_month for c in cycles] == [2]
-    assert cycles[0].starts_on == "2026-10-05"
+    # EXACTLY ONE cycle — the STARTER one. A first plan on Oct 7 anchors cycle 1
+    # at Oct 7-11 under the frozen rule, and no further week is generated.
+    assert [c.sequence_in_month for c in cycles] == [1]
+    assert cycles[0].starts_on == "2026-10-07"
     assert cycles[0].ends_on == "2026-10-11"
-    assert cycles[0].is_partial is False
+    assert cycles[0].is_partial is True
     for collection in ("pilot_rtm_episodes", "pilot_rtm_periods",
                        "pilot_adaptation_records", "pilot_defer_records"):
         assert chain.docs(collection) == [], collection

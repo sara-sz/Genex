@@ -75,6 +75,7 @@ from ..domain.weekly_cycle import (
     WeeklyPlanLink,
     WeeklyPlanSnapshot,
     plan_cycle_bounds,
+    starter_cycle_bounds,
 )
 from ..persistence.document_store import DocumentStoreError
 from ..repository.interface import DuplicateRecord, RecordNotFound
@@ -243,8 +244,28 @@ class WeeklyService:
                      sequence_in_month: int,
                      predecessor_cycle_id: Optional[str] = None,
                      generation_reason: Optional[GenerationReason] = None,
+                     first_plan_date: Optional[str] = None,
                      request_id: str = "") -> WeeklyCycle:
-        """Open cycle N of a month. Bounds are DERIVED from the cycle month."""
+        """Open cycle N of a month. Bounds are DERIVED, never supplied.
+
+        ## `first_plan_date` selects the ANCHOR, not the bounds
+
+        0.6A-2 restores a frozen Genex invariant this layer declared and never
+        wired — `PartialReason.PLAN_ACTIVATED_MIDWEEK`, unreferenced since 0.4D.
+
+        Without it, bounds come from `plan_cycle_bounds`: cycle 1 starts on the
+        FIRST OF THE MONTH. That is right for a month-anchored sequence and
+        wrong for a child's first plan, because a family that onboarded on the
+        7th would be handed activities dated the 1st.
+
+        With it, bounds come from `starter_cycle_bounds`: cycle 1 runs from the
+        first-plan date to that week's Sunday, and week 2 onward is Monday to
+        Sunday. The caller supplies the DATE; the calendar rule stays in the
+        domain, so no caller can hand in arbitrary bounds.
+
+        Defaulted to None, so every existing caller keeps the month anchor and
+        nothing already released changes.
+        """
         plan = self._require_active_plan(focus_plan_id)
         self._authorize(principal, plan.child_id)
         self._require_planner(principal, plan.child_id)
@@ -255,8 +276,12 @@ class WeeklyService:
         if any(c.sequence_in_month == sequence_in_month for c in existing):
             raise WeeklyConflict("this cycle already exists for the month")
 
-        starts_on, ends_on, is_partial, partial_reason = plan_cycle_bounds(
-            plan.cycle_month, sequence_in_month)
+        if first_plan_date:
+            starts_on, ends_on, is_partial, partial_reason = (
+                starter_cycle_bounds(first_plan_date, sequence_in_month))
+        else:
+            starts_on, ends_on, is_partial, partial_reason = plan_cycle_bounds(
+                plan.cycle_month, sequence_in_month)
         reason = generation_reason or (
             GenerationReason.FIRST_CYCLE_OF_MONTH if sequence_in_month == 1
             else GenerationReason.SEQUENTIAL)

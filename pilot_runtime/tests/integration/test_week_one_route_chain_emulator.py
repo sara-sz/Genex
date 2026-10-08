@@ -233,11 +233,19 @@ def test_the_whole_chain_through_the_real_routes(stack):
     assert body["created"] is True
     assert body["activity_count"] == CAPACITY
     assert body["goal_ids"] == [goal_id]
+    # The STARTER week under the frozen Genex rule. This route runs on the REAL
+    # clock, so the invariant is asserted rather than fixed dates: the week
+    # starts TODAY and ends on that week's Sunday, and never earlier than today.
+    from datetime import date, timedelta
+
+    today = date.today()
+    sunday = today + timedelta(days=(6 - today.weekday()) % 7)
     week = body["week"]["week"]
-    assert (week["starts_on"], week["ends_on"]) == ("2026-10-05",
-                                                    "2026-10-11")
+    assert week["starts_on"] == today.isoformat()
+    assert week["ends_on"] == sunday.isoformat()
+    assert week["starts_on"] <= week["ends_on"]
     trace.append(f"POST release capacity=3 -> 200 created=true  "
-                 f"week={week['starts_on']}..{week['ends_on']}  "
+                 f"STARTER week={week['starts_on']}..{week['ends_on']}  "
                  f"activities={body['activity_count']}")
 
     # 8. The caregiver reads the released week.
@@ -248,6 +256,9 @@ def test_the_whole_chain_through_the_real_routes(stack):
     titles = [(d["local_date"], a["title"])
               for d in days for a in d["activities"]]
     assert len(titles) == CAPACITY
+    # No activity is dated before the family entered the care loop.
+    assert min(d for d, _t in titles) >= today.isoformat()
+    assert max(d for d, _t in titles) <= sunday.isoformat()
     trace.append(f"GET this-week as CAREGIVER -> 200 released=true  "
                  f"activities={len(titles)}")
 
