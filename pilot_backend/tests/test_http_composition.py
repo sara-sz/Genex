@@ -557,6 +557,11 @@ def test_route_table_and_apisurface_cannot_disagree():
         # separate path rather than a flag, so a client cannot reach the v1
         # algorithm by omitting a parameter.
         "/pilot/children/{child_id}/goal-suggestions/generate-v2": False,
+        # 0.6A-2. ONE managing-provider action composing every transition from
+        # approved-goal validation to release. POST because it writes.
+        "/pilot/children/{child_id}/weekly-cycles/current/release": False,
+        # 0.6A-2. The family's read. Caregiver-readable, released weeks only.
+        "/pilot/children/{child_id}/this-week": False,
         "/pilot/children/{child_id}/monthly-plan": False,
         "/pilot/children/{child_id}/current-cycle": False,
         "/pilot/children/{child_id}/rtm": False,

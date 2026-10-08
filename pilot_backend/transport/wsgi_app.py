@@ -166,6 +166,24 @@ GENERATE_SUGGESTIONS_ROUTE = (
 #: behaviour this slice exists to retire.
 GENERATE_SUGGESTIONS_V2_ROUTE = (
     "/pilot/children/{child_id}/goal-suggestions/generate-v2")
+#: 0.6A-2. ONE managing-provider action that composes every existing transition
+#: from approved-goal validation through to release. The low-level transitions
+#: are deliberately NOT exposed individually: a browser able to allocate but not
+#: snapshot could leave a cycle half-planned and visible to nobody.
+WEEK_ONE_RELEASE_ROUTE = (
+    "/pilot/children/{child_id}/weekly-cycles/current/release")
+#: The body allowlist for that route. ONE field, and it is REQUIRED.
+#:
+#: `family_declared_capacity` is what the family reports it can manage this
+#: week, recorded by the provider for planning — never a recommended or
+#: prescribed frequency and never a clinical dosage. There is no default: the
+#: number of activities is a direct function of it, so defaulting would author a
+#: clinical frequency nobody approved. `read_json_body` refuses every
+#: `IDENTITY_FIELDS` name, so this body cannot carry identity either.
+WEEK_ONE_RELEASE_FIELDS = ("family_declared_capacity",)
+
+#: 0.6A-2. The family's read. Returns ONLY a released week — never a draft.
+THIS_WEEK_ROUTE = "/pilot/children/{child_id}/this-week"
 CHILD_MONTHLY_PLAN_ROUTE = "/pilot/children/{child_id}/monthly-plan"
 CHILD_CURRENT_CYCLE_ROUTE = "/pilot/children/{child_id}/current-cycle"
 CHILD_RTM_ROUTE = "/pilot/children/{child_id}/rtm"
@@ -206,6 +224,8 @@ ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
     ("GET", CHILD_SUGGESTIONS_ROUTE, False),
     ("POST", GENERATE_SUGGESTIONS_ROUTE, False),
     ("POST", GENERATE_SUGGESTIONS_V2_ROUTE, False),
+    ("POST", WEEK_ONE_RELEASE_ROUTE, False),
+    ("GET", THIS_WEEK_ROUTE, False),
     ("GET", CHILD_MONTHLY_PLAN_ROUTE, False),
     ("POST", CHILD_MONTHLY_PLAN_ROUTE, False),
     ("GET", CHILD_CURRENT_CYCLE_ROUTE, False),
@@ -290,6 +310,24 @@ def _match_generate_suggestions_v2_route(path: str) -> Optional[str]:
         return None
     if (parts[0] != "pilot" or parts[1] != "children"
             or parts[3] != "goal-suggestions" or parts[4] != "generate-v2"):
+        return None
+    return parts[2]
+
+
+def _match_week_one_release_route(path: str) -> Optional[str]:
+    """Return the child id for `.../weekly-cycles/current/release`. 0.6A-2.
+
+    Six exact segments, hand-matched like every other route here. `current` is a
+    literal rather than a cycle id: the action is "release THIS child's current
+    Week 1", and accepting an id would let a client name a cycle belonging to
+    another child and rely on a later check to catch it.
+    """
+    parts = [p for p in path.split("/") if p != ""]
+    if len(parts) != 6:
+        return None
+    if (parts[0] != "pilot" or parts[1] != "children"
+            or parts[3] != "weekly-cycles" or parts[4] != "current"
+            or parts[5] != "release"):
         return None
     return parts[2]
 
@@ -778,6 +816,7 @@ class PilotWSGIApplication:
     def __init__(self, *, settings, verifier, repos, recorder=None,
                  parent_source=None,
                  rung_source=None,
+                 activity_bank=None,
                  log_sink: Optional[List[str]] = None) -> None:
         self._settings = settings
         self._verifier = verifier
@@ -796,6 +835,12 @@ class PilotWSGIApplication:
         #: `build_parent_source` takes — unconfigured means the capability is
         #: simply absent, which is a safe state.
         self._rung_source = rung_source
+        #: 0.6A-2. The reviewed static activity bank, or None.
+        #:
+        #: Optional and defaulted for the same reason `rung_source` is, and None
+        #: FAILS the Week 1 release closed: a week with no reviewed activities
+        #: is not a plan, and there is no fallback content to reach for.
+        self._activity_bank = activity_bank
         #: Tests capture emitted lines here. Production would hand these to a
         #: logging handler; either way they pass through `format_log` first,
         #: so an unsafe field raises rather than being written.
@@ -953,6 +998,16 @@ class PilotWSGIApplication:
             return self._handle_generate_suggestions(environ, generate_child,
                                                      request_id)
 
+        # 0.6A-2 Week 1 release. Tested before the four-segment table for the
+        # same reason the generation routes are: a six-segment form must not be
+        # swallowed by a shorter matcher.
+        release_child = _match_week_one_release_route(path)
+        if release_child is not None:
+            if method != "POST":
+                return 405, _ERROR_BODIES[405], WEEK_ONE_RELEASE_ROUTE
+            return self._handle_week_one_release(environ, release_child,
+                                                request_id)
+
         # 0.6A-1G evidence-driven generation. Its own matcher, so the v1 tail
         # cannot prefix-match the v2 path and quietly run the v1 algorithm.
         generate_v2_child = _match_generate_suggestions_v2_route(path)
@@ -968,6 +1023,9 @@ class PilotWSGIApplication:
                 ("children", "monthly-plan", CHILD_MONTHLY_PLAN_ROUTE, ("GET", "POST")),
                 ("children", "current-cycle", CHILD_CURRENT_CYCLE_ROUTE, ("GET",)),
                 ("children", "rtm", CHILD_RTM_ROUTE, ("GET",)),
+                # 0.6A-2. A caregiver-readable read, so it joins the shared
+                # workflow table rather than getting a bespoke matcher.
+                ("children", "this-week", THIS_WEEK_ROUTE, ("GET",)),
                 ("monthly-plans", "allocations", PLAN_ALLOCATIONS_ROUTE, ("POST",)),
                 ("monthly-plans", "activate", PLAN_ACTIVATE_ROUTE, ("POST",)),
                 ("cycles", "observations", CYCLE_OBSERVATIONS_ROUTE, ("GET", "POST")),
@@ -1587,6 +1645,20 @@ class PilotWSGIApplication:
                                   if snapshots else None),
             }
 
+        if route == THIS_WEEK_ROUTE:
+            # 0.6A-2. The family's week. `_handle_workflow` has already resolved
+            # and authorized the principal for this child, so a CAREGIVER
+            # reaches here legitimately — reading a released week is exactly
+            # what they are entitled to.
+            #
+            # The service returns None for "nothing released", including when a
+            # DRAFT cycle exists. A draft is deliberately indistinguishable from
+            # nothing here: a partially allocated week must never reach a family.
+            week = self._week_one_service(goals, plans, weekly).this_week(
+                principal, resource)
+            return {"child_id": resource, "released": week is not None,
+                    "week": week}
+
         if route == CHILD_RTM_ROUTE:
             # `list_episodes` authorizes the child first, so the period rows
             # read below belong to an episode the caller is already proven to
@@ -2153,6 +2225,133 @@ class PilotWSGIApplication:
             "request_id": request_id,
         }, GENERATE_SUGGESTIONS_V2_ROUTE
 
+    def _week_one_service(self, goals, plans, weekly):
+        """The Week 1 orchestrator over the request's frozen services.
+
+        The activity bank is the COMPOSED one — the same lookup-only static bank
+        the browser image carries. `None` means no reviewed content is
+        configured, and the callers below fail closed rather than planning a week
+        with no activities.
+        """
+        from ..integration.week_one_release import WeekOneReleaseService
+
+        return WeekOneReleaseService(
+            repos=self._repos, goals=goals, plans=plans, weekly=weekly,
+            activity_bank=self._activity_bank)
+
+    def _handle_week_one_release(self, environ: Mapping[str, object],
+                                 child_id: str, request_id: str
+                                 ) -> Tuple[int, Mapping, str]:
+        """0.6A-2. ONE managing-provider action: approved goal -> released Week 1.
+
+        ## Authorization, in order, and identical to the generation routes'
+
+          1. a verified Pilot principal
+          2. `principal.role is ActorRole.PROVIDER` — a caregiver is refused
+             here, before any service call. A family may READ a released week;
+             they may never create, allocate or release one.
+          3. active child access, via `GoalService._authorize`
+          4. the caller must BE this child's current managing clinician
+
+        ## The body carries the family's declared weekly capacity, and nothing else
+
+        `family_declared_capacity` is REQUIRED. It is what the family reports it
+        can manage this week, recorded by the provider for planning — not a
+        recommended frequency, not a prescribed frequency, not a clinical dosage.
+        There is no default: the activity count is a direct function of this
+        number, so defaulting it would author a clinical frequency nobody
+        approved. An absent or non-integer value is refused.
+
+        Everything else is derived server-side from the child's approved goals,
+        so there is nothing else a client could supply.
+        """
+        from ..domain.roles import ActorRole
+        from ..goals.errors import (
+            GoalAuthorizationError,
+            GoalConflict,
+            GoalValidationError,
+        )
+        from ..integration.activity_bank import ActivityBankError
+        from ..integration.week_one_release import WeekOneReleaseError
+        from ..weekly.errors import (
+            ReleasedPlanImmutable,
+            WeeklyConflict,
+            WeeklyValidationError,
+        )
+
+        principal, status = self._principal(environ)
+        if principal is None:
+            self._log(request_id, WEEK_ONE_RELEASE_ROUTE, "POST", status, None)
+            return status, _ERROR_BODIES[status], WEEK_ONE_RELEASE_ROUTE
+
+        if principal.role is not ActorRole.PROVIDER:
+            self._log_principal(request_id, WEEK_ONE_RELEASE_ROUTE, "POST",
+                                HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    WEEK_ONE_RELEASE_ROUTE)
+
+        if self._activity_bank is None:
+            # No reviewed activity content is configured. A capability gap, and
+            # it fails closed: a week with no reviewed activities is not a plan.
+            self._log_principal(request_id, WEEK_ONE_RELEASE_ROUTE, "POST",
+                                HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    WEEK_ONE_RELEASE_ROUTE)
+
+        # A malformed body renders as the SAME constant 403 as every other
+        # refusal on this route. This transport declares no 400 body at all, and
+        # the 0.5C no-oracle rule is why: a distinguishable shape error tells a
+        # prober that the route exists and that they cleared the auth gates.
+        from .body import TransportError, read_json_body
+
+        try:
+            body = read_json_body(environ, allowed=WEEK_ONE_RELEASE_FIELDS,
+                                  required=WEEK_ONE_RELEASE_FIELDS)
+        except TransportError:
+            self._log_principal(request_id, WEEK_ONE_RELEASE_ROUTE, "POST",
+                                HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    WEEK_ONE_RELEASE_ROUTE)
+        capacity = body.get("family_declared_capacity")
+
+        goals, plans, weekly, _rtm = self._services()
+        try:
+            goals._authorize(principal, child_id)
+            # The EXISTING managing-clinician gate. Reused, not reimplemented.
+            goals._require_managing_clinician(principal, child_id)
+            outcome = self._week_one_service(goals, plans, weekly
+                                            ).release_week_one(
+                principal, child_id,
+                family_declared_capacity=capacity,
+                request_id=request_id)
+        except (GoalAuthorizationError, GoalConflict, GoalValidationError,
+                WeekOneReleaseError, ActivityBankError, ReleasedPlanImmutable,
+                WeeklyConflict, WeeklyValidationError):
+            # One constant 403, the 0.5C no-oracle rule. A finer status would
+            # tell a prober which gate stopped them.
+            self._log_principal(request_id, WEEK_ONE_RELEASE_ROUTE, "POST",
+                                HTTP_FORBIDDEN, principal)
+            return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
+                    WEEK_ONE_RELEASE_ROUTE)
+
+        self._log_principal(request_id, WEEK_ONE_RELEASE_ROUTE, "POST",
+                            HTTP_OK, principal)
+        # `week` is the SAME structured projection the family reads, so a
+        # clinician releasing a week sees exactly what was released. No capacity
+        # ledger, no weights, no alignment rows, no rung refs.
+        return HTTP_OK, {
+            "child_id": child_id,
+            "created": outcome.created,
+            "cycle_id": outcome.cycle_id,
+            "focus_plan_id": outcome.focus_plan_id,
+            "goal_ids": list(outcome.goal_ids),
+            "activity_count": outcome.activity_count,
+            "released_at": (outcome.released_at.isoformat()
+                            if outcome.released_at else None),
+            "week": outcome.parent_week,
+            "request_id": request_id,
+        }, WEEK_ONE_RELEASE_ROUTE
+
     # -- logging ------------------------------------------------------------
 
     def _log(self, request_id: str, route_template: str, method: str,
@@ -2202,6 +2401,7 @@ class PilotWSGIApplication:
 def build_application(*, settings, repos, verifier, recorder=None,
                       parent_source=None,
                       rung_source=None,
+                      activity_bank=None,
                       log_sink: Optional[List[str]] = None) -> PilotWSGIApplication:
     """Composition root for the proof.
 
@@ -2212,6 +2412,7 @@ def build_application(*, settings, repos, verifier, recorder=None,
     return PilotWSGIApplication(settings=settings, verifier=verifier, repos=repos,
                                 recorder=recorder, parent_source=parent_source,
                                 rung_source=rung_source,
+                                activity_bank=activity_bank,
                                 log_sink=log_sink)
 
 
