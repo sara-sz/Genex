@@ -2302,12 +2302,12 @@ class PilotWSGIApplication:
         # refusal on this route. This transport declares no 400 body at all, and
         # the 0.5C no-oracle rule is why: a distinguishable shape error tells a
         # prober that the route exists and that they cleared the auth gates.
-        from .body import TransportError, read_json_body
+        from .body import BodyError, read_json_body
 
         try:
             body = read_json_body(environ, allowed=WEEK_ONE_RELEASE_FIELDS,
                                   required=WEEK_ONE_RELEASE_FIELDS)
-        except TransportError:
+        except BodyError:
             self._log_principal(request_id, WEEK_ONE_RELEASE_ROUTE, "POST",
                                 HTTP_FORBIDDEN, principal)
             return (HTTP_FORBIDDEN, _ERROR_BODIES[HTTP_FORBIDDEN],
