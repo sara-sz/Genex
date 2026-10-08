@@ -61,6 +61,7 @@ from pilot_backend.persistence import FakeDocumentStore, FirestoreRepositories
 from pilot_backend.transport import build_application
 
 from .auth.firebase_decoder import FirebaseTokenDecoder, initialize_firebase_app
+from .integration.static_activity_bank import build_static_activity_bank
 from .integration.static_rung_source import build_static_rung_source
 from .integration.parent_gcs_source import (
     BUCKET_ENV_VAR,
@@ -104,6 +105,10 @@ class PilotRuntime:
     #: file inside the image, so its absence is a build defect rather than a
     #: configuration choice, and `build_rung_source` raises instead.
     rung_source: Any = None
+    #: The reviewed activity bank backing 0.6A-2 Week 1 release. NEVER None in a
+    #: built runtime, for the same reason as `rung_source` and enforced the same
+    #: way — see `build_activity_bank`.
+    activity_bank: Any = None
 
     @property
     def is_production(self) -> bool:
@@ -209,6 +214,32 @@ def build_rung_source(artifact_path: Any = None):
     return build_static_rung_source(artifact_path)
 
 
+def build_activity_bank(artifact_path: Any = None):
+    """The reviewed activity bank for the BROWSER image. 0.6A-2.
+
+    The exact counterpart of `build_rung_source`, and it exists because its
+    absence was a real deployment defect rather than a hypothetical one: this
+    composition root built the served application WITHOUT an activity bank, so
+    `build_application` defaulted it to `None` and the Week 1 release route
+    fail-closed with a constant 403 for every correctly authorised managing
+    clinician. The route-level and emulator tests did not catch it because they
+    construct the application themselves and inject a bank, which is precisely
+    the path a composition test must not take.
+
+    Raises rather than returning None, for the reason `build_rung_source`
+    states: the artifact ships INSIDE the image, so its absence is a build
+    defect, not a deployment choice. `build_static_activity_bank` already
+    documents itself as "the composition seam" — this is the caller it was
+    waiting for.
+
+    It loads ONE static JSON artifact and nothing else: no runtime model, no
+    Parent activity engine, no generic fallback. Loading happens ONCE at startup
+    because the bank is read-only and identical for every child, so a corrupt
+    artifact refuses the deployment instead of failing the first release.
+    """
+    return build_static_activity_bank(artifact_path)
+
+
 def build_runtime(env: Mapping[str, str], *,
                   process_env: Optional[Mapping[str, str]] = None,
                   in_memory: bool = False,
@@ -217,6 +248,7 @@ def build_runtime(env: Mapping[str, str], *,
                   credential: Any = None,
                   storage_client: Any = None,
                   rung_artifact_path: Any = None,
+                  activity_artifact_path: Any = None,
                   log_sink: Optional[list] = None) -> PilotRuntime:
     """Assemble the runtime from an explicit environment mapping.
 
@@ -262,14 +294,17 @@ def build_runtime(env: Mapping[str, str], *,
 
     parent_source = build_parent_source(env, storage_client=storage_client)
     rung_source = build_rung_source(rung_artifact_path)
+    activity_bank = build_activity_bank(activity_artifact_path)
 
     application = build_application(settings=settings, repos=repos, verifier=verifier,
                                     recorder=recorder, parent_source=parent_source,
-                                    rung_source=rung_source, log_sink=log_sink)
+                                    rung_source=rung_source,
+                                    activity_bank=activity_bank, log_sink=log_sink)
 
     return PilotRuntime(
         settings=settings, store=store, repos=repos, verifier=verifier,
         recorder=recorder, child_context=child_context,
         application=application, cors=cors_policy_for(settings),
         parent_source=parent_source, rung_source=rung_source,
+        activity_bank=activity_bank,
     )

@@ -2257,8 +2257,16 @@ jobs:
         #
         # PYTHONPATH is deliberately NOT set: neither suite may need the Parent
         # namespace, and the staged-context suite asserts its absence.
+        #
+        # 0.6A-2 adds the activity-bank counterpart. It belongs in exactly the
+        # same step for exactly the same reason, and it is here because the
+        # omission it guards was found by DEPLOYING rather than by CI: the
+        # route-level and emulator Week 1 suites build the application
+        # themselves and inject a bank, so they passed while the composed
+        # application held `None` and the release route 403'd in staging.
         run: |
           for f in pilot_runtime/tests/test_static_rung_composition.py \
+                   pilot_runtime/tests/test_static_activity_bank_composition.py \
                    pilot_runtime/tests/test_browser_artifact_context.py; do
             if [ -f "$f" ]; then python -m pytest "$f" -q; else
               echo "not present on this branch: $f"; fi
