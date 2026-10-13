@@ -21,10 +21,18 @@ anchor binds two families is a clinical statement that both matter; quietly
 returning only the covered one would schedule a week that practises half the
 goal while reporting full coverage.
 
-That is exactly the live case: the pilot's 24m goal binds
-`expressive_vocabulary_growth` (13 curated cards) and `two_word_phrases`
-(none). Returning the 13 alone would mean single-word practice for a
-two-word-combination target.
+This is not hypothetical. A goal can bind one family whose curated pool is
+large and another whose pool is smaller or, early in a content cycle, empty.
+Serving only the well-stocked one would substitute a narrower skill for the
+one the clinician approved — practising a component of the target instead of
+the target — and would report that substitution as full coverage.
+
+Which families a goal binds, and which of them are served, are properties of
+the goal's canonical anchor and of the reviewed content set at build time.
+Neither is restated here: this module is told the families and answers about
+them. Naming a specific family in this docstring would make it a second,
+drifting record of something the taxonomy and the generated artifact already
+own.
 
 ## VALIDATION ALREADY HAPPENED
 

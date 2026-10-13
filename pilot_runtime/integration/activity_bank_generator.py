@@ -75,10 +75,21 @@ GENERATOR_VERSION = "pilot-activity-bank-generator-v1"
 #: `baseline_suggestion_generation`.
 DOMAIN_KEY = "talking_and_communicating"
 
-#: Families the October pilot's first goal binds. Both are REQUIRED: the goal's
-#: canonical anchor names both, so a week covering only one practises half the
-#: clinical target. `two_word_phrases` has no curated content today, which is
-#: why `release_ready` is false.
+#: Families the October pilot's first goal binds. EVERY entry is REQUIRED: the
+#: goal's canonical anchor names them all, so a week covering only some of them
+#: practises a component of the clinical target rather than the target.
+#:
+#: `release_ready` in the generated artifact is false while any family here has
+#: no reviewed content, and `assert_release_ready` refuses a release in that
+#: state. Which of them are currently served is a property of the ARTIFACT
+#: (`served_families`, `population.by_family`), not of this comment — a count
+#: or a status stated here goes stale the moment a clinician supplies a card.
+#:
+#: These two literals, and the keys of `BUCKET_REUSE_APPROVED` below, are the
+#: ONLY places in non-test Pilot code where a canonical activity-family
+#: identifier may appear. The CI no-mirror gate enforces exactly that: it
+#: exempts this module for family identifiers alone, and only while every such
+#: literal is confined to these two constants.
 REQUIRED_FAMILIES: Tuple[str, ...] = (
     "expressive_vocabulary_growth",
     "two_word_phrases",

@@ -3,25 +3,32 @@
 This directory is the ONLY place the pilot accepts activity content that does
 not already exist in a frozen Parent curated tier.
 
-It exists because the October pilot's first goal binds two activity families
-and only one of them has curated content:
+It exists because a goal's canonical anchor can bind more than one activity
+family, and the frozen Parent curated tiers do not necessarily carry reviewed
+content for every one of them. Where they do not, a clinician supplies cards
+here and the generator admits them on the same terms as curated content.
 
-| family | source | status |
-|---|---|---|
-| `expressive_vocabulary_growth` | Parent `_BUCKET_VARIANTS["expressive_word"]` | 13 cards, validator-passing |
-| `two_word_phrases` | Parent bucket `sentence` | **no cards exist** |
+**Which families are required, which are served, and how many cards each
+holds are NOT recorded in this file.** They are properties of the generated
+artifact (`required_families`, `served_families`, `population.by_family`,
+`release_ready`) and of `REQUIRED_FAMILIES` in
+`pilot_runtime/integration/activity_bank_generator.py`. A table of family
+names and counts here would be a second record that goes stale the moment a
+clinician adds a card — which is exactly what happened to the previous version
+of this file. Read the artifact instead; it is regenerated and digest-checked
+by the CI drift gate on every run.
 
-The Parent engine's generic tier-3 template is NOT an answer. It produces
-placeholder prose (`"items for photo sentence (from around the home)"`) that
-the Parent validator itself rejects with seven `placeholder_wording`
-violations. The generator refuses that tier by construction.
+The Parent engine's generic tier-3 template is NOT an answer for a missing
+family. It produces placeholder prose that the Parent validator itself rejects
+with `placeholder_wording` violations. The generator refuses that tier by
+construction.
 
 ## How to supply cards
 
-Create `two_word_phrases.json` in this directory, containing a JSON array of
-card objects. Each card must have EXACTLY these nine fields, all non-empty
-strings — the same schema the frozen Parent curated cards use, so there is one
-content shape and not two:
+Create `<family>.json` in this directory, containing a JSON array of card
+objects. Each card must have EXACTLY these nine fields, all non-empty strings
+— the same schema the frozen Parent curated cards use, so there is one content
+shape and not two:
 
 ```json
 [
@@ -59,8 +66,8 @@ strength of being present here.
 
 `instructions` must say what the parent does, what the child does, what counts
 as success, and when to stop — and must be specific enough to run without
-interpretation. The 13 `expressive_word` cards are the reference standard. For
-example:
+interpretation. The frozen Parent curated cards are the reference standard.
+For example:
 
 > Hold one toy in each hand. Say 'which one?' and wait. If your child reaches
 > or looks, say the name and give it. Try again with a different pair. Do 3-4
@@ -74,7 +81,10 @@ no difficulty tier (the curated source has none). Adding any of them here would
 create a second content schema and a field the rest of the pipeline cannot
 honour.
 
-## Not done by this slice
+## Release gating
 
-No content was authored here. `two_word_phrases.json` is intentionally absent,
-so the release gate fails closed until a clinician supplies it.
+`release_ready` in the generated artifact is false while any REQUIRED family
+has no reviewed content, and `assert_release_ready` refuses a week release in
+that state. So an unsupplied family fails closed rather than producing a
+partially covered week. Consult the artifact for the current state; do not
+infer it from this document.

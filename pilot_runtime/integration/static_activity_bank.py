@@ -29,13 +29,19 @@ adjusted still fails the drift gate, which regenerates from the curated source.
 ## IT REFUSES A PARTIALLY SERVED GOAL
 
 `templates_for_families` raises `FamilyNotServed` when any requested family has
-no templates. That is the live case: the pilot's 24m goal binds
-`expressive_vocabulary_growth` (served) and `two_word_phrases` (no reviewed
-content yet). Returning the served half would schedule single-word practice for
-a two-word-combination target and report it as covered.
+no templates. A goal whose anchor binds more than one family is a clinical
+statement that each of them matters, so returning the served subset would
+schedule practice for a component of the target rather than the target, and
+report it as covered.
+
+Which families exist, which a goal binds, and which currently have reviewed
+content are owned by the taxonomy, the goal's canonical anchor and the
+generated artifact respectively. None of the three is restated here — this
+module is handed the families and answers about them, and a family named in
+this docstring would be a fourth copy that drifts the moment content changes.
 
 `release_ready` in the artifact says the same thing at the artifact level, and
-`assert_release_ready` is the gate 0.6A-2 will call before releasing a week.
+`assert_release_ready` is the gate 0.6A-2 calls before releasing a week.
 """
 
 from __future__ import annotations

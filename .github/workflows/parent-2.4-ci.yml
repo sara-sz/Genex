@@ -310,18 +310,140 @@ jobs:
         # Asserted over the whole pilot tree rather than the two new files,
         # because the cheapest way to "fix" a future bridge failure would be
         # to paste a rung into some other module.
+        #
+        # 0.6A-2 NARROWING. The content needles are now split by CATEGORY,
+        # because they were never equally exceptionable:
+        #
+        #   milestone prose   no exception, anywhere, ever
+        #   rung/track refs   no exception; now matched as a PATTERN, which is
+        #                     strictly stronger than the previous needle list
+        #   family ids        two narrow, category-limited allowances below
+        #
+        # The family-identifier allowances exist because 0.6A-1 introduced a
+        # REVIEWED ACTIVITY BANK, whose generator must name the families the
+        # pilot's goal binds in order to require them, and whose generated
+        # artifact is keyed by them. Neither is a mirror of the workbook: the
+        # first is a requirement declaration, the second is regenerated and
+        # digest-checked by the drift gate in the next step.
+        #
+        # They are deliberately NOT a blanket exemption for `pilot_runtime/`,
+        # `pilot_backend/`, or activity-bank modules in general. ONE module is
+        # exempt, for ONE category, and only while every such literal in it is
+        # confined to the two approved constants — proved over the AST, plus a
+        # textual count so a comment or docstring cannot smuggle one in. The
+        # four prose occurrences that previously existed in other modules were
+        # removed rather than exempted.
+        #
+        # Negative controls run at the end: the gate must still reject
+        # milestone prose, a concrete rung ref, a family id in any other
+        # module, and a family id placed in the exempt module outside those
+        # constants. Without them this narrowing could not be distinguished
+        # from a rubber stamp.
         working-directory: .
         run: |
           python - <<'PY'
-          import pathlib, sys
+          import ast, pathlib, re, sys
 
-          CONTENT = (
+          # ── category 1: workbook milestone prose. NEVER exceptionable. ────
+          MILESTONE_PROSE = (
               "says about 50 words", "calls parents mama or dada",
+          )
+
+          # ── category 2: canonical activity-family identifiers. ───────────
+          ACTIVITY_FAMILIES = (
               "expressive_vocabulary_growth", "early_vocalizations",
               "gesture_communication", "two_word_phrases",
               "narration_storytelling", "receptive_directions_one_step",
           )
+
+          # ── category 3: a CONCRETE canonical rung or track reference. ────
+          # The bare `rung1:` prefix is a legitimate id scheme and appears in
+          # `canonical_rung.py`; a full ref is workbook-derived identity and
+          # must never be pasted anywhere outside a generated artifact.
+          REF_PATTERN = re.compile(r"(?:rung1|track1):[0-9a-f]{32}")
+
+          CONTENT = MILESTONE_PROSE + ACTIVITY_FAMILIES
+
+          # ── allowance A: the generator's two approved constants ──────────
+          FAMILY_MODULE = "pilot_runtime/integration/activity_bank_generator.py"
+          FAMILY_CONSTANTS = ("REQUIRED_FAMILIES", "BUCKET_REUSE_APPROVED")
+
+          # ── allowance B: the generated artifacts, each drift-gated ───────
+          ALLOWED_DATA = {
+              "pilot_runtime/data/rung_table_talking_v1.json",
+              "pilot_runtime/data/activity_bank_talking_v1.json",
+          }
+
+          def violations(rel, text, *, families_exempt=False):
+              """Every forbidden occurrence. ONE implementation, so the
+              negative controls below exercise the same code as the real scan.
+              """
+              found = []
+              for needle in MILESTONE_PROSE:
+                  if needle in text:
+                      found.append(f"{rel}: milestone prose {needle!r}")
+              hit = REF_PATTERN.search(text)
+              if hit:
+                  found.append(f"{rel}: canonical ref {hit.group(0)!r}")
+              if not families_exempt:
+                  for needle in ACTIVITY_FAMILIES:
+                      if needle in text:
+                          found.append(f"{rel}: family id {needle!r}")
+              return found
+
+          def families_confined_to_constants(text):
+              """True iff every family identifier in the exempt module is an
+              element of REQUIRED_FAMILIES or a key of BUCKET_REUSE_APPROVED.
+
+              Checked two ways on purpose. The AST pass proves the literals
+              that ARE present sit in the approved constants; the textual
+              count then proves there are no OTHER occurrences, which is what
+              stops a comment or docstring reintroducing one.
+              """
+              tree = ast.parse(text)
+              approved = []
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.AnnAssign):
+                      target = node.target
+                      names = ({target.id}
+                               if isinstance(target, ast.Name) else set())
+                      value = node.value
+                  elif isinstance(node, ast.Assign):
+                      names = {t.id for t in node.targets
+                               if isinstance(t, ast.Name)}
+                      value = node.value
+                  else:
+                      continue
+                  if not (names & set(FAMILY_CONSTANTS)) or value is None:
+                      continue
+                  if isinstance(value, ast.Dict):
+                      members = value.keys
+                  else:
+                      members = list(ast.walk(value))
+                  approved += [
+                      n.value for n in members
+                      if isinstance(n, ast.Constant)
+                      and isinstance(n.value, str)
+                      and n.value in ACTIVITY_FAMILIES]
+
+              present = [n.value for n in ast.walk(tree)
+                         if isinstance(n, ast.Constant)
+                         and isinstance(n.value, str)
+                         and n.value in ACTIVITY_FAMILIES]
+              stray_literals = sorted(set(present) - set(approved))
+
+              miscounted = []
+              for needle in set(approved):
+                  if text.count(needle) != approved.count(needle):
+                      miscounted.append(
+                          f"{needle!r} appears {text.count(needle)} times but "
+                          f"only {approved.count(needle)} are approved "
+                          f"constant members")
+              return stray_literals, miscounted
+
+          # ── the real scan: *.py ───────────────────────────────────────────
           offenders = []
+          exempt_seen = False
           for root in ("pilot_backend", "pilot_runtime"):
               base = pathlib.Path(root)
               if not base.is_dir():
@@ -330,14 +452,28 @@ jobs:
                   # Tests legitimately name content: they assert on it.
                   if "tests" in path.parts or "fixtures" in path.parts:
                       continue
+                  rel = path.as_posix()
                   text = path.read_text()
-                  for needle in CONTENT:
-                      if needle in text:
-                          offenders.append(f"{path}: {needle!r}")
+                  is_exempt = rel == FAMILY_MODULE
+                  if is_exempt:
+                      exempt_seen = True
+                      stray, miscounted = families_confined_to_constants(text)
+                      for item in stray:
+                          offenders.append(
+                              f"{rel}: family id {item!r} outside "
+                              f"{FAMILY_CONSTANTS}")
+                      for item in miscounted:
+                          offenders.append(f"{rel}: {item}")
+                  offenders += violations(rel, text, families_exempt=is_exempt)
           assert not offenders, (
               "workbook content is restated in non-test pilot code; it must "
               "cross the boundary at runtime:\n  " + "\n  ".join(offenders))
+          assert exempt_seen, (
+              f"{FAMILY_MODULE} was not found, so its narrow family-identifier "
+              f"allowance is dead and must be removed")
           print("no workbook content restated in pilot_backend/ or pilot_runtime/")
+          print(f"the one family-identifier allowance is confined to "
+                f"{FAMILY_CONSTANTS} in {FAMILY_MODULE}")
 
           # 0.5F-B Option C. The scan above covers *.py only, so a GENERATED
           # data file would have slipped past it silently. That is stated here
@@ -346,12 +482,18 @@ jobs:
           # founder-approved exception to it.
           #
           # The exception is narrow and conditional: workbook content may live
-          # in the ONE generated artifact, and only because the drift gate in
-          # the next step regenerates it from the frozen workbooks and fails on
-          # any difference. A hand-maintained copy of the same bytes would be
-          # exactly the mirror that was rejected; a regenerated one cannot
-          # diverge without CI going red.
-          ALLOWED_DATA = {"pilot_runtime/data/rung_table_talking_v1.json"}
+          # in a GENERATED artifact, and only because a drift gate regenerates
+          # it from the frozen source and fails on any difference. A
+          # hand-maintained copy of the same bytes would be exactly the mirror
+          # that was rejected; a regenerated one cannot diverge without CI
+          # going red. `ALLOWED_DATA` therefore lists artifacts, each of which
+          # MUST have such a gate:
+          #
+          #   rung_table_talking_v1.json     0.5F-B rung table DRIFT GATE
+          #   activity_bank_talking_v1.json  0.6A-1 activity bank DRIFT GATE
+          #
+          # Both gates live in later steps of this job. If either is removed,
+          # the matching entry here must go with it.
           data_offenders = []
           for root in ("pilot_backend", "pilot_runtime"):
               base = pathlib.Path(root)
@@ -368,24 +510,88 @@ jobs:
                       text = path.read_text()
                   except (UnicodeDecodeError, OSError):
                       continue
-                  for needle in CONTENT:
-                      if needle in text:
-                          data_offenders.append(f"{path}: {needle!r}")
+                  data_offenders += violations(path.as_posix(), text)
           assert not data_offenders, (
               "workbook content appears in a non-generated data file:\n  "
               + "\n  ".join(data_offenders))
 
-          # Non-vacuity: the allowance must actually be needed, i.e. the
-          # generated artifact really does carry workbook content. If it did
-          # not, this exception would be dead and should be deleted.
-          artifact = pathlib.Path(
-              "pilot_runtime/data/rung_table_talking_v1.json")
-          if artifact.is_file():
+          # Non-vacuity: each allowance must actually be needed, i.e. the
+          # generated artifact really does carry content a scan would catch. An
+          # allowance for a file that needs none is dead and must be deleted.
+          for rel in sorted(ALLOWED_DATA):
+              artifact = pathlib.Path(rel)
+              if not artifact.is_file():
+                  continue
               text = artifact.read_text()
-              assert any(n in text for n in CONTENT), (
-                  "the generated artifact carries no workbook content, so the "
-                  "no-mirror exception for it is dead and must be removed")
-              print("the one generated artifact is allowed, and is non-empty")
+              assert violations(rel, text), (
+                  f"{rel} carries no workbook content, so its no-mirror "
+                  f"exception is dead and must be removed")
+              print(f"generated artifact allowed and non-empty: {rel}")
+
+          # ── NEGATIVE CONTROLS ────────────────────────────────────────────
+          #
+          # The narrowing above is only trustworthy if the gate still rejects
+          # what it was built to reject. These run the SAME `violations` and
+          # confinement functions over synthetic inputs, so a future edit that
+          # defanged either one fails here rather than passing quietly.
+          controls = []
+
+          # 1. milestone prose, in an ordinary module. No exception exists.
+          if not violations("pilot_runtime/anything.py",
+                            "X = 'says about 50 words'"):
+              controls.append("milestone prose was NOT rejected")
+
+          # 2. milestone prose is not exceptionable even in the exempt module.
+          if not violations(FAMILY_MODULE, "X = 'calls parents mama or dada'",
+                            families_exempt=True):
+              controls.append(
+                  "milestone prose was NOT rejected in the exempt module")
+
+          # 3. a CONCRETE rung ref, and a track ref, in an ordinary module.
+          for ref in ("rung1:" + "a" * 32, "track1:" + "0" * 32):
+              if not violations("pilot_backend/anything.py", f"X = {ref!r}"):
+                  controls.append(f"a concrete ref {ref!r} was NOT rejected")
+          # ...while the bare prefix stays legal, or `canonical_rung.py` could
+          # not declare its own id scheme.
+          if violations("pilot_backend/domain/canonical_rung.py",
+                        'PREFIX = "rung1:"'):
+              controls.append("the bare rung prefix was wrongly rejected")
+
+          # 4. a family id in any module other than the exempt one.
+          if not violations("pilot_runtime/integration/somewhere_else.py",
+                            "X = 'two_word_phrases'"):
+              controls.append(
+                  "a family id in a non-exempt module was NOT rejected")
+
+          # 5. a family id inside the exempt module but OUTSIDE the approved
+          #    constants — as a stray literal, and as a comment.
+          stray_src = (
+              "REQUIRED_FAMILIES = ('two_word_phrases',)\n"
+              "SNEAKY = 'gesture_communication'\n")
+          stray, miscounted = families_confined_to_constants(stray_src)
+          if "gesture_communication" not in stray:
+              controls.append("a stray family literal was NOT rejected")
+          comment_src = (
+              "REQUIRED_FAMILIES = ('two_word_phrases',)\n"
+              "# two_word_phrases is mentioned again here\n")
+          stray, miscounted = families_confined_to_constants(comment_src)
+          if not miscounted:
+              controls.append("a family id in a COMMENT was NOT rejected")
+
+          # 6. and the real module passes the same confinement check cleanly.
+          real = pathlib.Path(FAMILY_MODULE)
+          if real.is_file():
+              stray, miscounted = families_confined_to_constants(
+                  real.read_text())
+              if stray or miscounted:
+                  controls.append(
+                      f"the exempt module is not confined: {stray} {miscounted}")
+
+          assert not controls, (
+              "the no-mirror gate no longer rejects what it exists to "
+              "reject:\n  " + "\n  ".join(controls))
+          print("negative controls pass: prose, concrete refs, foreign family "
+                "ids and unconfined family ids are all still rejected")
           PY
 
       - name: October pilot 0.5F-B — rung table DRIFT GATE
