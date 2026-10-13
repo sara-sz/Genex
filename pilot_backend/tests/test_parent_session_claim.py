@@ -817,7 +817,19 @@ def test_the_claim_repository_has_no_mutating_method():
 #: guarantee.
 #:
 #: What the byte pin was protecting is now asserted BEHAVIOURALLY and more
-#: specifically, by `test_the_a2_v1_boundary_survives_the_v2_route` below.
+#: specifically, by `test_the_a2_v1_boundary_survives_the_v2_route`.
+#:
+#: That test does NOT live here. It builds the real projection application, so
+#: it constructs a Firestore store and needs `google.api_core` — which this
+#: dependency-pure suite deliberately does not have, and must not acquire: the
+#: tests in this tree assert structurally that `pilot_backend` imports no cloud
+#: SDK, and that assertion is worth nothing in an environment where the SDK is
+#: installed. It therefore sits beside the rest of the entrypoint's coverage in
+#: `pilot_runtime/tests/test_projection_service.py`, which the integration job
+#: runs with the SDKs present.
+#:
+#: The two tests immediately below stay here, because they only shell out to
+#: git and need nothing installed.
 A2_FROZEN_FILES = (
     "pilot_backend/transport/projection_wsgi.py",
     "pilot_backend/integration/baseline_projection_service.py",
@@ -885,96 +897,6 @@ def test_the_composition_root_is_the_only_a2_file_the_v2_route_changed():
         if got != want:
             changed.append(path)
     assert changed == [A2_COMPOSITION_ROOT], changed
-
-
-def test_the_a2_v1_boundary_survives_the_v2_route():
-    """What the entrypoint's byte pin was actually protecting, asserted directly.
-
-    Four claims, each checkable:
-
-      1. the entrypoint still builds the EXACT frozen v1 app class, over the
-         frozen v1 service;
-      2. every startup refusal is intact — the mode is required and has no
-         default, an unknown mode is refused, production is refused;
-      3. one declared auth mode governs the whole service, so no route can be
-         verified while another is not;
-      4. the v1 ROUTE is unchanged: the router delegates it, and its 404 for an
-         unknown path still comes from the v1 app.
-    """
-    import pilot_runtime.projection_server as entrypoint
-    from pilot_backend.integration.baseline_projection_service import (
-        BaselineProjectionService,
-    )
-    from pilot_backend.transport.projection_v2_wsgi import (
-        InternalProjectionRouter,
-    )
-    from pilot_backend.transport.projection_wsgi import (
-        PROJECTION_ROUTE,
-        ProjectionApp,
-    )
-
-    env = {
-        "PILOT_PROJECTION_AUTH_MODE": "iam_only",
-        "PILOT_ENVIRONMENT": "dev",
-        "GCP_PROJECT_ID": "demo-genex-pilot",
-        "FIRESTORE_DATABASE": "(default)",
-    }
-    app = entrypoint.build_projection_application(
-        env=env, firestore_client=object())
-
-    # 1. the composed application still contains the frozen v1 app, built over
-    #    the frozen v1 service.
-    assert isinstance(app, InternalProjectionRouter)
-    assert type(app.v1_app) is ProjectionApp
-    assert isinstance(app.v1_app._service_factory(), BaselineProjectionService)
-
-    # 2. the startup refusals. The ABSENT-mode case removes the key rather than
-    #    merging an empty dict, which would have left the env unchanged and made
-    #    this assertion vacuous.
-    absent = {k: v for k, v in env.items()
-              if k != "PILOT_PROJECTION_AUTH_MODE"}
-    for broken in (absent,
-                   dict(env, PILOT_PROJECTION_AUTH_MODE=""),
-                   dict(env, PILOT_PROJECTION_AUTH_MODE="trust_me"),
-                   dict(env, PILOT_PROJECTION_AUTH_MODE="iam_plus_token")):
-        with pytest.raises(entrypoint.ProjectionConfigError):
-            entrypoint.build_projection_application(
-                env=broken, firestore_client=object())
-    # Production is refused. With this minimal env the SETTINGS layer refuses
-    # first (prod demands four more variables), so either refusal is correct and
-    # both are fail-closed — the point here is that no prod app is ever built.
-    # `test_the_entrypoint_refuses_production` in
-    # `pilot_runtime/tests/test_projection_service.py` covers the
-    # fully-configured prod env, where the projection-specific refusal is the one
-    # that fires.
-    from pilot_backend.config.errors import ConfigError
-
-    with pytest.raises((entrypoint.ProjectionConfigError, ConfigError)):
-        entrypoint.build_projection_application(
-            env=dict(env, PILOT_ENVIRONMENT="prod"), firestore_client=object())
-
-    # 3. one mode governs the whole service.
-    assert app.verifies_tokens is False
-    assert app.v1_app.verifies_tokens is app.v2_app.verifies_tokens
-
-    # 4. the v1 route still belongs to the v1 app, and so does the 404.
-    import io
-    import json as _json
-
-    def call(path, body):
-        raw = _json.dumps(body).encode()
-        captured = {}
-        chunks = app({"REQUEST_METHOD": "POST", "PATH_INFO": path,
-                      "CONTENT_LENGTH": str(len(raw)),
-                      "wsgi.input": io.BytesIO(raw)},
-                     lambda s, h: captured.setdefault("s", int(s.split()[0])))
-        return captured["s"], _json.loads(b"".join(chunks))
-
-    # v1's own validator answers, exactly as it did before the router existed.
-    assert call(PROJECTION_ROUTE,
-                {"source_session_id": "s", "source_record_digest": "a" * 64,
-                 "projection": {}})[0] == 400
-    assert call("/internal/not-a-route", {}) == (404, {"error": "not found"})
 
 
 def test_the_bootstrap_transport_never_logs():

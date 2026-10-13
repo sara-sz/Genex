@@ -642,3 +642,126 @@ def test_the_probe_script_is_executable_shell_and_runs_nothing_here():
         stripped = line.strip()
         if stripped.startswith("run:") and "probe_projection_auth" in stripped:
             raise AssertionError(f"CI runs the probe: {stripped}")
+# ---------------------------------------------------------------------------
+# The A2 v1 trust boundary, asserted BEHAVIOURALLY (0.6A-1F / 0.6A-2)
+#
+# MOVED here from `pilot_backend/tests/test_parent_session_claim.py`, where it
+# could never pass. It builds the real projection application, which constructs
+# a Firestore store and therefore needs `google.api_core`; the pilot_backend
+# suite runs in the dependency-pure job, whose whole purpose is to prove
+# `pilot_backend` imports no cloud SDK. Installing the SDK there to satisfy one
+# test would have voided that proof for every other test in the tree.
+#
+# It belongs beside the rest of this entrypoint's coverage anyway: its own
+# comment on the production refusal already pointed at
+# `test_the_entrypoint_refuses_production` in this file.
+#
+# This test is what REPLACES the obsolete byte pin on
+# `pilot_runtime/projection_server.py`. 0.6A-1F intentionally converted that
+# module into the shared v1+v2 composition root, so a byte comparison against
+# the 0.5F-A2 tag can only ever fail. The protection it provided is not
+# weakened — it is stated more precisely, as four checkable claims:
+#
+#     1. the entrypoint still builds the EXACT frozen v1 app class over the
+#        frozen v1 service              -> v1 delegation intact
+#     2. every startup refusal is intact
+#     3. ONE declared auth mode governs both routes
+#                                       -> the v2 router is purely additive
+#     4. the v1 route and its 404 still come from the v1 app
+#
+# The frozen v1 transport, accepting service and domain record remain BYTE
+# pinned, in `pilot_backend/tests/test_parent_session_claim.py`
+# (`A2_FROZEN_FILES`), together with
+# `test_the_composition_root_is_the_only_a2_file_the_v2_route_changed`, which
+# asserts the composition root is the ONLY A2 file that moved.
+# ---------------------------------------------------------------------------
+
+
+def test_the_a2_v1_boundary_survives_the_v2_route():
+    """What the entrypoint's byte pin was actually protecting, asserted directly.
+
+    Four claims, each checkable:
+
+      1. the entrypoint still builds the EXACT frozen v1 app class, over the
+         frozen v1 service;
+      2. every startup refusal is intact — the mode is required and has no
+         default, an unknown mode is refused, production is refused;
+      3. one declared auth mode governs the whole service, so no route can be
+         verified while another is not;
+      4. the v1 ROUTE is unchanged: the router delegates it, and its 404 for an
+         unknown path still comes from the v1 app.
+    """
+    import pilot_runtime.projection_server as entrypoint
+    from pilot_backend.integration.baseline_projection_service import (
+        BaselineProjectionService,
+    )
+    from pilot_backend.transport.projection_v2_wsgi import (
+        InternalProjectionRouter,
+    )
+    from pilot_backend.transport.projection_wsgi import (
+        PROJECTION_ROUTE,
+        ProjectionApp,
+    )
+
+    env = {
+        "PILOT_PROJECTION_AUTH_MODE": "iam_only",
+        "PILOT_ENVIRONMENT": "dev",
+        "GCP_PROJECT_ID": "demo-genex-pilot",
+        "FIRESTORE_DATABASE": "(default)",
+    }
+    app = entrypoint.build_projection_application(
+        env=env, firestore_client=object())
+
+    # 1. the composed application still contains the frozen v1 app, built over
+    #    the frozen v1 service.
+    assert isinstance(app, InternalProjectionRouter)
+    assert type(app.v1_app) is ProjectionApp
+    assert isinstance(app.v1_app._service_factory(), BaselineProjectionService)
+
+    # 2. the startup refusals. The ABSENT-mode case removes the key rather than
+    #    merging an empty dict, which would have left the env unchanged and made
+    #    this assertion vacuous.
+    absent = {k: v for k, v in env.items()
+              if k != "PILOT_PROJECTION_AUTH_MODE"}
+    for broken in (absent,
+                   dict(env, PILOT_PROJECTION_AUTH_MODE=""),
+                   dict(env, PILOT_PROJECTION_AUTH_MODE="trust_me"),
+                   dict(env, PILOT_PROJECTION_AUTH_MODE="iam_plus_token")):
+        with pytest.raises(entrypoint.ProjectionConfigError):
+            entrypoint.build_projection_application(
+                env=broken, firestore_client=object())
+    # Production is refused. With this minimal env the SETTINGS layer refuses
+    # first (prod demands four more variables), so either refusal is correct and
+    # both are fail-closed — the point here is that no prod app is ever built.
+    # `test_the_entrypoint_refuses_production` in
+    # `pilot_runtime/tests/test_projection_service.py` covers the
+    # fully-configured prod env, where the projection-specific refusal is the one
+    # that fires.
+    from pilot_backend.config.errors import ConfigError
+
+    with pytest.raises((entrypoint.ProjectionConfigError, ConfigError)):
+        entrypoint.build_projection_application(
+            env=dict(env, PILOT_ENVIRONMENT="prod"), firestore_client=object())
+
+    # 3. one mode governs the whole service.
+    assert app.verifies_tokens is False
+    assert app.v1_app.verifies_tokens is app.v2_app.verifies_tokens
+
+    # 4. the v1 route still belongs to the v1 app, and so does the 404.
+    import io
+    import json as _json
+
+    def call(path, body):
+        raw = _json.dumps(body).encode()
+        captured = {}
+        chunks = app({"REQUEST_METHOD": "POST", "PATH_INFO": path,
+                      "CONTENT_LENGTH": str(len(raw)),
+                      "wsgi.input": io.BytesIO(raw)},
+                     lambda s, h: captured.setdefault("s", int(s.split()[0])))
+        return captured["s"], _json.loads(b"".join(chunks))
+
+    # v1's own validator answers, exactly as it did before the router existed.
+    assert call(PROJECTION_ROUTE,
+                {"source_session_id": "s", "source_record_digest": "a" * 64,
+                 "projection": {}})[0] == 400
+    assert call("/internal/not-a-route", {}) == (404, {"error": "not found"})

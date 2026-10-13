@@ -3379,7 +3379,32 @@ jobs:
               "pilot_runtime/deploy/gcloudignore-projection",
               "pilot_runtime/deploy/cloudbuild-projection.yaml",
               "pilot_runtime/deploy/probe_projection_auth.sh",
-              "pilot_runtime/projection_server.py",
+              # `pilot_runtime/projection_server.py` is DELIBERATELY ABSENT.
+              #
+              # 0.6A-1F converted it from the A2-only entrypoint into the
+              # shared v1 + v2 composition root, so a byte comparison against
+              # the A2 tag can only ever fail. The alternative — a second
+              # entrypoint module — would have meant editing the frozen
+              # `Dockerfile.projection`, which hardcodes
+              # `pilot_runtime.projection_server:application`; a deployment
+              # artifact is a harder thing to change safely than a composition
+              # root, and all four build files staying byte-identical is the
+              # more valuable guarantee.
+              #
+              # The protection is NOT removed, only relocated and sharpened.
+              # `test_the_a2_v1_boundary_survives_the_v2_route` in
+              # `pilot_runtime/tests/test_projection_service.py` (run by the
+              # `pilot-integration` job) asserts behaviourally that the
+              # entrypoint still builds the frozen v1 app over the frozen v1
+              # service, that every startup refusal is intact, that ONE
+              # declared auth mode governs both routes so the v2 router is
+              # purely additive, and that the v1 route and its 404 still come
+              # from the v1 app.
+              #
+              # The v1 transport, accepting service and domain record below
+              # remain BYTE pinned, and
+              # `test_the_composition_root_is_the_only_a2_file_the_v2_route_changed`
+              # asserts the composition root is the only A2 file that moved.
               "pilot_runtime/google_oidc.py",
               "pilot_backend/transport/projection_wsgi.py",
               "pilot_backend/integration/baseline_projection_service.py",

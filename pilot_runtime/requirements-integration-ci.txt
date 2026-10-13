@@ -27,7 +27,43 @@
 # replay. The Firestore emulator itself is not a Python dependency: it is a
 # Java program supplied by the gcloud `cloud-firestore-emulator` component and
 # needs no credentials.
+#
+# ── 0.6A-2: the CROSS-SYSTEM A2 v2 emulator suite ──────────────────────────
+#
+# `pilot_runtime/tests/integration/test_a2_v2_emulator.py` drives a REAL Parent
+# v2 baseline through the REAL Parent API into the REAL Firestore emulator, so
+# neither side of the A2 v2 boundary can be a fake agreeing with itself. That
+# means it imports `api.main`, which needs the Parent application's own
+# dependency set.
+#
+# Without these five, the suite does not fail — it fails to COLLECT, and the
+# job's "Prove the emulator suites actually ran" step then fails because the
+# collected count drops below its floor. Eight real tests were silently absent.
+# They are added so the suite RUNS; suppressing or skipping it would have left
+# the A2 v2 boundary ungated, which is the one thing that step exists to catch.
+#
+# Versions are the repo's existing canonical pins, taken verbatim from
+# `genex-parent/requirements-parent24-app-ci.txt` (fastapi, pydantic, httpx)
+# and `genex-parent/requirements-parent24-ci.txt` (pandas, openpyxl), so the
+# repository has ONE version of each library rather than two.
+#
+# Provenance:
+#   fastapi    0.135.3 — `fastapi.testclient.TestClient` against `api.main`
+#   pydantic   2.13.0  — the Parent request models FastAPI validates with
+#   httpx      0.28.1  — the transport `TestClient` is built on
+#   pandas     3.0.3   — reached via `genex_core.bridge_selector`, imported by
+#                        `api.main` -> pipeline -> functional_baseline
+#   openpyxl   3.1.5   — the xlsx engine pandas uses for the frozen workbook
+#
+# Deliberately NOT added: `google-cloud-storage`. The suite was verified to
+# pass without it, so the Parent GCS session store is never reached — and a
+# dependency nothing imports is a dependency nobody is auditing.
 
 pytest==9.1.1
 firebase-admin==7.5.0
 google-cloud-firestore==2.28.0
+fastapi==0.135.3
+pydantic==2.13.0
+httpx==0.28.1
+pandas==3.0.3
+openpyxl==3.1.5
