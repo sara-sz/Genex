@@ -347,6 +347,23 @@ def next_question_v2(record: BaselineRecordV2) -> Optional[Dict[str, Any]]:
     Step 2 is the whole correction: a band is finished before any vertical
     movement, so a demonstrated skill can never carry its siblings with it and
     an unknown can never advance the ladder.
+
+    ## THE STOP RULE IS UNDER FOUNDER REVIEW — see the design note
+
+    Step 4's "the bracket is established" can end the baseline after TWO
+    answers, because the declared track's relevant bands hold one skill each,
+    which makes step 2's band-completeness guarantee trivially true there. The
+    approved target behaviour (a 5-question norm with a bounded 6th, broader
+    communication-subarea sampling, and a multi-area profile) is NOT implemented
+    here yet.
+
+    Canonical decisions, current-state gaps and what is deliberately deferred:
+
+        pilot_runtime/docs/parent_baseline_v2_design.md
+
+    Read that note before changing this traversal or the `ready_to_finalize`
+    expression in `api/functional_baseline_v2_api.py`. The rules are recorded
+    there and deliberately not duplicated here.
     """
     if not record.bands_entered:
         band = _entry_band(record)

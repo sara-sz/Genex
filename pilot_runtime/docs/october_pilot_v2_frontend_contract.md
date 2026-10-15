@@ -13,6 +13,18 @@ back from the running services, not from source alone.
 > **This file contains no credentials, no API keys and no beta codes.** Staging
 > logins are handed over out of band and must never be committed.
 
+> **Scope.** This document owns the **observable HTTP contract**: routes,
+> payload shapes, status codes, retry semantics and which fields may reach which
+> audience. It does **not** own Baseline v2's product behaviour — why the
+> baseline asks what it asks, how many questions it may spend, when it is
+> allowed to stop, how a multi-area profile is recorded, or what the completion
+> screen may claim. Those are founder decisions recorded in
+> **[`parent_baseline_v2_design.md`](./parent_baseline_v2_design.md)**, which is
+> canonical for them and also records which behaviour is implemented today
+> versus approved-but-not-yet-built. Read it before building the baseline UI:
+> some of what this contract describes is **current state under active review**,
+> not the target.
+
 > **Why this file lives under `pilot_runtime/docs/` rather than `/docs/`.**
 > `genex-parent/tests/test_parent_24_integrity.py::test_parent_commits_touch_only_parent_paths`
 > diffs `PARENT_BASE_TAG..HEAD` and rejects any path outside

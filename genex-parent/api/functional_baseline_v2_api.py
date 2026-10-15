@@ -432,6 +432,11 @@ def view(doc: Dict[str, Any], domain: str) -> Dict[str, Any]:
         "skills_assessed": len(record.skills),
         "bands": _band_progress(record),
         "current_question": _client_question(question),
+        # SUFFICIENCY, and it currently carries no evidence threshold of its
+        # own: it reports the traversal's verdict, nothing more. The approved
+        # target behaviour requires an explicit sufficiency predicate here.
+        # Decisions and current-state gaps live in ONE place:
+        #   pilot_runtime/docs/parent_baseline_v2_design.md
         "ready_to_finalize": (not finalized) and question is None,
         "updated_at": envelope.get("updated_at", ""),
     }
