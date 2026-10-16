@@ -248,6 +248,17 @@ class BaselineRecordV2:
     routing_anchor_months: Optional[int] = None
     demonstrated_months: Optional[int] = None
     not_demonstrated_months: Optional[int] = None
+    #: The interview policy FROZEN to this session at start. Two opaque
+    #: strings: this engine never resolves them and never reads a budget from
+    #: them. They are carried so a replay can prove which rules produced the
+    #: record, and so a later default change cannot reinterpret it.
+    #:
+    #: Deliberately `None` for records created before the policy object
+    #: existed. `record_to_state_v2` OMITS them when unset, which is what keeps
+    #: every historical stored dict — and therefore every historical A2
+    #: `projection_id` — byte-identical.
+    policy_id: Optional[str] = None
+    policy_digest: Optional[str] = None
 
     # -- track ------------------------------------------------------------
 
@@ -300,7 +311,10 @@ def ladder(record: BaselineRecordV2) -> Tuple[int, ...]:
 
 
 def start_baseline_v2(area_id: str, choice_id: str,
-                      chronological_months: int) -> BaselineRecordV2:
+                      chronological_months: int, *,
+                      policy_id: Optional[str] = None,
+                      policy_digest: Optional[str] = None
+                      ) -> BaselineRecordV2:
     """Begin a v2 baseline at the band the entry choice selects.
 
     The anchor chooses WHERE TO START ASKING. It is not evidence, and nothing
@@ -308,6 +322,13 @@ def start_baseline_v2(area_id: str, choice_id: str,
     used purely as a routing fallback — the most neutral place to begin when the
     caregiver cannot describe the child's speech — and still asserts nothing
     about ability.
+
+    `policy_id` / `policy_digest` are the interview policy FROZEN to this
+    session, passed IN by the API layer rather than resolved here. The
+    dependency runs one way on purpose: this engine decides what evidence
+    means, and it must not be able to read a budget, or the two concerns would
+    be coupled in the one module where they must stay apart. Both default to
+    `None` so every existing caller keeps working unchanged.
     """
     area = v1.get_area(area_id)
     choice = area.choice(choice_id)
@@ -318,6 +339,8 @@ def start_baseline_v2(area_id: str, choice_id: str,
         entry_choice_id=choice_id,
         entry_anchor_months=choice.anchor_months,
         chronological_months=int(chronological_months),
+        policy_id=policy_id,
+        policy_digest=policy_digest,
     )
     return record
 
@@ -583,7 +606,7 @@ def record_to_state_v2(record: BaselineRecordV2) -> Dict[str, Any]:
     """
     skills = sorted((_skill_to_state(e) for e in record.skills.values()),
                     key=lambda s: (s["months"], s["subdomain"], s["milestone"]))
-    return {
+    state = {
         "record_schema": RECORD_SCHEMA_V2,
         "baseline_version": record.baseline_version,
         "area_id": record.area_id,
@@ -598,6 +621,18 @@ def record_to_state_v2(record: BaselineRecordV2) -> Dict[str, Any]:
         "demonstrated_months": record.demonstrated_months,
         "not_demonstrated_months": record.not_demonstrated_months,
     }
+    # OMITTED WHEN UNSET, never written as null.
+    #
+    # The A2 v2 source digest is taken over this exact dict, so emitting the
+    # keys unconditionally would change the digest of every record created
+    # before the policy object existed — turning an idempotent replay into an
+    # integrity conflict against itself. Omission keeps historical bytes, and
+    # therefore historical `projection_id`s, identical.
+    if record.policy_id:
+        state["policy_id"] = record.policy_id
+    if record.policy_digest:
+        state["policy_digest"] = record.policy_digest
+    return state
 
 
 def record_from_state_v2(stored: Dict[str, Any]) -> BaselineRecordV2:
@@ -632,6 +667,11 @@ def record_from_state_v2(stored: Dict[str, Any]) -> BaselineRecordV2:
         routing_anchor_months=stored.get("routing_anchor_months"),
         demonstrated_months=stored.get("demonstrated_months"),
         not_demonstrated_months=stored.get("not_demonstrated_months"),
+        # Absent for every record created before the policy object existed.
+        # Read with `.get` so those records still decode unchanged; the API
+        # layer decides what an unpolicied record may do.
+        policy_id=stored.get("policy_id"),
+        policy_digest=stored.get("policy_digest"),
     )
     for row in (stored.get("skills") or []):
         evidence = BaselineSkillEvidence(

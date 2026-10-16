@@ -63,6 +63,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
+from api import baseline_policy
 from genex_core.functional_baseline import (
     BaselineError,
     area_for_domain,
@@ -262,11 +263,39 @@ def start(doc: Dict[str, Any], domain: str, entry_choice_id: str
     except Exception as exc:  # the engine raises on an unknown descriptor
         raise BaselineV2EntryChoiceUnknown(entry_choice_id) from exc
 
+    # FREEZE the interview policy onto this session, once, here.
+    #
+    # Resolved from the registry's default for (baseline_version, domain) and
+    # then written to the record, so every later question and every replay uses
+    # the policy the RECORD names rather than whatever the default has become.
+    # That is what makes a later budget change unable to reach an in-progress or
+    # historical session. See api/baseline_policy.py.
+    policy = baseline_policy.default_policy(BASELINE_VERSION_V2, key)
     record = start_baseline_v2(area.area_id, entry_choice_id,
-                               _chronological_months(doc))
+                               _chronological_months(doc),
+                               policy_id=policy.policy_id,
+                               policy_digest=policy.policy_digest)
     next_question_v2(record)
     _store(doc, record, finalized=False)
     return view(doc, key), True
+
+
+def policy_for_record(record: BaselineRecordV2):
+    """The policy a session was frozen to, verified, or a refusal.
+
+    Records created before the policy object existed carry neither field. They
+    are answered with the registered DEFAULT for their domain — not because a
+    default is equivalent, but because such a record predates every budget rule
+    and nothing about it was decided by one. New records always carry both, and
+    for those the digest is verified: an unknown id or an edited registry
+    REFUSES rather than silently applying today's rules to an interview
+    conducted under different ones.
+    """
+    if not record.policy_id:
+        return baseline_policy.default_policy(record.baseline_version,
+                                              record.domain)
+    return baseline_policy.verify_policy(record.policy_id,
+                                         record.policy_digest or "")
 
 
 def answer(doc: Dict[str, Any], domain: str, requested_skill_key: str,
