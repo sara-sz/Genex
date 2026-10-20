@@ -26,8 +26,8 @@ from api import baseline_traversal as T
 from genex_core import functional_baseline_v2 as v2
 
 AREA = "talking"
-POLICY = P.TALKING_V2_POLICY_1
-BUDGET = POLICY.target_finding_budget
+POLICY = P.TALKING_V2_POLICY_2
+BUDGET = POLICY.target_finding_normal_allocation
 LOOKAHEAD = POLICY.normal_upper_lookahead_months
 
 CHOICES = ("no_words_yet", "few_sounds_or_words", "many_single_words",
@@ -36,16 +36,38 @@ AGES = (2, 4, 6, 9, 12, 18, 24, 30, 36, 48, 60)
 ANSWERS = ("yes", "no", "sometimes", "with_help", "not_sure")
 
 
-def drive(choice, age, answer_for, budget=BUDGET, lookahead=LOOKAHEAD):
-    """Run Channel A to its terminal step. Returns (record, reason, asked)."""
+def budget_for(allocation=None, asked_total=0, hard=None, normal=None):
+    """One budget object; the planner never sees loose integers."""
+    return T.InterviewBudget(
+        normal_allocation=(POLICY.target_finding_normal_allocation
+                           if allocation is None else allocation),
+        normal_total=(POLICY.normal_question_target if normal is None
+                      else normal),
+        hard_total=(POLICY.hard_question_max if hard is None else hard),
+        asked_total=asked_total)
+
+
+def drive(choice, age, answer_for, budget=None, lookahead=LOOKAHEAD,
+          hard=None, normal=None):
+    """Run Channel A to its terminal step. Returns (record, reason, asked).
+
+    `asked_total` is refreshed every iteration, because the hard total binds
+    the WHOLE interview and Channel A is all of it during target finding.
+    """
+    allocation = budget
     record = v2.start_baseline_v2(AREA, choice, age)
     asked = []
+    tiers = []
     for _ in range(64):
-        step = T.plan_next(record, lookahead_months=lookahead, budget=budget)
+        step = T.plan_next(
+            record, lookahead_months=lookahead,
+            budget=budget_for(allocation, len(asked), hard, normal))
         if step.kind == T.STOP:
+            record._tiers = tiers          # test-only breadcrumb
             return record, step.reason, asked
         if step.enters_band is not None:
             record.bands_entered.append(step.enters_band)
+            tiers.append((step.enters_band, step.admitted_tier))
         q = step.question
         asked.append(q)
         v2.record_answer_v2(record, q, answer_for(q))
@@ -107,7 +129,7 @@ def test_a_truncated_band_really_does_break_the_pilot():
     # budget of 4 it cannot be (1 + 4 > 4), which is its own finding.
     record, reason, asked = drive(
         "two_three_words", 36,
-        lambda q: "yes" if q["months"] <= 24 else "no", budget=9)
+        lambda q: "yes" if q["months"] <= 24 else "no", budget=9, normal=9)
     band30 = [r for r in v2.band_skill_rows(record, 30)]
     assert 30 in record.bands_entered and len(band30) == 4
     victim = v2.skill_key(record.domain, band30[-1]["subdomain"], 30,
@@ -128,26 +150,178 @@ def test_a_truncated_band_really_does_break_the_pilot():
 # 2. the budget
 # ---------------------------------------------------------------------------
 
-def test_channel_a_never_exceeds_the_target_finding_budget():
+def test_channel_a_never_exceeds_the_hard_total():
+    """The only absolute bound. NINE IS A TOTAL, never a per-channel figure.
+
+    `target_finding_normal_allocation` is the PREFERRED allocation, not a
+    ceiling: when target or floor integrity needs another complete band,
+    Channel A may pass it via tier 2 (within the normal total) or tier 3
+    (within the hard total). An earlier version of this test asserted
+    `L <= 4` and that assertion was itself the bug.
+    """
     over = [(c, a, n, len(asked))
             for c, a, n, f in MATRIX
             for _r, _reason, asked in [drive(c, a, f)]
-            if len(asked) > BUDGET]
+            if len(asked) > POLICY.hard_question_max]
     assert over == [], over
 
 
-@pytest.mark.parametrize("budget", [1, 2, 3, 4, 5, 6, 7])
-def test_the_budget_is_respected_at_every_value(budget):
+def test_expansion_beyond_the_preferred_allocation_is_always_tier_justified():
+    """Every band past tier 1 must name the bound that admitted it."""
+    for choice, age, name, fn in MATRIX:
+        record, reason, asked = drive(choice, age, fn)
+        if len(asked) <= POLICY.target_finding_normal_allocation:
+            continue
+        tiers = {t for _band, t in record._tiers}
+        assert tiers & {T.TIER_NORMAL, T.TIER_ADDITIONAL}, (
+            choice, age, name, record._tiers)
+        for _band, tier in record._tiers:
+            assert tier in T.BAND_ADMISSION_TIERS
+
+
+@pytest.mark.parametrize("allocation", [1, 2, 3, 4, 5, 6])
+def test_every_entered_band_stays_complete_at_every_allocation(allocation):
     for choice, age, name, fn in MATRIX[::37]:
-        record, reason, asked = drive(choice, age, fn, budget=budget)
-        assert len(asked) <= budget
+        record, reason, asked = drive(choice, age, fn, budget=allocation)
+        assert len(asked) <= POLICY.hard_question_max
         for months in record.bands_entered:
             assert v2.band_assessment(record, months).assessment_complete
 
 
+# ---------------------------------------------------------------------------
+# 2b. THE THREE FOUNDER-PINNED BUDGET CASES
+# ---------------------------------------------------------------------------
+
+def test_case_24m_mastered_then_whole_band_30_costs_five_inside_normal():
+    """1 + 4 = 5. Tier 2. Still a normal interview, zero additional questions.
+
+    Band 24 is one skill wide and band 30 is four. Under the superseded
+    reading (4 as an absolute ceiling) this band could never be entered, so a
+    child who had mastered 24m got no target at all — even though 30m is
+    exactly where their target lies.
+    """
+    record, reason, asked = drive(
+        "two_three_words", 36, lambda q: "yes" if q["months"] <= 24 else "no")
+    assert [q["months"] for q in asked] == [24, 30, 30, 30, 30]
+    assert len(asked) == 5
+    assert len(asked) <= POLICY.normal_question_target
+    assert record.bands_entered == [24, 30]
+    # Entered at tier 2: beyond the preferred 4, inside the normal 6.
+    assert dict(record._tiers)[30] == T.TIER_NORMAL
+    # Zero additional-question usage: 5 <= 6.
+    additional_used = max(0, len(asked) - POLICY.normal_question_target)
+    assert additional_used == 0
+    # One normal profile slot remains before six.
+    assert POLICY.profile_slots_for(len(asked)) == 1
+    for months in record.bands_entered:
+        assert v2.band_assessment(record, months).assessment_complete
+
+
+def test_case_36m_anchor_establishing_the_30m_floor_costs_seven():
+    """3 + 4 = 7. Tier 3. Q7 is the first beyond the normal interview."""
+    record, reason, asked = drive(
+        "short_sentences", 36, lambda q: "yes" if q["months"] < 36 else "no")
+    assert len(asked) == 7
+    assert record.bands_entered == [36, 30]
+    assert dict(record._tiers)[36] == T.TIER_PREFERRED
+    assert dict(record._tiers)[30] == T.TIER_ADDITIONAL
+    assert reason == T.TARGET_FOUND
+    assert T.floor_band(record) == 30
+    assert T.candidate_target_band(record) == 36
+    # Q7 is the first additional question; two slots remain, never past nine.
+    additional_used = len(asked) - POLICY.normal_question_target
+    assert additional_used == 1
+    assert POLICY.additional_question_allowance - additional_used == 2
+    assert len(asked) <= POLICY.hard_question_max
+    assert POLICY.profile_slots_for(len(asked)) == 0
+    for months in record.bands_entered:
+        assert v2.band_assessment(record, months).assessment_complete
+
+
+def test_case_a_whole_band_that_would_exceed_nine_is_not_entered():
+    """6 already asked + a four-wide band = 10. Refuse; never half-ask it."""
+    record = v2.start_baseline_v2(AREA, "two_three_words", 36)
+    record.bands_entered.append(24)
+    row = v2.band_skill_rows(record, 24)[0]
+    v2.record_answer_v2(record, {"domain": record.domain,
+                                 "subdomain": row["subdomain"],
+                                 "months": 24,
+                                 "milestone": row["milestone"]}, "yes")
+    # Channel B has already spent five, so the interview total stands at six.
+    budget = T.InterviewBudget(
+        normal_allocation=POLICY.target_finding_normal_allocation,
+        normal_total=POLICY.normal_question_target,
+        hard_total=POLICY.hard_question_max,
+        asked_total=6)
+    assert T.band_width(record, 30) == 4
+    assert budget.admits_band(channel_a_spent=1, width=4) is None
+    step = T.plan_next(record, lookahead_months=LOOKAHEAD, budget=budget)
+    assert step.kind == T.STOP
+    assert step.reason == T.CEILING_BUDGET_EXHAUSTED
+    assert 30 not in record.bands_entered
+    assert v2.band_assessment(record, 24).assessment_complete
+
+
+def test_the_hard_total_binds_channel_a_and_channel_b_together():
+    """Nine is a total. A tier-1 decision cannot overrun it."""
+    budget = T.InterviewBudget(normal_allocation=4, normal_total=6,
+                               hard_total=9, asked_total=8)
+    # Width 1 fits (9), width 2 does not (10) — even though Channel A has
+    # spent nothing and tier 1 would otherwise admit it.
+    assert budget.admits_band(channel_a_spent=0, width=1) is not None
+    assert budget.admits_band(channel_a_spent=0, width=2) is None
+
+
+def test_target_integrity_outranks_profile_breadth():
+    """A band needed for integrity is entered even though it costs profile."""
+    record, reason, asked = drive(
+        "two_three_words", 36, lambda q: "yes" if q["months"] <= 24 else "no")
+    assert POLICY.profile_slots_for(len(asked)) < 3, (
+        "entering band 30 must cost profile breadth")
+    assert 30 in record.bands_entered, (
+        "and integrity must still win: the band is entered")
+
+
+def test_the_three_tiers_are_admitted_in_order():
+    budget = T.InterviewBudget(normal_allocation=4, normal_total=6,
+                               hard_total=9, asked_total=0)
+    assert budget.admits_band(channel_a_spent=0, width=4) == T.TIER_PREFERRED
+    assert budget.admits_band(channel_a_spent=3, width=3) == T.TIER_NORMAL
+    assert budget.with_asked(5).admits_band(channel_a_spent=5,
+                                            width=4) == T.TIER_ADDITIONAL
+    assert budget.with_asked(6).admits_band(channel_a_spent=6, width=4) is None
+
+
+def test_the_additional_allowance_cannot_contradict_the_two_bounds():
+    for policy_id in P.registered_policy_ids():
+        policy = P.get_policy(policy_id)
+        budget = T.InterviewBudget.from_policy(policy)
+        assert budget.additional_allowance == (
+            policy.hard_question_max - policy.normal_question_target)
+        assert budget.additional_allowance == \
+            policy.additional_question_allowance
+
+
+def test_changing_the_allocation_changes_no_recorded_state():
+    """Budget is routing. It never touches meaning."""
+    answers = {}
+
+    def pattern(q):
+        answers.setdefault(q["skill_key"], "yes" if q["months"] <= 24 else "no")
+        return answers[q["skill_key"]]
+
+    a = drive("two_three_words", 36, pattern, budget=4)
+    b = drive("two_three_words", 36, pattern, budget=6)
+    for record in (a[0], b[0]):
+        for key, evidence in record.skills.items():
+            assert evidence.state == (
+                "demonstrated" if evidence.months <= 24 else "not_demonstrated")
+
+
 def test_a_band_wider_than_the_budget_is_never_entered():
     """Rule 5 at the first step. Band 6 is three skills wide."""
-    record, reason, asked = drive("not_sure", 6, lambda q: "yes", budget=2)
+    record, reason, asked = drive("not_sure", 6, lambda q: "yes", budget=2,
+                                  normal=2, hard=2)
     assert asked == []
     assert reason == T.START_BAND_DOES_NOT_FIT
     assert record.bands_entered == []
@@ -172,7 +346,7 @@ def test_a_delayed_older_child_starts_low_not_at_their_age():
     """The founder's example: 36m child reported as having no words."""
     record = v2.start_baseline_v2(AREA, "no_words_yet", 36)
     assert T.start_band(record) == 9
-    step = T.plan_next(record, lookahead_months=LOOKAHEAD, budget=BUDGET)
+    step = T.plan_next(record, lookahead_months=LOOKAHEAD, budget=budget_for())
     assert step.is_ask and step.question["months"] == 9
 
 
@@ -181,7 +355,7 @@ def test_the_anchor_is_honoured_even_above_the_guardrail():
     record = v2.start_baseline_v2(AREA, "short_sentences", 12)
     assert T.start_band(record) == 36
     assert T.ascent_ceiling_band(record, lookahead_months=LOOKAHEAD) == 36
-    step = T.plan_next(record, lookahead_months=LOOKAHEAD, budget=BUDGET)
+    step = T.plan_next(record, lookahead_months=LOOKAHEAD, budget=budget_for())
     assert step.is_ask and step.question["months"] == 36
 
 
@@ -241,7 +415,8 @@ def test_the_candidate_target_is_the_lowest_unresolved_entered_band():
 
 
 def test_a_deficit_at_the_ladder_bottom_is_still_a_finding():
-    record, reason, asked = drive("no_words_yet", 9, lambda q: "no", budget=9)
+    record, reason, asked = drive("no_words_yet", 9, lambda q: "no", budget=9,
+                                  normal=9)
     assert reason in (T.TARGET_AT_LADDER_BOTTOM, T.FLOOR_UNESTABLISHED)
 
 
@@ -267,7 +442,7 @@ def test_plan_next_mutates_nothing():
     record = v2.start_baseline_v2(AREA, "many_single_words", 36)
     before = (dict(record.skills), list(record.bands_entered))
     for _ in range(3):
-        T.plan_next(record, lookahead_months=LOOKAHEAD, budget=BUDGET)
+        T.plan_next(record, lookahead_months=LOOKAHEAD, budget=budget_for())
     assert (dict(record.skills), list(record.bands_entered)) == before
 
 
@@ -285,7 +460,7 @@ def test_channel_a_summary_reports_completeness_and_no_child_data():
     record, reason, asked = drive("two_three_words", 36,
                                   lambda q: "yes" if q["months"] <= 24 else "no")
     summary = T.channel_a_summary(record, lookahead_months=LOOKAHEAD,
-                                  budget=BUDGET)
+                                  budget=budget_for())
     assert summary["every_entered_band_complete"] is True
     assert summary["questions_spent"] == len(asked)
     assert summary["terminal_reason"] == reason

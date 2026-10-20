@@ -66,14 +66,15 @@ POLICY_KEYS: Tuple[str, ...] = (
     # -- interview budget ------------------------------------------------
     "normal_question_target",
     "hard_question_max",
-    "clarification_budget",
+    # DERIVED, never a caller input. See `additional_question_allowance`.
+    "additional_question_allowance",
     # -- routing ---------------------------------------------------------
     "normal_upper_lookahead_months",
     "anchor_source",
     "anchor_may_exceed_guardrail",
     "descent_lower_bound",
     # -- target finding (Channel A) --------------------------------------
-    "target_finding_budget",
+    "target_finding_normal_allocation",
     "target_budget_enforced_at",
     "floor_rule",
     "floor_recovery_via_clarifier",
@@ -116,14 +117,13 @@ class BaselinePolicy:
 
     normal_question_target: int
     hard_question_max: int
-    clarification_budget: int
 
     normal_upper_lookahead_months: int
     anchor_source: str
     anchor_may_exceed_guardrail: bool
     descent_lower_bound: str
 
-    target_finding_budget: int
+    target_finding_normal_allocation: int
     target_budget_enforced_at: str
     floor_rule: str
     floor_recovery_via_clarifier: bool
@@ -134,6 +134,43 @@ class BaselinePolicy:
     profile_fallback_tiers: Tuple[str, ...]
     profile_first_probe_anchor: str
     profile_clarify_direction: str
+
+    # -- derived, never an input ------------------------------------------
+
+    def __post_init__(self) -> None:
+        """Validate the budget relationships at construction.
+
+        A policy that cannot be satisfied is refused here rather than
+        producing an interview nobody can finish.
+        """
+        if int(self.hard_question_max) < int(self.normal_question_target):
+            raise BaselinePolicyError(
+                "hard_question_max must be at least normal_question_target")
+        if int(self.target_finding_normal_allocation) > int(
+                self.normal_question_target):
+            raise BaselinePolicyError(
+                "the preferred Channel-A allocation cannot exceed the normal "
+                "total interview target")
+        if int(self.target_finding_normal_allocation) < 1:
+            raise BaselinePolicyError(
+                "the preferred Channel-A allocation must admit one question")
+
+    @property
+    def additional_question_allowance(self) -> int:
+        """Questions 7-9: `hard_question_max - normal_question_target`.
+
+        DERIVED, never accepted as policy input. It was briefly an independent
+        field and that was a latent contradiction: a policy could declare
+        `hard_question_max = 8` and an allowance of 3, and nothing would
+        notice. One source of truth, computed.
+
+        These are no longer "clarification" questions in particular. They are
+        the additional-question allowance, and the founder's approved uses are
+        target/floor completion, profile coverage recovery, uncertainty
+        clarification and multi-area differentiation. Naming them after one of
+        those four would have mis-described the other three.
+        """
+        return int(self.hard_question_max) - int(self.normal_question_target)
 
     # -- canonical form ---------------------------------------------------
 
@@ -150,14 +187,16 @@ class BaselinePolicy:
             "domain": self.domain,
             "normal_question_target": int(self.normal_question_target),
             "hard_question_max": int(self.hard_question_max),
-            "clarification_budget": int(self.clarification_budget),
+            "additional_question_allowance":
+                int(self.additional_question_allowance),
             "normal_upper_lookahead_months":
                 int(self.normal_upper_lookahead_months),
             "anchor_source": self.anchor_source,
             "anchor_may_exceed_guardrail":
                 bool(self.anchor_may_exceed_guardrail),
             "descent_lower_bound": self.descent_lower_bound,
-            "target_finding_budget": int(self.target_finding_budget),
+            "target_finding_normal_allocation":
+                int(self.target_finding_normal_allocation),
             "target_budget_enforced_at": self.target_budget_enforced_at,
             "floor_rule": self.floor_rule,
             "floor_recovery_via_clarifier":
@@ -221,10 +260,16 @@ def _digest(payload: Any) -> str:
 # the registry
 # ---------------------------------------------------------------------------
 
-#: The October pilot policy. Founder-approved values, recorded in the design
-#: note. `target_finding_budget = 4` was chosen from the traversal audit: it
-#: holds Channel A to <=4 questions with a mean of 2.67 while leaving >=2 normal
-#: slots for profile breadth. It is a POLICY value, not a clinical constant.
+#: SUPERSEDED by policy 2. Retained, registered and immutable so that any
+#: session which named it still replays through its own rules — never through
+#: today's default. No deployed or real-family session was ever created under
+#: it, which is why correcting the budget SEMANTICS was possible at all: the
+#: correction landed as a new id rather than as an edit.
+#:
+#: Its values are identical to policy 2's. The difference is interpretation,
+#: and that is exactly why it needed a new id: under policy 1 the Channel-A
+#: allocation was read as an absolute ceiling, which blocked entering a whole
+#: band that target integrity required.
 TALKING_V2_POLICY_1 = BaselinePolicy(
     policy_id="talking-v2-policy-1",
     baseline_version="parent-2.4-functional-baseline-v2",
@@ -232,14 +277,65 @@ TALKING_V2_POLICY_1 = BaselinePolicy(
 
     normal_question_target=6,
     hard_question_max=9,
-    clarification_budget=3,
 
     normal_upper_lookahead_months=6,
     anchor_source="entry_choice",
     anchor_may_exceed_guardrail=True,
     descent_lower_bound="none",
 
-    target_finding_budget=4,
+    target_finding_normal_allocation=4,
+    target_budget_enforced_at="complete_band_boundary",
+    floor_rule="mastered_band_below",
+    floor_recovery_via_clarifier=True,
+    substitute_served_target=False,
+
+    required_profile_areas=("receptive", "functional", "social"),
+    profile_area_priority=("receptive", "functional", "social"),
+    profile_fallback_tiers=("receptive_plus", "functional_plus",
+                            "social_plus", "intelligibility"),
+    profile_first_probe_anchor="chronological_with_guardrail",
+    profile_clarify_direction="downward_unbounded",
+)
+
+#: THE CURRENT PILOT POLICY. Same values as policy 1; corrected semantics.
+#:
+#: `target_finding_normal_allocation = 4` is the PREFERRED Channel-A
+#: allocation, chosen from the traversal audit — it holds Channel A to a mean
+#: of 2.67 questions while leaving two normal slots for profile breadth. It is
+#: NOT an absolute ceiling. When target or floor integrity requires another
+#: COMPLETE band, Channel A may exceed it, admitted at the first bound the
+#: whole band fits:
+#:
+#:     tier 1   within target_finding_normal_allocation (4)   preferred
+#:     tier 2   within normal_question_target (6)             still a normal
+#:                                                            interview, NOT an
+#:                                                            additional question
+#:     tier 3   within hard_question_max (9)                  consumes the
+#:                                                            additional-question
+#:                                                            allowance
+#:     else     do not enter; stop honestly, never truncate
+#:
+#: Worked examples the tests pin: 24m mastered then band 30 costs 1+4=5, which
+#: is tier 2 and leaves question 6 for Channel B with zero additional-question
+#: usage. A 36m anchor needing the 30m floor costs 3+4=7, which is tier 3 and
+#: makes question 7 the first beyond the normal interview.
+#:
+#: The bounds are enforced over the WHOLE interview, Channel A and Channel B
+#: together. Nine is a total, never a per-channel figure.
+TALKING_V2_POLICY_2 = BaselinePolicy(
+    policy_id="talking-v2-policy-2",
+    baseline_version="parent-2.4-functional-baseline-v2",
+    domain="talking_and_communicating",
+
+    normal_question_target=6,
+    hard_question_max=9,
+
+    normal_upper_lookahead_months=6,
+    anchor_source="entry_choice",
+    anchor_may_exceed_guardrail=True,
+    descent_lower_bound="none",
+
+    target_finding_normal_allocation=4,
     target_budget_enforced_at="complete_band_boundary",
     floor_rule="mastered_band_below",
     floor_recovery_via_clarifier=True,
@@ -255,13 +351,14 @@ TALKING_V2_POLICY_1 = BaselinePolicy(
 
 _REGISTRY: Mapping[str, BaselinePolicy] = MappingProxyType({
     TALKING_V2_POLICY_1.policy_id: TALKING_V2_POLICY_1,
+    TALKING_V2_POLICY_2.policy_id: TALKING_V2_POLICY_2,
 })
 
 #: `(baseline_version, domain) -> policy_id` for NEW sessions only. The one
 #: operationally changeable thing in this module; rollback is repointing it.
 _DEFAULTS: Mapping[Tuple[str, str], str] = MappingProxyType({
-    (TALKING_V2_POLICY_1.baseline_version, TALKING_V2_POLICY_1.domain):
-        TALKING_V2_POLICY_1.policy_id,
+    (TALKING_V2_POLICY_2.baseline_version, TALKING_V2_POLICY_2.domain):
+        TALKING_V2_POLICY_2.policy_id,
 })
 
 
@@ -309,6 +406,7 @@ __all__ = [
     "FORBIDDEN_POLICY_KEY_FRAGMENTS",
     "POLICY_KEYS",
     "TALKING_V2_POLICY_1",
+    "TALKING_V2_POLICY_2",
     "BaselinePolicy",
     "BaselinePolicyError",
     "canonical_json",

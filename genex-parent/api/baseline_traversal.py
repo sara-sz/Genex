@@ -99,10 +99,88 @@ TERMINAL_REASONS: Tuple[str, ...] = (
 TARGET_REASONS: Tuple[str, ...] = (TARGET_FOUND, TARGET_AT_LADDER_BOTTOM)
 
 
+#: Which bound admitted a band. Reported so slice 7/9 can explain WHY an
+#: interview ran past six questions rather than leaving it to be inferred.
+TIER_PREFERRED = "preferred_allocation"
+TIER_NORMAL = "normal_total"
+TIER_ADDITIONAL = "additional_allowance"
+
+BAND_ADMISSION_TIERS: Tuple[str, ...] = (TIER_PREFERRED, TIER_NORMAL,
+                                         TIER_ADDITIONAL)
+
+
 class TraversalError(Exception):
     """The traversal could not be planned. PHI-safe: names no child."""
 
     PHI_SAFE_MESSAGE = True
+
+
+@dataclass(frozen=True)
+class InterviewBudget:
+    """The ONE budget source. Three bounds over the WHOLE interview.
+
+    Built from a policy, never assembled by hand from loose integers — that is
+    how two counters start disagreeing. `asked_total` counts Channel A and
+    Channel B together, because nine is a total and never a per-channel figure.
+
+    ## THE THREE TIERS
+
+    A complete band is admitted at the first bound it fits in:
+
+        tier 1  within the PREFERRED Channel-A allocation (4)
+        tier 2  within the NORMAL total interview (6) — target integrity
+                outranks profile breadth, and this is still an ordinary
+                interview, NOT an additional question
+        tier 3  within the HARD total (9) — consumes the additional-question
+                allowance
+        none    do not enter; stop honestly and never truncate
+
+    Tier 2 exists because the preferred allocation was being read as an
+    absolute ceiling, which blocked the commonest useful case: a child who has
+    mastered 24m needs the four-wide 30m band, costing 1 + 4 = 5. That is
+    inside the normal six and should never have required an exception.
+    """
+
+    normal_allocation: int
+    normal_total: int
+    hard_total: int
+    asked_total: int = 0
+
+    @classmethod
+    def from_policy(cls, policy: Any, *, asked_total: int = 0
+                    ) -> "InterviewBudget":
+        return cls(
+            normal_allocation=int(policy.target_finding_normal_allocation),
+            normal_total=int(policy.normal_question_target),
+            hard_total=int(policy.hard_question_max),
+            asked_total=int(asked_total),
+        )
+
+    def with_asked(self, asked_total: int) -> "InterviewBudget":
+        return InterviewBudget(self.normal_allocation, self.normal_total,
+                               self.hard_total, int(asked_total))
+
+    @property
+    def additional_allowance(self) -> int:
+        return self.hard_total - self.normal_total
+
+    def admits_band(self, *, channel_a_spent: int,
+                    width: int) -> Optional[str]:
+        """The tier that admits this WHOLE band, or `None` to refuse.
+
+        `None` is the honest outcome, not a failure: a band that does not fit
+        is not entered at all, so no band is ever left partially assessed.
+        """
+        width = int(width)
+        # The hard total binds every tier. Checked first so a Channel B that
+        # has already spent questions cannot be overrun by a tier-1 decision.
+        if self.asked_total + width > self.hard_total:
+            return None
+        if int(channel_a_spent) + width <= self.normal_allocation:
+            return TIER_PREFERRED
+        if self.asked_total + width <= self.normal_total:
+            return TIER_NORMAL
+        return TIER_ADDITIONAL
 
 
 @dataclass(frozen=True)
@@ -113,6 +191,8 @@ class TraversalStep:
     question: Optional[Dict[str, Any]] = None
     enters_band: Optional[int] = None
     reason: Optional[str] = None
+    #: Which bound admitted `enters_band`. `None` when no band is opened.
+    admitted_tier: Optional[str] = None
 
     @property
     def is_ask(self) -> bool:
@@ -214,7 +294,8 @@ def candidate_target_band(record) -> Optional[int]:
 # the planner
 # ---------------------------------------------------------------------------
 
-def plan_next(record, *, lookahead_months: int, budget: int) -> TraversalStep:
+def plan_next(record, *, lookahead_months: int,
+              budget: InterviewBudget) -> TraversalStep:
     """The next Channel-A step. Pure: reads the record, mutates nothing.
 
     The caller appends `enters_band` to `record.bands_entered` when it acts on
@@ -230,12 +311,14 @@ def plan_next(record, *, lookahead_months: int, budget: int) -> TraversalStep:
         start = start_band(record)
         if start is None:
             raise TraversalError("no starting band could be routed")
-        if band_width(record, start) > int(budget):
+        tier = budget.admits_band(channel_a_spent=spent,
+                                  width=band_width(record, start))
+        if tier is None:
             # Never enter a band we cannot finish — rule 5, at the first step.
             return TraversalStep(kind=STOP, reason=START_BAND_DOES_NOT_FIT)
         row = band_skill_rows(record, start)[0]
         return TraversalStep(kind=ASK, question=_question(record, start, row),
-                             enters_band=start)
+                             enters_band=start, admitted_tier=tier)
 
     current = record.bands_entered[-1]
 
@@ -269,11 +352,13 @@ def plan_next(record, *, lookahead_months: int, budget: int) -> TraversalStep:
         nxt = higher[0]
         if nxt in record.bands_entered:
             return TraversalStep(kind=STOP, reason=NO_TARGET_WITHIN_GUARDRAIL)
-        if spent + band_width(record, nxt) > int(budget):
+        tier = budget.admits_band(channel_a_spent=spent,
+                                  width=band_width(record, nxt))
+        if tier is None:
             return TraversalStep(kind=STOP, reason=CEILING_BUDGET_EXHAUSTED)
         row = band_skill_rows(record, nxt)[0]
         return TraversalStep(kind=ASK, question=_question(record, nxt, row),
-                             enters_band=nxt)
+                             enters_band=nxt, admitted_tier=tier)
 
     if assessment.unresolved:
         if floor_band(record) is not None and floor_band(record) < current:
@@ -286,13 +371,16 @@ def plan_next(record, *, lookahead_months: int, budget: int) -> TraversalStep:
         nxt = lower[-1]
         if nxt in record.bands_entered:
             return TraversalStep(kind=STOP, reason=FLOOR_UNESTABLISHED)
-        if spent + band_width(record, nxt) > int(budget):
-            # Descent is unbounded by AGE (rule 3) but not by budget. Stopping
-            # here is honest: a deficit is known, a floor is not.
+        tier = budget.admits_band(channel_a_spent=spent,
+                                  width=band_width(record, nxt))
+        if tier is None:
+            # Descent is unbounded by AGE (rule 3) but not by the interview
+            # total. Stopping here is honest: a deficit is known, a floor is
+            # not, and the band is not half-asked.
             return TraversalStep(kind=STOP, reason=FLOOR_UNESTABLISHED)
         row = band_skill_rows(record, nxt)[0]
         return TraversalStep(kind=ASK, question=_question(record, nxt, row),
-                             enters_band=nxt)
+                             enters_band=nxt, admitted_tier=tier)
 
     # Complete, not mastered, nothing unresolved: every non-demonstrated answer
     # was `unknown`. Not a target, and not a deficit.
@@ -300,7 +388,7 @@ def plan_next(record, *, lookahead_months: int, budget: int) -> TraversalStep:
 
 
 def channel_a_summary(record, *, lookahead_months: int,
-                      budget: int) -> Dict[str, Any]:
+                      budget: InterviewBudget) -> Dict[str, Any]:
     """Derived Channel-A state. Diagnostics and slice 7's outcome input."""
     step = plan_next(record, lookahead_months=lookahead_months, budget=budget)
     target = candidate_target_band(record)
@@ -322,6 +410,11 @@ def channel_a_summary(record, *, lookahead_months: int,
 
 __all__ = [
     "ASK",
+    "BAND_ADMISSION_TIERS",
+    "InterviewBudget",
+    "TIER_ADDITIONAL",
+    "TIER_NORMAL",
+    "TIER_PREFERRED",
     "CEILING_BUDGET_EXHAUSTED",
     "FLOOR_UNESTABLISHED",
     "NO_TARGET_WITHIN_GUARDRAIL",

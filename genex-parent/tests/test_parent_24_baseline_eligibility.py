@@ -171,18 +171,25 @@ def test_the_module_defines_no_answer_to_state_mapping():
 # ---------------------------------------------------------------------------
 
 def _drive(choice, age, answer_for, budget=None):
-    policy = P.TALKING_V2_POLICY_1
-    budget = policy.target_finding_budget if budget is None else budget
+    policy = P.TALKING_V2_POLICY_2
+    allocation = (policy.target_finding_normal_allocation if budget is None
+                  else budget)
     record = v2.start_baseline_v2(AREA, choice, age)
+    asked = 0
     for _ in range(64):
-        step = T.plan_next(record,
-                           lookahead_months=policy.normal_upper_lookahead_months,
-                           budget=budget)
+        step = T.plan_next(
+            record, lookahead_months=policy.normal_upper_lookahead_months,
+            budget=T.InterviewBudget(
+                normal_allocation=allocation,
+                normal_total=max(allocation, policy.normal_question_target),
+                hard_total=max(allocation, policy.hard_question_max),
+                asked_total=asked))
         if step.kind == T.STOP:
             return record, step.reason
         if step.enters_band is not None:
             record.bands_entered.append(step.enters_band)
         v2.record_answer_v2(record, step.question, answer_for(step.question))
+        asked += 1
     raise AssertionError("did not terminate")
 
 

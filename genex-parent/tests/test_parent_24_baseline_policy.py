@@ -34,12 +34,12 @@ DOMAIN = "talking_and_communicating"
 # ---------------------------------------------------------------------------
 
 def test_the_pilot_policy_carries_the_founder_approved_values():
-    p = P.get_policy("talking-v2-policy-1")
+    p = P.get_policy("talking-v2-policy-2")
     assert p.normal_question_target == 6
     assert p.hard_question_max == 9
-    assert p.clarification_budget == 3
+    assert p.additional_question_allowance == 3
     assert p.normal_upper_lookahead_months == 6
-    assert p.target_finding_budget == 4
+    assert p.target_finding_normal_allocation == 4
     assert p.target_budget_enforced_at == "complete_band_boundary"
     assert p.descent_lower_bound == "none"
     assert p.anchor_source == "entry_choice"
@@ -49,7 +49,7 @@ def test_the_pilot_policy_carries_the_founder_approved_values():
 
 def test_the_policy_digest_is_stable_and_order_independent():
     """DRIFT GATE. The digest is a pure function of the canonical dict."""
-    p = P.TALKING_V2_POLICY_1
+    p = P.TALKING_V2_POLICY_2
     assert p.policy_digest == p.policy_digest
     shuffled = dict(reversed(list(p.as_canonical_dict().items())))
     assert P.canonical_json(shuffled) == P.canonical_json(p.as_canonical_dict())
@@ -60,12 +60,11 @@ def test_a_changed_value_changes_the_digest():
     """Non-vacuity: the digest must actually detect an edit."""
     import dataclasses
 
-    p = P.TALKING_V2_POLICY_1
+    p = P.TALKING_V2_POLICY_2
     for field, value in (("normal_question_target", 7),
                          ("hard_question_max", 8),
-                         ("clarification_budget", 2),
                          ("normal_upper_lookahead_months", 9),
-                         ("target_finding_budget", 5),
+                         ("target_finding_normal_allocation", 3),
                          ("substitute_served_target", True)):
         mutated = dataclasses.replace(p, **{field: value})
         assert mutated.policy_digest != p.policy_digest, field
@@ -73,7 +72,7 @@ def test_a_changed_value_changes_the_digest():
 
 def test_verify_refuses_an_edited_registry():
     with pytest.raises(P.BaselinePolicyError):
-        P.verify_policy("talking-v2-policy-1", "0" * 64)
+        P.verify_policy("talking-v2-policy-2", "0" * 64)
 
 
 def test_verify_refuses_an_unknown_policy_id():
@@ -90,9 +89,10 @@ def test_an_unknown_policy_never_falls_back_to_the_default():
 def test_the_registry_is_not_mutable_through_its_accessors():
     ids = P.registered_policy_ids()
     assert "talking-v2-policy-1" in ids
+    assert "talking-v2-policy-2" in ids
     assert isinstance(ids, tuple)
     with pytest.raises(TypeError):
-        P._REGISTRY["new"] = P.TALKING_V2_POLICY_1  # type: ignore[index]
+        P._REGISTRY["new"] = P.TALKING_V2_POLICY_2  # type: ignore[index]
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +101,9 @@ def test_the_registry_is_not_mutable_through_its_accessors():
 
 def test_the_policy_key_set_is_exactly_the_allowlist():
     """A new key has to come through POLICY_KEYS, where a reviewer sees it."""
-    assert set(P.TALKING_V2_POLICY_1.as_canonical_dict()) == set(P.POLICY_KEYS)
+    for policy_id in P.registered_policy_ids():
+        assert set(P.get_policy(policy_id).as_canonical_dict()) == \
+            set(P.POLICY_KEYS)
 
 
 def test_no_policy_key_names_an_evidence_concept():
@@ -151,7 +153,7 @@ def test_changing_a_budget_cannot_change_any_recorded_state():
     before = copy.deepcopy(v2.record_to_state_v2(rec))
 
     # A different policy, frozen onto an otherwise identical record.
-    other = dataclasses.replace(P.TALKING_V2_POLICY_1,
+    other = dataclasses.replace(P.TALKING_V2_POLICY_2,
                                 policy_id="talking-v2-policy-hypothetical",
                                 normal_question_target=7,
                                 hard_question_max=8)
@@ -224,7 +226,7 @@ def test_a_historical_record_still_decodes_and_keeps_its_evidence():
 
 def test_an_unpolicied_record_resolves_to_the_registered_default():
     rec = _legacy_record()
-    assert api.policy_for_record(rec).policy_id == "talking-v2-policy-1"
+    assert api.policy_for_record(rec).policy_id == "talking-v2-policy-2"
 
 
 # ---------------------------------------------------------------------------
@@ -242,15 +244,15 @@ def test_start_freezes_the_policy_onto_the_record():
     stored = api.finalized_record.__wrapped__(doc, DOMAIN) \
         if hasattr(api.finalized_record, "__wrapped__") else \
         (doc[v2.STATE_KEY_V2][DOMAIN])
-    assert stored["policy_id"] == "talking-v2-policy-1"
-    assert stored["policy_digest"] == P.TALKING_V2_POLICY_1.policy_digest
+    assert stored["policy_id"] == "talking-v2-policy-2"
+    assert stored["policy_digest"] == P.TALKING_V2_POLICY_2.policy_digest
 
 
 def test_a_frozen_session_is_verified_not_re_resolved():
     doc = _doc()
     api.start(doc, DOMAIN, "many_single_words")
     rec = v2.record_from_state_v2(doc[v2.STATE_KEY_V2][DOMAIN])
-    assert api.policy_for_record(rec).policy_id == "talking-v2-policy-1"
+    assert api.policy_for_record(rec).policy_id == "talking-v2-policy-2"
 
     rec.policy_digest = "0" * 64          # simulate a registry edit
     with pytest.raises(P.BaselinePolicyError):
@@ -276,10 +278,10 @@ def test_the_frozen_policy_survives_a_later_default_change():
 def test_profile_slots_are_not_capped_at_the_number_of_standard_areas(
         spent, expected):
     """Correction 1: "6 normally" really means aim for 6."""
-    assert P.TALKING_V2_POLICY_1.profile_slots_for(spent) == expected
+    assert P.TALKING_V2_POLICY_2.profile_slots_for(spent) == expected
 
 
 @pytest.mark.parametrize("age,ceiling", [(6, 12), (9, 15), (24, 30), (36, 42),
                                          (60, 66)])
 def test_the_upper_guardrail_is_chronological_plus_lookahead(age, ceiling):
-    assert P.TALKING_V2_POLICY_1.ascent_ceiling_months(age) == ceiling
+    assert P.TALKING_V2_POLICY_2.ascent_ceiling_months(age) == ceiling
