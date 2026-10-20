@@ -1,0 +1,68 @@
+[
+  {
+    "title": "Face to Face Sounds",
+    "theme": "responsive sound play, face to face",
+    "materials": "no materials needed — a calm, awake moment",
+    "instructions": "Settle your child safely so your faces are about eight to twelve inches apart and you can see each other. Make a long, soft vowel sound such as ooooo or aahhh, then stop and wait five seconds. Answer any sound your child makes by making it back. Carry on for five or six rounds.",
+    "success_criteria": "The child makes any sound other than crying during at least one pause.",
+    "make_easier": "Make the sound twice and wait longer; a change in breathing, a look, or a small movement counts as a response.",
+    "make_harder": "Wait a little longer before you answer, and try a second vowel sound in the same session.",
+    "group_play_line": "Another familiar person can sit beside you and answer your child's sounds in turn.",
+    "what_to_avoid": "Keep your child supported and supervised in a position that is safe for their age. Stop if your child looks away or becomes unsettled, and never keep going in order to get a sound."
+  },
+  {
+    "title": "Blow and Buzz",
+    "theme": "lip and tongue sound play",
+    "materials": "no materials needed",
+    "instructions": "Sit where your child can see your mouth clearly. Blow a raspberry, buzz your lips, or stick your tongue out and blow gently. Stop, smile, and wait five seconds. Make the sound again if your child watches, and answer any sound or mouth movement they offer. Do five or six rounds.",
+    "success_criteria": "The child watches your mouth and attempts any lip, tongue, or blowing sound at least once.",
+    "make_easier": "Use one sound only and repeat it slowly several times before you pause.",
+    "make_harder": "Alternate two different mouth sounds and wait to see which one your child tries.",
+    "group_play_line": "Another familiar person can take a turn making a mouth sound for your child to watch.",
+    "what_to_avoid": "Keep your child supported and supervised in a position that is safe for their age, and stop if your child turns away or seems tired."
+  },
+  {
+    "title": "High and Low",
+    "theme": "playing with loud, quiet, high, and low sounds",
+    "materials": "no materials needed",
+    "instructions": "Make a sound your child already enjoys, first quietly and then a little louder, then high and then low. Pause five seconds after each change and wait. Answer any squeal, sound, or change of volume your child offers by matching it back. Do four or five contrasts.",
+    "success_criteria": "The child makes any sound, squeal, or change in loudness during at least one pause.",
+    "make_easier": "Use one contrast only, such as quiet and then slightly louder, and repeat it several times.",
+    "make_harder": "Let your child start, then match the loudness or the pitch they chose.",
+    "group_play_line": "Two familiar people can take turns being the quiet voice and the louder voice.",
+    "what_to_avoid": "Keep the loudest sounds gentle and close to your child's own level, and stop if your child startles or turns away."
+  },
+  {
+    "title": "Your Turn, My Turn Sounds",
+    "theme": "taking turns making sounds",
+    "materials": "no materials needed",
+    "instructions": "Make one simple sound, then stop and wait five seconds while looking at your child. When your child makes any sound, copy it back exactly as they made it. Then wait again. Keep the back and forth going while your child stays interested, usually four or five turns each.",
+    "success_criteria": "The child takes at least one sound turn after your pause.",
+    "make_easier": "Begin by copying a sound your child has just made, rather than waiting for them to answer yours.",
+    "make_harder": "Wait a little longer between turns, and try five or six exchanges in one round.",
+    "group_play_line": "A familiar person can join the turn-taking so your child hears two voices answering.",
+    "what_to_avoid": "Do not fill every pause with your own sounds, and never continue once your child looks away or becomes unsettled."
+  },
+  {
+    "title": "Ba-Ba-Ba",
+    "theme": "repeated syllable sound play",
+    "materials": "no materials needed",
+    "instructions": "Say a repeated syllable slowly and clearly, such as ba-ba-ba or ma-ma-ma, while your child can see your face. Stop and wait five seconds. Answer any sound your child makes, whether it is a syllable or a vowel, by saying your syllable again. Do five or six rounds.",
+    "success_criteria": "The child attempts any syllable or sound during at least one pause.",
+    "make_easier": "Accept any single sound or vowel as a turn, and say just one syllable rather than three.",
+    "make_harder": "Offer a second syllable string in the same session and see whether your child tries a different sound.",
+    "group_play_line": "Another familiar person can say a different syllable string so your child hears both.",
+    "what_to_avoid": "Keep your child supported and supervised in a position that is safe for their age, and do not ask your child to repeat a syllable."
+  },
+  {
+    "title": "Sounds in Our Routines",
+    "theme": "sound play inside everyday care routines",
+    "materials": "the routines you already do each day, such as changing, bathing, or feeding",
+    "instructions": "Pick one routine you do every day. Each time you reach the same step, make the same sound, then pause five seconds and wait. Answer any sound your child makes. Use the same routine and the same sound for several days so your child learns what comes next.",
+    "success_criteria": "The child makes any sound during the chosen routine on at least one day.",
+    "make_easier": "Use one step of one routine and make the sound twice before you pause.",
+    "make_harder": "Add a second routine, or a second sound in the same routine, across the week.",
+    "group_play_line": "Anyone who shares the routine can use the same sound at the same step.",
+    "what_to_avoid": "Keep your child supported and supervised in a position that is safe for their age, and do not stretch out a routine in order to wait for a sound."
+  }
+]

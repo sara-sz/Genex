@@ -1,0 +1,57 @@
+[
+  {
+    "title": "What Am I Doing",
+    "theme": "labeling an action you are doing",
+    "materials": "no materials needed",
+    "instructions": "Start a familiar action your child sees every day, such as eating, washing, or reading, and keep doing it slowly. Ask what you are doing and wait five seconds. Accept any attempt, then name the action clearly, such as eating. Do four or five different actions.",
+    "success_criteria": "The child attempts to name at least one action you are doing.",
+    "make_easier": "Offer a choice of two, such as eating or sleeping, and accept a point or a look toward the answer.",
+    "make_harder": "Do the action for a moment and then stop, so your child names it from memory.",
+    "group_play_line": "A sibling can do an action and let your child name what they are doing.",
+    "what_to_avoid": "Do not ask the same question over and over if your child does not answer; name the action yourself and move on."
+  },
+  {
+    "title": "What Are You Doing",
+    "theme": "labeling the child's own action",
+    "materials": "whatever your child is already playing with",
+    "instructions": "Watch your child for a moment, then say what they are doing, such as you are playing. Pause, then ask what they are doing and wait five seconds. Accept any attempt and say the action back clearly. Do this three or four times in one play session.",
+    "success_criteria": "The child attempts to name their own action at least once.",
+    "make_easier": "Say the action twice yourself before you ask, so the word is fresh.",
+    "make_harder": "Ask again a few minutes later about a different action in the same play.",
+    "group_play_line": "Ask each child in turn what they are doing, then say both actions back.",
+    "what_to_avoid": "Do not interrupt play your child is deeply involved in; wait for a natural pause."
+  },
+  {
+    "title": "Photo Actions",
+    "theme": "labeling actions in family photos",
+    "materials": "four or five photos of familiar people doing everyday things",
+    "instructions": "Show one photo at a time. Point to the person and ask what she is doing. Wait five seconds and accept any attempt. Say the action clearly one time, such as she is drinking, then move to the next photo. Do four or five photos in a sitting.",
+    "success_criteria": "The child attempts to name the action in at least two photos.",
+    "make_easier": "Name the action first, then show the same photo again and ask.",
+    "make_harder": "Use a photo your child has not seen before and ask the same question.",
+    "group_play_line": "Let a sibling choose the next photo and ask the question.",
+    "what_to_avoid": "Do not use photos that upset your child or that show people they do not know well."
+  },
+  {
+    "title": "Picture Book Actions",
+    "theme": "labeling actions on a book page",
+    "materials": "a picture book with people or animals doing clear, simple things",
+    "instructions": "Open the book and find a page where someone is clearly doing something. Point to them and ask what he is doing. Wait five seconds and accept any attempt. Say the action clearly one time, then turn the page. Do five or six pages.",
+    "success_criteria": "The child attempts to name the action on at least two pages.",
+    "make_easier": "Ask about the same page several times across the week, so the action becomes familiar.",
+    "make_harder": "Ask what is happening on a page with more detail, where several things are going on.",
+    "group_play_line": "Take turns with a sibling asking about one page each.",
+    "what_to_avoid": "Do not keep turning pages past the point where your child stops looking at the book."
+  },
+  {
+    "title": "Busy Picture",
+    "theme": "labeling two actions in one picture",
+    "materials": "one busy picture or book page where two people are doing different things",
+    "instructions": "Find a picture where two people are doing different things. Point to the first person and ask what he is doing. Wait five seconds, accept any attempt, and name it. Then point to the second person and ask the same question. Do two or three busy pictures.",
+    "success_criteria": "The child attempts to name two different actions in the same picture.",
+    "make_easier": "Cover one half of the picture so only one person shows, then ask.",
+    "make_harder": "Ask your child to find someone doing a named action, such as who is eating.",
+    "group_play_line": "Each child can take one person in the picture and name what they are doing.",
+    "what_to_avoid": "Do not ask about more than two people in one picture at this stage."
+  }
+]

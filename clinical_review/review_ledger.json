@@ -1,0 +1,187 @@
+{
+  "ledger_version": "genex-clinical-review-ledger-v1",
+  "entries": {
+    "atpl1:d970973944e15ae69ffa5dec3e819126": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Support gradient step 1 of 5, most supported: the caregiver performs the action, so the referent is live and shared. VERB SET IS CONSTRAINED BY A MACHINE RULE, NOT BY CLINICAL CHOICE: the content validator treats jump, hop, toss, throw, catch, race and climb as critical failures in any language card, so this card uses eating, washing and reading instead. Confirm that a verb set without those is clinically adequate for action labeling; if a blocked verb is clinically necessary, say so and it will be raised as a separate decision rather than worked around.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:99eb7ec785da7ba1fb85ffe9972a0662": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Support gradient step 2 of 5: the child's own action, which is the easiest referent after the caregiver's. Review focus: whether interrupting a child's own play to ask a question is appropriate here, and whether the natural-pause instruction is sufficient protection.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:0874e5c5a23ae528e47b27bf5f38fce9": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Support gradient step 3 of 5: a still image, but of familiar people. Review focus: whether family photos are a clinically useful intermediate step between live action and book pictures, or whether they add nothing over a book page.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:e7cc3a3e61ff9161939bc1124bfe9b79": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Support gradient step 4 of 5, and the milestone's OWN context: the canonical rung text names a picture or book. Review focus: page count, and whether one character per page is the right level of selectivity.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:493c8827f98983d85001907eff03d284": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Support gradient step 5 of 5, least supported: two agents in one image, requiring the child to hold one action while labeling another. Review focus: whether two actions is the right ceiling for this rung, and whether the make_harder reversal (find who is doing a named action) belongs here or in a receptive family.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:69702817b90ba435e5c7b575db187291": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Anchored at the 12m person-naming rung. Review focus: is a familiar-person name the right first target here, and is the arrival/departure moment frequent enough to be practicable?",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:c04d588bb0437f1c6c56db0a000ea1b4": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Anchored at the 12m person-naming rung, high-repetition variant. Review focus: round count and whether a reveal game competes with the naming target.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:f562e541df79bc55108f3607b75bebb4": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "12m to 15m bridge: maximum array simplification, one item only. Review focus: the adaptation narrowed the source from a two-item choice to one item and removed 'reach' from success, because a reach is a gesture outcome rather than a first-word outcome. Confirm that narrowing.",
+      "supersedes": null,
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['expressive_word'][0] 'Pick Your Toy'"
+    },
+    "atpl1:b9030e455771b9fc0213d75e9d00530e": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Anchored at 15m object naming, embedded in the snack routine. Review focus: the what_to_avoid line is the load-bearing part — food must never be contingent on a word.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:7015cc812377ad0cb64e04e09ff02b90": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "15m to 18m, embedded in bath and bedtime routines. Review focus: whether nightly repetition of one word is the right dose, and whether bedtime is an appropriate window at all.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:75020d1045c22f79ba398d154d1be321": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "15m recast/expansion card. Its target is the CAREGIVER's response: treating an approximation as the word rather than as an error. Review focus: is this clinically distinct from 'One Word, One Thing' (simplification) or do the two collapse into one activity?",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:c062d182c4ec09fd4432dc9a348cb742": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Anchored at 18m: generalisation of a known word across contexts rather than acquisition of a new one. Review focus: whether generalisation or breadth of new words is the better 18m target.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:cdc591d639808c7ef952fb057634d515": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION: the positioning and supervision sentence in what_to_avoid was drafted by Track 2 and is not established guidance. Approve it, replace it, or supply standing wording. Content anchored at the 4m cooing rung, reaching down to 2m via make_easier.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:1f6ba8efea00dc1bf54d44f979aebf55": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Anchored at the 6m raspberry/tongue rung. The adaptation dropped the source card's spoken cue ('Say you try!'), which presumes verbal comprehension the 6m rung does not assume, and reduced it to model, pause, answer.",
+      "supersedes": null,
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['sound'][2] 'Silly Sounds Mirror'"
+    },
+    "atpl1:9c8fc5e0bb249f3cc1db3f034b08e9a4": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Anchored at the 6m squealing rung (pitch and intensity range). Review focus: the loudness guidance, and whether squealing is a target a caregiver should be prompted to elicit at all.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:05904049483a92bd232d54e5944807cf": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Anchored at the 6m sound turn-taking rung. The adaptation kept the 'copy it back exactly' contingency from the source card but removed the toy, because the rung is VOCAL turn-taking rather than object-mediated turn-taking.",
+      "supersedes": null,
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['sound'][2] 'Silly Sounds Mirror' + [4] 'Noisy Toy Turn'"
+    },
+    "atpl1:be7588fa50653b56ecc1e822d8123978": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Anchored at the 9m reduplicated-babble rung. make_easier deliberately reaches down to any single vowel so the card stays safe if it is allocated to a child whose target is 4m — see README on why one family serves a 2m-to-9m span.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:84d62c7bb7803faf47361eba8e933e60": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Spans the whole band: the same sound at the same step of one daily routine. This card absorbed two earlier concepts (routine-embedded cooing and routine-embedded babble) that proved to be one activity at different rungs.",
+      "supersedes": null,
+      "adapted_from": null
+    }
+  },
+  "legacy_unresolved": [
+    "atpl1:01cdd9f34e37a62bed4feda4300902a7",
+    "atpl1:041794bbb1acb1f86a27ca9460088c2d",
+    "atpl1:06a431b9e9a8e118a900b7f407fecc02",
+    "atpl1:1081de288d8fc18f41225d80bb291a63",
+    "atpl1:1226e454bd64d869206574bb6ad9851f",
+    "atpl1:166c4e5492dab00d41b9fb4d5162202b",
+    "atpl1:2c317105a4151f55be1d2122a16fc3fc",
+    "atpl1:3550b9ec30305b58d9cbbaa24c58e5b2",
+    "atpl1:5f44b9eba107589ca26c6610f2c6cb05",
+    "atpl1:797708a5514fd175e24bf0bac3f2a8ff",
+    "atpl1:9b0facf380b755262eadbf9d76820e7a",
+    "atpl1:9b9eb883a67400556702486fc177e75b",
+    "atpl1:9e165d6d242e3e887ddb32f6d7c48486",
+    "atpl1:bd6a98e7eef7d1a01c1e48baa8230317",
+    "atpl1:c694ec43189c20633adeea5502833f6b",
+    "atpl1:e22a325977fbaaeca903a6ea909d17d0",
+    "atpl1:f7a99d017c398560058379637732ac58",
+    "atpl1:f83b5f3cd8ef75cdba82700d6b389be7"
+  ]
+}

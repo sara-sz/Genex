@@ -1,0 +1,79 @@
+[
+  {
+    "title": "Who's Here",
+    "theme": "naming a familiar person",
+    "materials": "no materials needed — a moment when a familiar person arrives or leaves",
+    "instructions": "When a familiar person comes into the room, look at your child, point to them, and say the name your family uses one time. Wait five seconds and look at your child expectantly. Accept any sound or word attempt, then say the name once more. Do this three or four times a day.",
+    "success_criteria": "The child attempts any sound or word for a familiar person at least once.",
+    "make_easier": "Say the name twice, and accept a look toward the person as a response before you say it again.",
+    "make_harder": "Use the name of a second familiar person during the same day, so your child hears two different names.",
+    "group_play_line": "An older sibling can say the person's name first, then wait for your child to try.",
+    "what_to_avoid": "Do not ask your child to repeat the name, and do not delay a greeting or a cuddle while you wait for a sound."
+  },
+  {
+    "title": "Peek and Name",
+    "theme": "finding a familiar person in a hiding game",
+    "materials": "a light blanket, a towel, or your own hands",
+    "instructions": "Hide your face behind a blanket or your hands, then reveal it and say the name your family uses for you one time. Pause five seconds and look at your child. Accept any sound or word attempt, then hide and reveal again. Play six to eight rounds while your child stays interested.",
+    "success_criteria": "The child attempts any sound or word during at least one reveal.",
+    "make_easier": "Reveal your face straight away without hiding fully, and say the name twice before you pause.",
+    "make_harder": "Let another familiar person hide and reveal, and say their name instead of yours.",
+    "group_play_line": "Two people can take turns hiding and revealing, each saying their own name.",
+    "what_to_avoid": "Stop the game if your child turns away or becomes upset rather than hiding for longer."
+  },
+  {
+    "title": "One Word, One Thing",
+    "theme": "naming one favorite object",
+    "materials": "one favorite toy, cup, or book your child already knows",
+    "instructions": "Hold up one favorite item where your child can see it. Say its name slowly, one time, then wait five seconds while looking at your child. Accept any sound or word attempt, say the name once more, and hand the item over. Repeat with the same item three or four times.",
+    "success_criteria": "The child attempts any sound or word for the item at least once.",
+    "make_easier": "Say the name twice and hand the item over after any look or sound, however small.",
+    "make_harder": "Hold the item slightly back and wait the full five seconds before you say the name again.",
+    "group_play_line": "A sibling can name the same item first, then pass it to your child to try.",
+    "what_to_avoid": "Do not use a drink, a snack, or a comfort item your child needs while you are waiting for a sound."
+  },
+  {
+    "title": "Snack Words",
+    "theme": "naming during a snack routine",
+    "materials": "a snack your child likes, served in small pieces",
+    "instructions": "At snack time, hold up one piece and say the food's name slowly, one time. Wait five seconds, accept any sound or word attempt, then say the name again and give the piece. Use the same food word for the whole snack so your child hears it many times.",
+    "success_criteria": "The child attempts any sound or word for the food at least once during the snack.",
+    "make_easier": "Give the piece after any sound, look, or reach, and say the food name twice each time.",
+    "make_harder": "Offer a second familiar food later in the day and use its name the same way.",
+    "group_play_line": "Everyone at the table can say the food name once before the first bite.",
+    "what_to_avoid": "Never make food depend on producing a word; give the piece whether or not a sound comes."
+  },
+  {
+    "title": "Bath and Bedtime Words",
+    "theme": "naming during care routines",
+    "materials": "the items you already use at bath time and bedtime",
+    "instructions": "Pick one item you use every night, such as a duck, a towel, or a book. Say its name slowly one time as you reach for it, wait five seconds, and accept any sound or word attempt. Say the name once more and carry on. Use the same word every night.",
+    "success_criteria": "The child attempts any sound or word for the chosen item on at least one night.",
+    "make_easier": "Say the name twice and keep the pause short, so the evening stays calm and predictable.",
+    "make_harder": "Add a second nightly item and use its name the same way across the week.",
+    "group_play_line": "A sibling sharing bath time or bedtime can say the item's name first.",
+    "what_to_avoid": "Do not stretch out the evening or delay sleep in order to wait for a sound."
+  },
+  {
+    "title": "Say It Your Way",
+    "theme": "accepting and expanding a sound attempt",
+    "materials": "three familiar objects your child has tried to name before",
+    "instructions": "Put three familiar items in front of your child. When your child makes any sound toward one of them, treat it as the word: say the full word back once, clearly and warmly, and give the item. If no sound comes, say the name yourself and wait five seconds. Do four or five turns.",
+    "success_criteria": "The child attempts a sound for at least one item, and that attempt is accepted and said back in full.",
+    "make_easier": "Use two items instead of three and accept a look toward an item as the attempt.",
+    "make_harder": "Wait a little longer before saying the name yourself, giving your child more room to start.",
+    "group_play_line": "A sibling can model saying one item's full name before your child's turn.",
+    "what_to_avoid": "Do not correct the way a sound was said or ask for it again; a close attempt is the word."
+  },
+  {
+    "title": "Words Around the House",
+    "theme": "using one known word in new places",
+    "materials": "one word your child already uses, and three rooms in your home",
+    "instructions": "Choose a word your child already attempts. Find something it names in three different rooms, such as a ball in the living room, the bedroom, and the hall. In each room say the word once, wait five seconds, and accept any attempt. Do one room at a time across the day.",
+    "success_criteria": "The child attempts the word in at least two different rooms.",
+    "make_easier": "Stay in one room and use the word with two different objects of the same kind.",
+    "make_harder": "Add a second word your child is beginning to use and try it in the same three rooms.",
+    "group_play_line": "A sibling can carry the object to the next room and say the word on arrival.",
+    "what_to_avoid": "Do not test your child by asking for the word over and over; say it yourself and leave space."
+  }
+]
