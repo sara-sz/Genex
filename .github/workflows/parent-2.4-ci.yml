@@ -188,6 +188,48 @@ jobs:
             echo "0.6A-1D not present on this branch — nothing to run"
           fi
 
+      - name: Parent Baseline v2 — interview policy, micro-tracks, traversal, eligibility, profile
+        # 0.6A-1 slices 1-5, and they had NO CI GATE when they were written.
+        #
+        # Each suite pins a rule that fails SILENTLY if broken, which is
+        # exactly the class of regression a hosted gate exists to catch:
+        #
+        #   policy        a registered policy is immutable, a policy cannot
+        #                 express evidence semantics, and an unpolicied
+        #                 historical record still serialises byte-identically
+        #                 (so no historical A2 projection_id moves)
+        #   micro_tracks  Parent-side activity-family derivation agrees with
+        #                 the Pilot's frozen rung table on every declared rung
+        #   traversal     every entered band is finished, no path issues a
+        #                 tenth question, and a band that would overrun the
+        #                 hard maximum is not entered at all
+        #   eligibility   failure on a genuinely above-age skill never becomes
+        #                 a deficit or a concern
+        #   profile       Channel-B evidence adds nothing to Channel A, the
+        #                 A2 v2 clinical payload is byte-identical with and
+        #                 without it, and an area with no age-appropriate
+        #                 canonical skill stays not_assessed rather than
+        #                 acquiring manufactured coverage
+        #
+        # Run as SEPARATE pytest invocations, matching the rest of this job.
+        # The parent suites are not currently isolated from one another's
+        # FastAPI auth overrides, so a single combined invocation produces
+        # unrelated 401s; per-file runs are what the whole workflow already
+        # does and what these gates are verified under.
+        #
+        # In the dependency-pure job: these modules need the taxonomy workbook
+        # (pandas, openpyxl) and nothing else. No fastapi, no firebase.
+        run: |
+          for f in baseline_policy baseline_micro_tracks baseline_traversal \
+                   baseline_eligibility baseline_profile; do
+            t="tests/test_parent_24_${f}.py"
+            if [ -f "$t" ]; then
+              python -m pytest "$t" -q
+            else
+              echo "$t not present on this branch — nothing to run"
+            fi
+          done
+
       - name: October pilot backend — identity foundation
         # Runs from the repository root, not genex-parent/, because
         # pilot_backend/ is a top-level shared namespace (Parent + Therapist +
