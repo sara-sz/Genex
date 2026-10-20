@@ -259,6 +259,16 @@ class BaselineRecordV2:
     #: `projection_id` — byte-identical.
     policy_id: Optional[str] = None
     policy_digest: Optional[str] = None
+    #: CHANNEL B. Broader communication-profile evidence, kept in a SEPARATE
+    #: mapping from `skills` so it can never reach the A2 v2 projection, which
+    #: iterates `skills` and `bands_entered` only. That separation is
+    #: structural, not a convention: profile evidence cannot generate a goal
+    #: because the Pilot never receives it.
+    #:
+    #: Also OMITTED from the stored dict when empty, for the same digest
+    #: reason as the policy keys.
+    profile_probes: Dict[str, "BaselineSkillEvidence"] = field(
+        default_factory=dict)
 
     # -- track ------------------------------------------------------------
 
@@ -475,6 +485,33 @@ def record_answer_v2(record: BaselineRecordV2, question: Dict[str, Any],
     return record
 
 
+def record_profile_probe_v2(record: BaselineRecordV2, question: Dict[str, Any],
+                            answer: str) -> BaselineRecordV2:
+    """Record one CHANNEL B profile probe. Never touches `skills`.
+
+    Deliberately a SEPARATE function rather than a flag on `record_answer_v2`.
+    A flag would put the only thing standing between profile evidence and the
+    A2 v2 projection inside a caller's argument, where one wrong call site
+    silently promotes broad-profile evidence into goal-generating evidence. Two
+    functions writing to two mappings makes that impossible to do by accident.
+
+    The CLASSIFICATION is identical — `_classify` is the one answer vocabulary,
+    and a profile `sometimes` means emerging exactly as it does on the declared
+    track. What differs is REACHABILITY, not meaning.
+    """
+    state = v1._classify(answer)
+    evidence = BaselineSkillEvidence(
+        domain=question["domain"],
+        months=int(question["months"]),
+        milestone=question["milestone"],
+        subdomain=question.get("subdomain", ""),
+        state=state,
+    )
+    record.profile_probes[evidence.key] = evidence
+    return record
+
+
+
 def finalize_v2(record: BaselineRecordV2) -> BaselineRecordV2:
     """Derive the month-level fields FROM skill evidence, for compatibility.
 
@@ -632,6 +669,10 @@ def record_to_state_v2(record: BaselineRecordV2) -> Dict[str, Any]:
         state["policy_id"] = record.policy_id
     if record.policy_digest:
         state["policy_digest"] = record.policy_digest
+    if record.profile_probes:
+        state["profile_probes"] = sorted(
+            (_skill_to_state(e) for e in record.profile_probes.values()),
+            key=lambda s: (s["months"], s["subdomain"], s["milestone"]))
     return state
 
 
@@ -673,6 +714,15 @@ def record_from_state_v2(stored: Dict[str, Any]) -> BaselineRecordV2:
         policy_id=stored.get("policy_id"),
         policy_digest=stored.get("policy_digest"),
     )
+    for row in (stored.get("profile_probes") or []):
+        probe = BaselineSkillEvidence(
+            domain=row["domain"],
+            months=int(row["months"]),
+            milestone=row["milestone"],
+            subdomain=row.get("subdomain", ""),
+            state=row["state"],
+        )
+        record.profile_probes[probe.key] = probe
     for row in (stored.get("skills") or []):
         evidence = BaselineSkillEvidence(
             domain=row["domain"],
