@@ -75,3 +75,27 @@ class EpisodeClosedForAccrual(RTMConflict):
     month's report. An episode that could not be reported on after closing
     would make the last month of every course of treatment undocumentable.
     """
+
+
+class RTMPrerequisitesIncomplete(RTMConflict):
+    """Monitoring cannot begin: enrollment, consent or setup is missing.
+
+    Track 3 slice 3C. The pilot order is enrollment metadata -> caregiver
+    consent -> setup/education -> monitoring, and this is what refuses the
+    last step when the first three are not all in place.
+
+    Distinct from `EpisodeClosedForAccrual`, which says a course of treatment
+    has ENDED. This one says it has not properly BEGUN, and the remedy is the
+    opposite: supply the missing evidence and open the month again.
+
+    ## IT REFUSES RTM MONITORING, NOT THE PRODUCT
+
+    An episode that is not RTM-ready blocks RTM months and nothing else. The
+    family keeps using Genex — plans, activities, observations, reads and
+    account access are all untouched, because none of them consults readiness.
+    RTM readiness and Genex access are separate states by design.
+
+    The message names WHICH prerequisites are missing, as short PHI-free
+    reason codes, because a refusal a clinician cannot act on is a support
+    ticket rather than a gate.
+    """

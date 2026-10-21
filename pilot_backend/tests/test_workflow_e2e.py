@@ -308,12 +308,37 @@ def _cycle(e2e, plan_id, goal_id) -> str:
 
 
 def _rtm_period(e2e, goal, plan_id) -> tuple:
-    """An episode and its monitoring period, through the frozen service."""
+    """An episode and its monitoring period, through the frozen service.
+
+    Slice 3C: walks the full enrollment order, because `open_period` refuses a
+    month until the metadata, caregiver consent and setup record all exist.
+    """
+    from pilot_backend.domain.rtm_enrollment import ConsentAuthority
+
+    hannah = e2e.principal("hannah")
+    caregiver = e2e.principal("cg")
     episode = e2e.rtm.open_episode(
-        e2e.principal("hannah"), e2e.child,
-        [GoalRef(GoalKind.CLINICAL, goal["goal_id"])])
-    period = e2e.rtm.open_period(e2e.principal("hannah"), episode.episode_id,
-                                 plan_id)
+        hannah, e2e.child, [GoalRef(GoalKind.CLINICAL, goal["goal_id"])],
+        authorized_caregiver_id=caregiver.application_id,
+        clinical_indication="Fictional expressive-language delay",
+        clinical_rationale="Monitoring home practice between visits.",
+        expected_duration_months=6)
+    e2e.rtm.record_consent(
+        caregiver, episode.episode_id,
+        authority=ConsentAuthority.PARENT,
+        consent_document_id="genex-rtm-consent",
+        consent_document_version="v1.0",
+        acknowledged_monitoring=True,
+        acknowledged_billing_and_cost_sharing=True,
+        acknowledged_withdrawal_right=True,
+        acknowledged_communication_expectations=True,
+        acknowledged_response_expectations=True)
+    e2e.rtm.record_setup(
+        hannah, episode.episode_id,
+        configuration_summary="Weekly plan and reminders configured.",
+        education_summary="Showed how to record an attempt each day.",
+        caregiver_confirmed_able_to_use=True)
+    period = e2e.rtm.open_period(hannah, episode.episode_id, plan_id)
     return episode, period
 
 

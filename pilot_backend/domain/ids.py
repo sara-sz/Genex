@@ -83,6 +83,12 @@ ADAPTATION_RECORD_PREFIX = "adpt"
 RTM_EPISODE_PREFIX = "repi"
 RTM_PERIOD_PREFIX = "rper"
 RTM_TECHNOLOGY_PREFIX = "rtec"
+#: Slice 3C enrollment evidence, attached to the EPISODE rather than a month:
+#: consent and setup establish a course of treatment, not a calendar page.
+#: Both append-only with revision lineage, so a correction mints a NEW id and
+#: the attested original keeps its own.
+RTM_CONSENT_PREFIX = "rcon"
+RTM_SETUP_PREFIX = "rset"
 THERAPIST_REVIEW_PREFIX = "trev"
 CLINICAL_ACTION_PREFIX = "clac"
 TIME_ENTRY_PREFIX = "tent"
@@ -123,8 +129,10 @@ ALL_PREFIXES = (
     DEFER_RECORD_PREFIX,
     THERAPIST_INTERVENTION_PREFIX,
     ADAPTATION_RECORD_PREFIX,
+    RTM_CONSENT_PREFIX,
     RTM_EPISODE_PREFIX,
     RTM_PERIOD_PREFIX,
+    RTM_SETUP_PREFIX,
     RTM_TECHNOLOGY_PREFIX,
     THERAPIST_REVIEW_PREFIX,
     CLINICAL_ACTION_PREFIX,
@@ -270,6 +278,14 @@ def new_rtm_period_id() -> str:
 
 def new_rtm_technology_id() -> str:
     return new_id(RTM_TECHNOLOGY_PREFIX)
+
+
+def new_rtm_consent_id() -> str:
+    return new_id(RTM_CONSENT_PREFIX)
+
+
+def new_rtm_setup_id() -> str:
+    return new_id(RTM_SETUP_PREFIX)
 
 
 def new_therapist_review_id() -> str:

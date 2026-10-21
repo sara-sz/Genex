@@ -47,6 +47,7 @@ from ..domain.child_context import ChildContextRecord
 from ..domain.intervention import TherapistIntervention
 from ..domain.month_end import MonthEndReport
 from ..domain.rtm import RTMEpisode, RTMMonitoringPeriod, RTMTechnology
+from ..domain.rtm_enrollment import RTMConsentAttestation, RTMSetupEducation
 from ..domain.rtm_documentation import (
     ClinicalAction,
     SynchronousInteraction,
@@ -179,7 +180,13 @@ _TIME_ATTRS = ("created_at", "occurred_at", "snapshot_at", "captured_at",
                # 0.5F-A3: a pending Parent-session claim is ISSUED. Registered
                # even though the claim repository performs no query today, so a
                # later one cannot fail with an AttributeError at runtime.
-               "issued_at")
+               "issued_at",
+               # Slice 3C: enrollment evidence is RECORDED at a time that can
+               # differ from when it was accepted or performed. Ordering on
+               # `recorded_at` keeps the stored sequence stable even when a
+               # correction carries its predecessor's `accepted_at` or
+               # `performed_at` forward, which it is required to do.
+               "recorded_at")
 
 
 def _record_time(record: Any) -> Any:
@@ -1269,6 +1276,43 @@ class FirestoreRTMTechnologyRepository(_BaseRepo):
         return self._query("episode_id", episode_id)
 
 
+class FirestoreRTMConsentRepository(_BaseRepo):
+    """Caregiver consent attestations, append-only with revision lineage.
+
+    `update` exists ONLY so a predecessor can gain its forward pointer when a
+    correction supersedes it. The attested content of a stored row is never
+    rewritten; a correction is a new document.
+    """
+
+    record_type, model = "rtm_consent_attestation", RTMConsentAttestation
+
+    def create(self, consent):
+        return self._create(consent.consent_id, consent)
+
+    def get_by_id(self, consent_id): return self._get(consent_id)
+
+    def update(self, consent):
+        return self._set(consent.consent_id, consent)
+
+    def list_for_episode(self, episode_id):
+        return self._query("episode_id", episode_id)
+
+
+class FirestoreRTMSetupRepository(_BaseRepo):
+    """Setup/education records, append-only with revision lineage."""
+
+    record_type, model = "rtm_setup_education", RTMSetupEducation
+
+    def create(self, setup): return self._create(setup.setup_id, setup)
+
+    def get_by_id(self, setup_id): return self._get(setup_id)
+
+    def update(self, setup): return self._set(setup.setup_id, setup)
+
+    def list_for_episode(self, episode_id):
+        return self._query("episode_id", episode_id)
+
+
 class FirestoreTherapistReviewRepository(_PeriodScopedRepo):
     """Clinician interpretation. Create-only: there is no update method."""
 
@@ -1476,6 +1520,8 @@ class FirestoreRepositories:
         self.rtm_episodes = FirestoreRTMEpisodeRepository(store)
         self.rtm_periods = FirestoreRTMPeriodRepository(store)
         self.rtm_technologies = FirestoreRTMTechnologyRepository(store)
+        self.rtm_consents = FirestoreRTMConsentRepository(store)
+        self.rtm_setups = FirestoreRTMSetupRepository(store)
         self.therapist_reviews = FirestoreTherapistReviewRepository(store)
         self.clinical_actions = FirestoreClinicalActionRepository(store)
         self.time_entries = FirestoreTimeEntryRepository(store)

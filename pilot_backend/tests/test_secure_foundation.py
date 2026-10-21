@@ -1236,6 +1236,25 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
             "candidate_count", "missing_flag_count", "coding_rule_set_id",
             "coding_rule_version", "confirmation_status", "report_version",
             "report_state",
+            # Track 3 slice 3C RTM enrollment evidence. Opaque ids, short
+            # enums, booleans and counts.
+            #
+            # `consent_document_id` and `consent_document_version` are
+            # permitted because they identify a PUBLISHED FORM — which version
+            # of a consent document a family accepted is operational
+            # provenance, not a clinical fact about the child.
+            #
+            # Deliberately ABSENT, and asserted below: the episode's clinical
+            # indication and rationale, the configuration and education
+            # summaries, and the proxy reason. Those are clinician-authored or
+            # clinical content; the trail records THAT a family consented and
+            # was set up, never the wording.
+            "consent_id", "supersedes_consent_id",
+            "setup_id", "supersedes_setup_id",
+            "consent_document_id", "consent_document_version",
+            "consent_authority", "consent_attested_by",
+            "acknowledgement_count", "caregiver_confirmed",
+            "readiness_missing_count", "billing_provider_id",
             # 0.4D/E weekly allocation, evidence and adaptation
             "cycle_id", "cycle_sequence", "is_partial_week", "engine_version",
             "snapshot_id", "activity_count", "coverage_gap_count",

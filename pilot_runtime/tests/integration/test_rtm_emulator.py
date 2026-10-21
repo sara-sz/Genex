@@ -156,10 +156,35 @@ def _prepare(rt):
     )
     result = rt.weekly.allocate_cycle(rt.provider_alpha, cycle.cycle_id,
                                       candidates, family_declared_capacity=2)
-    episode = rt.rtm.open_episode(rt.provider_alpha, rt.child,
-                                  [g.ref for g in goals])
+    # Slice 3C: the full enrollment order, because `open_period` refuses a
+    # month until the metadata, caregiver consent and setup record all exist.
+    # The period itself is opened by the individual tests below, so this
+    # helper only has to leave the episode READY.
+    from pilot_backend.domain.rtm_enrollment import ConsentAuthority
+
+    episode = rt.rtm.open_episode(
+        rt.provider_alpha, rt.child, [g.ref for g in goals],
+        authorized_caregiver_id=rt.caregiver_alpha.application_id,
+        clinical_indication="Fictional expressive-language delay",
+        clinical_rationale="Monitoring home practice between visits.",
+        expected_duration_months=6)
     rt.rtm.declare_technology(rt.provider_alpha, episode.episode_id,
                               "Genex RTM pilot")
+    rt.rtm.record_consent(
+        rt.caregiver_alpha, episode.episode_id,
+        authority=ConsentAuthority.PARENT,
+        consent_document_id="genex-rtm-consent",
+        consent_document_version="v1.0",
+        acknowledged_monitoring=True,
+        acknowledged_billing_and_cost_sharing=True,
+        acknowledged_withdrawal_right=True,
+        acknowledged_communication_expectations=True,
+        acknowledged_response_expectations=True)
+    rt.rtm.record_setup(
+        rt.provider_alpha, episode.episode_id,
+        configuration_summary="Weekly plan and reminders configured.",
+        education_summary="Showed how to record an attempt each day.",
+        caregiver_confirmed_able_to_use=True)
     return plan, cycle, result, goals, episode
 
 

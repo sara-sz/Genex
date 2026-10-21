@@ -99,6 +99,45 @@ class RTMEpisode:
     #: The managing-clinician assignment that authorised opening, for audit
     #: and for the no-silent-transfer rule.
     managing_assignment_id: str = ""
+    # -- slice 3C enrollment metadata --------------------------------------
+    #
+    # All default-empty so episodes persisted before 3C still DECODE. Every
+    # NEW episode is required to carry them by `RTMEpisode.open`, and an
+    # episode missing any is not RTM-ready — see `rtm_enrollment`. Tolerant
+    # record, strict constructor, readiness as the authority: the same shape
+    # slice 3B used for legacy source refs.
+    #
+    #: The caregiver authorised to consent and to be monitored with. Distinct
+    #: from an observation's `recorded_by_caregiver_id`: this is the episode's
+    #: party, not whoever happened to log an attempt.
+    authorized_caregiver_id: str = ""
+    #: The clinician who BILLS, when that is not the treating clinician.
+    #: Empty means "the same as managing". Deliberately NOT defaulted to
+    #: `managing_provider_id`: an empty field is honestly silent, whereas a
+    #: copied one would assert a billing arrangement nobody stated.
+    #:
+    #: `practice_id` stays separate and is neither of these. A practice is not
+    #: a clinician, and collapsing them would make a group practice look like
+    #: the billing provider.
+    billing_provider_id: str = ""
+    #: The condition or clinical indication being monitored.
+    clinical_indication: str = ""
+    #: Why RTM is clinically appropriate for this child. Clinician-authored;
+    #: Genex never generates it.
+    clinical_rationale: str = ""
+    #: How long monitoring is expected to run. A clinical expectation, never a
+    #: schedule and never enforced — nothing closes an episode because this
+    #: elapsed.
+    expected_duration_months: Optional[int] = None
+    #: Optional order or plan-of-care reference held elsewhere.
+    order_reference: str = ""
+    #: (goal_id, version_id) pairs PINNED at open time, and the reason this
+    #: field exists: `clinical_goal_refs` names goals, and
+    #: `ClinicalGoal.current_version_id` MOVES when a clinician revises
+    #: wording. An episode storing only goal ids would silently come to mean
+    #: the new wording, leaving "what was this episode opened against?"
+    #: unanswerable.
+    pinned_goal_version_ids: Tuple[Tuple[str, str], ...] = ()
     status: EpisodeStatus = EpisodeStatus.OPEN
     closed_at: Optional[datetime] = None
     closed_by_actor_id: Optional[str] = None
@@ -126,6 +165,69 @@ class RTMEpisode:
                              ("opened_by_actor_id", self.opened_by_actor_id)):
             if not (value or "").strip():
                 raise RTMError(f"an RTM episode requires {label}")
+        object.__setattr__(self, "pinned_goal_version_ids",
+                           tuple(self.pinned_goal_version_ids))
+        pinned = {}
+        for goal_id, version_id in self.pinned_goal_version_ids:
+            if not (goal_id or "").strip() or not (version_id or "").strip():
+                raise RTMError("a pinned goal version requires both ids")
+            if goal_id in pinned:
+                raise RTMError("a goal cannot be pinned to two versions")
+            pinned[goal_id] = version_id
+        if pinned:
+            # A pin that names a goal this episode does not hold would describe
+            # an episode nobody opened. Refused rather than ignored.
+            named = {goal_id for _, goal_id in self.clinical_goal_refs}
+            if not set(pinned) <= named:
+                raise RTMError(
+                    "a pinned goal version names a goal this episode does "
+                    "not hold")
+        if (self.expected_duration_months is not None
+                and (isinstance(self.expected_duration_months, bool)
+                     or not isinstance(self.expected_duration_months, int)
+                     or self.expected_duration_months <= 0)):
+            raise RTMError(
+                "expected duration must be a positive whole number of months")
+        if (self.billing_provider_id.strip()
+                and self.billing_provider_id == self.practice_id):
+            # A practice is not a clinician. Catching this here stops the two
+            # identities merging through a copy-paste at a call site.
+            raise RTMError(
+                "billing_provider_id must be a clinician, not the practice")
+
+    @property
+    def enrollment_complete(self) -> bool:
+        """Whether this episode carries the metadata the pilot requires.
+
+        False for episodes persisted before slice 3C, which is the honest
+        answer — they were not enrolled under these rules. `assess_readiness`
+        reads this, so such an episode simply cannot begin new monitoring.
+
+        `billing_provider_id`, `expected_duration_months` and
+        `order_reference` are deliberately NOT required: the first means "same
+        as managing" when empty, and the other two are genuinely optional in
+        the pilot workflow.
+        """
+        return all((getattr(self, name) or "").strip() for name in
+                   ("authorized_caregiver_id", "clinical_indication",
+                    "clinical_rationale"))
+
+    @property
+    def effective_billing_provider_id(self) -> str:
+        """Who bills. The managing clinician unless one was named separately.
+
+        A property rather than a stored copy, so the record keeps saying
+        "nobody named a separate biller" instead of asserting one.
+        """
+        return (self.billing_provider_id.strip()
+                or self.managing_provider_id)
+
+    def pinned_version_for(self, goal_id: str) -> Optional[str]:
+        """The version this episode was opened against, or None."""
+        for pinned_goal, version_id in self.pinned_goal_version_ids:
+            if pinned_goal == goal_id:
+                return version_id
+        return None
 
     @property
     def is_open(self) -> bool:
@@ -147,12 +249,44 @@ class RTMEpisode:
     def open(child_id: str, provider_id: str, practice_id: str,
              goal_refs: Tuple[GoalRef, ...], *, actor_id: str,
              managing_assignment_id: str = "",
+             authorized_caregiver_id: str = "",
+             clinical_indication: str = "",
+             clinical_rationale: str = "",
+             pinned_goal_version_ids: Tuple[Tuple[str, str], ...] = (),
+             billing_provider_id: str = "",
+             expected_duration_months: Optional[int] = None,
+             order_reference: str = "",
              now: Optional[datetime] = None) -> "RTMEpisode":
-        """Open an episode. Every goal must be clinician-approved."""
+        """Open an episode. Every goal must be clinician-approved.
+
+        Slice 3C makes the enrollment metadata REQUIRED here even though the
+        record defaults it. The record is tolerant so pre-3C rows decode; this
+        constructor is strict so no NEW episode is ever created incomplete.
+        An episode that reached the readiness gate missing its indication
+        would be refused there anyway, and refusing at creation puts the error
+        where the caller can still fix it.
+
+        Every goal must also arrive with a PINNED version. A goal's current
+        version moves when a clinician revises wording, so an episode opened
+        without the pin would silently come to mean whatever the goal says
+        later.
+        """
         if not goal_refs:
             raise RTMError("an RTM episode requires at least one clinical goal")
         for ref in goal_refs:
             require_clinical_goal_ref(ref)
+        for label, value in (
+                ("an authorized caregiver", authorized_caregiver_id),
+                ("a clinical indication", clinical_indication),
+                ("a clinical rationale", clinical_rationale)):
+            if not (value or "").strip():
+                raise RTMError(f"opening an RTM episode requires {label}")
+        pinned = tuple(pinned_goal_version_ids)
+        if {goal_id for goal_id, _ in pinned} != {r.goal_id
+                                                  for r in goal_refs}:
+            raise RTMError(
+                "every clinical goal must be pinned to the approved version "
+                "it was opened against")
         stamp = now or utc_now()
         return RTMEpisode(
             episode_id=new_rtm_episode_id(),
@@ -164,6 +298,13 @@ class RTMEpisode:
             opened_at=stamp,
             opened_by_actor_id=actor_id,
             managing_assignment_id=managing_assignment_id,
+            authorized_caregiver_id=authorized_caregiver_id,
+            billing_provider_id=billing_provider_id,
+            clinical_indication=clinical_indication,
+            clinical_rationale=clinical_rationale,
+            expected_duration_months=expected_duration_months,
+            order_reference=order_reference,
+            pinned_goal_version_ids=pinned,
             created_at=stamp, updated_at=stamp,
         )
 

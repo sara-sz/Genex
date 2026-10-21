@@ -122,6 +122,13 @@ class AuditAction(str, Enum):
     RTM_EPISODE_OPENED = "rtm_episode_opened"
     RTM_EPISODE_CLOSED = "rtm_episode_closed"
     RTM_TECHNOLOGY_DECLARED = "rtm_technology_declared"
+    # Slice 3C enrollment evidence. Recording and CORRECTING are separate
+    # actions: a trail that merged them could not answer whether a family
+    # consented once or had an attestation restated.
+    RTM_CONSENT_RECORDED = "rtm_consent_recorded"
+    RTM_CONSENT_CORRECTED = "rtm_consent_corrected"
+    RTM_SETUP_RECORDED = "rtm_setup_recorded"
+    RTM_SETUP_CORRECTED = "rtm_setup_corrected"
     RTM_PERIOD_OPENED = "rtm_period_opened"
     RTM_PERIOD_FINALIZED = "rtm_period_finalized"
     THERAPIST_REVIEW_RECORDED = "therapist_review_recorded"
@@ -266,6 +273,22 @@ ALLOWED_METADATA_KEYS = frozenset({
     "supersedes_time_entry_id",
     "interaction_id",
     "technology_id",
+    # Slice 3C. Opaque ids, short enums and booleans only. The consent
+    # DOCUMENT id and VERSION are deliberately allowed — they identify a
+    # published form, not clinical content about a child. The acknowledgement
+    # flags are allowed as a count, never as the document text.
+    "billing_provider_id",
+    "consent_id",
+    "supersedes_consent_id",
+    "setup_id",
+    "supersedes_setup_id",
+    "consent_document_id",
+    "consent_document_version",
+    "consent_authority",
+    "consent_attested_by",
+    "acknowledgement_count",
+    "caregiver_confirmed",
+    "readiness_missing_count",
     "summary_id",
     "coding_summary_id",
     "report_id",

@@ -53,8 +53,18 @@ from ..domain.goals import GoalRef, require_clinical_goal_ref
 from ..domain.identity_claims import ClaimKind, IdentityClaim, key_digest
 from ..domain.month_end import MonthEndReport, ReportSection, SectionContent
 from ..domain.roles import ActorRole
+from ..domain.rtm_enrollment import (
+    REQUIRED_ACKNOWLEDGEMENTS,
+    ConsentAttestedBy,
+    ConsentAuthority,
+    EnrollmentError,
+    RTMConsentAttestation,
+    RTMSetupEducation,
+    assess_readiness,
+)
 from ..domain.rtm import (
     EpisodeStatus,
+    RTMError,
     PeriodStatus,
     RegulatoryStatus,
     RTMEpisode,
@@ -80,12 +90,15 @@ from .errors import (
     FinalizedRecordImmutable,
     RTMAuthorizationError,
     RTMConflict,
+    RTMPrerequisitesIncomplete,
     RTMValidationError,
 )
 from .evidence import derive_evidence_summary
 from .reporting import build_sections
 
 RESOURCE_EPISODE = "rtm_episode"
+RESOURCE_CONSENT = "rtm_consent_attestation"
+RESOURCE_SETUP = "rtm_setup_education"
 RESOURCE_PERIOD = "rtm_monitoring_period"
 RESOURCE_TECHNOLOGY = "rtm_technology"
 RESOURCE_REVIEW = "therapist_review"
@@ -224,8 +237,31 @@ class RTMService:
 
     def open_episode(self, principal, child_id: str,
                      goal_refs: Sequence[GoalRef], *,
+                     authorized_caregiver_id: str = "",
+                     clinical_indication: str = "",
+                     clinical_rationale: str = "",
+                     billing_provider_id: str = "",
+                     expected_duration_months: Optional[int] = None,
+                     order_reference: str = "",
                      request_id: str = "") -> RTMEpisode:
-        """Open an episode. Clinical goals only, all for this child."""
+        """Open an episode. Clinical goals only, all for this child.
+
+        Slice 3C: this is the ENROLLMENT step, and it is the first of four.
+        Consent and setup attach to the episode afterwards, and monitoring
+        cannot begin until all three exist — see `open_period`.
+
+        ## GOAL VERSIONS ARE PINNED HERE, READ FROM THE GOAL ITSELF
+
+        Each goal's `current_version_id` is captured as the version this
+        episode was opened against. Read from the stored goal rather than
+        accepted from the caller: a caller-supplied version could name wording
+        the clinician never approved, and the whole point of the pin is that
+        the episode records what was actually in force.
+
+        A later revision moves the goal's `current_version_id` and leaves this
+        pin untouched, which is what makes "what was this episode opened
+        against?" answerable after an edit.
+        """
         self._authorize(principal, child_id)
         assignment = self._require_managing_clinician(
             principal, child_id, "opening an RTM episode")
@@ -233,6 +269,7 @@ class RTMService:
         if not goal_refs:
             raise RTMValidationError(
                 "an RTM episode requires at least one clinical goal")
+        pinned = []
         for ref in goal_refs:
             # A caregiver-approved goal cannot satisfy this. Different TYPES.
             require_clinical_goal_ref(ref)
@@ -243,16 +280,47 @@ class RTMService:
             if goal.child_id != child_id:
                 raise RTMValidationError(
                     "clinical goal belongs to a different child")
+            if not (goal.current_version_id or "").strip():
+                raise RTMValidationError(
+                    "this clinical goal has no approved version to pin")
+            pinned.append((ref.goal_id, goal.current_version_id))
+
+        if authorized_caregiver_id:
+            # The caregiver must actually be connected to this child. Without
+            # this an episode could name a caregiver who cannot consent, and
+            # the consent gate would then refuse forever with no explanation
+            # of why. `list_caregivers_for_child` already excludes ended
+            # connections, so the active filter is not restated here.
+            connected = {c.caregiver_id for c in
+                         self._repos.caregiver_child.list_caregivers_for_child(
+                             child_id)}
+            if authorized_caregiver_id not in connected:
+                raise RTMValidationError(
+                    "the authorized caregiver is not actively connected to "
+                    "this child")
 
         for existing in self._repos.rtm_episodes.list_for_child(child_id):
             if existing.is_open:
                 raise RTMConflict("this child already has an open RTM episode")
 
-        episode = RTMEpisode.open(
-            child_id, principal.application_id, assignment.practice_id,
-            tuple(goal_refs), actor_id=principal.application_id,
-            managing_assignment_id=assignment.assignment_id,
-            now=self._stamp())
+        try:
+            episode = RTMEpisode.open(
+                child_id, principal.application_id, assignment.practice_id,
+                tuple(goal_refs), actor_id=principal.application_id,
+                managing_assignment_id=assignment.assignment_id,
+                authorized_caregiver_id=authorized_caregiver_id,
+                clinical_indication=clinical_indication,
+                clinical_rationale=clinical_rationale,
+                pinned_goal_version_ids=tuple(pinned),
+                billing_provider_id=billing_provider_id,
+                expected_duration_months=expected_duration_months,
+                order_reference=order_reference,
+                now=self._stamp())
+        except RTMError as exc:
+            # The record's own enrollment rules, surfaced as a validation
+            # failure rather than leaking a domain exception type through the
+            # service boundary.
+            raise RTMValidationError(str(exc)) from None
         self._repos.rtm_episodes.create(episode)
 
         self._audit(AuditAction.RTM_EPISODE_OPENED, AuditResult.SUCCESS,
@@ -262,7 +330,11 @@ class RTMService:
                     goal_count=len(goal_refs),
                     provider_id=principal.application_id,
                     assignment_id=assignment.assignment_id,
-                    practice_id=assignment.practice_id)
+                    practice_id=assignment.practice_id,
+                    # Opaque ids and a count. The indication and rationale are
+                    # clinical text and deliberately never enter the trail.
+                    caregiver_id=episode.authorized_caregiver_id,
+                    billing_provider_id=episode.billing_provider_id)
         return episode
 
     def close_episode(self, principal, episode_id: str, *, reason: str,
@@ -289,6 +361,319 @@ class RTMService:
                     request_id=request_id, episode_id=episode_id,
                     provider_id=principal.application_id)
         return closed
+
+    # =====================================================================
+    # Enrollment evidence — slice 3C
+    # =====================================================================
+
+    def _readiness_for(self, episode: RTMEpisode):
+        """Readiness for one episode, from its CURRENT enrollment records.
+
+        A thin read plus the pure `assess_readiness`. The verdict is never
+        stored: it is a function of records that can change, and a cached
+        readiness flag would be a second truth to keep in step.
+        """
+        return assess_readiness(
+            episode,
+            consents=self._repos.rtm_consents.list_for_episode(
+                episode.episode_id),
+            setups=self._repos.rtm_setups.list_for_episode(
+                episode.episode_id))
+
+    def episode_readiness(self, principal, episode_id: str):
+        """May monitoring begin? Readable before anyone tries to open a month.
+
+        Exposed so a clinician can see WHICH prerequisite is outstanding
+        without provoking a refusal to find out.
+        """
+        episode = self._load_episode(episode_id)
+        self._authorize(principal, episode.child_id)
+        self._require_managing_clinician(principal, episode.child_id,
+                                         "reading RTM readiness")
+        return self._readiness_for(episode)
+
+    def record_consent(self, principal, episode_id: str, *,
+                       authority: ConsentAuthority,
+                       consent_document_id: str,
+                       consent_document_version: str,
+                       acknowledged_monitoring: bool = False,
+                       acknowledged_billing_and_cost_sharing: bool = False,
+                       acknowledged_withdrawal_right: bool = False,
+                       acknowledged_communication_expectations: bool = False,
+                       acknowledged_response_expectations: bool = False,
+                       accepted_at: Optional[datetime] = None,
+                       proxy_documentation_ref: str = "",
+                       proxy_reason: str = "",
+                       request_id: str = "") -> RTMConsentAttestation:
+        """Record the caregiver's RTM consent.
+
+        ## WHO MAY DO THIS, AND WHAT IT THEN MEANS
+
+        The AUTHORIZED CAREGIVER on the episode may record their own consent;
+        the record is then `CAREGIVER_ATTESTED`. The managing clinician may
+        record it on their behalf, and the record is then
+        `PROVIDER_RECORDED_PROXY` and REQUIRES a documentation reference and a
+        reason — a provider assertion can never be stored as the caregiver's
+        own act, because the two use different enum values and the proxy value
+        cannot exist without its provenance.
+
+        Any other caregiver is refused even if connected to the child: consent
+        belongs to the person the episode names, not to anyone with access.
+        """
+        episode = self._load_episode(episode_id)
+        self._authorize(principal, episode.child_id)
+
+        if principal.role is ActorRole.CAREGIVER:
+            if not episode.authorized_caregiver_id:
+                raise RTMValidationError(
+                    "this episode names no authorized caregiver")
+            if principal.application_id != episode.authorized_caregiver_id:
+                raise RTMAuthorizationError(
+                    "only this episode's authorized caregiver may consent")
+            attested_by = ConsentAttestedBy.CAREGIVER_ATTESTED
+            proxy_provider = ""
+        else:
+            # Provider proxy. Full managing-clinician + no-transfer gate.
+            self._require_episode_owner(principal, episode,
+                                        "recording RTM consent by proxy")
+            if not episode.authorized_caregiver_id:
+                raise RTMValidationError(
+                    "this episode names no authorized caregiver")
+            attested_by = ConsentAttestedBy.PROVIDER_RECORDED_PROXY
+            proxy_provider = principal.application_id
+
+        if not episode.is_open:
+            raise EpisodeClosedForAccrual(
+                "this RTM episode is closed; enrollment evidence cannot be "
+                "added to it")
+
+        try:
+            consent = RTMConsentAttestation.record(
+                episode_id, episode.child_id, episode.authorized_caregiver_id,
+                authority=authority,
+                consent_document_id=consent_document_id,
+                consent_document_version=consent_document_version,
+                accepted_at=accepted_at or self._stamp(),
+                attested_by=attested_by,
+                acknowledged_monitoring=acknowledged_monitoring,
+                acknowledged_billing_and_cost_sharing=(
+                    acknowledged_billing_and_cost_sharing),
+                acknowledged_withdrawal_right=acknowledged_withdrawal_right,
+                acknowledged_communication_expectations=(
+                    acknowledged_communication_expectations),
+                acknowledged_response_expectations=(
+                    acknowledged_response_expectations),
+                proxy_recorded_by_provider_id=proxy_provider,
+                proxy_documentation_ref=proxy_documentation_ref,
+                proxy_reason=proxy_reason,
+                recorded_by_actor_id=principal.application_id,
+                now=self._stamp())
+        except EnrollmentError as exc:
+            raise RTMValidationError(str(exc)) from None
+        self._repos.rtm_consents.create(consent)
+
+        self._audit(AuditAction.RTM_CONSENT_RECORDED, AuditResult.SUCCESS,
+                    RESOURCE_CONSENT, principal=principal,
+                    child_id=episode.child_id,
+                    resource_id=consent.consent_id, request_id=request_id,
+                    episode_id=episode_id, consent_id=consent.consent_id,
+                    caregiver_id=consent.caregiver_id,
+                    consent_document_id=consent_document_id,
+                    consent_document_version=consent_document_version,
+                    consent_authority=authority.value,
+                    consent_attested_by=attested_by.value,
+                    acknowledgement_count=len(
+                        [1 for name in REQUIRED_ACKNOWLEDGEMENTS
+                         if getattr(consent, name)]))
+        return consent
+
+    def correct_consent(self, principal, consent_id: str, *, reason: str,
+                        request_id: str = "", **fields
+                        ) -> RTMConsentAttestation:
+        """Supersede a consent record. The attested original is RETAINED.
+
+        The predecessor keeps its own `accepted_at`, actor and document
+        version — the point of a correction is that the earlier attestation
+        happened, not that it can be unsaid. Readiness reads only current
+        records, so a correction cannot leave a family ready on superseded
+        wording.
+        """
+        try:
+            original = self._repos.rtm_consents.get_by_id(consent_id)
+        except RecordNotFound:
+            raise RTMConflict("no such consent record") from None
+        episode = self._load_episode(original.episode_id)
+        self._authorize(principal, episode.child_id)
+        if principal.role is ActorRole.CAREGIVER:
+            if principal.application_id != episode.authorized_caregiver_id:
+                raise RTMAuthorizationError(
+                    "only this episode's authorized caregiver may correct "
+                    "their consent")
+        else:
+            self._require_episode_owner(principal, episode,
+                                        "correcting RTM consent")
+        if not original.is_current:
+            raise RTMConflict("this consent record has already been corrected")
+        if not (reason or "").strip():
+            raise RTMValidationError("a consent correction requires a reason")
+
+        unknown = sorted(set(fields) - set(REQUIRED_ACKNOWLEDGEMENTS)
+                         - {"authority", "consent_document_id",
+                            "consent_document_version", "accepted_at"})
+        if unknown:
+            raise RTMValidationError(
+                f"a consent correction cannot set: {unknown}")
+
+        try:
+            correction = RTMConsentAttestation.record(
+                original.episode_id, original.child_id, original.caregiver_id,
+                authority=fields.get("authority", original.authority),
+                consent_document_id=fields.get(
+                    "consent_document_id", original.consent_document_id),
+                consent_document_version=fields.get(
+                    "consent_document_version",
+                    original.consent_document_version),
+                accepted_at=fields.get("accepted_at", original.accepted_at),
+                attested_by=original.attested_by,
+                proxy_recorded_by_provider_id=(
+                    original.proxy_recorded_by_provider_id),
+                proxy_documentation_ref=original.proxy_documentation_ref,
+                proxy_reason=original.proxy_reason,
+                recorded_by_actor_id=principal.application_id,
+                supersedes_consent_id=consent_id,
+                correction_reason=reason, now=self._stamp(),
+                **{name: fields.get(name, getattr(original, name))
+                   for name in REQUIRED_ACKNOWLEDGEMENTS})
+        except EnrollmentError as exc:
+            raise RTMValidationError(str(exc)) from None
+        self._repos.rtm_consents.create(correction)
+        self._repos.rtm_consents.update(
+            original.with_successor(correction.consent_id))
+
+        self._audit(AuditAction.RTM_CONSENT_CORRECTED, AuditResult.SUCCESS,
+                    RESOURCE_CONSENT, principal=principal,
+                    child_id=episode.child_id,
+                    resource_id=correction.consent_id, request_id=request_id,
+                    episode_id=original.episode_id,
+                    consent_id=correction.consent_id,
+                    supersedes_consent_id=consent_id,
+                    consent_document_version=(
+                        correction.consent_document_version))
+        return correction
+
+    def record_setup(self, principal, episode_id: str, *,
+                     configuration_summary: str, education_summary: str,
+                     caregiver_confirmed_able_to_use: bool = False,
+                     performed_at: Optional[datetime] = None,
+                     request_id: str = "") -> RTMSetupEducation:
+        """Record the one-time setup and education for this episode.
+
+        Provider-performed, so it takes the full managing-clinician gate.
+        DISTINCT from `ClinicalActionType.EDUCATION_OR_COACHING`, which is
+        coaching decided on during a monitored month as part of treatment:
+        this is the setup that made monitoring possible at all.
+        """
+        episode = self._load_episode(episode_id)
+        self._require_episode_owner(principal, episode,
+                                    "recording RTM setup and education")
+        if not episode.is_open:
+            raise EpisodeClosedForAccrual(
+                "this RTM episode is closed; enrollment evidence cannot be "
+                "added to it")
+        if not episode.authorized_caregiver_id:
+            raise RTMValidationError(
+                "this episode names no authorized caregiver")
+
+        try:
+            setup = RTMSetupEducation.record(
+                episode_id, episode.child_id,
+                performed_by_actor_id=principal.application_id,
+                caregiver_id=episode.authorized_caregiver_id,
+                performed_at=performed_at or self._stamp(),
+                configuration_summary=configuration_summary,
+                education_summary=education_summary,
+                caregiver_confirmed_able_to_use=(
+                    caregiver_confirmed_able_to_use),
+                recorded_by_actor_id=principal.application_id,
+                now=self._stamp())
+        except EnrollmentError as exc:
+            raise RTMValidationError(str(exc)) from None
+        self._repos.rtm_setups.create(setup)
+
+        self._audit(AuditAction.RTM_SETUP_RECORDED, AuditResult.SUCCESS,
+                    RESOURCE_SETUP, principal=principal,
+                    child_id=episode.child_id, resource_id=setup.setup_id,
+                    request_id=request_id, episode_id=episode_id,
+                    setup_id=setup.setup_id,
+                    caregiver_id=setup.caregiver_id,
+                    provider_id=principal.application_id,
+                    caregiver_confirmed=(
+                        setup.caregiver_confirmed_able_to_use))
+        return setup
+
+    def correct_setup(self, principal, setup_id: str, *, reason: str,
+                      configuration_summary: str = "",
+                      education_summary: str = "",
+                      caregiver_confirmed_able_to_use: Optional[bool] = None,
+                      request_id: str = "") -> RTMSetupEducation:
+        """Supersede a setup record. The original is RETAINED, with its time."""
+        try:
+            original = self._repos.rtm_setups.get_by_id(setup_id)
+        except RecordNotFound:
+            raise RTMConflict("no such setup record") from None
+        episode = self._load_episode(original.episode_id)
+        self._require_episode_owner(principal, episode,
+                                    "correcting RTM setup and education")
+        if not original.is_current:
+            raise RTMConflict("this setup record has already been corrected")
+        if not (reason or "").strip():
+            raise RTMValidationError("a setup correction requires a reason")
+
+        try:
+            correction = RTMSetupEducation.record(
+                original.episode_id, original.child_id,
+                # The original PERFORMER and time are preserved: a correction
+                # restates what was recorded, it does not re-perform the setup.
+                performed_by_actor_id=original.performed_by_actor_id,
+                caregiver_id=original.caregiver_id,
+                performed_at=original.performed_at,
+                configuration_summary=(configuration_summary
+                                       or original.configuration_summary),
+                education_summary=(education_summary
+                                   or original.education_summary),
+                caregiver_confirmed_able_to_use=(
+                    original.caregiver_confirmed_able_to_use
+                    if caregiver_confirmed_able_to_use is None
+                    else caregiver_confirmed_able_to_use),
+                recorded_by_actor_id=principal.application_id,
+                supersedes_setup_id=setup_id,
+                correction_reason=reason, now=self._stamp())
+        except EnrollmentError as exc:
+            raise RTMValidationError(str(exc)) from None
+        self._repos.rtm_setups.create(correction)
+        self._repos.rtm_setups.update(
+            original.with_successor(correction.setup_id))
+
+        self._audit(AuditAction.RTM_SETUP_CORRECTED, AuditResult.SUCCESS,
+                    RESOURCE_SETUP, principal=principal,
+                    child_id=episode.child_id,
+                    resource_id=correction.setup_id, request_id=request_id,
+                    episode_id=original.episode_id,
+                    setup_id=correction.setup_id,
+                    supersedes_setup_id=setup_id,
+                    caregiver_confirmed=(
+                        correction.caregiver_confirmed_able_to_use))
+        return correction
+
+    def list_consents(self, principal, episode_id: str):
+        episode = self._load_episode(episode_id)
+        self._authorize(principal, episode.child_id)
+        return list(self._repos.rtm_consents.list_for_episode(episode_id))
+
+    def list_setups(self, principal, episode_id: str):
+        episode = self._load_episode(episode_id)
+        self._authorize(principal, episode.child_id)
+        return list(self._repos.rtm_setups.list_for_episode(episode_id))
 
     def declare_technology(self, principal, episode_id: str,
                            product_descriptor: str, *,
@@ -330,6 +715,20 @@ class RTMService:
                                     "opening a monitoring period")
         if not episode.is_open:
             raise RTMConflict("a closed episode cannot gain a new period")
+        # Slice 3C: THE PREREQUISITE GATE, and it sits here deliberately.
+        #
+        # Monitoring "begins" when a month exists, because every accruing
+        # write needs a period id. Refusing the month therefore refuses the
+        # minutes, reviews, actions and contacts in one place, instead of five
+        # gates that could fall out of step.
+        #
+        # It refuses RTM monitoring and nothing else: no caregiver path, plan
+        # path, observation path or read consults readiness.
+        readiness = self._readiness_for(episode)
+        if not readiness.is_ready:
+            raise RTMPrerequisitesIncomplete(
+                "RTM monitoring cannot begin until the enrollment "
+                "prerequisites exist: " + ", ".join(readiness.missing))
 
         try:
             plan = self._repos.focus_plans.get_by_id(focus_plan_id)

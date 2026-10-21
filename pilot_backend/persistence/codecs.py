@@ -85,6 +85,12 @@ from ..domain.rtm_documentation import (
     TimeEntry,
     TimeEntryMethod,
 )
+from ..domain.rtm_enrollment import (
+    ConsentAttestedBy,
+    ConsentAuthority,
+    RTMConsentAttestation,
+    RTMSetupEducation,
+)
 from ..domain.rtm_summary import (
     CodingAssistanceSummary,
     GoalEvidenceLine,
@@ -934,10 +940,44 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "practice_id": STR, "clinical_goal_refs": STR_PAIR_TUPLE,
         "opened_at": DT, "opened_by_actor_id": STR,
         "managing_assignment_id": STR,
+        # Slice 3C enrollment metadata. Defaulted on the record, so an episode
+        # persisted before 3C decodes with all of these absent and is simply
+        # not RTM-ready.
+        "authorized_caregiver_id": STR, "billing_provider_id": STR,
+        "clinical_indication": STR, "clinical_rationale": STR,
+        "expected_duration_months": OPT_INT, "order_reference": STR,
+        "pinned_goal_version_ids": STR_PAIR_TUPLE,
         "status": _EnumKind(EpisodeStatus),
         "closed_at": OPT_DT, "closed_by_actor_id": OPT_STR,
         "close_reason": STR,
         "created_at": DT, "updated_at": DT, "schema_version": STR,
+    },
+    RTMConsentAttestation: {
+        "consent_id": STR, "episode_id": STR, "child_id": STR,
+        "caregiver_id": STR, "authority": _EnumKind(ConsentAuthority),
+        "consent_document_id": STR, "consent_document_version": STR,
+        "accepted_at": DT, "attested_by": _EnumKind(ConsentAttestedBy),
+        "acknowledged_monitoring": BOOL,
+        "acknowledged_billing_and_cost_sharing": BOOL,
+        "acknowledged_withdrawal_right": BOOL,
+        "acknowledged_communication_expectations": BOOL,
+        "acknowledged_response_expectations": BOOL,
+        "proxy_recorded_by_provider_id": STR,
+        "proxy_documentation_ref": STR, "proxy_reason": STR,
+        "recorded_at": DT, "recorded_by_actor_id": STR,
+        "supersedes_consent_id": OPT_STR,
+        "superseded_by_consent_id": OPT_STR,
+        "correction_reason": STR, "schema_version": STR,
+    },
+    RTMSetupEducation: {
+        "setup_id": STR, "episode_id": STR, "child_id": STR,
+        "performed_by_actor_id": STR, "caregiver_id": STR,
+        "performed_at": DT, "configuration_summary": STR,
+        "education_summary": STR,
+        "caregiver_confirmed_able_to_use": BOOL,
+        "recorded_at": DT, "recorded_by_actor_id": STR,
+        "supersedes_setup_id": OPT_STR, "superseded_by_setup_id": OPT_STR,
+        "correction_reason": STR, "schema_version": STR,
     },
     RTMMonitoringPeriod: {
         "period_id": STR, "episode_id": STR, "child_id": STR,

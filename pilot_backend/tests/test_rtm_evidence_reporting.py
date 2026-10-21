@@ -66,6 +66,20 @@ from pilot_backend.domain.rtm_documentation import (
     TimeEntryMethod,
     documented_minutes,
 )
+from pilot_backend.domain.rtm_enrollment import (
+    MISSING_CONSENT,
+    REQUIRED_ACKNOWLEDGEMENTS,
+    MISSING_CONSENT_ACKNOWLEDGEMENTS,
+    MISSING_ENROLLMENT_METADATA,
+    MISSING_SETUP,
+    MISSING_SETUP_CONFIRMATION,
+    ConsentAttestedBy,
+    ConsentAuthority,
+    EnrollmentError,
+    RTMConsentAttestation,
+    RTMSetupEducation,
+    assess_readiness,
+)
 from pilot_backend.domain.rtm_summary import (
     CodingAssistanceSummary,
     GoalEvidenceLine,
@@ -90,6 +104,7 @@ from pilot_backend.persistence.collections import COLLECTIONS, PILOT_COLLECTION_
 from pilot_backend.planning.service import MonthlyPlanService
 from pilot_backend.rtm.errors import (
     EpisodeClosedForAccrual,
+    RTMPrerequisitesIncomplete,
     EpisodeTransferRefused,
     FinalizedRecordImmutable,
     RTMAuthorizationError,
@@ -238,11 +253,55 @@ def _instances(result):
             for p in result.placements}
 
 
-def _rtm_open(s, ctx):
-    episode = s.rtm.open_episode(s.provider_alpha, s.child,
-                                 [g.ref for g in ctx["goals"]])
+#: Slice 3C. The fixture now walks the REAL enrollment order —
+#: enrollment metadata -> caregiver consent -> setup/education -> monitoring —
+#: because `open_period` refuses a month until all three exist. Every pre-3C
+#: test flows through here, so they all exercise the enrolled path instead of
+#: a shortcut. That is deliberate: a fixture that bypassed the gate would
+#: leave it untested by everything except its own tests.
+def _enroll(s, ctx, *, consent=True, setup=True, confirmed=True,
+            billing_provider_id="", expected_duration_months=6):
+    """Open an episode with full 3C enrollment metadata, then its evidence.
+
+    The `consent`/`setup`/`confirmed` switches exist so the readiness tests
+    can build each incomplete state through the same path a real workflow
+    takes, rather than hand-writing a half-enrolled episode.
+    """
+    episode = s.rtm.open_episode(
+        s.provider_alpha, s.child, [g.ref for g in ctx["goals"]],
+        authorized_caregiver_id=s.caregiver_alpha.application_id,
+        clinical_indication="Fictional expressive-language delay",
+        clinical_rationale=(
+            "Home practice between visits needs monitoring to adjust the "
+            "weekly plan."),
+        billing_provider_id=billing_provider_id,
+        expected_duration_months=expected_duration_months,
+        order_reference="fictional-order-001")
     s.rtm.declare_technology(s.provider_alpha, episode.episode_id,
                              "Genex RTM pilot")
+    if consent:
+        s.rtm.record_consent(
+            s.caregiver_alpha, episode.episode_id,
+            authority=ConsentAuthority.PARENT,
+            consent_document_id="genex-rtm-consent",
+            consent_document_version="v1.0",
+            acknowledged_monitoring=True,
+            acknowledged_billing_and_cost_sharing=True,
+            acknowledged_withdrawal_right=True,
+            acknowledged_communication_expectations=True,
+            acknowledged_response_expectations=True)
+    if setup:
+        s.rtm.record_setup(
+            s.provider_alpha, episode.episode_id,
+            configuration_summary="Weekly plan and reminders configured.",
+            education_summary="Showed how to record an attempt each day.",
+            caregiver_confirmed_able_to_use=confirmed)
+    return episode
+
+
+def _rtm_open(s, ctx):
+    """A fully enrolled episode with its first monitoring month open."""
+    episode = _enroll(s, ctx)
     period = s.rtm.open_period(s.provider_alpha, episode.episode_id,
                                ctx["plan"].focus_plan_id)
     return episode, period
@@ -603,9 +662,15 @@ def test_closing_an_episode_requires_a_reason(s):
 
 def test_an_episode_is_inactive_on_status_even_without_a_timestamp():
     """The recurring mutation lesson, applied to episodes."""
-    episode = RTMEpisode.open("chld_x", "prov_1", "prac_1",
-                              (GoalRef(GoalKind.CLINICAL, "clgl_1"),),
-                              actor_id="prov_1")
+    episode = RTMEpisode.open(
+        "chld_x", "prov_1", "prac_1",
+        (GoalRef(GoalKind.CLINICAL, "clgl_1"),), actor_id="prov_1",
+        # Slice 3C: `open` now requires the enrollment metadata and a pinned
+        # version for every goal.
+        authorized_caregiver_id="cgvr_1",
+        clinical_indication="Fictional indication",
+        clinical_rationale="Fictional rationale",
+        pinned_goal_version_ids=(("clgl_1", "gver_1"),))
     assert episode.is_open
     assert not replace(episode, status=EpisodeStatus.CLOSED,
                        closed_at=None).is_open
@@ -1369,12 +1434,44 @@ def test_full_october_end_to_end(s):
     assert adaptation.not_a_failure
     assert adaptation.resulting_change
 
-    # --- RTM (0.4F) -------------------------------------------------------
-    episode = s.rtm.open_episode(s.provider_alpha, s.child,
-                                 [primary.ref, secondary.ref])
+    # --- RTM enrollment, consent, setup (slice 3C) ------------------------
+    episode = s.rtm.open_episode(
+        s.provider_alpha, s.child, [primary.ref, secondary.ref],
+        authorized_caregiver_id=s.caregiver_alpha.application_id,
+        clinical_indication="Fictional expressive-language delay",
+        clinical_rationale="Monitoring home practice between visits.",
+        expected_duration_months=6)
+    assert episode.pinned_goal_version_ids, "goal versions were not pinned"
     technology = s.rtm.declare_technology(s.provider_alpha,
                                           episode.episode_id, "Genex RTM pilot")
     assert technology.regulatory_status is RegulatoryStatus.UNDER_REVIEW
+
+    # Monitoring cannot begin yet: consent and setup are still missing.
+    assert not s.rtm.episode_readiness(s.provider_alpha,
+                                       episode.episode_id).is_ready
+    with pytest.raises(RTMPrerequisitesIncomplete):
+        s.rtm.open_period(s.provider_alpha, episode.episode_id,
+                          plan.focus_plan_id)
+
+    s.rtm.record_consent(
+        s.caregiver_alpha, episode.episode_id,
+        authority=ConsentAuthority.PARENT,
+        consent_document_id="genex-rtm-consent",
+        consent_document_version="v1.0",
+        acknowledged_monitoring=True,
+        acknowledged_billing_and_cost_sharing=True,
+        acknowledged_withdrawal_right=True,
+        acknowledged_communication_expectations=True,
+        acknowledged_response_expectations=True)
+    s.rtm.record_setup(
+        s.provider_alpha, episode.episode_id,
+        configuration_summary="Weekly plan and reminders configured.",
+        education_summary="Showed how to record an attempt each day.",
+        caregiver_confirmed_able_to_use=True)
+    assert s.rtm.episode_readiness(s.provider_alpha,
+                                   episode.episode_id).is_ready
+
+    # --- RTM monitoring (0.4F) -------------------------------------------
     period = s.rtm.open_period(s.provider_alpha, episode.episode_id,
                                plan.focus_plan_id)
     assert period.focus_plan_id == plan.focus_plan_id
@@ -2703,3 +2800,618 @@ def test_only_section_h_uses_the_superseded_ref_field(s):
             assert content.superseded_record_refs
         else:
             assert content.superseded_record_refs == (), content.section
+
+
+# ===========================================================================
+# TRACK 3 SLICE 3C — enrollment, consent, setup, and the sequencing gate
+# ===========================================================================
+#
+# Pilot order: enrollment metadata -> caregiver consent -> setup/education ->
+# monitoring. The episode is openable before consent and setup because it IS
+# the record they attach to; what cannot happen is a monitoring MONTH existing
+# before all three, because every accruing write needs a period id.
+#
+# RTM readiness and Genex account access are separate states, and the last
+# test in this block is the one that pins that.
+
+
+# -- 1. enrollment metadata and goal-version pinning -----------------------
+
+def test_the_episode_carries_every_required_enrollment_field(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, billing_provider_id="prov_biller_fictional")
+
+    assert episode.child_id == s.child
+    assert episode.authorized_caregiver_id == s.caregiver_alpha.application_id
+    assert episode.managing_provider_id == s.provider_alpha.application_id
+    assert episode.billing_provider_id == "prov_biller_fictional"
+    assert episode.opened_at is not None
+    assert episode.clinical_indication
+    assert episode.clinical_rationale
+    assert episode.expected_duration_months == 6
+    assert episode.order_reference == "fictional-order-001"
+    assert episode.status is EpisodeStatus.OPEN
+    assert episode.enrollment_complete
+
+
+def test_the_practice_is_not_the_billing_clinician(s):
+    """Separate identities, and the record refuses to merge them."""
+    ctx = _planning(s)
+    episode = _enroll(s, ctx)
+    assert episode.practice_id
+    assert episode.billing_provider_id == ""
+    # Empty means "the same as managing" — read through a property so the
+    # record never asserts a billing arrangement nobody stated.
+    assert episode.effective_billing_provider_id == episode.managing_provider_id
+
+    with pytest.raises(RTMError, match="not the practice"):
+        replace(episode, billing_provider_id=episode.practice_id)
+
+
+def test_the_episode_pins_goal_versions_not_mutable_goal_ids(s):
+    """A goal id alone is not enough: wording moves, the pin must not."""
+    ctx = _planning(s)
+    episode = _enroll(s, ctx)
+
+    goal_ids = {goal_id for _, goal_id in episode.clinical_goal_refs}
+    pinned = dict(episode.pinned_goal_version_ids)
+    assert set(pinned) == goal_ids, "every goal must carry a pinned version"
+    for goal_id, version_id in pinned.items():
+        goal = s.repos.clinical_goals.get_by_id(goal_id)
+        assert version_id == goal.current_version_id
+        stored = s.repos.goal_versions.get_by_id(version_id)
+        assert stored.goal_id == goal_id
+
+
+def test_a_later_goal_revision_leaves_the_episode_pin_intact(s):
+    """THE REASON THE PIN EXISTS.
+
+    Revising a goal moves its `current_version_id`. The episode must keep
+    naming the version it was opened against, or "what was this episode
+    opened against?" becomes unanswerable after any edit.
+    """
+    ctx = _planning(s)
+    episode = _enroll(s, ctx)
+    goal = ctx["goals"][0]
+    pinned_before = episode.pinned_version_for(goal.ref.goal_id)
+    assert pinned_before
+
+    revision = s.goals.revise_goal(
+        s.provider_alpha, goal.ref, "Fictional revised goal wording.",
+        edit_type=EditType.MODIFIED,
+        reason="Narrowed the target after review.")
+    assert revision.version_id != pinned_before
+
+    moved = s.repos.clinical_goals.get_by_id(goal.ref.goal_id)
+    assert moved.current_version_id == revision.version_id, \
+        "the goal's current version did not move; the test proves nothing"
+
+    stored_episode = s.repos.rtm_episodes.get_by_id(episode.episode_id)
+    assert stored_episode.pinned_version_for(goal.ref.goal_id) == pinned_before
+    # And the pinned wording is still retrievable.
+    original = s.repos.goal_versions.get_by_id(pinned_before)
+    assert original.version_id == pinned_before
+
+
+def test_an_episode_cannot_be_opened_without_enrollment_metadata(s):
+    ctx = _planning(s)
+    refs = [g.ref for g in ctx["goals"]]
+    for missing in ("authorized_caregiver_id", "clinical_indication",
+                    "clinical_rationale"):
+        kwargs = dict(
+            authorized_caregiver_id=s.caregiver_alpha.application_id,
+            clinical_indication="Fictional indication",
+            clinical_rationale="Fictional rationale")
+        kwargs[missing] = ""
+        with pytest.raises(RTMValidationError):
+            s.rtm.open_episode(s.provider_alpha, s.child, refs, **kwargs)
+
+
+def test_an_episode_cannot_name_an_unconnected_caregiver(s):
+    """A caregiver who cannot consent must not be enrolled as the one who will."""
+    ctx = _planning(s)
+    with pytest.raises(RTMValidationError, match="not actively connected"):
+        s.rtm.open_episode(
+            s.provider_alpha, s.child, [g.ref for g in ctx["goals"]],
+            authorized_caregiver_id=s.caregiver_beta.application_id,
+            clinical_indication="Fictional indication",
+            clinical_rationale="Fictional rationale")
+
+
+def test_a_pin_cannot_name_a_goal_the_episode_does_not_hold():
+    with pytest.raises(RTMError, match="does not hold"):
+        RTMEpisode(
+            episode_id="repi_x", child_id="chld_x",
+            managing_provider_id="prov_1", practice_id="prac_1",
+            clinical_goal_refs=(("clinical", "clgl_1"),),
+            opened_at=T0, opened_by_actor_id="prov_1",
+            pinned_goal_version_ids=(("clgl_other", "gver_1"),))
+
+
+def test_a_goal_cannot_be_pinned_to_two_versions():
+    with pytest.raises(RTMError, match="two versions"):
+        RTMEpisode(
+            episode_id="repi_x", child_id="chld_x",
+            managing_provider_id="prov_1", practice_id="prac_1",
+            clinical_goal_refs=(("clinical", "clgl_1"),),
+            opened_at=T0, opened_by_actor_id="prov_1",
+            pinned_goal_version_ids=(("clgl_1", "gver_1"),
+                                     ("clgl_1", "gver_2")))
+
+
+def test_a_pre_3c_episode_still_decodes_and_is_simply_not_ready():
+    """Compatibility. An episode stored before 3C carries none of this.
+
+    It decodes cleanly and reports `enrollment_complete` False, which is the
+    honest answer: nobody enrolled it under these rules. Readiness then
+    refuses new monitoring rather than the record refusing to load.
+    """
+    from pilot_backend.persistence.codecs import decode, encode
+
+    legacy = RTMEpisode(
+        episode_id="repi_legacy", child_id="chld_x",
+        managing_provider_id="prov_1", practice_id="prac_1",
+        clinical_goal_refs=(("clinical", "clgl_1"),),
+        opened_at=T0, opened_by_actor_id="prov_1")
+    restored = decode(RTMEpisode, encode(legacy))
+    assert restored.authorized_caregiver_id == ""
+    assert restored.pinned_goal_version_ids == ()
+    assert not restored.enrollment_complete
+
+    verdict = assess_readiness(restored)
+    assert not verdict.is_ready
+    assert MISSING_ENROLLMENT_METADATA in verdict.missing
+
+
+# -- 2. caregiver consent attestation --------------------------------------
+
+def test_consent_captures_the_full_attestation(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, setup=False)
+    consent, = s.rtm.list_consents(s.provider_alpha, episode.episode_id)
+
+    assert consent.caregiver_id == s.caregiver_alpha.application_id
+    assert consent.authority is ConsentAuthority.PARENT
+    assert consent.consent_document_id == "genex-rtm-consent"
+    assert consent.consent_document_version == "v1.0"
+    assert consent.accepted_at is not None
+    assert consent.attested_by is ConsentAttestedBy.CAREGIVER_ATTESTED
+    assert consent.is_complete
+    assert consent.missing_acknowledgements == ()
+    assert consent.is_current
+    for name in REQUIRED_ACKNOWLEDGEMENTS:
+        assert getattr(consent, name) is True, name
+
+
+def test_only_the_authorized_caregiver_may_consent(s):
+    """Access is not authority, proven at BOTH gates.
+
+    The topology has no second ACTIVE caregiver on this child, so the two
+    layers are exercised separately rather than pretending one case covers
+    both:
+
+      1. a caregiver with no relationship is stopped by the child-access gate
+         before the episode is even consulted — the earlier, stronger refusal;
+      2. a caregiver who IS connected but is not the one the episode names is
+         stopped by the authorized-caregiver check itself.
+    """
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, consent=False, setup=False)
+
+    # 1. no relationship at all.
+    with pytest.raises(RTMAuthorizationError, match="no_relationship"):
+        s.rtm.record_consent(
+            s.caregiver_beta, episode.episode_id,
+            authority=ConsentAuthority.PARENT,
+            consent_document_id="genex-rtm-consent",
+            consent_document_version="v1.0")
+
+    # 2. connected, but not the authorized caregiver. The episode is stored
+    #    naming someone else, so `caregiver_alpha` clears the access gate and
+    #    is then refused by the check under test.
+    s.repos.rtm_episodes.update(
+        replace(episode, authorized_caregiver_id="cgvr_someone_else"))
+    with pytest.raises(RTMAuthorizationError, match="authorized caregiver"):
+        s.rtm.record_consent(
+            s.caregiver_alpha, episode.episode_id,
+            authority=ConsentAuthority.PARENT,
+            consent_document_id="genex-rtm-consent",
+            consent_document_version="v1.0")
+
+
+def test_a_provider_proxy_consent_must_carry_its_provenance(s):
+    """A provider may record consent, but never as the caregiver's own act."""
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, consent=False, setup=False)
+
+    # Without documentation and a reason the record cannot be formed.
+    with pytest.raises(RTMValidationError, match="proxy"):
+        s.rtm.record_consent(
+            s.provider_alpha, episode.episode_id,
+            authority=ConsentAuthority.LEGAL_GUARDIAN,
+            consent_document_id="genex-rtm-consent",
+            consent_document_version="v1.0",
+            acknowledged_monitoring=True)
+
+    proxy = s.rtm.record_consent(
+        s.provider_alpha, episode.episode_id,
+        authority=ConsentAuthority.LEGAL_GUARDIAN,
+        consent_document_id="genex-rtm-consent",
+        consent_document_version="v1.0",
+        acknowledged_monitoring=True,
+        acknowledged_billing_and_cost_sharing=True,
+        acknowledged_withdrawal_right=True,
+        acknowledged_communication_expectations=True,
+        acknowledged_response_expectations=True,
+        proxy_documentation_ref="fictional-signed-form-001",
+        proxy_reason="Signed on paper in clinic.")
+
+    assert proxy.attested_by is ConsentAttestedBy.PROVIDER_RECORDED_PROXY
+    assert proxy.proxy_recorded_by_provider_id == \
+        s.provider_alpha.application_id
+    assert proxy.proxy_documentation_ref
+    assert proxy.proxy_reason
+    # It is still the CAREGIVER's consent that is recorded.
+    assert proxy.caregiver_id == s.caregiver_alpha.application_id
+
+
+def test_proxy_fields_cannot_decorate_a_caregiver_attested_consent():
+    """The two paths stay distinguishable in both directions."""
+    with pytest.raises(EnrollmentError, match="only for proxy"):
+        RTMConsentAttestation.record(
+            "repi_1", "chld_1", "cgvr_1",
+            authority=ConsentAuthority.PARENT,
+            consent_document_id="d", consent_document_version="v1",
+            accepted_at=T0,
+            attested_by=ConsentAttestedBy.CAREGIVER_ATTESTED,
+            proxy_documentation_ref="should-not-be-here")
+
+
+def test_partial_consent_is_not_consent(s):
+    """Nothing infers one acknowledgement from another."""
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, consent=False, setup=True)
+    partial = s.rtm.record_consent(
+        s.caregiver_alpha, episode.episode_id,
+        authority=ConsentAuthority.PARENT,
+        consent_document_id="genex-rtm-consent",
+        consent_document_version="v1.0",
+        acknowledged_monitoring=True)
+
+    assert not partial.is_complete
+    assert len(partial.missing_acknowledgements) == 4
+    verdict = s.rtm.episode_readiness(s.provider_alpha, episode.episode_id)
+    assert MISSING_CONSENT_ACKNOWLEDGEMENTS in verdict.missing
+
+
+def test_a_consent_correction_keeps_the_original_attested_facts(s):
+    """Append-only. The original keeps its time, actor and document version."""
+    ctx = _planning(s)
+    episode = _enroll(s, ctx)
+    original, = s.rtm.list_consents(s.provider_alpha, episode.episode_id)
+    original_accepted_at = original.accepted_at
+    original_version = original.consent_document_version
+
+    correction = s.rtm.correct_consent(
+        s.caregiver_alpha, original.consent_id,
+        reason="Re-accepted the updated form.",
+        consent_document_version="v1.1")
+
+    stored = s.repos.rtm_consents.get_by_id(original.consent_id)
+    assert stored.accepted_at == original_accepted_at
+    assert stored.consent_document_version == original_version
+    assert stored.superseded_by_consent_id == correction.consent_id
+    assert not stored.is_current
+
+    assert correction.supersedes_consent_id == original.consent_id
+    assert correction.consent_document_version == "v1.1"
+    assert correction.correction_reason
+    assert correction.is_current
+    # Readiness reads only the current record.
+    assert s.rtm.episode_readiness(s.provider_alpha,
+                                   episode.episode_id).is_ready
+
+
+def test_a_consent_correction_requires_a_reason(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx)
+    original, = s.rtm.list_consents(s.provider_alpha, episode.episode_id)
+    with pytest.raises(RTMValidationError, match="requires a reason"):
+        s.rtm.correct_consent(s.caregiver_alpha, original.consent_id,
+                              reason="   ")
+
+
+def test_a_consent_record_cannot_be_corrected_twice(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx)
+    original, = s.rtm.list_consents(s.provider_alpha, episode.episode_id)
+    s.rtm.correct_consent(s.caregiver_alpha, original.consent_id,
+                          reason="first correction")
+    with pytest.raises(RTMConflict, match="already been corrected"):
+        s.rtm.correct_consent(s.caregiver_alpha, original.consent_id,
+                              reason="second attempt")
+
+
+# -- 3. setup / education ---------------------------------------------------
+
+def test_setup_captures_what_was_configured_and_taught(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, consent=False)
+    setup, = s.rtm.list_setups(s.provider_alpha, episode.episode_id)
+
+    assert setup.configuration_summary
+    assert setup.education_summary
+    assert setup.performed_by_actor_id == s.provider_alpha.application_id
+    assert setup.caregiver_id == s.caregiver_alpha.application_id
+    assert setup.performed_at is not None
+    assert setup.caregiver_confirmed_able_to_use is True
+    assert setup.is_current
+
+
+def test_setup_is_distinct_from_post_enrollment_clinical_coaching(s):
+    """Two different records, two different lifecycles, two different places.
+
+    `ClinicalActionType.EDUCATION_OR_COACHING` documents coaching decided on
+    DURING a monitored month. A setup record is the one-time enablement. A
+    month with no coaching action must not make "was this family set up?"
+    unanswerable.
+    """
+    ctx = _planning(s)
+    episode, period = _rtm_open(s, ctx)
+
+    setups = s.rtm.list_setups(s.provider_alpha, episode.episode_id)
+    assert len(setups) == 1
+
+    review = s.rtm.record_review(
+        s.provider_alpha, period.period_id,
+        clinical_interpretation="Coaching needed on wait time.")
+    coaching = s.rtm.record_clinical_action(
+        s.provider_alpha, review.review_id,
+        action_type=ClinicalActionType.EDUCATION_OR_COACHING,
+        narrative="Coached on pausing for five seconds.")
+
+    # The coaching action did NOT become a setup record, and vice versa.
+    assert len(s.rtm.list_setups(s.provider_alpha, episode.episode_id)) == 1
+    assert coaching.period_id == period.period_id
+    assert not hasattr(coaching, "configuration_summary")
+    assert setups[0].setup_id != coaching.action_id
+    # The setup belongs to the EPISODE, the coaching to a MONTH.
+    assert setups[0].episode_id == episode.episode_id
+
+
+def test_a_setup_correction_preserves_the_original_performer_and_time(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx)
+    original, = s.rtm.list_setups(s.provider_alpha, episode.episode_id)
+    performed_at = original.performed_at
+
+    correction = s.rtm.correct_setup(
+        s.provider_alpha, original.setup_id,
+        reason="Added the reminder configuration that was missed.",
+        configuration_summary="Weekly plan, reminders and quiet hours set.")
+
+    stored = s.repos.rtm_setups.get_by_id(original.setup_id)
+    assert not stored.is_current
+    assert stored.configuration_summary == original.configuration_summary
+    # A correction RESTATES; it does not re-perform the setup.
+    assert correction.performed_at == performed_at
+    assert correction.performed_by_actor_id == original.performed_by_actor_id
+    assert correction.supersedes_setup_id == original.setup_id
+    assert correction.correction_reason
+
+
+def test_setup_without_caregiver_confirmation_is_not_enough(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, confirmed=False)
+    verdict = s.rtm.episode_readiness(s.provider_alpha, episode.episode_id)
+    assert MISSING_SETUP_CONFIRMATION in verdict.missing
+    assert not verdict.is_ready
+
+
+# -- 4. sequencing: monitoring cannot begin early --------------------------
+
+def test_monitoring_cannot_begin_without_consent(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, consent=False)
+    verdict = s.rtm.episode_readiness(s.provider_alpha, episode.episode_id)
+    assert MISSING_CONSENT in verdict.missing
+
+    with pytest.raises(RTMPrerequisitesIncomplete) as caught:
+        s.rtm.open_period(s.provider_alpha, episode.episode_id,
+                          ctx["plan"].focus_plan_id)
+    assert MISSING_CONSENT in str(caught.value)
+
+
+def test_monitoring_cannot_begin_without_setup(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, setup=False)
+    with pytest.raises(RTMPrerequisitesIncomplete) as caught:
+        s.rtm.open_period(s.provider_alpha, episode.episode_id,
+                          ctx["plan"].focus_plan_id)
+    assert MISSING_SETUP in str(caught.value)
+
+
+def test_no_rtm_accrual_is_possible_before_prerequisites(s):
+    """The gate holds for every accruing write, because none has a period.
+
+    This is why the gate sits on `open_period`: a month is the thing every
+    accrual needs, so refusing the month refuses the minutes, reviews,
+    actions and contacts in one place.
+    """
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, consent=False, setup=False)
+    assert s.repos.rtm_periods.list_for_episode(episode.episode_id) == []
+
+    with pytest.raises(RTMPrerequisitesIncomplete):
+        s.rtm.open_period(s.provider_alpha, episode.episode_id,
+                          ctx["plan"].focus_plan_id)
+    # No period exists, so nothing can be timed, reviewed or contacted.
+    assert s.repos.rtm_periods.list_for_episode(episode.episode_id) == []
+    assert s.repos.time_entries.list_for_period("rper_nonexistent") == []
+
+
+def test_monitoring_begins_once_the_full_sequence_is_complete(s):
+    """Enrollment -> consent -> setup -> monitoring, in that order."""
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, consent=False, setup=False)
+    assert not s.rtm.episode_readiness(s.provider_alpha,
+                                       episode.episode_id).is_ready
+
+    s.rtm.record_consent(
+        s.caregiver_alpha, episode.episode_id,
+        authority=ConsentAuthority.PARENT,
+        consent_document_id="genex-rtm-consent",
+        consent_document_version="v1.0",
+        acknowledged_monitoring=True,
+        acknowledged_billing_and_cost_sharing=True,
+        acknowledged_withdrawal_right=True,
+        acknowledged_communication_expectations=True,
+        acknowledged_response_expectations=True)
+    still = s.rtm.episode_readiness(s.provider_alpha, episode.episode_id)
+    assert MISSING_SETUP in still.missing
+
+    s.rtm.record_setup(
+        s.provider_alpha, episode.episode_id,
+        configuration_summary="Configured.", education_summary="Taught.",
+        caregiver_confirmed_able_to_use=True)
+    assert s.rtm.episode_readiness(s.provider_alpha,
+                                   episode.episode_id).is_ready
+
+    period = s.rtm.open_period(s.provider_alpha, episode.episode_id,
+                               ctx["plan"].focus_plan_id)
+    assert period.period_id
+    entry = s.rtm.record_time(
+        s.provider_alpha, period.period_id, local_date="2026-10-05",
+        minutes=20, activity_description="review after enrollment")
+    assert entry.minutes == 20
+
+
+def test_ordinary_genex_use_is_unaffected_by_incomplete_rtm_readiness(s):
+    """THE SEPARATION THIS SLICE MUST NOT BREAK.
+
+    RTM readiness and Genex account access are different states. A family
+    whose RTM prerequisites are incomplete keeps using the product: plans,
+    activities, observations and reads all work.
+    """
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, consent=False, setup=False)
+    assert not s.rtm.episode_readiness(s.provider_alpha,
+                                       episode.episode_id).is_ready
+
+    instances = _instances(ctx["result"])
+    event = s.weekly.record_observation(
+        s.caregiver_alpha, ctx["cycle"].cycle_id, instances["activity-a"],
+        local_date=ctx["cycle"].ends_on,
+        attempt_outcome=AttemptOutcome.DID_IT)
+    assert event.event_id
+
+    observations = s.weekly.list_observations(s.caregiver_alpha,
+                                              ctx["cycle"].cycle_id)
+    assert event.event_id in {e.event_id for e in observations}
+    assert s.weekly.list_cycles(s.provider_alpha, ctx["plan"].focus_plan_id)
+    assert s.rtm.list_episodes(s.provider_alpha, s.child)
+
+
+# -- 6. authorization boundaries -------------------------------------------
+
+def test_a_non_managing_provider_cannot_enroll_or_set_up_this_child(s):
+    """Existing child/provider boundaries are not loosened by 3C."""
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, setup=False)
+    gamma = s.connected_provider_gamma()
+
+    with pytest.raises((RTMAuthorizationError, RTMConflict)):
+        s.rtm.open_episode(
+            gamma, s.child, [g.ref for g in ctx["goals"]],
+            authorized_caregiver_id=s.caregiver_alpha.application_id,
+            clinical_indication="Fictional", clinical_rationale="Fictional")
+    with pytest.raises((RTMAuthorizationError, EpisodeTransferRefused,
+                        RTMConflict)):
+        s.rtm.record_setup(gamma, episode.episode_id,
+                           configuration_summary="x", education_summary="y")
+
+
+def test_a_caregiver_cannot_record_setup(s):
+    """Setup is provider-performed documentation."""
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, setup=False)
+    with pytest.raises(RTMAuthorizationError):
+        s.rtm.record_setup(s.caregiver_alpha, episode.episode_id,
+                           configuration_summary="x", education_summary="y")
+
+
+def test_enrollment_evidence_cannot_be_added_to_a_closed_episode(s):
+    """3A's closure rule extends to enrollment evidence."""
+    ctx = _planning(s)
+    episode = _enroll(s, ctx, consent=False, setup=False)
+    s.rtm.close_episode(s.provider_alpha, episode.episode_id,
+                        reason="enrolled in error")
+
+    with pytest.raises(EpisodeClosedForAccrual):
+        s.rtm.record_consent(
+            s.caregiver_alpha, episode.episode_id,
+            authority=ConsentAuthority.PARENT,
+            consent_document_id="d", consent_document_version="v1")
+    with pytest.raises(EpisodeClosedForAccrual):
+        s.rtm.record_setup(s.provider_alpha, episode.episode_id,
+                           configuration_summary="x", education_summary="y")
+
+
+def test_a_closed_episode_is_never_ready(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx)
+    assert s.rtm.episode_readiness(s.provider_alpha,
+                                   episode.episode_id).is_ready
+    s.rtm.close_episode(s.provider_alpha, episode.episode_id, reason="done")
+    verdict = s.rtm.episode_readiness(s.provider_alpha, episode.episode_id)
+    assert not verdict.is_ready
+
+
+# -- regression: 3A and 3B still hold --------------------------------------
+
+def test_3a_closure_and_3b_traceability_survive_3c(s):
+    ctx, _episode, period = _full_month(s)
+    episode, = s.rtm.list_episodes(s.provider_alpha, s.child)
+
+    # 3B: the report still carries its source refs.
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    engagement = _section(report, ReportSection.ENGAGEMENT)
+    assert engagement.record_refs
+    assert (engagement.count("distinct_attempts")
+            == len(set(engagement.record_refs)))
+    time_section = _section(report, ReportSection.DOCUMENTED_TIME)
+    assert time_section.superseded_record_refs
+
+    # 3A: closure still stops accrual.
+    s.rtm.close_episode(s.provider_alpha, episode.episode_id, reason="done")
+    with pytest.raises(EpisodeClosedForAccrual):
+        s.rtm.record_time(s.provider_alpha, period.period_id,
+                          local_date="2026-10-20", minutes=5,
+                          activity_description="after closure")
+
+
+def test_enrollment_audit_actions_are_emitted(s):
+    ctx = _planning(s)
+    episode = _enroll(s, ctx)
+    consent, = s.rtm.list_consents(s.provider_alpha, episode.episode_id)
+    setup, = s.rtm.list_setups(s.provider_alpha, episode.episode_id)
+    s.rtm.correct_consent(s.caregiver_alpha, consent.consent_id,
+                          reason="re-accepted")
+    s.rtm.correct_setup(s.provider_alpha, setup.setup_id, reason="restated")
+
+    actions = {e.action for e in s.repos.audit_events.list_all()}
+    assert {AuditAction.RTM_CONSENT_RECORDED,
+            AuditAction.RTM_CONSENT_CORRECTED,
+            AuditAction.RTM_SETUP_RECORDED,
+            AuditAction.RTM_SETUP_CORRECTED} <= actions
+
+
+def test_the_enrollment_audit_trail_carries_no_clinical_text(s):
+    """Indication and rationale are clinical text and never enter the trail."""
+    ctx = _planning(s)
+    _enroll(s, ctx)
+    for event in s.repos.audit_events.list_all():
+        blob = str(event.metadata)
+        assert "expressive-language delay" not in blob
+        assert "Home practice between visits" not in blob
+        assert "Showed how to record" not in blob

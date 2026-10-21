@@ -113,6 +113,9 @@ COLLECTIONS: Mapping[str, str] = {
     "rtm_episode": "pilot_rtm_episodes",
     "rtm_period": "pilot_rtm_periods",
     "rtm_technology": "pilot_rtm_technologies",
+    # Slice 3C enrollment evidence. Episode-scoped, append-only.
+    "rtm_consent_attestation": "pilot_rtm_consent_attestations",
+    "rtm_setup_education": "pilot_rtm_setup_education",
     "therapist_review": "pilot_therapist_reviews",
     "clinical_action": "pilot_clinical_actions",
     "time_entry": "pilot_time_entries",
