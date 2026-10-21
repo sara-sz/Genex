@@ -86,15 +86,23 @@ def derive_evidence_summary(period: RTMMonitoringPeriod, *,
     in_month = [e for e in events if e.attribution_month == month]
     coverage = summarize(alignments, in_month, attribution_month=month)
 
+    # Deduplicated by event id, matching `summarize`, which counts DISTINCT
+    # events. Tallying the raw list would let a repeated row inflate the
+    # outcome counts past `total_distinct_observation_events` — and now that
+    # the summary carries its source ids, that disagreement is a refusal in
+    # `RTMEvidenceSummary.__post_init__` rather than a silent skew.
+    distinct = {event.event_id: event for event in in_month}
+
     outcome_counts = {o: 0 for o in AttemptOutcome}
     observed_dates = set()
-    for event in in_month:
+    for event in distinct.values():
         outcome_counts[event.attempt_outcome] += 1
         observed_dates.add(event.local_date)
 
     per_goal = []
     for line in coverage.per_goal:
-        goal_events = [e for e in in_month if e.event_id in line.event_ids]
+        goal_events = [e for e in distinct.values()
+                       if e.event_id in line.event_ids]
         not_ready = sum(1 for e in goal_events
                         if e.attempt_outcome is AttemptOutcome.WASNT_READY_YET)
         didnt_want = sum(1 for e in goal_events
@@ -107,6 +115,11 @@ def derive_evidence_summary(period: RTMMonitoringPeriod, *,
             scheduled_opportunities=line.scheduled,
             status_recommendation=_status_for(
                 line.attempted, line.completed, not_ready, didnt_want),
+            # Slice 3B: the SAME ids `summarize` attributed when it produced
+            # `line.attempted`, carried straight through. Not recomputed from
+            # the counts, and not re-queried — either could agree with the
+            # number while naming different events.
+            event_ids=tuple(sorted(line.event_ids)),
         ))
 
     minutes = documented_minutes(
@@ -141,6 +154,10 @@ def derive_evidence_summary(period: RTMMonitoringPeriod, *,
         wasnt_ready_yet_count=outcome_counts[AttemptOutcome.WASNT_READY_YET],
         didnt_want_to_try_count=outcome_counts[AttemptOutcome.DIDNT_WANT_TO_TRY],
         per_goal_evidence=tuple(per_goal),
+        # Slice 3B: the source set behind every count above. Sorted so a
+        # regeneration over the same evidence is byte-identical, which is what
+        # makes "did the refs survive regeneration?" a meaningful question.
+        observed_event_ids=tuple(sorted(distinct)),
         multi_goal_overlap_count=len(coverage.multi_goal_event_ids),
         therapist_review_count=len(reviews),
         clinical_action_count=len(actions),

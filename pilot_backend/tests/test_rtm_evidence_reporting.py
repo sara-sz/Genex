@@ -68,6 +68,7 @@ from pilot_backend.domain.rtm_documentation import (
 )
 from pilot_backend.domain.rtm_summary import (
     CodingAssistanceSummary,
+    GoalEvidenceLine,
     GoalStatusRecommendation,
     RTMEvidenceSummary,
     SummaryError,
@@ -2093,3 +2094,434 @@ def test_the_closure_refusal_carries_no_clinical_text(s):
     for sentinel in ALL_SENTINELS:
         assert sentinel not in message
     assert period.period_id not in message
+
+
+# ===========================================================================
+# TRACK 3 SLICE 3B — every reported number carries its immutable source refs
+# ===========================================================================
+#
+# Before 3B: `summarize` computed exactly which ObservationEvent ids it
+# attributed to each goal, `evidence.py` used them to classify outcomes, and
+# then DISCARDED them. Report sections B and C carried numbers with an EMPTY
+# `record_refs`. So "which events support this goal's four attempts?" was
+# recomputable from live rows but recorded nowhere, and a stored summary could
+# not be audited against the evidence it claimed to summarise.
+#
+# The chain these tests defend is: immutable evidence -> derived summary ->
+# report. Refs always travel FORWARD along it, and are never reconstructed
+# backwards from counts or prose.
+
+
+def _section(report, section):
+    return next(c for c in report.sections if c.section is section)
+
+
+def _month_event_ids(s, ctx, month="2026-10"):
+    """Every ObservationEvent id that really belongs to the month."""
+    found = set()
+    for cycle in s.weekly.list_cycles(s.provider_alpha,
+                                      ctx["plan"].focus_plan_id):
+        for event in s.repos.observation_events.list_for_cycle(cycle.cycle_id):
+            if event.attribution_month == month:
+                found.add(event.event_id)
+    return found
+
+
+# -- 1. goal lines name exactly the events they were derived from -----------
+
+def test_goal_lines_name_exactly_the_events_they_were_derived_from(s):
+    """The per-line count IS the cardinality of the named set.
+
+    `summarize` increments `attempted` once per DISTINCT event and appends
+    that same id once, so this equality is the field's definition and not a
+    coincidence of the fixture.
+    """
+    ctx, _episode, period = _full_month(s)
+    summary = s.repos.evidence_summaries.latest_for_period(period.period_id)
+
+    assert summary.per_goal_evidence, "fixture produced no goal lines"
+    real = _month_event_ids(s, ctx)
+    for line in summary.per_goal_evidence:
+        assert line.event_ids, (line.goal_id, "line has counts but no source")
+        assert len(set(line.event_ids)) == len(line.event_ids)
+        assert line.attributed_attempts == len(line.event_ids)
+        assert line.attributed_completions <= len(line.event_ids)
+        # Every named id is a real event of this month, not an invention.
+        assert set(line.event_ids) <= real, line.goal_id
+
+
+def test_a_multi_goal_event_appears_on_every_line_it_serves(s):
+    """Overlap is the reason per-goal refs must not be summed.
+
+    The same event id appearing on two lines is CORRECT. The test exists so a
+    future "deduplicate the refs" change has to confront it.
+    """
+    ctx, _episode, period = _full_month(s)
+    summary = s.repos.evidence_summaries.latest_for_period(period.period_id)
+
+    seen = {}
+    for line in summary.per_goal_evidence:
+        for event_id in line.event_ids:
+            seen.setdefault(event_id, []).append(line.goal_id)
+
+    if summary.multi_goal_overlap_count:
+        shared = [ids for ids in seen.values() if len(ids) > 1]
+        assert shared, "overlap was declared but no event is on two lines"
+        summed = sum(l.attributed_attempts for l in summary.per_goal_evidence)
+        assert summed > len(seen), "the sum must exceed the distinct union"
+
+
+# -- 2. unrelated events cannot appear --------------------------------------
+
+def test_another_months_event_is_not_named_as_a_source(s):
+    """Month scoping, asserted on the REFS and not only on the count.
+
+    The pre-3B suite proved a November attempt was not COUNTED in October.
+    Now the refs must not name it either — a correct number beside a wrong
+    source list is the failure this field exists to make visible.
+    """
+    ctx = _planning(s)
+    _episode, period = _rtm_open(s, ctx)
+    instances = _instances(ctx["result"])
+
+    for sequence in (2, 3, 4, 5):
+        s.weekly.create_cycle(s.provider_alpha, ctx["plan"].focus_plan_id,
+                              sequence_in_month=sequence)
+    spanning = [c for c in s.weekly.list_cycles(
+        s.provider_alpha, ctx["plan"].focus_plan_id)
+        if c.spans_month_boundary]
+    assert spanning, "no cycle crosses the month boundary in this fixture"
+    crossing = spanning[0]
+    result = s.weekly.allocate_cycle(
+        s.provider_alpha, crossing.cycle_id, ctx["candidates"],
+        family_declared_capacity=2)
+    crossing_ref = result.placements[0].activity_instance_ref
+
+    october = s.weekly.record_observation(
+        s.caregiver_alpha, ctx["cycle"].cycle_id, instances["activity-a"],
+        local_date="2026-10-02", attempt_outcome=AttemptOutcome.DID_IT)
+    november = s.weekly.record_observation(
+        s.caregiver_alpha, crossing.cycle_id, crossing_ref,
+        local_date="2026-11-01", attempt_outcome=AttemptOutcome.DID_IT)
+    assert november.attribution_month == "2026-11"
+
+    summary = s.rtm.generate_evidence_summary(s.provider_alpha,
+                                              period.period_id)
+    assert summary.observed_event_ids == (october.event_id,)
+    assert november.event_id not in summary.observed_event_ids
+    for line in summary.per_goal_evidence:
+        assert november.event_id not in line.event_ids
+
+
+def test_another_childs_event_is_not_named_as_a_source(s):
+    """Child scoping. A summary names only its own child's evidence."""
+    ctx, _episode, period = _full_month(s)
+    summary = s.repos.evidence_summaries.latest_for_period(period.period_id)
+
+    named = set(summary.observed_event_ids)
+    for line in summary.per_goal_evidence:
+        named |= set(line.event_ids)
+    assert named, "fixture named no sources"
+
+    for cycle in s.weekly.list_cycles(s.provider_alpha,
+                                      ctx["plan"].focus_plan_id):
+        for event in s.repos.observation_events.list_for_cycle(cycle.cycle_id):
+            if event.event_id in named:
+                assert event.child_id == period.child_id
+
+
+def test_the_summary_refs_are_episode_and_period_scoped(s):
+    """Refs belong to the period's own focus plan and month."""
+    ctx, episode, period = _full_month(s)
+    summary = s.repos.evidence_summaries.latest_for_period(period.period_id)
+
+    assert summary.period_id == period.period_id
+    assert summary.focus_plan_ref == period.focus_plan_id
+    assert period.episode_id == episode.episode_id
+    assert set(summary.observed_event_ids) == _month_event_ids(s, ctx)
+
+
+# -- 3. regeneration is deterministic and preserves refs --------------------
+
+def test_source_refs_survive_deterministic_regeneration(s):
+    """Regenerating mints a NEW id and the SAME sources.
+
+    The summary is regenerable by design, so the refs have to be a function of
+    the evidence alone — not of generation order, dict iteration or clock.
+    """
+    _ctx, _episode, period = _full_month(s)
+    first = s.repos.evidence_summaries.latest_for_period(period.period_id)
+    again = s.rtm.generate_evidence_summary(s.provider_alpha,
+                                            period.period_id)
+
+    assert again.summary_id != first.summary_id
+    assert again.observed_event_ids == first.observed_event_ids
+    assert ([(l.goal_id, l.event_ids) for l in again.per_goal_evidence]
+            == [(l.goal_id, l.event_ids) for l in first.per_goal_evidence])
+    # Sorted, so equality is byte-level rather than set-level.
+    assert list(again.observed_event_ids) == sorted(again.observed_event_ids)
+
+
+def test_source_refs_round_trip_through_the_codec(s):
+    """Persisted, not merely computed in memory."""
+    from pilot_backend.persistence.codecs import decode, encode
+
+    _ctx, _episode, period = _full_month(s)
+    summary = s.repos.evidence_summaries.latest_for_period(period.period_id)
+    assert summary.observed_event_ids
+
+    restored = decode(RTMEvidenceSummary, encode(summary))
+    assert restored.observed_event_ids == summary.observed_event_ids
+    assert ([l.event_ids for l in restored.per_goal_evidence]
+            == [l.event_ids for l in summary.per_goal_evidence])
+
+
+# -- 4/5. sections B and C carry refs, and zero-count sections need none ----
+
+def test_sections_b_and_c_carry_their_source_refs(s):
+    """THE 3B DELIVERABLE. Both sections used to hold numbers and no refs."""
+    ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+
+    engagement = _section(report, ReportSection.ENGAGEMENT)
+    attribution = _section(report, ReportSection.GOAL_ATTRIBUTION)
+
+    assert engagement.count("distinct_attempts") > 0
+    assert engagement.record_refs, "section B still has no sources"
+    # Section B's count IS the cardinality of its ref set, by definition.
+    assert (engagement.count("distinct_attempts")
+            == len(set(engagement.record_refs)))
+    assert set(engagement.record_refs) == _month_event_ids(s, ctx)
+
+    assert attribution.record_refs, "section C still has no sources"
+    assert attribution.overlap_declared is True
+    # Section C declares its OWN cardinality rather than being compared with
+    # a per-goal count it does not equal.
+    assert (attribution.count("distinct_attributed_events")
+            == len(set(attribution.record_refs)))
+    # ...and the attributed union is a subset of everything observed.
+    assert set(attribution.record_refs) <= set(engagement.record_refs)
+
+
+def test_section_c_refs_are_the_union_of_the_goal_lines(s):
+    _ctx, _episode, period = _full_month(s)
+    summary = s.repos.evidence_summaries.latest_for_period(period.period_id)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+
+    expected = set()
+    for line in summary.per_goal_evidence:
+        expected |= set(line.event_ids)
+    attribution = _section(report, ReportSection.GOAL_ATTRIBUTION)
+    assert set(attribution.record_refs) == expected
+
+
+def test_section_c_does_not_claim_the_per_goal_sum(s):
+    """The founder's exclusion, pinned.
+
+    One event serving two goals is counted on both lines, so the per-goal
+    numbers may sum to MORE than the distinct refs. Imposing
+    `count == len(refs)` on this section would force a false arithmetic.
+    """
+    _ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    attribution = _section(report, ReportSection.GOAL_ATTRIBUTION)
+
+    per_goal_sum = sum(value for name, value in attribution.counts
+                       if name.endswith("_attempts"))
+    assert attribution.count("distinct_attributed_events") <= per_goal_sum
+    assert attribution.count("distinct_total") is not None
+
+
+def test_a_month_with_no_observations_needs_no_refs(s):
+    """Zero counts, zero refs, and NO placeholder.
+
+    A fabricated ref would be worse than an empty list: it would make an
+    empty month look sourced.
+    """
+    ctx = _planning(s)
+    _episode, period = _rtm_open(s, ctx)
+    _document_42_minutes_with_contact(s, period)
+    review = s.rtm.record_review(
+        s.provider_alpha, period.period_id,
+        clinical_interpretation="No home practice recorded this month.")
+    s.rtm.record_clinical_action(
+        s.provider_alpha, review.review_id,
+        action_type=ClinicalActionType.MODIFY_PLAN,
+        narrative="Reduce to one activity and re-check engagement.")
+    s.rtm.finalize_period(s.provider_alpha, period.period_id)
+    summary = s.rtm.generate_evidence_summary(s.provider_alpha,
+                                              period.period_id)
+    s.rtm.generate_coding_assistance(s.provider_alpha, period.period_id)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+
+    assert summary.total_distinct_observation_events == 0
+    assert summary.observed_event_ids == ()
+    for line in summary.per_goal_evidence:
+        assert line.attributed_attempts == 0
+        assert line.event_ids == ()
+
+    engagement = _section(report, ReportSection.ENGAGEMENT)
+    attribution = _section(report, ReportSection.GOAL_ATTRIBUTION)
+    assert engagement.count("distinct_attempts") == 0
+    assert engagement.record_refs == ()
+    assert attribution.record_refs == ()
+    # The report is still complete — an empty month is a reportable month.
+    assert len(report.sections) == 11
+
+
+# -- 6. amendment preserves traceability ------------------------------------
+
+def test_amendment_preserves_the_source_refs(s):
+    """An amended report is a NEW report that still names its evidence.
+
+    Lineage without traceability would let an amendment quietly lose the
+    sources the predecessor carried.
+    """
+    _ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    s.rtm.finalize_report(s.provider_alpha, report.report_id)
+    amended = s.rtm.amend_report(s.provider_alpha, report.report_id,
+                                 reason="clarified section B wording")
+
+    for section in (ReportSection.ENGAGEMENT, ReportSection.GOAL_ATTRIBUTION):
+        before = _section(report, section)
+        after = _section(amended, section)
+        assert after.record_refs == before.record_refs, section
+        assert after.counts == before.counts, section
+    assert amended.supersedes_report_id == report.report_id
+
+
+def test_the_predecessor_report_keeps_its_refs_after_amendment(s):
+    """Append-only: the superseded report is not edited."""
+    _ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    original = _section(report, ReportSection.ENGAGEMENT).record_refs
+    s.rtm.finalize_report(s.provider_alpha, report.report_id)
+    s.rtm.amend_report(s.provider_alpha, report.report_id, reason="clarified")
+
+    stored = s.repos.month_end_reports.get_by_id(report.report_id)
+    assert _section(stored, ReportSection.ENGAGEMENT).record_refs == original
+    assert stored.superseded_by_report_id is not None
+
+
+# -- 8. the pre-existing immutability rules still hold ----------------------
+
+def test_a_finalized_report_is_still_immutable_in_place(s):
+    _ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    s.rtm.finalize_report(s.provider_alpha, report.report_id)
+    with pytest.raises(FinalizedRecordImmutable):
+        s.rtm.finalize_report(s.provider_alpha, report.report_id)
+    with pytest.raises(ReportError):
+        replace(report, state=ReportState.FINALIZED).finalize(actor_id="x")
+
+
+# -- the invariants refuse what they exist to refuse -----------------------
+
+def test_a_goal_line_cannot_name_the_same_event_twice():
+    with pytest.raises(SummaryError, match="same event twice"):
+        GoalEvidenceLine(goal_kind="clinical", goal_id="g",
+                         attributed_attempts=2, attributed_completions=0,
+                         scheduled_opportunities=1,
+                         event_ids=("e1", "e1"))
+
+
+def test_a_goal_lines_count_must_match_its_sources():
+    with pytest.raises(SummaryError, match="attributed_attempts must equal"):
+        GoalEvidenceLine(goal_kind="clinical", goal_id="g",
+                         attributed_attempts=5, attributed_completions=0,
+                         scheduled_opportunities=1, event_ids=("e1", "e2"))
+
+
+def test_a_goal_line_cannot_complete_more_than_it_attempted():
+    with pytest.raises(SummaryError, match="cannot exceed the source events"):
+        GoalEvidenceLine(goal_kind="clinical", goal_id="g",
+                         attributed_attempts=2, attributed_completions=3,
+                         scheduled_opportunities=1, event_ids=("e1", "e2"))
+
+
+def test_scheduled_opportunities_carries_no_false_equality():
+    """It counts aligned INSTANCES, not events, so it is unconstrained."""
+    line = GoalEvidenceLine(goal_kind="clinical", goal_id="g",
+                            attributed_attempts=2, attributed_completions=1,
+                            scheduled_opportunities=9,
+                            event_ids=("e1", "e2"))
+    assert line.scheduled_opportunities == 9
+
+
+def test_a_summary_total_must_match_its_source_set():
+    with pytest.raises(SummaryError, match="must equal the number"):
+        RTMEvidenceSummary.create("per", "chld",
+                                  total_distinct_observation_events=7,
+                                  observed_event_ids=("e1", "e2"))
+
+
+def test_a_summary_cannot_tally_more_outcomes_than_events():
+    with pytest.raises(SummaryError, match="outcome tallies cannot exceed"):
+        RTMEvidenceSummary.create("per", "chld",
+                                  total_distinct_observation_events=2,
+                                  did_it_count=2, wasnt_ready_yet_count=1,
+                                  observed_event_ids=("e1", "e2"))
+
+
+def test_a_summary_cannot_observe_more_dates_than_events():
+    with pytest.raises(SummaryError, match="dates cannot exceed"):
+        RTMEvidenceSummary.create("per", "chld",
+                                  total_distinct_observation_events=1,
+                                  distinct_observed_local_dates=4,
+                                  observed_event_ids=("e1",))
+
+
+def test_a_goal_line_cannot_cite_an_event_the_summary_never_counted():
+    """Cross-field containment: lines are drawn FROM the observed set."""
+    line = GoalEvidenceLine(goal_kind="clinical", goal_id="g",
+                            attributed_attempts=1, attributed_completions=0,
+                            scheduled_opportunities=1, event_ids=("ghost",))
+    with pytest.raises(SummaryError, match="did not count"):
+        RTMEvidenceSummary.create("per", "chld",
+                                  total_distinct_observation_events=1,
+                                  observed_event_ids=("e1",),
+                                  per_goal_evidence=(line,))
+
+
+def test_a_pre_3b_summary_without_refs_still_decodes():
+    """Legacy tolerance, deliberate and bounded.
+
+    Summaries persisted before 3B carry no refs. Refusing them would turn a
+    traceability improvement into data loss, so empty is legal — while a
+    DERIVED line can never be empty-with-attempts, which the derivation tests
+    above prove.
+    """
+    legacy = RTMEvidenceSummary.create(
+        "per", "chld", total_distinct_observation_events=4,
+        distinct_observed_local_dates=3, did_it_count=4,
+        per_goal_evidence=(GoalEvidenceLine(
+            goal_kind="clinical", goal_id="g", attributed_attempts=4,
+            attributed_completions=4, scheduled_opportunities=2),))
+    assert legacy.observed_event_ids == ()
+    assert legacy.per_goal_evidence[0].event_ids == ()
+
+
+# -- no prose anywhere in the new refs -------------------------------------
+
+def test_the_new_source_refs_carry_no_clinical_prose(s):
+    """Refs are opaque ids. Derivation stays evidence -> summary -> report."""
+    _ctx, _episode, period = _full_month(s)
+    summary = s.repos.evidence_summaries.latest_for_period(period.period_id)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+
+    blob = " ".join(summary.observed_event_ids)
+    for line in summary.per_goal_evidence:
+        blob += " " + " ".join(line.event_ids)
+    for section in (ReportSection.ENGAGEMENT, ReportSection.GOAL_ATTRIBUTION):
+        blob += " " + " ".join(_section(report, section).record_refs)
+
+    for sentinel in ALL_SENTINELS:
+        assert sentinel not in blob
+    # Read the prefix from `ids` rather than writing it as a literal: a
+    # hard-coded guess here would only ever prove what the test author
+    # assumed about id shape.
+    from pilot_backend.domain.ids import OBSERVATION_EVENT_PREFIX
+
+    assert all(ref.startswith(OBSERVATION_EVENT_PREFIX)
+               for ref in summary.observed_event_ids)

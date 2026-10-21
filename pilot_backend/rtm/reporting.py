@@ -59,9 +59,19 @@ def _goals_section(evidence: RTMEvidenceSummary,
 
 def _engagement_section(evidence: RTMEvidenceSummary) -> SectionContent:
     """B. Factual attempts and outcomes. `distinct_observed_local_dates` is
-    a count of dates, never a qualification."""
+    a count of dates, never a qualification.
+
+    Slice 3B: carries the `ObservationEvent` ids these counts were derived
+    from. Previously the section held five numbers and an EMPTY `record_refs`,
+    so nothing in the report said which events produced them.
+
+    Taken from the SUMMARY, not from a fresh event query. The counts come from
+    the summary, so the refs must come from the same record or a stale summary
+    beside fresh events could report numbers and sources that disagree.
+    """
     return SectionContent(
         section=ReportSection.ENGAGEMENT,
+        record_refs=evidence.observed_event_ids,
         counts=(
             ("distinct_attempts", evidence.total_distinct_observation_events),
             ("did_it", evidence.did_it_count),
@@ -74,20 +84,40 @@ def _engagement_section(evidence: RTMEvidenceSummary) -> SectionContent:
 
 
 def _attribution_section(evidence: RTMEvidenceSummary) -> SectionContent:
-    """C. Per-goal attribution WITH the overlap declared."""
+    """C. Per-goal attribution WITH the overlap declared.
+
+    Slice 3B: carries the union of every goal line's source event ids.
+
+    NO `count == len(record_refs)` invariant belongs on this section, and that
+    is the point of the overlap declaration. One event serving two goals is
+    counted on BOTH lines, so the per-goal numbers legitimately sum to more
+    than the number of distinct refs — the exact case where imposing the
+    equality would force a false arithmetic. The per-line equality lives on
+    `GoalEvidenceLine`, where the count really is a set cardinality.
+
+    The union is a SUBSET of section B's refs: an event whose activity is
+    aligned to no goal is counted in B and appears on no line here.
+    """
     counts = []
     labels = []
+    refs = set()
     for line in evidence.per_goal_evidence:
         counts.append((f"{line.goal_id}_attempts", line.attributed_attempts))
         counts.append((f"{line.goal_id}_completions",
                        line.attributed_completions))
         labels.append((line.goal_id, line.status_recommendation.value))
+        refs.update(line.event_ids)
     counts.append(("multi_goal_overlap", evidence.multi_goal_overlap_count))
     # The total is carried alongside so a reader can see directly that it is
     # not the sum of the per-goal figures.
     counts.append(("distinct_total", evidence.total_distinct_observation_events))
+    # Published so a reader can tell the union apart from the per-goal sum
+    # without computing either, and so the ref list has a declared cardinality
+    # of its own rather than being compared against the wrong count.
+    counts.append(("distinct_attributed_events", len(refs)))
     return SectionContent(
         section=ReportSection.GOAL_ATTRIBUTION,
+        record_refs=tuple(sorted(refs)),
         counts=tuple(counts), labels=tuple(sorted(labels)),
         overlap_declared=True,
     )

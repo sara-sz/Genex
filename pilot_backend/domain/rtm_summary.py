@@ -79,7 +79,21 @@ class GoalStatusRecommendation(str, Enum):
 
 @dataclass(frozen=True)
 class GoalEvidenceLine:
-    """Per-goal attributed evidence. These counts OVERLAP across goals."""
+    """Per-goal attributed evidence. These counts OVERLAP across goals.
+
+    ## event_ids is the line's SOURCE, not a decoration
+
+    Slice 3B. `weekly/counting.summarize` already computes exactly which
+    `ObservationEvent` ids it attributed to this goal, and the derivation used
+    to discard them — so "which events support this goal's four attempts?" was
+    recomputable but never recorded, and a stored summary could not be audited
+    against the evidence it claimed to summarise.
+
+    They are carried as the SAME ids the counts were derived from, in the same
+    pass. Nothing reconstructs them afterwards from counts, prose or a second
+    query: a reconstruction could agree with the number while naming different
+    events, which is the failure this field exists to prevent.
+    """
 
     goal_kind: str
     goal_id: str
@@ -88,6 +102,40 @@ class GoalEvidenceLine:
     scheduled_opportunities: int
     status_recommendation: GoalStatusRecommendation = \
         GoalStatusRecommendation.INSUFFICIENT_EVIDENCE
+    #: Distinct `ObservationEvent` ids attributed to this goal. OVERLAPS with
+    #: other lines by design — one activity serving two goals contributes its
+    #: event id to both, which is why the per-goal figures must never be summed.
+    event_ids: Tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "event_ids", tuple(self.event_ids))
+        if len(set(self.event_ids)) != len(self.event_ids):
+            raise SummaryError(
+                "a goal evidence line cannot name the same event twice")
+        if self.event_ids:
+            # `summarize` increments `attempted` once per DISTINCT event and
+            # appends that same id once, so for THIS count the number is
+            # literally the cardinality of the source set. Asserted rather
+            # than trusted.
+            if self.attributed_attempts != len(self.event_ids):
+                raise SummaryError(
+                    "attributed_attempts must equal the number of source "
+                    "events this line names")
+            # Completions are a SUBSET of attempts, not a second set. A bound,
+            # deliberately not an equality.
+            if self.attributed_completions > len(self.event_ids):
+                raise SummaryError(
+                    "attributed_completions cannot exceed the source events")
+        # `scheduled_opportunities` gets NO invariant: it counts aligned
+        # activity instances, not events, so it is not a cardinality of this
+        # set and tying the two would be a false equality.
+        #
+        # An EMPTY `event_ids` stays legal on purpose. Summaries persisted
+        # before slice 3B carry no source refs, and refusing to decode them
+        # would turn a traceability improvement into data loss. New records
+        # cannot be empty-with-attempts: `derive_evidence_summary` populates
+        # from the same pass that produced the counts, and a test pins that no
+        # derived line has attempts without ids.
 
 
 @dataclass(frozen=True)
@@ -111,6 +159,15 @@ class RTMEvidenceSummary:
     wasnt_ready_yet_count: int = 0
     didnt_want_to_try_count: int = 0
     per_goal_evidence: Tuple[GoalEvidenceLine, ...] = ()
+    #: Slice 3B. The distinct `ObservationEvent` ids this summary counted, for
+    #: the month it covers. The SOURCE of `total_distinct_observation_events`
+    #: and of the outcome tallies, carried so a stored summary can be audited
+    #: against the evidence rather than only recomputed from it.
+    #:
+    #: A SUPERSET of the union of `per_goal_evidence` event ids: an event whose
+    #: activity is aligned to no goal is still an observation that happened and
+    #: is still counted here, but it appears on no goal line.
+    observed_event_ids: Tuple[str, ...] = ()
     #: Events attributed to more than one goal. Published so the per-goal
     #: figures are never mistaken for an additive breakdown.
     multi_goal_overlap_count: int = 0
@@ -130,10 +187,45 @@ class RTMEvidenceSummary:
 
     def __post_init__(self) -> None:
         for name in ("clinical_goal_refs", "cycle_refs", "per_goal_evidence",
-                     "documentation_missing_flags"):
+                     "documentation_missing_flags", "observed_event_ids"):
             object.__setattr__(self, name, tuple(getattr(self, name)))
         if self.total_distinct_observation_events < 0:
             raise SummaryError("counts cannot be negative")
+        if len(set(self.observed_event_ids)) != len(self.observed_event_ids):
+            raise SummaryError("observed_event_ids cannot repeat an event")
+        if self.observed_event_ids:
+            # `total_distinct_observation_events` is DEFINED as the count of
+            # distinct observation events, so here the number is the
+            # cardinality of the source set and the equality is the field's
+            # own definition rather than a convenience.
+            if self.total_distinct_observation_events != len(
+                    self.observed_event_ids):
+                raise SummaryError(
+                    "total_distinct_observation_events must equal the number "
+                    "of source events this summary names")
+            # The outcome tallies PARTITION that set, so each is a bound and
+            # together they cannot exceed it. Not three equalities: a single
+            # event has exactly one outcome, so no tally equals the whole.
+            tallies = (self.did_it_count + self.wasnt_ready_yet_count
+                       + self.didnt_want_to_try_count)
+            if tallies > len(self.observed_event_ids):
+                raise SummaryError(
+                    "outcome tallies cannot exceed the source events")
+            # Distinct DATES cannot outnumber the events that fell on them.
+            # A bound, not an equality: several events share a date.
+            if self.distinct_observed_local_dates > len(
+                    self.observed_event_ids):
+                raise SummaryError(
+                    "distinct observed dates cannot exceed the source events")
+            # Every goal line's source must be drawn from this set. Without
+            # this a line could cite an event the summary never counted.
+            named = {eid for line in self.per_goal_evidence
+                     for eid in line.event_ids}
+            if not named <= set(self.observed_event_ids):
+                raise SummaryError(
+                    "a goal evidence line names an event this summary did "
+                    "not count")
+        # Empty stays legal for pre-3B stored summaries; see GoalEvidenceLine.
 
     @property
     def sum_of_per_goal_attempts(self) -> int:

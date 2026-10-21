@@ -993,6 +993,9 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "goal_kind": STR, "goal_id": STR, "attributed_attempts": INT,
         "attributed_completions": INT, "scheduled_opportunities": INT,
         "status_recommendation": _EnumKind(GoalStatusRecommendation),
+        # Slice 3B source refs. Persisted so a stored summary stays auditable
+        # against the evidence it counted, not merely recomputable from it.
+        "event_ids": STR_TUPLE,
     },
     RTMEvidenceSummary: {
         "summary_id": STR, "period_id": STR, "child_id": STR,
@@ -1003,6 +1006,7 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "did_it_count": INT, "wasnt_ready_yet_count": INT,
         "didnt_want_to_try_count": INT,
         "per_goal_evidence": _NestedTuple(GoalEvidenceLine),
+        "observed_event_ids": STR_TUPLE,
         "multi_goal_overlap_count": INT,
         "therapist_review_count": INT, "clinical_action_count": INT,
         "documented_management_minutes": INT,
