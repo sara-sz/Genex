@@ -49,3 +49,29 @@ class EpisodeTransferRefused(RTMConflict):
     deferred rather than guessed at, and guessing here would silently move a
     course of treatment between clinicians.
     """
+
+
+class EpisodeClosedForAccrual(RTMConflict):
+    """The episode is closed, so no further RTM evidence or time may accrue.
+
+    Track 3 slice 3A. Before this existed, `open_period` refused a closed
+    episode a NEW month but nothing refused further writes into a month that
+    was already open — so a closed episode kept accruing clinician minutes,
+    reviews, actions and real-time contacts. The episode was loaded on that
+    path and its status discarded.
+
+    A distinct type because the correct response differs from every other
+    conflict here. `FinalizedRecordImmutable` says "this month is done, amend
+    instead"; this says "this course of treatment is over, and there is no
+    amendment that makes new evidence belong to it". Reopening is not a thing:
+    the clinician opens a NEW episode, which is the same shape as the
+    no-silent-transfer rule above.
+
+    ## WHAT IT DELIBERATELY DOES NOT STOP
+
+    Closure ends RTM ACCRUAL, not the family's use of Genex. It does not touch
+    account access, caregiver activity or observation recording, reading
+    already-recorded evidence, or generating, finalizing and amending the final
+    month's report. An episode that could not be reported on after closing
+    would make the last month of every course of treatment undocumentable.
+    """

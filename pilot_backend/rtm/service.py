@@ -75,6 +75,7 @@ from ..domain.rtm_summary import CodingAssistanceSummary, RTMEvidenceSummary
 from ..persistence.document_store import DocumentStoreError
 from ..repository.interface import DuplicateRecord, RecordNotFound
 from .errors import (
+    EpisodeClosedForAccrual,
     EpisodeTransferRefused,
     FinalizedRecordImmutable,
     RTMAuthorizationError,
@@ -179,12 +180,39 @@ class RTMService:
         except RecordNotFound:
             raise RTMConflict("no such monitoring period") from None
 
-    def _open_period_for_write(self, principal, period_id: str, what: str
+    def _open_period_for_write(self, principal, period_id: str, what: str, *,
+                               require_open_episode: bool = True
                                ) -> Tuple[RTMMonitoringPeriod, RTMEpisode]:
-        """Load a period that may still accept evidence, with its episode."""
+        """Load a period that may still accept evidence, with its episode.
+
+        TWO independent lifecycle gates, and both are needed.
+
+        `period.is_finalized` closes the MONTH. `episode.is_open` closes the
+        COURSE OF TREATMENT. Before slice 3A only the first was checked here —
+        the episode was loaded and its status discarded — so `open_period`
+        refused a closed episode a new month while every evidence writer
+        happily added clinician minutes, reviews, actions and real-time
+        contacts to a month that was already open. Closure stopped the calendar
+        and not the accrual.
+
+        `require_open_episode` defaults to the STRICT value so a future write
+        path is gated by omission rather than by remembering. Exactly one
+        caller relaxes it — `finalize_period`, which adds no evidence and must
+        stay possible after closure; see the note there. A test asserts both
+        the default and that the relaxation appears exactly once in this file.
+        """
         period = self._load_period(period_id)
         episode = self._load_episode(period.episode_id)
         self._require_episode_owner(principal, episode, what)
+        if require_open_episode and not episode.is_open:
+            # Checked BEFORE the finalized-period gate on purpose. When an
+            # episode is closed AND its last month is finalized, the episode
+            # is the more fundamental refusal and the more useful message:
+            # amending the month would not make new evidence belong to a
+            # course of treatment that has ended.
+            raise EpisodeClosedForAccrual(
+                "this RTM episode is closed; no further RTM evidence or time "
+                "may accrue to it")
         if period.is_finalized:
             raise FinalizedRecordImmutable(
                 "this period is finalized; amend rather than add evidence")
@@ -358,9 +386,25 @@ class RTMService:
 
     def finalize_period(self, principal, period_id: str, *,
                         request_id: str = "") -> RTMMonitoringPeriod:
-        """Finalize the MONTH. The episode is deliberately left untouched."""
+        """Finalize the MONTH. The episode is deliberately left untouched.
+
+        THE ONE CALLER THAT MAY RUN AFTER THE EPISODE IS CLOSED, and the only
+        one that passes `require_open_episode=False`.
+
+        Finalizing adds no evidence: it records that a month is complete and
+        changes no minute, review, action or contact. Refusing it after closure
+        would strand the final month of every course of treatment in ACTIVE
+        forever — and because `coding.rules` reads `period_finalized` as a
+        missing-documentation flag, that month's report would permanently carry
+        a defect the clinician had no way to clear. The founder requirement is
+        that the final month stays reportable, so this stays open.
+
+        Still fully authorized, and still refused once the month itself is
+        finalized: the `FinalizedRecordImmutable` gate is untouched.
+        """
         period, episode = self._open_period_for_write(
-            principal, period_id, "finalizing a monitoring period")
+            principal, period_id, "finalizing a monitoring period",
+            require_open_episode=False)
 
         finalized = period.finalize(actor_id=principal.application_id,
                                     now=self._stamp())

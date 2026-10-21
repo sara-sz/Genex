@@ -88,6 +88,7 @@ from pilot_backend.persistence.codecs import decode
 from pilot_backend.persistence.collections import COLLECTIONS, PILOT_COLLECTION_PREFIX
 from pilot_backend.planning.service import MonthlyPlanService
 from pilot_backend.rtm.errors import (
+    EpisodeClosedForAccrual,
     EpisodeTransferRefused,
     FinalizedRecordImmutable,
     RTMAuthorizationError,
@@ -1815,3 +1816,280 @@ def test_monitoring_day_qualification_is_not_computed():
         for banned in ("monitoring_day", "monitoringday", "qualifying_day",
                        "qualifying_days", "billable_day", "billable_days"):
             assert banned not in lowered, (relative, banned)
+
+
+# ===========================================================================
+# TRACK 3 SLICE 3A — episode closure stops RTM ACCRUAL, and nothing else
+# ===========================================================================
+#
+# The hole this closes: `open_period` refused a closed episode a NEW month,
+# but `_open_period_for_write` loaded the episode and discarded its status, so
+# a month that was already open kept accepting clinician minutes, reviews,
+# actions and real-time contacts after the course of treatment had ended.
+#
+# Every negative test below therefore uses an ACTIVE, NON-finalized period, so
+# the refusal under test is the EPISODE gate and not the pre-existing
+# finalized-period gate. A test at the end proves the two are distinguishable.
+
+
+def _mid_month_closure(s):
+    """An episode closed while its month is still ACTIVE and un-finalized.
+
+    This is the real close-out shape: a clinician ends a course of treatment
+    partway through a month, which is exactly when the old code kept accruing.
+    """
+    ctx = _planning(s)
+    episode, period = _rtm_open(s, ctx)
+    instances = _instances(ctx["result"])
+    s.weekly.record_observation(
+        s.caregiver_alpha, ctx["cycle"].cycle_id, instances["activity-c"],
+        local_date="2026-10-01", attempt_outcome=AttemptOutcome.DID_IT)
+    before = _document_42_minutes_with_contact(s, period)
+    review = s.rtm.record_review(
+        s.provider_alpha, period.period_id,
+        clinical_interpretation="Engagement steady before discharge.")
+    closed = s.rtm.close_episode(s.provider_alpha, episode.episode_id,
+                                 reason="discharged to monitoring only")
+    assert not closed.is_open
+    live = s.repos.rtm_periods.get_by_id(period.period_id)
+    assert not live.is_finalized, "the negative tests must exercise the " \
+                                  "episode gate, not the finalized gate"
+    return ctx, closed, period, review, before
+
+
+# -- NEGATIVE: every post-closure accrual path is refused -------------------
+
+def test_no_time_entry_after_episode_closure(s):
+    _ctx, _closed, period, _review, _before = _mid_month_closure(s)
+    with pytest.raises(EpisodeClosedForAccrual):
+        s.rtm.record_time(s.provider_alpha, period.period_id,
+                          local_date="2026-10-20", minutes=30,
+                          activity_description="after discharge")
+
+
+def test_no_time_correction_after_episode_closure(s):
+    """A correction mints a NEW entry and can RAISE current minutes.
+
+    So it is accrual, not bookkeeping, and it is refused like the rest.
+    """
+    _ctx, _closed, _period, _review, before = _mid_month_closure(s)
+    current = s.rtm.documented_minutes_for(s.provider_alpha,
+                                           before.period_id)
+    entries = s.repos.time_entries.list_for_period(before.period_id)
+    target = next(e for e in entries if e.is_current)
+    with pytest.raises(EpisodeClosedForAccrual):
+        s.rtm.correct_time(s.provider_alpha, target.time_entry_id,
+                           minutes=target.minutes + 60,
+                           reason="attempt to inflate after discharge")
+    assert s.rtm.documented_minutes_for(s.provider_alpha,
+                                        before.period_id) == current
+
+
+def test_no_therapist_review_after_episode_closure(s):
+    _ctx, _closed, period, _review, _before = _mid_month_closure(s)
+    with pytest.raises(EpisodeClosedForAccrual):
+        s.rtm.record_review(s.provider_alpha, period.period_id,
+                            clinical_interpretation="late addition")
+
+
+def test_no_clinical_action_after_episode_closure(s):
+    """Refused even against a review recorded BEFORE closure.
+
+    The action path loads its period through the review, so a stale review id
+    must not become a side door into a closed episode.
+    """
+    _ctx, _closed, _period, review, _before = _mid_month_closure(s)
+    with pytest.raises(EpisodeClosedForAccrual):
+        s.rtm.record_clinical_action(
+            s.provider_alpha, review.review_id,
+            action_type=ClinicalActionType.CONTINUE_PLAN,
+            narrative="late addition")
+
+
+def test_no_synchronous_interaction_after_episode_closure(s):
+    _ctx, _closed, period, _review, _before = _mid_month_closure(s)
+    with pytest.raises(EpisodeClosedForAccrual):
+        s.rtm.record_synchronous_interaction(
+            s.provider_alpha, period.period_id, local_date="2026-10-21",
+            modality=InteractionModality.PHONE,
+            participant_type=ParticipantType.CAREGIVER, duration_minutes=20)
+
+
+def test_no_new_rtm_month_after_episode_closure(s):
+    """The gate that already existed. Pinned so slice 3A cannot regress it."""
+    ctx, closed, _period, _review, _before = _mid_month_closure(s)
+    with pytest.raises(RTMConflict):
+        s.rtm.open_period(s.provider_alpha, closed.episode_id,
+                          ctx["plan"].focus_plan_id)
+
+
+def test_every_accrual_path_is_gated_and_none_is_missed(s):
+    """COMPLETENESS, measured rather than listed.
+
+    Walks the service for every public method that reaches
+    `_open_period_for_write` and asserts each one either refuses after closure
+    or is the single documented close-out exemption. A new accrual path added
+    later shows up here instead of silently escaping the gate.
+    """
+    import ast as _ast
+
+    source = (PILOT_ROOT / "rtm" / "service.py").read_text()
+    tree = _ast.parse(source)
+    gated, relaxed = set(), set()
+    for node in _ast.walk(tree):
+        if not isinstance(node, _ast.FunctionDef) or node.name.startswith("_"):
+            continue
+        for call in _ast.walk(node):
+            if (isinstance(call, _ast.Call)
+                    and isinstance(call.func, _ast.Attribute)
+                    and call.func.attr == "_open_period_for_write"):
+                gated.add(node.name)
+                if any(k.arg == "require_open_episode" for k in call.keywords):
+                    relaxed.add(node.name)
+
+    assert gated == {"finalize_period", "record_review",
+                     "record_clinical_action", "record_time", "correct_time",
+                     "record_synchronous_interaction"}, sorted(gated)
+    # Exactly one exemption, and it is the close-out path.
+    #
+    # Asserted over CALL SITES via the AST rather than by counting the string
+    # in the file: both `_open_period_for_write` and `finalize_period`
+    # legitimately name the parameter in their docstrings to explain the
+    # exemption, so a textual count would be a test that punishes
+    # documentation. The AST pass is the stronger check anyway — it sees which
+    # function actually passes the keyword, not which mentions it.
+    assert relaxed == {"finalize_period"}, sorted(relaxed)
+    # The gate's default must be the strict one, so omission is safe.
+    signature = inspect.signature(RTMService._open_period_for_write)
+    assert signature.parameters["require_open_episode"].default is True
+    # ...and keyword-only, so it cannot be relaxed by a positional argument
+    # that a caller mistook for the `what` label.
+    assert (signature.parameters["require_open_episode"].kind
+            is inspect.Parameter.KEYWORD_ONLY)
+
+
+# -- POSITIVE: closure ends accrual, not the product ------------------------
+
+def test_the_final_month_can_still_be_finalized_and_reported(s):
+    """The founder requirement: the last month stays documentable.
+
+    Finalizing adds no evidence, and `coding.rules` reads `period_finalized`
+    as a missing-documentation flag — so refusing it would leave the final
+    month's report permanently carrying a defect nobody could clear.
+    """
+    _ctx, _closed, period, _review, _before = _mid_month_closure(s)
+
+    finalized = s.rtm.finalize_period(s.provider_alpha, period.period_id)
+    assert finalized.is_finalized
+
+    s.rtm.generate_evidence_summary(s.provider_alpha, period.period_id)
+    s.rtm.generate_coding_assistance(s.provider_alpha, period.period_id)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    assert len(report.sections) == 11
+
+    final = s.rtm.finalize_report(s.provider_alpha, report.report_id)
+    assert final.state is ReportState.FINALIZED
+
+    amended = s.rtm.amend_report(s.provider_alpha, report.report_id,
+                                 reason="clarified section F wording")
+    assert amended.supersedes_report_id == report.report_id
+
+
+def test_already_recorded_evidence_survives_closure(s):
+    """Closure is not deletion. Everything recorded before it remains."""
+    _ctx, _closed, period, review, before = _mid_month_closure(s)
+
+    assert s.rtm.documented_minutes_for(s.provider_alpha, period.period_id) == 42
+    entries = s.rtm.list_time_entries(s.provider_alpha, period.period_id)
+    assert len(entries) == 3                      # 2 original + 1 correction
+    assert sum(1 for e in entries if e.is_current) == 2
+    assert s.repos.therapist_reviews.get_by_id(review.review_id) is not None
+    assert s.repos.synchronous_interactions.get_by_id(
+        before.interaction_id) is not None
+    # And the closed episode is still readable, with its reason intact.
+    read = s.rtm.get_episode(s.provider_alpha, _closed.episode_id)
+    assert read.close_reason == "discharged to monitoring only"
+
+
+def test_caregiver_product_use_is_unaffected_by_closure(s):
+    """THE POINT OF THE SLICE.
+
+    Closing an RTM episode ends RTM-billable accrual. It must not touch the
+    family's use of Genex: the caregiver keeps recording observations against
+    the same live cycle, and those observations keep being readable.
+    """
+    ctx, _closed, _period, _review, _before = _mid_month_closure(s)
+    instances = _instances(ctx["result"])
+
+    before_count = len(s.weekly.list_observations(
+        s.caregiver_alpha, ctx["cycle"].cycle_id))
+
+    # The LAST day the cycle covers, read off the cycle rather than written as
+    # a literal: a hard-coded date outside the week would fail in the weekly
+    # layer and look like a closure bug when it is a fixture bug.
+    last_day = ctx["cycle"].ends_on
+    assert ctx["cycle"].covers(last_day)
+
+    event = s.weekly.record_observation(
+        s.caregiver_alpha, ctx["cycle"].cycle_id, instances["activity-a"],
+        local_date=last_day,
+        attempt_outcome=AttemptOutcome.WASNT_READY_YET)
+    assert event.event_id
+
+    after = s.weekly.list_observations(s.caregiver_alpha,
+                                       ctx["cycle"].cycle_id)
+    assert len(after) == before_count + 1
+    assert event.event_id in {e.event_id for e in after}
+
+
+def test_closed_episode_still_authorizes_reads(s):
+    """Account access and RTM reads are untouched by closure."""
+    _ctx, closed, period, _review, _before = _mid_month_closure(s)
+    episodes = s.rtm.list_episodes(s.provider_alpha, s.child)
+    assert closed.episode_id in {e.episode_id for e in episodes}
+    assert s.rtm.get_period(s.provider_alpha, period.period_id) is not None
+
+
+# -- the two lifecycle gates stay distinguishable ---------------------------
+
+def test_episode_closure_and_month_finalization_raise_different_types(s):
+    """Two gates, two types, so a caller can tell which rule stopped them.
+
+    `FinalizedRecordImmutable` means "amend instead". `EpisodeClosedForAccrual`
+    means "there is no amendment that makes new evidence belong here; open a
+    new episode". Collapsing them would advise the wrong remedy.
+    """
+    # month finalized, episode still OPEN -> the month gate
+    ctx = _planning(s)
+    episode, period = _rtm_open(s, ctx)
+    s.rtm.finalize_period(s.provider_alpha, period.period_id)
+    with pytest.raises(FinalizedRecordImmutable):
+        s.rtm.record_time(s.provider_alpha, period.period_id,
+                          local_date="2026-10-09", minutes=10,
+                          activity_description="after finalization")
+
+    # episode closed -> the episode gate wins, even once the month is final
+    s.rtm.close_episode(s.provider_alpha, episode.episode_id, reason="done")
+    with pytest.raises(EpisodeClosedForAccrual):
+        s.rtm.record_time(s.provider_alpha, period.period_id,
+                          local_date="2026-10-09", minutes=10,
+                          activity_description="after closure")
+
+    assert issubclass(EpisodeClosedForAccrual, RTMConflict)
+    assert not issubclass(EpisodeClosedForAccrual, FinalizedRecordImmutable)
+    assert EpisodeClosedForAccrual.PHI_SAFE_MESSAGE is True
+
+
+def test_the_closure_refusal_carries_no_clinical_text(s):
+    """PHI-safe like every other RTM refusal: names the rule, nothing else."""
+    _ctx, _closed, period, _review, _before = _mid_month_closure(s)
+    try:
+        s.rtm.record_review(s.provider_alpha, period.period_id,
+                            clinical_interpretation=SENTINEL_CONCERN)
+    except EpisodeClosedForAccrual as exc:
+        message = str(exc)
+    else:                                          # pragma: no cover
+        raise AssertionError("the closed episode accepted a review")
+    for sentinel in ALL_SENTINELS:
+        assert sentinel not in message
+    assert period.period_id not in message
