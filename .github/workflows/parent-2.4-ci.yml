@@ -205,6 +205,9 @@ jobs:
         #                 hard maximum is not entered at all
         #   eligibility   failure on a genuinely above-age skill never becomes
         #                 a deficit or a concern
+        #   additional    no path reaches a tenth question, Q7-Q9 are
+        #                 accounted in questions rather than reason events,
+        #                 and there is no completeness reason
         #   profile       Channel-B evidence adds nothing to Channel A, the
         #                 A2 v2 clinical payload is byte-identical with and
         #                 without it, and an area with no age-appropriate
@@ -221,7 +224,7 @@ jobs:
         # (pandas, openpyxl) and nothing else. No fastapi, no firebase.
         run: |
           for f in baseline_policy baseline_micro_tracks baseline_traversal \
-                   baseline_eligibility baseline_profile; do
+                   baseline_eligibility baseline_profile baseline_additional; do
             t="tests/test_parent_24_${f}.py"
             if [ -f "$t" ]; then
               python -m pytest "$t" -q
