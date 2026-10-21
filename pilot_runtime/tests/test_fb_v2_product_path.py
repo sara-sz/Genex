@@ -91,7 +91,10 @@ def parent_projection(overrides, *, choice="two_three_words", chrono=30,
         for fragment, value in overrides.items():
             if fragment in question["milestone"]:
                 answer = value
-        asked.append((question["months"], question["milestone"], answer))
+        # The Parent client payload no longer carries a developmental month;
+        # the canonical month is the third field of the skill key.
+        asked.append((int(question["skill_key"].split("\x1f")[2]),
+                      question["milestone"], answer))
         view = PARENT_API.answer(doc, DOMAIN, question["skill_key"], answer)
     PARENT_API.finalize_baseline(doc, DOMAIN)
 
