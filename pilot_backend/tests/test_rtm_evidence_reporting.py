@@ -2525,3 +2525,181 @@ def test_the_new_source_refs_carry_no_clinical_prose(s):
 
     assert all(ref.startswith(OBSERVATION_EVENT_PREFIX)
                for ref in summary.observed_event_ids)
+
+
+# ===========================================================================
+# SLICE 3B FOLLOW-UP — section H references its superseded entries too
+# ===========================================================================
+#
+# `superseded_entry_count` used to count rows whose ids appeared nowhere in
+# the section, so the one number in H that describes corrections was the one
+# number a reader could not check.
+#
+# `record_refs` keeps its meaning (entries that COUNT toward the minutes) and
+# `superseded_record_refs` names the corrected-away rows. Separate fields,
+# because flattening them would make `current_entry_count` untraceable.
+
+
+def test_section_h_references_its_superseded_entries(s):
+    """THE FOLLOW-UP. Both counts are traceable to their own ref list."""
+    _ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    time_section = _section(report, ReportSection.DOCUMENTED_TIME)
+
+    assert time_section.count("superseded_entry_count") == 1
+    assert time_section.superseded_record_refs, \
+        "the superseded entry is counted but still unreferenced"
+    assert (time_section.count("superseded_entry_count")
+            == len(set(time_section.superseded_record_refs)))
+    assert (time_section.count("current_entry_count")
+            == len(set(time_section.record_refs)))
+
+    # The refs name the REAL rows, and the two populations are disjoint.
+    entries = {e.time_entry_id: e for e in
+               s.rtm.list_time_entries(s.provider_alpha, period.period_id)}
+    assert set(time_section.record_refs) | set(
+        time_section.superseded_record_refs) == set(entries)
+    assert not (set(time_section.record_refs)
+                & set(time_section.superseded_record_refs))
+    for ref in time_section.record_refs:
+        assert entries[ref].is_current, ref
+    for ref in time_section.superseded_record_refs:
+        assert not entries[ref].is_current, ref
+
+
+def test_superseded_minutes_are_referenced_but_never_counted(s):
+    """Referenced is not counted. 25 + 17 = 42, and the mis-keyed 30 is out."""
+    _ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    time_section = _section(report, ReportSection.DOCUMENTED_TIME)
+
+    assert time_section.count("documented_management_minutes") == 42
+    assert s.rtm.documented_minutes_for(s.provider_alpha,
+                                        period.period_id) == 42
+
+    entries = {e.time_entry_id: e for e in
+               s.rtm.list_time_entries(s.provider_alpha, period.period_id)}
+    superseded_minutes = sum(entries[r].minutes
+                             for r in time_section.superseded_record_refs)
+    assert superseded_minutes == 30          # the corrected-away figure
+    counted = sum(entries[r].minutes for r in time_section.record_refs)
+    assert counted == 42
+    # The point: the excluded row is visible AND excluded.
+    assert counted + superseded_minutes != 42
+
+
+def test_correction_lineage_is_reproducible_from_the_refs(s):
+    """The chain is walkable from the report's own references."""
+    _ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    time_section = _section(report, ReportSection.DOCUMENTED_TIME)
+
+    entries = {e.time_entry_id: e for e in
+               s.rtm.list_time_entries(s.provider_alpha, period.period_id)}
+    for ref in time_section.superseded_record_refs:
+        original = entries[ref]
+        successor = entries[original.superseded_by_time_entry_id]
+        assert successor.supersedes_time_entry_id == ref
+        assert successor.correction_reason
+        assert successor.is_current
+
+
+def test_multiple_correction_generations_stay_reproducible(s):
+    """Three generations: two superseded rows, one current, 42 -> 55.
+
+    A chain rather than a single correction, because an off-by-one in the
+    `is_current` partition only shows up past the second generation.
+    """
+    ctx = _planning(s)
+    _episode, period = _rtm_open(s, ctx)
+    first = s.rtm.record_time(s.provider_alpha, period.period_id,
+                              local_date="2026-10-05", minutes=25,
+                              activity_description="initial review")
+    second = s.rtm.correct_time(s.provider_alpha, first.time_entry_id,
+                                minutes=40, reason="first correction")
+    third = s.rtm.correct_time(s.provider_alpha, second.time_entry_id,
+                               minutes=55, reason="second correction")
+    s.rtm.record_synchronous_interaction(
+        s.provider_alpha, period.period_id, local_date="2026-10-06",
+        modality=InteractionModality.PHONE,
+        participant_type=ParticipantType.CAREGIVER)
+    s.rtm.finalize_period(s.provider_alpha, period.period_id)
+    s.rtm.generate_evidence_summary(s.provider_alpha, period.period_id)
+    s.rtm.generate_coding_assistance(s.provider_alpha, period.period_id)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    time_section = _section(report, ReportSection.DOCUMENTED_TIME)
+
+    assert time_section.count("documented_management_minutes") == 55
+    assert time_section.count("current_entry_count") == 1
+    assert time_section.count("superseded_entry_count") == 2
+    assert set(time_section.record_refs) == {third.time_entry_id}
+    assert set(time_section.superseded_record_refs) == {
+        first.time_entry_id, second.time_entry_id}
+
+    # The whole chain is walkable, oldest to newest, from the refs alone.
+    entries = {e.time_entry_id: e for e in
+               s.rtm.list_time_entries(s.provider_alpha, period.period_id)}
+    walk, cursor = [], first.time_entry_id
+    while cursor:
+        walk.append(cursor)
+        cursor = entries[cursor].superseded_by_time_entry_id
+    assert walk == [first.time_entry_id, second.time_entry_id,
+                    third.time_entry_id]
+    assert [entries[t].minutes for t in walk] == [25, 40, 55]
+
+
+def test_section_h_refs_survive_finalization_and_amendment(s):
+    _ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    before = _section(report, ReportSection.DOCUMENTED_TIME)
+    s.rtm.finalize_report(s.provider_alpha, report.report_id)
+    amended = s.rtm.amend_report(s.provider_alpha, report.report_id,
+                                 reason="clarified section H wording")
+    after = _section(amended, ReportSection.DOCUMENTED_TIME)
+
+    assert after.record_refs == before.record_refs
+    assert after.superseded_record_refs == before.superseded_record_refs
+    assert after.counts == before.counts
+    stored = s.repos.month_end_reports.get_by_id(report.report_id)
+    assert (_section(stored, ReportSection.DOCUMENTED_TIME)
+            .superseded_record_refs == before.superseded_record_refs)
+
+
+def test_section_h_refs_round_trip_through_the_codec(s):
+    from pilot_backend.persistence.codecs import decode, encode
+
+    _ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    restored = decode(MonthEndReport, encode(report))
+    before = _section(report, ReportSection.DOCUMENTED_TIME)
+    after = _section(restored, ReportSection.DOCUMENTED_TIME)
+    assert after.superseded_record_refs == before.superseded_record_refs
+    assert after.record_refs == before.record_refs
+
+
+def test_a_record_cannot_be_both_counted_and_superseded():
+    """The generic invariant. A row is counted or excluded, never both."""
+    with pytest.raises(ReportError, match="counted and superseded"):
+        SectionContent(section=ReportSection.DOCUMENTED_TIME,
+                       record_refs=("t1", "t2"),
+                       superseded_record_refs=("t2",))
+
+
+def test_section_refs_cannot_repeat_a_record():
+    with pytest.raises(ReportError, match="cannot repeat a record"):
+        SectionContent(section=ReportSection.DOCUMENTED_TIME,
+                       record_refs=("t1", "t1"))
+    with pytest.raises(ReportError, match="cannot repeat a record"):
+        SectionContent(section=ReportSection.DOCUMENTED_TIME,
+                       superseded_record_refs=("t1", "t1"))
+
+
+def test_only_section_h_uses_the_superseded_ref_field(s):
+    """Scoped: every other section leaves it empty, so it stays meaningful."""
+    _ctx, _episode, period = _full_month(s)
+    report = s.rtm.generate_report(s.provider_alpha, period.period_id)
+    for content in report.sections:
+        if content.section is ReportSection.DOCUMENTED_TIME:
+            assert content.superseded_record_refs
+        else:
+            assert content.superseded_record_refs == (), content.section

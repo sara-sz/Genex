@@ -76,8 +76,18 @@ class SectionContent:
     """
 
     section: ReportSection
-    #: Opaque ids of the records this section indexes.
+    #: Opaque ids of the records this section indexes, and that still COUNT
+    #: toward its reported totals.
     record_refs: Tuple[str, ...] = ()
+    #: Opaque ids of source records this section reports a FACT about but
+    #: deliberately excludes from its totals — currently only section H's
+    #: superseded `TimeEntry` rows.
+    #:
+    #: A separate field rather than more entries in `record_refs`, because
+    #: those two populations answer different questions and flattening them
+    #: would make `current_entry_count` untraceable: a reader could no longer
+    #: tell which refs were counted. Kept empty on every other section.
+    superseded_record_refs: Tuple[str, ...] = ()
     #: Small, non-clinical integers: counts, minutes, units.
     counts: Tuple[Tuple[str, int], ...] = ()
     #: Short enum-valued facts, e.g. a goal's status recommendation.
@@ -89,8 +99,21 @@ class SectionContent:
     def __post_init__(self) -> None:
         if not isinstance(self.section, ReportSection):
             raise ReportError("section must be a ReportSection")
-        for name in ("record_refs", "counts", "labels"):
+        for name in ("record_refs", "superseded_record_refs", "counts",
+                     "labels"):
             object.__setattr__(self, name, tuple(getattr(self, name)))
+        for name in ("record_refs", "superseded_record_refs"):
+            value = getattr(self, name)
+            if len(set(value)) != len(value):
+                raise ReportError(f"{name} cannot repeat a record")
+        # A record is either counted or excluded, never both. Without this a
+        # superseded entry could appear in `record_refs` too and be counted
+        # once while also being reported as excluded.
+        overlap = set(self.record_refs) & set(self.superseded_record_refs)
+        if overlap:
+            raise ReportError(
+                "a record cannot be both counted and superseded in one "
+                "section")
 
     def count(self, key: str) -> Optional[int]:
         for name, value in self.counts:

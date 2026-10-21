@@ -169,14 +169,34 @@ def _actions_section(actions: Sequence) -> SectionContent:
 
 
 def _time_section(entries: Sequence, minutes: int) -> SectionContent:
-    """H. Documented minutes from CURRENT entries only."""
-    current = [e for e in entries if e.is_current]
+    """H. Documented minutes from CURRENT entries only.
+
+    Slice 3B follow-up. `superseded_entry_count` used to count rows whose ids
+    appeared nowhere in the section, so the one number in H that describes
+    corrections was the one number a reader could not check.
+
+    Both populations are now referenced, in SEPARATE fields. `record_refs`
+    keeps its meaning — the entries that count toward the minutes — and
+    `superseded_record_refs` names the corrected-away rows. Flattening them
+    into one list would have made `current_entry_count` untraceable, because
+    a reader could no longer tell which refs were counted.
+
+    Both counts are `len()` of their own ref list, so each is equal to its
+    source set by CONSTRUCTION rather than by a separate assertion that could
+    drift from the thing it checks. `minutes` stays the caller's figure from
+    `documented_minutes`, which sums current entries only — a superseded row
+    is referenced here and still contributes no clinician time.
+    """
+    current_refs = sorted(e.time_entry_id for e in entries if e.is_current)
+    superseded_refs = sorted(e.time_entry_id for e in entries
+                             if not e.is_current)
     return SectionContent(
         section=ReportSection.DOCUMENTED_TIME,
-        record_refs=tuple(sorted(e.time_entry_id for e in current)),
+        record_refs=tuple(current_refs),
+        superseded_record_refs=tuple(superseded_refs),
         counts=(("documented_management_minutes", minutes),
-                ("current_entry_count", len(current)),
-                ("superseded_entry_count", len(entries) - len(current))),
+                ("current_entry_count", len(current_refs)),
+                ("superseded_entry_count", len(superseded_refs))),
         labels=(("entry_method", "manual"),),
         attributed_to_role="provider",
     )

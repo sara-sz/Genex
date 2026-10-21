@@ -1035,7 +1035,11 @@ SPECS: Dict[type, Dict[str, Kind]] = {
     },
     SectionContent: {
         "section": _EnumKind(ReportSection),
-        "record_refs": STR_TUPLE, "counts": INT_PAIR_TUPLE,
+        "record_refs": STR_TUPLE,
+        # Slice 3B follow-up: section H's corrected-away TimeEntry rows, kept
+        # referenced but excluded from its totals.
+        "superseded_record_refs": STR_TUPLE,
+        "counts": INT_PAIR_TUPLE,
         "labels": STR_PAIR_TUPLE, "attributed_to_role": STR,
         "overlap_declared": BOOL,
     },
