@@ -99,6 +99,7 @@ from api.schemas import (
     SwapRequest,
 )
 from api import functional_baseline_api as baseline_api
+from api import baseline_projection_gate as projection_gate
 from api import functional_baseline_v2_api as baseline_v2_api
 from api import parent_baseline_projection_client as projection_client
 from api import parent_baseline_projection_v2_client as projection_v2_client
@@ -3310,6 +3311,21 @@ def _baseline_v2_http(exc: Exception) -> HTTPException:
                              detail="baseline_not_in_progress")
     if isinstance(exc, baseline_v2_api.BaselineV2EntryChoiceUnknown):
         return HTTPException(status_code=422, detail="unknown_entry_choice")
+    if isinstance(exc, projection_gate.ProjectionWithheld):
+        # 409, not 422 or 500. Nothing is wrong with the request and nothing is
+        # wrong with the service: the stored outcome CONFLICTS with the action
+        # asked for, which is exactly what 409 is. It is also not
+        # `projection_rejected` (422) — the Pilot never saw it, and never
+        # should.
+        #
+        # The finding travels in the body rather than only the detail string,
+        # so a clinician surface can render "a target was identified, but there
+        # is no approved pilot content for it" without re-deriving anything.
+        # PHI-safe by construction: bands, counts, family identifiers, states.
+        return HTTPException(
+            status_code=409,
+            detail={"error": "projection_withheld",
+                    **exc.decision.as_dict()})
     if isinstance(exc, baseline_v2_api.BaselineV2SkillMismatch):
         # The expected key is echoed so a client can recover by answering the
         # right skill. It is the client's OWN previous question, so this reveals
@@ -3537,6 +3553,12 @@ async def session_baseline_v2_projection(
       404 unsupported_baseline_domain
       404 baseline_not_started
       409 baseline_not_finalized        — projection copies a RESULT
+      409 projection_withheld           — the outcome is real and is NOT
+                                          projectable (slice 8): a target was
+                                          identified and no approved pilot
+                                          content serves it. The body carries
+                                          the finding so a clinician surface
+                                          can show it.
       501 projection_not_configured     — this deployment may not project v2
       403 projection_pairing_forbidden  — declared pairing is not permitted
       422 projection_rejected           — the Pilot refused it on its merits

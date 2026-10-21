@@ -221,6 +221,12 @@ jobs:
         #                 substituted, and `multi_area` stays a tri-state so
         #                 an unsampled area never reads as reassurance
         #
+        #   projection_gate
+        #                 TARGET_UNSUPPORTED_BY_CONTENT never reaches the A2 v2
+        #                 projection, no other outcome's behaviour changes, and
+        #                 the refusal never converts the outcome nor drops the
+        #                 target band or the unserved family names
+        #
         # Run as SEPARATE pytest invocations, matching the rest of this job.
         # The parent suites are not currently isolated from one another's
         # FastAPI auth overrides, so a single combined invocation produces
@@ -232,7 +238,7 @@ jobs:
         run: |
           for f in baseline_policy baseline_micro_tracks baseline_traversal \
                    baseline_eligibility baseline_profile baseline_additional \
-                   baseline_outcome; do
+                   baseline_outcome baseline_projection_gate; do
             t="tests/test_parent_24_${f}.py"
             if [ -f "$t" ]; then
               python -m pytest "$t" -q

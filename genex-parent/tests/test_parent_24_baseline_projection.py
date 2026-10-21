@@ -873,3 +873,112 @@ def test_the_probe_never_logs_the_token_itself():
     probe = (REPO.parent / "pilot_runtime" / "deploy"
              / "probe_projection_auth.sh").read_text()
     assert "must never log the token itself" in probe
+
+
+# ---------------------------------------------------------------------------
+# SLICE 8 — the withheld projection, end to end over HTTP.
+#
+# Lives here rather than in `test_parent_24_baseline_projection_gate.py`
+# because it needs `api.main`, FIREBASE_PROJECT_ID and fastapi, and that suite
+# runs in the dependency-pure CI job. Proving the mapping on the SDK-backed
+# surface is the same choice 0.6A-1F made for the A2 v1 boundary test rather
+# than weakening it with an import guard.
+# ---------------------------------------------------------------------------
+
+from api import main as main_module  # noqa: E402
+from api import baseline_outcome as _outcome  # noqa: E402
+from api import baseline_projection_gate as _gate  # noqa: E402
+from api import functional_baseline_v2_api as _v2api  # noqa: E402
+from genex_core import functional_baseline_v2 as _v2  # noqa: E402
+
+
+def _drive_v2_over_http(session_id, uid, entry_choice, answer_for,
+                        auth=AUTH_A):
+    """Run a whole v2 baseline through the real routes, then finalize."""
+    _make_session(uid, session_id)
+    base = f"/api/v2/session/{session_id}/baseline/{SLP}"
+    response = client.post(f"{base}/start",
+                           json={"entry_choice_id": entry_choice},
+                           headers=auth)
+    assert response.status_code == 200, response.text
+    for _ in range(16):
+        view = client.get(base, headers=auth)
+        assert view.status_code == 200, view.text
+        question = view.json().get("current_question")
+        if not question:
+            break
+        answered = client.post(
+            f"{base}/answer",
+            json={"skill_key": question["skill_key"],
+                  "answer": answer_for(question)},
+            headers=auth)
+        assert answered.status_code == 200, answered.text
+    finalized = client.post(f"{base}/finalize", headers=auth)
+    assert finalized.status_code == 200, finalized.text
+    return base
+
+
+def _outcome_of(uid, session_id):
+    stored = _reload(uid, session_id)[_v2.STATE_KEY_V2][SLP]
+    return _outcome.derive_outcome(_v2.record_from_state_v2(stored))
+
+
+def test_a_withheld_projection_is_a_409_carrying_the_finding():
+    """THE SLICE 8 GATE, over HTTP.
+
+    An identified target with no approved pilot content must not reach the
+    Pilot, and the refusal must carry the clinical finding so a clinician
+    surface can render it.
+    """
+    base = _drive_v2_over_http(
+        "s-withheld", "uid-proj-a", "no_words_yet",
+        lambda q: "sometimes" if q["months"] <= 9 else "yes")
+    result = _outcome_of("uid-proj-a", "s-withheld")
+    # ASSERTED, not skipped. A skip here would let the one end-to-end proof of
+    # the slice-8 block go quietly vacuous if routing ever changed.
+    assert result.outcome == \
+        _outcome.OUTCOME_TARGET_UNSUPPORTED_BY_CONTENT, result.outcome
+
+    response = client.post(f"{base}/projection", headers=AUTH_A)
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert detail["error"] == "projection_withheld"
+    assert detail["outcome"] == \
+        _outcome.OUTCOME_TARGET_UNSUPPORTED_BY_CONTENT
+    assert detail["withheld_because"] == \
+        _gate.WITHHELD_UNSUPPORTED_BY_CONTENT
+    assert detail["target_identified"] is True
+    assert detail["target_band"] == result.target_band
+    assert detail["unsupported_families"] or detail["unmappable_skills"]
+    assert detail["served_family_set_digest"]
+    # The outcome is NOT converted by the refusal.
+    assert _outcome_of("uid-proj-a", "s-withheld").outcome == result.outcome
+
+
+def test_the_withheld_409_is_not_the_pilot_rejection_code():
+    """422 means the Pilot refused it on its merits. It never saw this one."""
+    http = main_module._baseline_v2_http(
+        _gate.ProjectionWithheld(_gate.ProjectionDecision(
+            status=_gate.PROJECTION_WITHHELD,
+            outcome=_outcome.OUTCOME_TARGET_UNSUPPORTED_BY_CONTENT,
+            withheld_because=_gate.WITHHELD_UNSUPPORTED_BY_CONTENT,
+            target_band=24)))
+    assert http.status_code == 409
+    assert http.status_code != 422
+    assert http.detail["error"] == "projection_withheld"
+
+
+def test_a_projectable_outcome_is_unaffected_by_the_slice_8_gate():
+    """Regression: the three allowed outcomes still reach the client layer."""
+    base = _drive_v2_over_http("s-allowed", "uid-proj-a", "many_single_words",
+                               lambda q: "yes")
+    result = _outcome_of("uid-proj-a", "s-allowed")
+    assert result.outcome != _outcome.OUTCOME_TARGET_UNSUPPORTED_BY_CONTENT
+    doc = _reload("uid-proj-a", "s-allowed")
+    payload = _v2api.projection_payload(doc, SLP)
+    assert set(payload) == {"summary", "skills", "band_totals"}
+    # And the route gets past the gate: it fails on CONFIGURATION, not content.
+    response = client.post(f"{base}/projection", headers=AUTH_A)
+    assert response.status_code in (501, 503, 200), response.text
+    if response.status_code == 409:
+        raise AssertionError("the gate must not withhold a projectable outcome")

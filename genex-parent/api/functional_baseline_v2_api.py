@@ -64,6 +64,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from api import baseline_policy
+from api import baseline_projection_gate as projection_gate
 from genex_core.functional_baseline import (
     BaselineError,
     area_for_domain,
@@ -552,6 +553,14 @@ def projection_payload(doc: Dict[str, Any], domain: str) -> Dict[str, Any]:
     key = require_supported_domain(domain)
     stored = finalized_record(doc, key)
     record = record_from_state_v2(stored)
+
+    # SLICE 8. Refuse here rather than at the route, because this is the one
+    # function every projection passes through: `main.py` calls it for the
+    # payload and there is no second way to build one. A check at the route
+    # would be bypassed by any future caller.
+    #
+    # The outcome is NOT rewritten — see `api/baseline_projection_gate.py`.
+    projection_gate.assert_projectable(record)
 
     missing = [f for f in PROJECTED_SUMMARY_FIELDS if f not in stored]
     if missing:
