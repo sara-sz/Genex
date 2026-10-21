@@ -339,7 +339,141 @@ drift-gated in CI.
 | Clinical content of an activity | the reviewed card pools under `pilot_runtime/data/reviewed_cards/` |
 | Whether a change preserves the no-mirror property | the `0.5E-B — the bridge is not a mirror` CI gate |
 
-Implementation of the TARGET behaviour in
-[§2](#2-parent-ux-question-budget)–[§5](#5-sixth-question-behaviour) is **not yet
-authorized to be written**. This note exists so that when it is, the decisions do
-not have to be re-derived.
+The TARGET behaviour in [§2](#2-parent-ux-question-budget)–[§5](#5-sixth-question-behaviour)
+is now **IMPLEMENTED** on the Parent side. Nothing is deployed.
+
+---
+
+## 13. Historical clinical evidence vs current serviceability — FROZEN
+
+**IMPLEMENTED.** The single most important boundary in the derived contract, and
+the reason nothing about projectability is persisted.
+
+Two different kinds of fact:
+
+| | Basis | Changes when |
+|---|---|---|
+| **Historical clinical evidence** | the finalized baseline | never — it is a record of what was reported and what the evidence identified |
+| **Current serviceability** | the reviewed-content state *now* | reviewed content is added or withdrawn |
+
+Adding approved content may move serviceability from unsupported to
+supported/projectable. It **must not** make it appear that:
+
+- the child's answers changed;
+- their canonical target changed;
+- their floor changed;
+- their baseline was reassessed.
+
+This is enforced structurally, not by convention: the historical block is derived
+from the stored record alone and contains no reference to the content state, so no
+content change can move a value in it. The outcome itself is a *joint* statement
+about evidence and content and therefore does move — but only ever between the two
+target-bearing outcomes, so an identified target is never lost, never becomes "no
+target", and never becomes "insufficient evidence".
+
+**Every serviceability determination carries the content set id and digest it was
+evaluated under.** Two determinations that disagree are then always attributable to
+the content state rather than to a silent change in the child's record.
+
+**No stored `projection_withheld` boolean, and no other stale derived state.** A
+stored verdict would outlive the gap that caused it, and content landing later
+would never reach the children already waiting for it.
+
+---
+
+## 14. Field audience — FROZEN
+
+**IMPLEMENTED.** Three audiences, three views, three different forbid-lists. The
+lists are enforced by scanning the built payloads, not by review.
+
+| | parent | clinician (A2 v2.1) | engineering provenance |
+|---|---|---|---|
+| outcome state names | no | yes | yes |
+| content-support states and family identifiers | no | yes | yes |
+| developmental months / band labels | no | **no** | yes |
+| additional-question reason codes | no | **no** | yes |
+| milestone prose | no | no | **no** |
+| raw caregiver answers | no | no | **no** |
+| internal skill keys and refs | no | no | **no** |
+| scores | no | no | **no** |
+
+Milestone prose, raw answers, skill keys and scores appear in **no** view at all.
+
+**Parent-facing** carries a presentation key, not a clinical state — deliberately
+not a reversible encoding of the outcome, so a caregiver surface cannot recover the
+clinical state from it. Copy stays qualitative and non-diagnostic and is owned by
+the frontend; the backend ships no sentences. The product does **not** promise "6
+questions" (see [§15](#15-measured-implementation-findings)).
+
+**Clinician summary** stays minimal: derived outcome, current serviceability,
+per-area concern/uncertain/not-assessed status, and the multi-area result with its
+reasons. It carries **no month labels** — a developmental-month figure beside a
+child's name is the `dev_age` mistake in a new costume. The target's *existence* is
+reported; its band is provenance.
+
+**The additional-question reason ledger is provenance only.** It exists for
+reproducibility and debugging — why did this interview run to nine questions — and
+is not parent-facing clinical information.
+
+---
+
+## 15. Measured implementation findings
+
+**IMPLEMENTED — measured, not estimated.** Recorded as evidence for the post-pilot
+architecture decision. Figures are from exhaustive sweeps over the real frozen
+inventory.
+
+### 15.1 Question-count distribution
+
+Over 3072 adversarial paths (6 entry choices x 8 ages x 64 answer patterns):
+maximum 9 questions, never 10; every entered band complete on every path; zero
+above-age answers counted as a concern in either channel.
+
+Over 576 **coherent** profiles — a child who demonstrates at or below a true
+ability level and not above it, which is the realistic shape:
+
+| | share |
+|---|---|
+| finish within the normal target of 6 | **28%** |
+| reach the hard maximum of 9 | **49%** |
+| need 8–9 questions on the declared track alone | **39%** |
+| receive **zero** broad-profile questions | **32%** |
+
+### 15.2 Why — band width, not a budget leak
+
+The declared track's band widths are uneven: two mid-range bands hold four and
+three skills respectively. A target in either, with a floor needed beneath it,
+costs seven or more questions on the declared track alone — and finishing an
+entered band is not discretionary ([§2](#2-parent-ux-question-budget)).
+
+**Founder decision: do not reopen band completeness, the 9-question hard maximum,
+or target-integrity-first for this pilot.** The normal target of 6 remains the
+normal-budget boundary, not a promise that six will be the statistical mode. If
+safe target/floor evidence requires 7–9 questions, that is acceptable. Where the
+declared track consumes the budget and the broad profile stays partly or wholly
+unassessed, that is preserved honestly; target evidence is never weakened to
+guarantee breadth. The longitudinal care loop and clinician review refine missing
+areas later.
+
+### 15.3 Evidence for the post-pilot model
+
+These figures support eventually moving from **month-band completeness** toward the
+micro-track / target-chain completeness model already designed in
+[§11](#11-intentionally-deferred). Band completeness pays for every sibling skill
+in a band whether or not it bears on the target; a target chain pays only for the
+chain.
+
+**DEFERRED — not to be implemented in the pilot branch.**
+
+### 15.4 Inventory-bound profile coverage
+
+One required profile area's canonical inventory begins above the age of a large
+part of the cohort. For those children the area is unsampleable, is reported
+`not_assessed` with the inventory cause, and **no additional question is spent on
+it** — an above-age probe cannot indicate concern, so it would buy a guaranteed
+non-finding.
+
+This does **not** prevent a positive multi-area finding: two concerns observed in
+other areas confirm multi-area regardless ([§4](#4-multi-area-rule)). Measured,
+532 of 1920 paths for children below that inventory threshold reach CONFIRMED.
+What missing evidence prevents is a *reassuring negative*, never a positive one.

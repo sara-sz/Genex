@@ -166,11 +166,64 @@ describe the *area*, not the assessment algorithm. **Do not branch on it.**
            {"months": 24, "assessed": 1, "total": 1, "complete": true,  "mastered": false}],
  "current_question": null,
  "ready_to_finalize": false,
- "updated_at": "2026-10-08T17:26:54.781802+00:00"}
+ "updated_at": "2026-10-08T17:26:54.781802+00:00",
+ "outcome": {"state": "plan_ready", "plan_available": true,
+             "answers_recorded": 6}}
 ```
 
 `current_question` when present:
 `{ skill_key, months, milestone, parent_explanation }`.
+
+### `outcome` — ADDITIVE, present only once `finalized` is true
+
+Every field above `outcome` is unchanged from the previous contract. `outcome` is
+**added** on finalize and absent before it: an outcome derived mid-interview would
+be a prediction, and a caregiver surface showing "no plan yet" at question four
+would be reporting our progress as a finding about their child.
+
+Exactly three fields, and this is the **whole** parent-facing surface for the
+result:
+
+| Field | Values | Notes |
+|---|---|---|
+| `state` | `plan_ready` · `plan_not_available_yet` · `no_focus_identified` · `needs_more_information` | presentation key, **not** a clinical state |
+| `plan_available` | boolean | a plan can be produced right now; says nothing about why not |
+| `answers_recorded` | integer | questions answered in total |
+
+**`state` is deliberately not a reversible encoding of the clinical outcome.** A
+caregiver surface cannot recover the clinical state from it, and that is the point.
+The four internal outcome states, the content-support states, canonical family
+identifiers, developmental-month labels and the additional-question reason codes are
+system and clinician concepts and appear in **no** parent payload.
+
+**Copy is the frontend's.** This contract ships no sentences. Keep parent-facing
+language simple and non-diagnostic — qualitative ("a few quick questions"), never a
+promised question count: the interview normally targets six questions but
+legitimately runs to nine when establishing safe target evidence requires it.
+Suggested mapping, to be reworded freely:
+
+| `state` | intent |
+|---|---|
+| `plan_ready` | a plan is ready to view |
+| `plan_not_available_yet` | we do not have activities ready for this yet — a statement about Genex, never about the child |
+| `no_focus_identified` | nothing to focus on right now |
+| `needs_more_information` | we need a little more information |
+
+### Clinician and engineering views — NOT on this route
+
+Two further derived views exist server-side and are **not** returned here:
+
+- a **minimal clinician summary** (for the later A2 v2.1 surface): derived outcome,
+  current serviceability with its content digest, per-area
+  concern/uncertain/not-assessed status, and the multi-area result with reasons. It
+  carries **no** month labels, milestone prose, raw answers, skill keys, scores or
+  internal reason codes.
+- an **engineering provenance** view including the additional-question reason
+  ledger, for reproducibility and debugging. Not a product surface; the raw reason
+  ledger must never be rendered in the Parent UI.
+
+Field audience is frozen in
+[`parent_baseline_v2_design.md` §14](./parent_baseline_v2_design.md).
 
 - `status` ∈ `IN_PROGRESS` · `AGE_RELEVANT` · `BOUNDED` · `EMERGING` ·
   `UNRESOLVED`.
@@ -239,7 +292,52 @@ the service identity token.
 | 501 | `projection_not_configured` | this deployment may not project. A capability gap, not a fault. Do not retry. |
 | 403 | `projection_pairing_forbidden` | declared environment pairing not permitted. Do not retry. |
 | 422 | `projection_rejected` | the Pilot refused on the merits — most commonly **the session has no linked canonical child yet** (do the pilot-claim bridge first). Do not retry unchanged. |
+| 409 | `projection_withheld` *(object body — see below)* | the baseline outcome is real and is **not** projectable. Do not retry; do not re-run the baseline. |
 | 503 | `projection_unavailable` | **retryable** — see below |
+
+### 409 `projection_withheld` — a finding, not an error
+
+The only `detail` on this route that is an **object** rather than a string. It is
+returned when the baseline identified a clinically appropriate target and no
+approved pilot content currently serves it.
+
+```json
+{"detail": {"error": "projection_withheld",
+            "status": "WITHHELD",
+            "outcome": "TARGET_UNSUPPORTED_BY_CONTENT",
+            "withheld_because": "unsupported_by_content",
+            "target_identified": true,
+            "target_band": 6,
+            "target_support": "unserved",
+            "unsupported_families": ["..."],
+            "unmappable_skills": 0,
+            "served_family_set_id": "...",
+            "served_family_set_digest": "<64 hex>"}}
+```
+
+Nothing is wrong with the request and nothing is wrong with the service, which is
+why it is `409` and specifically **not** `422 projection_rejected` — the Pilot never
+saw it and never should.
+
+**Client rules:**
+
+- Do **not** retry, and do **not** prompt the caregiver to redo the baseline. The
+  evidence is sound; our content is not yet there.
+- Do **not** show this body to a caregiver. It is a clinician/engineering payload —
+  the parent surface for the same situation is `outcome.state ==
+  "plan_not_available_yet"` on the baseline view (§3).
+- A clinician surface may render: *a clinically appropriate target was identified,
+  but Genex does not currently have approved pilot content for it.*
+
+**Projectability is current system capability, not a property of the child.** It is
+evaluated fresh on every call against the reviewed-content state and is never
+stored. Adding approved content can therefore make an existing, unchanged baseline
+projectable with no migration and no re-interview — and when it does, the child's
+answers, canonical target and floor are all unchanged, and the baseline was not
+reassessed. `served_family_set_digest` identifies the content state a given
+determination was made under, so two differing results are always attributable.
+This boundary is frozen in
+[`parent_baseline_v2_design.md` §13](./parent_baseline_v2_design.md).
 
 ### 503 retry and idempotency — required client behaviour
 
@@ -636,7 +734,7 @@ completion and mastery booleans — never as an age equivalence.
 | 404 | Pilot | the path is not registered at all |
 | 404 | Parent | `session_not_found`, `unsupported_baseline_domain`, `baseline_not_started` |
 | 405 | Pilot | path registered under a different method |
-| 409 | Parent | baseline lifecycle conflicts |
+| 409 | Parent | baseline lifecycle conflicts, and `projection_withheld` (§4 — object body) |
 | 422 | Parent | Pydantic validation, skill-key mismatch, `projection_rejected` |
 | 500 | Pilot | unexpected failure; nothing about it reaches the client |
 | 501 | Parent | `projection_not_configured` — capability gap, not a fault |

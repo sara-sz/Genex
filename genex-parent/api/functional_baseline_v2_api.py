@@ -63,6 +63,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
+from api import baseline_contract
 from api import baseline_policy
 from api import baseline_projection_gate as projection_gate
 from genex_core.functional_baseline import (
@@ -452,7 +453,7 @@ def view(doc: Dict[str, Any], domain: str) -> Dict[str, Any]:
     envelope = _envelope(doc, key)
     finalized = bool(envelope.get("finalized"))
     question = None if finalized else next_question_v2(record)
-    return {
+    response = {
         "domain": key,
         "area_id": record.area_id,
         "baseline_version": record.baseline_version,
@@ -470,6 +471,19 @@ def view(doc: Dict[str, Any], domain: str) -> Dict[str, Any]:
         "ready_to_finalize": (not finalized) and question is None,
         "updated_at": envelope.get("updated_at", ""),
     }
+    if finalized:
+        # SLICE 9, ADDITIVE. Present only once the baseline is finalized,
+        # because an outcome derived mid-interview would be a prediction, not a
+        # result — and a caregiver surface showing "no plan yet" at question
+        # four would be reporting our progress as a finding about their child.
+        #
+        # Parent-facing by construction: a presentation key, a boolean and a
+        # count. No outcome state name, no family name, no month, no reason
+        # code. See `api/baseline_contract.py` for the three audience views and
+        # why their forbid-lists differ.
+        response["outcome"] = baseline_contract.parent_view(
+            record, policy=policy_for_record(record))
+    return response
 
 
 def entry_screen_for(domain: str) -> Dict[str, Any]:
