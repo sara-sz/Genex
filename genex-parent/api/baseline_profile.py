@@ -564,7 +564,15 @@ def profile_summary(record: v2.BaselineRecordV2, *,
                                      if not v["assessed"]),
         "areas_with_concern": sorted(a for a, v in areas.items()
                                      if v["concern"]),
+        # R3-SCOPED: required areas an additional question could recover.
         "areas_recoverable": list(recoverable_areas(record, policy=policy)),
+        # CAUSE PARTITION over EVERY area, required or not. The two together
+        # must exactly cover `areas_not_assessed`, which `areas_recoverable`
+        # alone cannot do — it deliberately omits the non-required areas R3
+        # would never spend a question on.
+        "areas_budget_consumed": sorted(
+            a for a, v in areas.items()
+            if v["not_assessed_cause"] == NOT_ASSESSED_BUDGET_CONSUMED),
         "areas_unprobeable": sorted(
             a for a, v in areas.items()
             if v["not_assessed_cause"] == NOT_ASSESSED_NO_AGE_APPROPRIATE_SKILL),

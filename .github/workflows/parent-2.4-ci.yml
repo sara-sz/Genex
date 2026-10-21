@@ -214,6 +214,13 @@ jobs:
         #                 canonical skill stays not_assessed rather than
         #                 acquiring manufactured coverage
         #
+        #   outcome       exactly one of the four outcome states holds, a
+        #                 sparse or absent Channel-B profile cannot change an
+        #                 otherwise valid Channel-A outcome, an unsupported
+        #                 target is never reported as no target nor
+        #                 substituted, and `multi_area` stays a tri-state so
+        #                 an unsampled area never reads as reassurance
+        #
         # Run as SEPARATE pytest invocations, matching the rest of this job.
         # The parent suites are not currently isolated from one another's
         # FastAPI auth overrides, so a single combined invocation produces
@@ -224,7 +231,8 @@ jobs:
         # (pandas, openpyxl) and nothing else. No fastapi, no firebase.
         run: |
           for f in baseline_policy baseline_micro_tracks baseline_traversal \
-                   baseline_eligibility baseline_profile baseline_additional; do
+                   baseline_eligibility baseline_profile baseline_additional \
+                   baseline_outcome; do
             t="tests/test_parent_24_${f}.py"
             if [ -f "$t" ]; then
               python -m pytest "$t" -q
