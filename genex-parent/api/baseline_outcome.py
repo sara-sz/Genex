@@ -37,9 +37,15 @@ the ones reporting the weakest result.
 area is affected", which is a claim about the child; when a required area was
 never sampled the honest answer is that we do not know. Three values:
 
-    CONFIRMED       >=2 sampled areas show an age-appropriate concern
-    NOT_OBSERVED    every required area was sampled, and <=1 shows concern
-    INDETERMINATE   a required area was not sampled at all
+    CONFIRMED       >=2 sampled areas show an age-appropriate concern.
+                    Takes precedence UNCONDITIONALLY — two observed concerns
+                    are sufficient positive evidence, and nothing missing
+                    elsewhere can erase them.
+    NOT_OBSERVED    <2 concerns AND the required evidence can support that
+                    negative: every required area sampled, none of the
+                    non-concerning ones left uncertain.
+    INDETERMINATE   <2 concerns and missing or uncertain evidence could still
+                    hold a second one.
 
 And the summary keeps the three distinctions a clinician needs separable:
 
@@ -101,17 +107,21 @@ MULTI_AREA_STATES: Tuple[str, ...] = (MULTI_AREA_CONFIRMED,
                                       MULTI_AREA_NOT_OBSERVED,
                                       MULTI_AREA_INDETERMINATE)
 
-#: WHY it is indeterminate. The tri-state stays a tri-state; this says whether
-#: the gap is one more question could close.
+#: WHY it is indeterminate — a SET, because several gaps can coexist and a
+#: clinician needs to know which. The tri-state stays a tri-state.
 #:
-#: Measured, this matters: `conversation_narrative` begins at 36 months, so for
-#: every younger child the required social area is permanently unsampleable and
-#: `multi_area` can never leave INDETERMINATE in this release. A clinician
-#: reading "indeterminate" needs to know whether that is a budget accident or a
-#: standing limit of the question bank.
+#: Reported only when fewer than two concerns were observed. Once two are, the
+#: positive evidence stands on its own and there is nothing to be indeterminate
+#: about.
 INDETERMINATE_BUDGET_CONSUMED = "budget_consumed"
 INDETERMINATE_NO_AGE_APPROPRIATE_SKILL = "no_age_appropriate_skill"
-INDETERMINATE_BOTH = "both"
+INDETERMINATE_UNCERTAINTY = "uncertainty"
+
+INDETERMINATE_REASONS: Tuple[str, ...] = (
+    INDETERMINATE_BUDGET_CONSUMED,
+    INDETERMINATE_NO_AGE_APPROPRIATE_SKILL,
+    INDETERMINATE_UNCERTAINTY,
+)
 
 
 class BaselineOutcomeError(Exception):
@@ -281,40 +291,83 @@ def derive_outcome(record, *, policy: Optional[
 # multi-area derivation
 # ---------------------------------------------------------------------------
 
+def _indeterminate_reasons(record, *, policy: policy_mod.BaselinePolicy,
+                           concerning: Tuple[str, ...]) -> Tuple[str, ...]:
+    """Gaps in the REQUIRED set that could still hide a second concern.
+
+    Scoped to the required areas, deliberately, and asymmetrically with
+    `CONFIRMED`: positive evidence counts from ANY sampled area, while the
+    negative conclusion is gated on the area set the policy actually requires.
+    Letting a never-required fallback area block `NOT_OBSERVED` would make that
+    state unreachable in practice, which would be a different way of refusing
+    to say anything.
+
+    An area that ALREADY shows concern contributes no reason even if it holds
+    an `unknown`: it is counted, and more certainty there cannot change whether
+    a SECOND area is concerning.
+    """
+    reasons = set()
+    for area in policy.required_profile_areas:
+        cause = profile.not_assessed_cause(record, area)
+        if cause == profile.NOT_ASSESSED_BUDGET_CONSUMED:
+            reasons.add(INDETERMINATE_BUDGET_CONSUMED)
+        elif cause == profile.NOT_ASSESSED_NO_AGE_APPROPRIATE_SKILL:
+            reasons.add(INDETERMINATE_NO_AGE_APPROPRIATE_SKILL)
+        elif area not in concerning and any(
+                e.state == v2.STATE_UNKNOWN
+                for e in profile.area_evidence(record, area)):
+            # SAMPLED, not concerning, and the caregiver could not answer. The
+            # area could still turn out concerning, so this cannot support a
+            # reassuring negative — the gap an earlier draft missed by looking
+            # only at whether an area had been sampled at all.
+            reasons.add(INDETERMINATE_UNCERTAINTY)
+    return tuple(r for r in INDETERMINATE_REASONS if r in reasons)
+
+
 def multi_area_state(record, *, policy: policy_mod.BaselinePolicy) -> str:
     """CONFIRMED / NOT_OBSERVED / INDETERMINATE — never a boolean.
 
-    `INDETERMINATE` wins over `NOT_OBSERVED` whenever a required area was never
-    sampled, including when another area already shows concern but a second one
-    is missing. "One area is affected and we checked the others" and "one area
-    is affected and we ran out of questions" are different clinical pictures,
-    and only the first is reassuring.
+    ## CONFIRMED FIRST, UNCONDITIONALLY
+
+    Two distinct areas with an observed age-appropriate concern is sufficient
+    positive evidence, and nothing missing elsewhere can take it away. A child
+    under 36 months with a receptive concern and a functional concern is
+    CONFIRMED even though `conversation_narrative` begins at 36 months and the
+    social area can never be sampled for them.
+
+    Missing evidence must prevent a reassuring NEGATIVE conclusion. It must not
+    erase a positive one. Those are different jobs, and an earlier draft of
+    this docstring conflated them by claiming younger children could never
+    leave INDETERMINATE — the code was right; the sentence was not.
+
+    ## THEN INDETERMINATE, THEN NOT_OBSERVED
+
+    With fewer than two concerns observed, `NOT_OBSERVED` is a claim about the
+    child and may only be made when the required evidence can support it: every
+    required area sampled, and none of the non-concerning ones left uncertain.
+    Anything else is INDETERMINATE with its reasons.
     """
     concerning = additional.concerning_areas(record, policy=policy)
     if len(concerning) >= 2:
         return MULTI_AREA_CONFIRMED
-    unsampled = [a for a in policy.required_profile_areas
-                 if profile.area_status(record, a) == profile.NOT_ASSESSED]
-    if unsampled:
+    if _indeterminate_reasons(record, policy=policy, concerning=concerning):
         return MULTI_AREA_INDETERMINATE
     return MULTI_AREA_NOT_OBSERVED
 
 
-def multi_area_indeterminate_because(record, *,
+def multi_area_indeterminate_reasons(record, *,
                                      policy: policy_mod.BaselinePolicy
-                                     ) -> Optional[str]:
-    """Why `multi_area` is INDETERMINATE, or `None` if it is not."""
-    if multi_area_state(record, policy=policy) != MULTI_AREA_INDETERMINATE:
-        return None
-    causes = {profile.not_assessed_cause(record, a)
-              for a in policy.required_profile_areas}
-    recoverable = profile.NOT_ASSESSED_BUDGET_CONSUMED in causes
-    unprobeable = profile.NOT_ASSESSED_NO_AGE_APPROPRIATE_SKILL in causes
-    if recoverable and unprobeable:
-        return INDETERMINATE_BOTH
-    if recoverable:
-        return INDETERMINATE_BUDGET_CONSUMED
-    return INDETERMINATE_NO_AGE_APPROPRIATE_SKILL
+                                     ) -> Tuple[str, ...]:
+    """Every reason `multi_area` is INDETERMINATE; empty when it is not.
+
+    A tuple rather than one value: budget, inventory and uncertainty gaps
+    coexist routinely, and collapsing them would hide which ones a further
+    question could close.
+    """
+    concerning = additional.concerning_areas(record, policy=policy)
+    if len(concerning) >= 2:
+        return ()
+    return _indeterminate_reasons(record, policy=policy, concerning=concerning)
 
 
 def uncertain_areas(record) -> Tuple[str, ...]:
@@ -357,8 +410,8 @@ def baseline_summary(record, *, policy: Optional[
         # would have to invent one, and the invented one would be wrong.
         "multi_area": multi_area,
         "multi_area_is_determinate": multi_area != MULTI_AREA_INDETERMINATE,
-        "multi_area_indeterminate_because":
-            multi_area_indeterminate_because(record, policy=policy),
+        "multi_area_indeterminate_reasons": list(
+            multi_area_indeterminate_reasons(record, policy=policy)),
         "areas_with_concern": profile_part["areas_with_concern"],
 
         # THE THREE DISTINCTIONS, kept separable.
@@ -390,7 +443,8 @@ __all__ = [
     "MULTI_AREA_CONFIRMED", "MULTI_AREA_NOT_OBSERVED",
     "MULTI_AREA_INDETERMINATE", "MULTI_AREA_STATES",
     "INDETERMINATE_BUDGET_CONSUMED", "INDETERMINATE_NO_AGE_APPROPRIATE_SKILL",
-    "INDETERMINATE_BOTH", "multi_area_indeterminate_because",
+    "INDETERMINATE_UNCERTAINTY", "INDETERMINATE_REASONS",
+    "multi_area_indeterminate_reasons",
     "BaselineOutcomeError", "OutcomeResult",
     "target_band_support", "derive_outcome", "multi_area_state",
     "uncertain_areas", "baseline_summary",

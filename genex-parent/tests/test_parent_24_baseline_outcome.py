@@ -361,29 +361,201 @@ def test_an_unsampled_required_area_forces_indeterminate():
             assert state == O.MULTI_AREA_INDETERMINATE, (unsampled, state)
 
 
-def test_indeterminate_always_says_which_kind_of_gap():
+def test_indeterminate_always_names_at_least_one_gap():
     for _choice, _age, _pattern, record, _total in _all_paths():
         state = O.multi_area_state(record, policy=POLICY)
-        because = O.multi_area_indeterminate_because(record, policy=POLICY)
+        reasons = O.multi_area_indeterminate_reasons(record, policy=POLICY)
+        assert set(reasons) <= set(O.INDETERMINATE_REASONS)
+        assert list(reasons) == sorted(
+            reasons, key=O.INDETERMINATE_REASONS.index), "stable order"
         if state == O.MULTI_AREA_INDETERMINATE:
-            assert because in (O.INDETERMINATE_BUDGET_CONSUMED,
-                               O.INDETERMINATE_NO_AGE_APPROPRIATE_SKILL,
-                               O.INDETERMINATE_BOTH)
+            assert reasons, "indeterminate must say why"
         else:
-            assert because is None
+            assert reasons == ()
 
 
-def test_a_young_child_is_indeterminate_because_of_the_inventory():
-    """Measured: social begins at 36 months, so this cannot be a budget fix."""
+def test_all_three_indeterminacy_reasons_are_reachable():
+    seen = set()
+    for _choice, _age, _pattern, record, _total in _all_paths():
+        seen.update(O.multi_area_indeterminate_reasons(record, policy=POLICY))
+    assert seen == set(O.INDETERMINATE_REASONS), (
+        f"unreachable: {set(O.INDETERMINATE_REASONS) - seen}")
+
+
+def test_a_young_child_with_one_concern_is_indeterminate_by_inventory():
+    """Social begins at 36 months, so one concern cannot support a negative."""
     for age in (18, 24, 30):
         record, _total, _trace = _drive("two_three_words", age, ("yes",))
         assert O.multi_area_state(record, policy=POLICY) == \
             O.MULTI_AREA_INDETERMINATE
-        because = O.multi_area_indeterminate_because(record, policy=POLICY)
-        assert because in (O.INDETERMINATE_NO_AGE_APPROPRIATE_SKILL,
-                           O.INDETERMINATE_BOTH)
+        reasons = O.multi_area_indeterminate_reasons(record, policy=POLICY)
+        assert O.INDETERMINATE_NO_AGE_APPROPRIATE_SKILL in reasons
         summary = O.baseline_summary(record, policy=POLICY)
         assert B.AREA_SOCIAL in summary["areas_not_assessed_unprobeable"]
+
+
+# ---------------------------------------------------------------------------
+# 5b. THE PRECEDENCE CORRECTION — the founder's three cases, all under 36m
+#     where `conversation_narrative` cannot be sampled at all.
+# ---------------------------------------------------------------------------
+
+def _under_36m_record(age=24):
+    record = v2.start_baseline_v2(AREA, "two_three_words", age)
+    assert B.first_probe(AREA, B.AREA_SOCIAL, chronological_months=age) is None
+    assert B.not_assessed_cause(record, B.AREA_SOCIAL) == \
+        B.NOT_ASSESSED_NO_AGE_APPROPRIATE_SKILL
+    return record
+
+
+def _probe(record, area, answer, age=24):
+    probe = B.first_probe(AREA, area, chronological_months=age)
+    assert probe is not None
+    v2.record_profile_probe_v2(record, B.probe_question(record, probe), answer)
+
+
+def test_two_observed_concerns_confirm_even_when_social_is_unassessable():
+    """CASE 1. Positive evidence is never erased by a missing area.
+
+    Receptive concern + functional concern, child aged 24 months so the social
+    area can never be sampled for them. CONFIRMED regardless.
+    """
+    record = _under_36m_record()
+    _probe(record, B.AREA_RECEPTIVE, "no")
+    _probe(record, B.AREA_FUNCTIONAL, "no")
+
+    assert B.area_status(record, B.AREA_SOCIAL) == B.NOT_ASSESSED
+    assert len(A.concerning_areas(record, policy=POLICY)) == 2
+    assert O.multi_area_state(record, policy=POLICY) == O.MULTI_AREA_CONFIRMED
+    assert O.multi_area_indeterminate_reasons(record, policy=POLICY) == ()
+
+    summary = O.baseline_summary(record, policy=POLICY)
+    assert summary["multi_area"] == O.MULTI_AREA_CONFIRMED
+    assert summary["multi_area_is_determinate"] is True
+    assert summary["multi_area_indeterminate_reasons"] == []
+    # And the missing area is still reported honestly alongside it.
+    assert B.AREA_SOCIAL in summary["areas_not_assessed_unprobeable"]
+
+
+def test_confirmed_survives_every_kind_of_missing_evidence():
+    """CASE 1, generalised: unprobeable, budget-consumed and uncertain all at
+    once must not downgrade two observed concerns."""
+    record = _under_36m_record()
+    _probe(record, B.AREA_RECEPTIVE, "no")
+    _probe(record, B.AREA_FUNCTIONAL, "no")
+    # Add an uncertain answer in a concerning area, and leave intelligibility
+    # (a non-required fallback area) unsampled.
+    lower = B.downward_probe(AREA, B.AREA_RECEPTIVE, below_months=24,
+                             asked_months=[24])
+    v2.record_profile_probe_v2(record, B.probe_question(record, lower),
+                               "not_sure")
+    assert B.area_status(record, B.AREA_INTELLIGIBILITY) == B.NOT_ASSESSED
+    assert O.uncertain_areas(record) == (B.AREA_RECEPTIVE,)
+    assert O.multi_area_state(record, policy=POLICY) == O.MULTI_AREA_CONFIRMED
+
+
+def test_one_concern_with_social_unassessable_is_indeterminate():
+    """CASE 2. One observed concern cannot support a reassuring negative."""
+    record = _under_36m_record()
+    _probe(record, B.AREA_RECEPTIVE, "no")
+    _probe(record, B.AREA_FUNCTIONAL, "yes")
+
+    assert A.concerning_areas(record, policy=POLICY) == (B.AREA_RECEPTIVE,)
+    assert O.multi_area_state(record, policy=POLICY) == \
+        O.MULTI_AREA_INDETERMINATE
+    reasons = O.multi_area_indeterminate_reasons(record, policy=POLICY)
+    assert reasons == (O.INDETERMINATE_NO_AGE_APPROPRIATE_SKILL,)
+
+    summary = O.baseline_summary(record, policy=POLICY)
+    assert summary["areas_with_concern"] == [B.AREA_RECEPTIVE]
+    assert summary["multi_area_is_determinate"] is False
+
+
+def test_no_concerns_with_social_unassessable_is_indeterminate():
+    """CASE 3. `not_assessed` is never interpreted as non-concerning."""
+    record = _under_36m_record()
+    _probe(record, B.AREA_RECEPTIVE, "yes")
+    _probe(record, B.AREA_FUNCTIONAL, "yes")
+
+    assert A.concerning_areas(record, policy=POLICY) == ()
+    assert O.multi_area_state(record, policy=POLICY) == \
+        O.MULTI_AREA_INDETERMINATE
+    assert O.multi_area_indeterminate_reasons(record, policy=POLICY) == \
+        (O.INDETERMINATE_NO_AGE_APPROPRIATE_SKILL,)
+    summary = O.baseline_summary(record, policy=POLICY)
+    assert summary["multi_area"] != O.MULTI_AREA_NOT_OBSERVED
+
+
+def test_a_sampled_but_unknown_area_blocks_not_observed():
+    """The gap the sampled-or-not test missed.
+
+    All three required areas sampled, one concern, and the non-concerning
+    functional area holds only an `unknown`. That area could still turn out
+    concerning, so NOT_OBSERVED is not available.
+    """
+    record = v2.start_baseline_v2(AREA, "short_sentences", 48)
+    for area, answer in ((B.AREA_RECEPTIVE, "no"),
+                         (B.AREA_FUNCTIONAL, "not_sure"),
+                         (B.AREA_SOCIAL, "yes")):
+        _probe(record, area, answer, age=48)
+
+    for area in POLICY.required_profile_areas:
+        assert B.area_status(record, area) == B.ASSESSED
+    assert A.concerning_areas(record, policy=POLICY) == (B.AREA_RECEPTIVE,)
+    assert O.multi_area_state(record, policy=POLICY) == \
+        O.MULTI_AREA_INDETERMINATE
+    assert O.multi_area_indeterminate_reasons(record, policy=POLICY) == \
+        (O.INDETERMINATE_UNCERTAINTY,)
+
+
+def test_an_unknown_inside_an_already_concerning_area_is_not_a_reason():
+    """It is already counted; more certainty there cannot make a SECOND area
+    concerning."""
+    record = v2.start_baseline_v2(AREA, "short_sentences", 48)
+    for area, answer in ((B.AREA_RECEPTIVE, "no"),
+                         (B.AREA_FUNCTIONAL, "yes"),
+                         (B.AREA_SOCIAL, "yes")):
+        _probe(record, area, answer, age=48)
+    lower = B.downward_probe(AREA, B.AREA_RECEPTIVE, below_months=24,
+                             asked_months=[24])
+    v2.record_profile_probe_v2(record, B.probe_question(record, lower),
+                               "not_sure")
+    assert B.AREA_RECEPTIVE in O.uncertain_areas(record)
+    assert O.multi_area_state(record, policy=POLICY) == \
+        O.MULTI_AREA_NOT_OBSERVED
+
+
+def test_a_non_required_fallback_area_never_blocks_not_observed():
+    """Deliberate asymmetry: CONFIRMED counts any area, the negative is gated
+    on the required set, or NOT_OBSERVED would be unreachable."""
+    record = v2.start_baseline_v2(AREA, "short_sentences", 48)
+    for area, answer in ((B.AREA_RECEPTIVE, "yes"),
+                         (B.AREA_FUNCTIONAL, "yes"),
+                         (B.AREA_SOCIAL, "yes")):
+        _probe(record, area, answer, age=48)
+    assert B.area_status(record, B.AREA_INTELLIGIBILITY) == B.NOT_ASSESSED
+    assert O.multi_area_state(record, policy=POLICY) == \
+        O.MULTI_AREA_NOT_OBSERVED
+
+
+def test_a_concern_in_a_non_required_area_still_counts_toward_confirmed():
+    """The other half of the asymmetry: positive evidence counts anywhere."""
+    record = v2.start_baseline_v2(AREA, "short_sentences", 48)
+    _probe(record, B.AREA_RECEPTIVE, "no", age=48)
+    _probe(record, B.AREA_INTELLIGIBILITY, "no", age=48)
+    assert set(A.concerning_areas(record, policy=POLICY)) == \
+        {B.AREA_RECEPTIVE, B.AREA_INTELLIGIBILITY}
+    assert O.multi_area_state(record, policy=POLICY) == O.MULTI_AREA_CONFIRMED
+
+
+def test_confirmed_is_never_downgraded_on_any_real_path():
+    """Swept: two observed concerns always CONFIRM, whatever is missing."""
+    checked = 0
+    for _choice, _age, _pattern, record, _total in _all_paths():
+        if len(A.concerning_areas(record, policy=POLICY)) >= 2:
+            assert O.multi_area_state(record, policy=POLICY) == \
+                O.MULTI_AREA_CONFIRMED
+            checked += 1
+    assert checked > 0
 
 
 def test_confirmed_requires_two_genuinely_sampled_concerning_areas():
