@@ -590,6 +590,135 @@ def test_r5_does_not_fire_at_the_bottom_of_an_area():
     assert A._clarification_step(record, policy=POLICY) is None
 
 
+def test_r5_gives_each_unresolved_area_one_clarification_before_any_second():
+    """BREADTH BEFORE DEPTH. The founder's correction, on the 48m all-`not_sure`
+    path that previously spent the whole allowance descending receptive."""
+    record, total, trace = run_interview("two_three_words", 48,
+                                         _answer_cycle(("not_sure",)))
+    assert total == 9
+    r5 = [(t[4], t[2]) for t in _asks(trace)
+          if t[3] == A.R5_UNCERTAINTY_CLARIFICATION]
+    assert len(r5) == 3
+    areas = [a for a, _m in r5]
+    assert len(set(areas)) >= 2, (
+        f"all three clarifications went to one area: {r5}")
+    # Deepest-first is the thing being forbidden: receptive already held three
+    # probes from normal descent, so it must not be clarified again first.
+    assert len(B.area_evidence(record, B.AREA_RECEPTIVE)) >= 3
+    assert areas[0] != B.AREA_RECEPTIVE
+
+
+def test_r5_selects_the_shallowest_unresolved_area():
+    """The rule, isolated: equal eligibility, unequal depth."""
+    record = v2.start_baseline_v2(AREA, "short_sentences", 48)
+    # receptive sampled twice, functional once — both unresolved.
+    probe = B.first_probe(AREA, B.AREA_RECEPTIVE, chronological_months=48)
+    v2.record_profile_probe_v2(record, B.probe_question(record, probe),
+                               "not_sure")
+    lower = B.downward_probe(AREA, B.AREA_RECEPTIVE, below_months=probe.months,
+                             asked_months=[probe.months])
+    v2.record_profile_probe_v2(record, B.probe_question(record, lower),
+                               "not_sure")
+    fprobe = B.first_probe(AREA, B.AREA_FUNCTIONAL, chronological_months=48)
+    v2.record_profile_probe_v2(record, B.probe_question(record, fprobe),
+                               "not_sure")
+
+    assert set(A.unresolved_sampled_areas(record, policy=POLICY)) == \
+        {B.AREA_RECEPTIVE, B.AREA_FUNCTIONAL}
+    step = A._clarification_step(record, policy=POLICY)
+    assert step is not None
+    assert step.profile_area == B.AREA_FUNCTIONAL, "the shallower one first"
+
+
+def test_r5_breaks_a_depth_tie_by_area_priority():
+    record = v2.start_baseline_v2(AREA, "short_sentences", 48)
+    for area in (B.AREA_FUNCTIONAL, B.AREA_RECEPTIVE):
+        probe = B.first_probe(AREA, area, chronological_months=48)
+        v2.record_profile_probe_v2(record, B.probe_question(record, probe),
+                                   "not_sure")
+    step = A._clarification_step(record, policy=POLICY)
+    assert step is not None
+    assert step.profile_area == POLICY.required_profile_areas[0]
+
+
+def test_r5_never_samples_an_unassessed_area():
+    """R3 owns unassessed areas; R5 only clarifies what was already sampled."""
+    record = v2.start_baseline_v2(AREA, "short_sentences", 48)
+    probe = B.first_probe(AREA, B.AREA_RECEPTIVE, chronological_months=48)
+    v2.record_profile_probe_v2(record, B.probe_question(record, probe),
+                               "not_sure")
+    assert B.area_status(record, B.AREA_FUNCTIONAL) == B.NOT_ASSESSED
+    for _ in range(4):
+        step = A._clarification_step(record, policy=POLICY)
+        if step is None:
+            break
+        assert step.profile_area == B.AREA_RECEPTIVE
+        v2.record_profile_probe_v2(record, step.question, "not_sure")
+    assert B.area_status(record, B.AREA_FUNCTIONAL) == B.NOT_ASSESSED
+    assert A.unresolved_sampled_areas(record, policy=POLICY) == \
+        (B.AREA_RECEPTIVE,)
+
+
+def test_r5_never_touches_an_unprobeable_area():
+    for choice, age in itertools.product(CHOICES, (12, 18, 24, 30, 35)):
+        record, _total, trace = run_interview(choice, age,
+                                              _answer_cycle(("not_sure",)))
+        for _o, _c, _m, reason_code, area, _ans in _asks(trace):
+            if reason_code == A.R5_UNCERTAINTY_CLARIFICATION:
+                assert area != B.AREA_SOCIAL, (choice, age)
+        assert B.not_assessed_cause(record, B.AREA_SOCIAL) == \
+            B.NOT_ASSESSED_NO_AGE_APPROPRIATE_SKILL
+
+
+def test_r5_never_deepens_an_area_while_a_shallower_one_is_clarifiable():
+    """THE INVARIANT, replayed at every R5 decision on every path.
+
+    Stated this way rather than as "the three clarifications must land in
+    different areas", because they legitimately may not. On the 24m
+    all-`not_sure` path normal routing leaves receptive with four probes and
+    functional with one, so functional takes all three additional questions
+    while CATCHING UP and never overtakes receptive. That is breadth, not
+    absorption. What must never happen is deepening an area while a shallower
+    unresolved area still had a clarifier available.
+    """
+    checked = 0
+    for choice, age in itertools.product(CHOICES, AGES):
+        for pattern in (("not_sure",), ("not_sure", "no"),
+                        ("not_sure", "yes"), ("no", "not_sure")):
+            record, total, trace = run_interview(choice, age,
+                                                 _answer_cycle(pattern))
+            r5_ordinals = [t[0] for t in _asks(trace)
+                           if t[3] == A.R5_UNCERTAINTY_CLARIFICATION]
+            if not r5_ordinals:
+                continue
+            for ordinal in r5_ordinals:
+                prefix = v2.start_baseline_v2(AREA, choice, age)
+                replay = _answer_cycle(pattern)
+                for i in range(ordinal - 1):
+                    s = A.plan_interview_step(prefix, policy=POLICY,
+                                              asked_total=i)
+                    ans = replay(s.question)
+                    if s.channel == v2.CHANNEL_A:
+                        if s.enters_band is not None:
+                            prefix.bands_entered.append(s.enters_band)
+                        v2.record_answer_v2(prefix, s.question, ans)
+                    else:
+                        v2.record_profile_probe_v2(prefix, s.question, ans)
+                chosen = A._clarification_step(prefix, policy=POLICY)
+                assert chosen is not None
+                depths = {}
+                for area in A.unresolved_sampled_areas(prefix, policy=POLICY):
+                    evidence = B.area_evidence(prefix, area)
+                    if B.downward_probe(
+                            AREA, area, below_months=evidence[0].months,
+                            asked_months=[e.months for e in evidence]):
+                        depths[area] = len(evidence)
+                assert depths[chosen.profile_area] == min(depths.values()), (
+                    choice, age, pattern, ordinal, chosen.profile_area, depths)
+                checked += 1
+    assert checked > 0, "non-vacuity: R5 must have fired somewhere"
+
+
 def test_r5_is_channel_b_only():
     """R2 owns Channel-A uncertainty and outranks R5."""
     import inspect

@@ -30,7 +30,8 @@ three-tier budget correction closed on the Channel-A side.
     R3  required profile-area recovery   budget caused the gap AND a
                                          difficulty has already been found
     R4  multi-area differentiation       >=2 sampled areas already concerning
-    R5  uncertainty clarification        a downward clarifier that still helps
+    R5  uncertainty clarification        a downward clarifier that still
+                                         helps, breadth before depth
 
 A target is what the interview is FOR: it is the only output that reaches the
 Pilot and becomes a goal. Profile breadth informs a clinician but generates
@@ -272,10 +273,7 @@ def _differentiation_step(record, *, policy: policy_mod.BaselinePolicy
     areas = concerning_areas(record, policy=policy)
     if len(areas) < 2:
         return None
-    ordered = tuple(policy.required_profile_areas) + tuple(
-        a for a in profile.AREA_SUBDOMAIN
-        if a not in policy.required_profile_areas)
-    for area in ordered:
+    for area in _area_priority(policy):
         if area not in areas:
             continue
         evidence = profile.area_evidence(record, area)
@@ -297,38 +295,77 @@ def _differentiation_step(record, *, policy: policy_mod.BaselinePolicy
 # R5 — uncertainty clarification
 # ---------------------------------------------------------------------------
 
+def _area_priority(policy: policy_mod.BaselinePolicy) -> Tuple[str, ...]:
+    """Required areas in policy order, then any remaining area."""
+    return tuple(policy.required_profile_areas) + tuple(
+        a for a in profile.AREA_SUBDOMAIN
+        if a not in policy.required_profile_areas)
+
+
+def unresolved_sampled_areas(record, *, policy: policy_mod.BaselinePolicy
+                             ) -> Tuple[str, ...]:
+    """SAMPLED areas whose lowest evidence is still `unknown`, in priority order.
+
+    Sampled is the operative word: an area with no evidence is not unresolved,
+    it is unassessed, and R3 owns that case. An area whose lowest answer is a
+    real answer is bracketed by it and needs nothing.
+    """
+    out = []
+    for area in _area_priority(policy):
+        evidence = profile.area_evidence(record, area)
+        if not evidence:
+            continue
+        if evidence[0].state == v2.STATE_UNKNOWN:
+            out.append(area)
+    return tuple(out)
+
+
 def _clarification_step(record, *, policy: policy_mod.BaselinePolicy
                         ) -> Optional[AdditionalStep]:
-    """A downward clarifier beneath a recorded `unknown`.
+    """A downward clarifier beneath a recorded `unknown`. BREADTH BEFORE DEPTH.
 
     Scoped to CHANNEL B. The Channel-A equivalent is R2, which owns target and
     floor uncertainty and outranks this; giving R5 a Channel-A path too would
     let a lower-priority reason spend a question on the thing a higher-priority
-    reason had already declined.
+    reason had already declined. And R5 never SAMPLES an area — an unassessed
+    area is R3's case, and an unprobeable one is nobody's.
 
     Material only beneath an `unknown` at the area's LOWEST sampled band. An
     unknown above an answered band is already bracketed by that answer.
+
+    ## ONE CLARIFICATION EACH BEFORE ANY SECOND
+
+    An earlier draft took the first unresolved area in priority order every
+    time, so an all-`not_sure` interview spent the whole allowance descending
+    receptive — 12, then 4, then 2 — while functional and social kept their
+    unknowns untouched. Three questions bought depth in one area and nothing
+    anywhere else.
+
+    The selection is therefore the unresolved area with the FEWEST probes,
+    tie-broken by area priority. Applied repeatedly that gives each unresolved
+    sampled area one clarification before any gets a second, and once they are
+    level the tie-break deepens the highest-priority one — which is the
+    approved order, derived from recorded state rather than from a counter this
+    module would have to persist.
     """
-    ordered = tuple(policy.required_profile_areas) + tuple(
-        a for a in profile.AREA_SUBDOMAIN
-        if a not in policy.required_profile_areas)
-    for area in ordered:
+    candidates = []
+    for area in unresolved_sampled_areas(record, policy=policy):
         evidence = profile.area_evidence(record, area)
-        if not evidence:
-            continue
-        lowest = evidence[0]
-        if lowest.state != v2.STATE_UNKNOWN:
-            continue
         probe = profile.downward_probe(
-            record.area_id, area, below_months=lowest.months,
+            record.area_id, area, below_months=evidence[0].months,
             asked_months=[e.months for e in evidence])
         if probe is None:
             continue
-        return AdditionalStep(kind=ASK,
-                              reason_code=R5_UNCERTAINTY_CLARIFICATION,
-                              channel=v2.CHANNEL_B, profile_area=area,
-                              question=profile.probe_question(record, probe))
-    return None
+        candidates.append((len(evidence), area, probe))
+    if not candidates:
+        return None
+    priority = _area_priority(policy)
+    depth, area, probe = min(candidates,
+                             key=lambda c: (c[0], priority.index(c[1])))
+    return AdditionalStep(kind=ASK,
+                          reason_code=R5_UNCERTAINTY_CLARIFICATION,
+                          channel=v2.CHANNEL_B, profile_area=area,
+                          question=profile.probe_question(record, probe))
 
 
 # ---------------------------------------------------------------------------
@@ -473,7 +510,7 @@ __all__ = [
     "STOP_NORMAL_TARGET_NOT_REACHED",
     "PHASE_CHANNEL_A", "PHASE_PROFILE_NORMAL", "PHASE_ADDITIONAL",
     "BaselineAdditionalError", "AdditionalStep",
-    "concerning_areas", "difficulty_found",
+    "concerning_areas", "difficulty_found", "unresolved_sampled_areas",
     "plan_additional_step", "plan_interview_step",
     "phase_for", "additional_summary",
 ]
