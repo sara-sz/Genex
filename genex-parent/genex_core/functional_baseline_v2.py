@@ -269,6 +269,19 @@ class BaselineRecordV2:
     #: reason as the policy keys.
     profile_probes: Dict[str, "BaselineSkillEvidence"] = field(
         default_factory=dict)
+    #: One entry per question asked BEYOND the policy's normal target, in the
+    #: order asked, each carrying the deterministic reason that justified it.
+    #:
+    #: Recorded rather than derived. A later reader asking "why did this
+    #: interview run to nine questions" cannot reconstruct the answer from the
+    #: evidence alone: the same final record is reachable by different reason
+    #: sequences, and the planner's inputs (the budget at that moment) are gone
+    #: by the time anyone asks. Deriving it would be a guess presented as a
+    #: record.
+    #:
+    #: Carries NO child data and no skill identity — a question ordinal, a
+    #: reason code and a channel. Also OMITTED when empty.
+    additional_reasons: List[Dict[str, Any]] = field(default_factory=list)
 
     # -- track ------------------------------------------------------------
 
@@ -511,6 +524,38 @@ def record_profile_probe_v2(record: BaselineRecordV2, question: Dict[str, Any],
     return record
 
 
+#: The exact key set of one `additional_reasons` entry.
+ADDITIONAL_REASON_KEYS: Tuple[str, ...] = ("question_number", "reason_code",
+                                           "channel")
+
+#: Which channel an additional question was spent on.
+CHANNEL_A = "A"
+CHANNEL_B = "B"
+
+
+def record_additional_reason_v2(record: BaselineRecordV2, *,
+                               question_number: int, reason_code: str,
+                               channel: str) -> BaselineRecordV2:
+    """Append one justification for a question beyond the normal target.
+
+    ACCOUNTING IS IN QUESTIONS, NOT REASONS. One entry per question asked, so
+    a reason that takes three questions to satisfy appears three times and
+    costs three. Counting reason EVENTS instead would let a single
+    "band completion" justify an unbounded number of questions, which is
+    precisely the budget leak the three-tier correction closed.
+    """
+    if channel not in (CHANNEL_A, CHANNEL_B):
+        raise BaselineV2Error("an additional question must name its channel")
+    if not str(reason_code or "").strip():
+        raise BaselineV2Error("an additional question must carry a reason code")
+    record.additional_reasons.append({
+        "question_number": int(question_number),
+        "reason_code": str(reason_code),
+        "channel": str(channel),
+    })
+    return record
+
+
 
 def finalize_v2(record: BaselineRecordV2) -> BaselineRecordV2:
     """Derive the month-level fields FROM skill evidence, for compatibility.
@@ -673,6 +718,11 @@ def record_to_state_v2(record: BaselineRecordV2) -> Dict[str, Any]:
         state["profile_probes"] = sorted(
             (_skill_to_state(e) for e in record.profile_probes.values()),
             key=lambda s: (s["months"], s["subdomain"], s["milestone"]))
+    if record.additional_reasons:
+        # NOT sorted. The order IS the content: it is the sequence in which the
+        # interview exceeded its normal target.
+        state["additional_reasons"] = [dict(r)
+                                       for r in record.additional_reasons]
     return state
 
 
@@ -723,6 +773,12 @@ def record_from_state_v2(stored: Dict[str, Any]) -> BaselineRecordV2:
             state=row["state"],
         )
         record.profile_probes[probe.key] = probe
+    for entry in (stored.get("additional_reasons") or []):
+        record.additional_reasons.append({
+            "question_number": int(entry["question_number"]),
+            "reason_code": str(entry["reason_code"]),
+            "channel": str(entry["channel"]),
+        })
     for row in (stored.get("skills") or []):
         evidence = BaselineSkillEvidence(
             domain=row["domain"],

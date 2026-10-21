@@ -105,6 +105,18 @@ AREA_SUBDOMAIN: Dict[str, str] = {
 ASSESSED = "assessed"
 NOT_ASSESSED = "not_assessed"
 
+#: WHY an area is `not_assessed`. Slice 5 measured these as two genuinely
+#: different causes over 3072 paths — social was unassessed 1920 times because
+#: the inventory begins at 36 months and 556 times because Channel A had spent
+#: the budget — and only the second is ever recoverable by an additional
+#: question. Collapsing them would make Slice 6 spend a scarce question on a
+#: future-only probe that cannot indicate concern.
+#:
+#: Derivational. Whether either becomes a Parent-facing label is Slice 9's
+#: decision, not this module's.
+NOT_ASSESSED_NO_AGE_APPROPRIATE_SKILL = "not_assessed_no_age_appropriate_skill"
+NOT_ASSESSED_BUDGET_CONSUMED = "not_assessed_budget_consumed"
+
 #: Step kinds.
 ASK = "ASK"
 STOP = "STOP"
@@ -322,6 +334,36 @@ def area_status(record: v2.BaselineRecordV2, profile_area: str) -> str:
     return ASSESSED if area_evidence(record, profile_area) else NOT_ASSESSED
 
 
+def not_assessed_cause(record: v2.BaselineRecordV2,
+                       profile_area: str) -> Optional[str]:
+    """Why this area holds no evidence, or `None` if it holds some.
+
+    The discriminator is simply whether an age-appropriate canonical skill
+    EXISTS. If one does, normal breadth routing would have taken it the moment
+    a slot was free — breadth precedes depth and precedes every fallback tier —
+    so the only way an area with available coverage stays empty is that no slot
+    was ever free. If one does not, no number of additional questions can
+    change the answer, because rule 4 forbids manufacturing coverage.
+    """
+    if area_evidence(record, profile_area):
+        return None
+    if first_probe(record.area_id, profile_area,
+                   chronological_months=int(record.chronological_months)) is None:
+        return NOT_ASSESSED_NO_AGE_APPROPRIATE_SKILL
+    return NOT_ASSESSED_BUDGET_CONSUMED
+
+
+def recoverable_areas(record: v2.BaselineRecordV2, *,
+                      policy: policy_mod.BaselinePolicy) -> Tuple[str, ...]:
+    """Required areas an additional question could still legitimately sample.
+
+    Exactly the `not_assessed_budget_consumed` ones, in the policy's order.
+    """
+    return tuple(
+        a for a in policy.required_profile_areas
+        if not_assessed_cause(record, a) == NOT_ASSESSED_BUDGET_CONSUMED)
+
+
 def area_direction(record: v2.BaselineRecordV2, profile_area: str,
                    *, chronological_months: int) -> Optional[str]:
     """DESCEND on concern or uncertainty, ASCEND when everything is clear.
@@ -500,6 +542,7 @@ def profile_summary(record: v2.BaselineRecordV2, *,
                                                      chronological)]
         areas[profile_area] = {
             "status": area_status(record, profile_area),
+            "not_assessed_cause": not_assessed_cause(record, profile_area),
             "assessed": bool(evidence),
             "probes": len(evidence),
             "concern": bool(concerns),
@@ -521,13 +564,19 @@ def profile_summary(record: v2.BaselineRecordV2, *,
                                      if not v["assessed"]),
         "areas_with_concern": sorted(a for a, v in areas.items()
                                      if v["concern"]),
+        "areas_recoverable": list(recoverable_areas(record, policy=policy)),
+        "areas_unprobeable": sorted(
+            a for a, v in areas.items()
+            if v["not_assessed_cause"] == NOT_ASSESSED_NO_AGE_APPROPRIATE_SKILL),
         "probes_total": len(record.profile_probes),
     }
 
 
 __all__ = [
     "AREA_RECEPTIVE", "AREA_FUNCTIONAL", "AREA_SOCIAL", "AREA_INTELLIGIBILITY",
-    "AREA_SUBDOMAIN", "ASSESSED", "NOT_ASSESSED", "ASK", "STOP",
+    "AREA_SUBDOMAIN", "ASSESSED", "NOT_ASSESSED",
+    "NOT_ASSESSED_NO_AGE_APPROPRIATE_SKILL", "NOT_ASSESSED_BUDGET_CONSUMED",
+    "not_assessed_cause", "recoverable_areas", "ASK", "STOP",
     "PROBE_FIRST", "PROBE_DOWNWARD", "PROBE_UPWARD", "DESCEND", "ASCEND",
     "STOP_NORMAL_BUDGET_SPENT", "STOP_NO_COVERAGE_AVAILABLE",
     "BaselineProfileError", "ProfileProbeRef", "ProfileStep",
