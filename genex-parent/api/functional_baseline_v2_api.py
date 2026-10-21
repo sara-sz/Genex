@@ -393,15 +393,32 @@ def _client_question(question: Optional[Dict[str, Any]]
     needs.
 
     `skill_key` IS returned, because the client must echo it back on `/answer` —
-    that is the whole retry guard. It is an opaque identity string built from
-    the question's own fields and tells the client nothing it was not just
-    shown.
+    that is the whole retry guard.
+
+    ## `months` IS WITHHELD — PRE-DEPLOY CLEANUP
+
+    It used to be returned alongside the question. A canonical band month is a
+    DEVELOPMENTAL-AGE figure, and a caregiver reading "24" beside a question
+    about their thirty-month-old reads it as a verdict, whatever the label says.
+    Chronological age is legitimate routing context; a developmental month in
+    the browser is an interpretation we never intended to publish.
+
+    Nothing client-side needs it: the question is identified by `skill_key` and
+    presented by `milestone` and `parent_explanation`. The canonical month is
+    unchanged server-side.
+
+    ## KNOWN RESIDUE, REPORTED NOT FIXED
+
+    `skill_key` is `skill_key(domain, subdomain, months, milestone)` joined by a
+    unit separator, so a client that splits it recovers the month — and the
+    subdomain this function deliberately withholds. The docstring above once
+    claimed it "tells the client nothing it was not just shown"; that was
+    wrong.
     """
     if question is None:
         return None
     return {
         "skill_key": question["skill_key"],
-        "months": question["months"],
         "milestone": question["milestone"],
         "parent_explanation": question.get("parent_explanation", ""),
     }
@@ -419,12 +436,29 @@ def _band_progress(record: BaselineRecordV2) -> List[Dict[str, Any]]:
     Counts rather than per-skill states keeps this view the same shape as v1's
     `answers_recorded`: enough for a progress indicator without re-serving
     clinical content back to the client.
+
+    ## `position`, NOT `months` — PRE-DEPLOY CLEANUP
+
+    This used to emit the canonical band month, which put a DEVELOPMENTAL-AGE
+    figure in a caregiver's browser. Chronological age is legitimate routing
+    context; a developmental month is an interpretation, and `18` beside a
+    30-month-old's progress bar reads as "your child is at eighteen months"
+    however it was labelled. That is the `dev_age` mistake the whole v2 design
+    exists to avoid, arriving through a progress indicator.
+
+    `position` is the 1-based ordinal of the band in the order the traversal
+    entered it. It is what a progress display actually needs — which step of
+    how many — and it reveals order, not developmental age.
+
+    The canonical months are UNCHANGED server-side: `record.bands_entered`
+    still holds them, the traversal still routes on them, and the A2 v2
+    projection still sends them. Only the browser stops receiving them.
     """
     out = []
-    for months in record.bands_entered:
+    for position, months in enumerate(record.bands_entered, start=1):
         assessment = band_assessment(record, months)
         out.append({
-            "months": int(months),
+            "position": position,
             "assessed": len(assessment.assessed),
             "total": assessment.total_skills,
             "complete": assessment.assessment_complete,
@@ -437,7 +471,8 @@ def view(doc: Dict[str, Any], domain: str) -> Dict[str, Any]:
     """What a client may see about a v2 baseline.
 
     Deliberately WITHOUT `routing_anchor_months`, `demonstrated_months`,
-    `not_demonstrated_months`, the track, and the per-skill states. Those are
+    `not_demonstrated_months`, the canonical band months, the track, and the
+    per-skill states. Those are
     server-side provenance for the projection path; a raw anchor number in a
     parent UI would be read as a developmental age, which is what that field's
     own naming comment exists to prevent.

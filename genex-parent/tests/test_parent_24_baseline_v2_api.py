@@ -160,12 +160,27 @@ MIXED_30M = {
 }
 
 
+def _months_of(client_question):
+    """The canonical month, recovered from the skill key for test assertions.
+
+    Deliberately NOT read from the response: the parent payload must not carry
+    a developmental month, and a test that read one from there would be
+    asserting the leak back into existence.
+    """
+    return int(client_question["skill_key"].split("\x1f")[2])
+
+
 def _drive(session_id, overrides=None, auth=AUTH_A, limit=40):
     """Answer every question the HTTP handler offers. Returns the full trace.
 
     Each element is `(months, milestone, answer, response_json)`, so a test can
     assert over what was ACTUALLY ASKED rather than over what the engine would
     have asked if called directly.
+
+    `months` comes from the SKILL KEY, not from the response: the client
+    payload no longer carries a developmental month. The canonical month is
+    still the third field of the key, which is itself a reported residue — see
+    `_client_question`.
     """
     overrides = overrides or {}
     trace = []
@@ -178,7 +193,7 @@ def _drive(session_id, overrides=None, auth=AUTH_A, limit=40):
                 value = answer
         response = _answer(session_id, question["skill_key"], value, auth=auth)
         assert response.status_code == 200, response.text
-        trace.append((question["months"], question["milestone"], value,
+        trace.append((_months_of(question), question["milestone"], value,
                       response.json()))
         view = response.json()
     return trace
@@ -206,7 +221,9 @@ def test_http_asks_every_declared_sibling_in_the_30_month_band():
     # The entry descriptor says where to START ASKING: `two_three_words` anchors
     # below 30 months, so the traversal begins at 24 and must finish that band
     # before it may move.
-    assert first["months"] == 24
+    assert _months_of(first) == 24
+    assert "months" not in first, (
+        "the parent payload must not carry a developmental month")
 
     trace = _drive(sid, MIXED_30M)
     asked = [(months, milestone) for months, milestone, _, _ in trace]
@@ -214,8 +231,13 @@ def test_http_asks_every_declared_sibling_in_the_30_month_band():
     # Every 24-month declared skill was handled before the band moved.
     at_24 = [m for months, m in asked if months == 24]
     assert at_24, "the entry band was never asked"
+    # Band identity is INTERNAL and is asserted against the stored record; the
+    # response carries only an ordinal position.
+    assert 24 in _reload(uid, sid)[
+        baseline_v2_api.CANONICAL_STATE_KEY_V2][SLP]["bands_entered"]
     view_24 = next(r for _, _, _, r in trace)
-    assert [b for b in view_24["bands"] if b["months"] == 24]
+    assert view_24["bands"], "progress must still be reported"
+    assert all("months" not in b for b in view_24["bands"])
 
     # All FOUR 30-month siblings were asked, each exactly once.
     at_30 = [m for months, m in asked if months == 30]
@@ -225,7 +247,10 @@ def test_http_asks_every_declared_sibling_in_the_30_month_band():
         assert any(fragment in m for m in at_30), f"{fragment} was never asked"
 
     final = _get(sid).json()
-    band_30 = next(b for b in final["bands"] if b["months"] == 30)
+    entered = _reload(uid, sid)[
+        baseline_v2_api.CANONICAL_STATE_KEY_V2][SLP]["bands_entered"]
+    band_30 = final["bands"][entered.index(30)]
+    assert band_30["position"] == entered.index(30) + 1
     assert band_30["total"] == 4
     assert band_30["assessed"] == 4
     # The two questions v2 exists to keep apart.
@@ -267,11 +292,13 @@ def test_an_unknown_answer_does_not_advance_the_ladder():
     _drive(sid, MIXED_30M)
 
     view = _get(sid).json()
-    entered = [b["months"] for b in view["bands"]]
+    entered = _reload(uid, sid)[
+        baseline_v2_api.CANONICAL_STATE_KEY_V2][SLP]["bands_entered"]
     assert 30 in entered
     assert not [m for m in entered if m > 30], entered
+    assert len(view["bands"]) == len(entered)
 
-    band_30 = next(b for b in view["bands"] if b["months"] == 30)
+    band_30 = view["bands"][entered.index(30)]
     assert band_30["complete"] is True and band_30["mastered"] is False
 
 

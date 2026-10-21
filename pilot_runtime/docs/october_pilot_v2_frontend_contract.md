@@ -162,8 +162,8 @@ describe the *area*, not the assessment algorithm. **Do not branch on it.**
  "baseline_version": "parent-2.4-functional-baseline-v2",
  "entry_choice_id": "many_single_words",
  "finalized": true, "status": "BOUNDED", "skills_assessed": 2,
- "bands": [{"months": 18, "assessed": 1, "total": 1, "complete": true,  "mastered": true},
-           {"months": 24, "assessed": 1, "total": 1, "complete": true,  "mastered": false}],
+ "bands": [{"position": 1, "assessed": 1, "total": 1, "complete": true,  "mastered": true},
+           {"position": 2, "assessed": 1, "total": 1, "complete": true,  "mastered": false}],
  "current_question": null,
  "ready_to_finalize": false,
  "updated_at": "2026-10-08T17:26:54.781802+00:00",
@@ -172,7 +172,38 @@ describe the *area*, not the assessment algorithm. **Do not branch on it.**
 ```
 
 `current_question` when present:
-`{ skill_key, months, milestone, parent_explanation }`.
+`{ skill_key, milestone, parent_explanation }`.
+
+### BREAKING for the Parent dev UI — developmental months removed
+
+Two fields previously carried a canonical **developmental band month** into the
+browser and have been **removed**:
+
+| Was | Now |
+|---|---|
+| `bands[].months` | `bands[].position` — 1-based ordinal in the order bands were entered |
+| `current_question.months` | *gone*; nothing replaces it |
+
+Chronological age is legitimate routing context. A developmental band month is an
+*interpretation*, and `18` beside a progress bar reads as a verdict about the child
+however it is labelled — the `dev_age` mistake arriving through a progress
+indicator.
+
+**Migration:** anything that used `months` for ordering or progress should use
+`position`. Do **not** substitute a field that indirectly reveals the band.
+`bands[]` remains in entry order, so `position` is redundant with the array index
+and either may be used.
+
+The canonical months are **unchanged server-side** — the record stores them, the
+traversal routes on them, and the A2 v2 projection still sends them (§4). Only the
+browser stops receiving them.
+
+**Known residue:** `skill_key` is `domain · subdomain · months · milestone` joined
+by `U+001F`, so splitting it recovers the month and the subdomain. It cannot be
+changed here — the client echoes it on `/answer` and that is the entire retry guard
+(§3), so it is a frozen request contract rather than a display. **Clients must not
+parse `skill_key`.** Treat it as opaque: echo it back, never decode it, and never
+render any part of it.
 
 ### `outcome` — ADDITIVE, present only once `finalized` is true
 

@@ -932,7 +932,10 @@ def test_a_withheld_projection_is_a_409_carrying_the_finding():
     """
     base = _drive_v2_over_http(
         "s-withheld", "uid-proj-a", "no_words_yet",
-        lambda q: "sometimes" if q["months"] <= 9 else "yes")
+        # Month recovered from the skill key: the parent payload no longer
+        # carries one.
+        lambda q: ("sometimes"
+                   if int(q["skill_key"].split("\x1f")[2]) <= 9 else "yes"))
     result = _outcome_of("uid-proj-a", "s-withheld")
     # ASSERTED, not skipped. A skip here would let the one end-to-end proof of
     # the slice-8 block go quietly vacuous if routing ever changed.
