@@ -498,3 +498,417 @@ def test_no_workflow_route_logs_a_resource_identifier(wf):
     assert wf.child_a not in rendered, "a child id reached a log line"
     assert "Fictional-sentinel-XYZ" not in rendered, "goal text reached a log"
     assert "/pilot/children/{child_id}/goals" in rendered
+
+
+# ===========================================================================
+# TRACK 3 SLICE 3C — the RTM enrollment surface over HTTP
+# ===========================================================================
+#
+# Four routes, one per step of the pilot order:
+#
+#   POST /pilot/children/{child_id}/rtm-episodes      provider (managing)
+#   POST /pilot/rtm-episodes/{episode_id}/consent     AUTHORIZED CAREGIVER
+#                                                     (or provider -> proxy)
+#   POST /pilot/rtm-episodes/{episode_id}/setup       provider (managing)
+#   GET  /pilot/rtm-episodes/{episode_id}/readiness   provider (managing)
+#
+# The caregiver path reuses the 0.5A caregiver identity that already
+# authenticates the observation route — a bootstrapped auth subject resolving
+# to a Caregiver record. No second identity bridge is introduced.
+
+
+#: The ONE constant refusal body, read from the transport rather than retyped
+#: so these tests cannot assert a stale literal.
+from pilot_backend.transport.wsgi_app import (  # noqa: E402
+    _ERROR_BODIES,
+    HTTP_FORBIDDEN,
+)
+
+_FORBIDDEN_BODY = _ERROR_BODIES[HTTP_FORBIDDEN]
+
+
+def _clinical_goal(wf, child, token="hannah"):
+    created = post(wf, f"/pilot/children/{child}/goals", token,
+                   {"edit_type": "authored_fresh",
+                    "text": "Fictional functional target",
+                    "reason": "Fictional clinical rationale"})
+    assert created[0] == 200, created
+    return created[1]["goal"]
+
+
+def _open_episode(wf, child=None, token="hannah", caregiver_token="cg-a",
+                  **overrides):
+    child = child or wf.child_a
+    # The goal must be authored by the SAME clinician who will open the
+    # episode: both operations require that child's managing clinician.
+    goal = _clinical_goal(wf, child, token=token)
+    body = {
+        "goal_ids": [goal["goal_id"]],
+        "authorized_caregiver_id": wf.principal(
+            caregiver_token).application_id,
+        "clinical_indication": "Fictional expressive-language delay",
+        "clinical_rationale": "Monitoring home practice between visits.",
+        "expected_duration_months": 6,
+        "order_reference": "fictional-order-001",
+    }
+    body.update(overrides)
+    return post(wf, f"/pilot/children/{child}/rtm-episodes", token, body), goal
+
+
+CONSENT_BODY = {
+    "authority": "parent",
+    "consent_document_id": "genex-rtm-consent",
+    "consent_document_version": "v1.0",
+    "acknowledged_monitoring": True,
+    "acknowledged_billing_and_cost_sharing": True,
+    "acknowledged_withdrawal_right": True,
+    "acknowledged_communication_expectations": True,
+    "acknowledged_response_expectations": True,
+}
+
+
+# -- the happy path, in order ----------------------------------------------
+
+def test_the_enrollment_sequence_works_over_http(wf):
+    """enrollment -> consent -> setup -> ready, each over its own route."""
+    (status, body, _), goal = _open_episode(wf)
+    assert status == 200, body
+    episode = body["episode"]
+    episode_id = episode["episode_id"]
+    assert episode["status"] == "open"
+
+    # The pin is visible, and it is the goal's APPROVED version.
+    assert episode["enrollment"]["enrollment_complete"] is True
+    pinned = episode["enrollment"]["pinned_goal_versions"]
+    assert pinned == [{"goal_id": goal["goal_id"],
+                       "version_id": goal["current_version_id"]}]
+    # Not ready yet: consent and setup are both outstanding.
+    assert episode["readiness"]["is_ready"] is False
+    assert "caregiver_consent_absent" in episode["readiness"]["missing"]
+    assert "setup_and_education_absent" in episode["readiness"]["missing"]
+
+    # Step 2: the CAREGIVER consents, over their own authenticated path.
+    consented = post(wf, f"/pilot/rtm-episodes/{episode_id}/consent",
+                     "cg-a", CONSENT_BODY)
+    assert consented[0] == 200, consented
+    consent = consented[1]["consent"]
+    assert consent["attested_by"] == "caregiver_attested"
+    assert consent["caregiver_id"] == wf.principal("cg-a").application_id
+    assert consent["authority"] == "parent"
+    assert consent["consent_document_id"] == "genex-rtm-consent"
+    assert consent["consent_document_version"] == "v1.0"
+    assert consent["accepted_at"]
+    assert consent["is_complete"] is True
+    assert consent["missing_acknowledgements"] == []
+    assert consent["proxy_recorded_by_provider_id"] == ""
+
+    # Step 3: the PROVIDER records setup and education.
+    setup = post(wf, f"/pilot/rtm-episodes/{episode_id}/setup", "hannah",
+                 {"configuration_summary": "Weekly plan and reminders set.",
+                  "education_summary": "Showed how to record an attempt.",
+                  "caregiver_confirmed_able_to_use": True})
+    assert setup[0] == 200, setup
+    assert setup[1]["setup"]["caregiver_confirmed_able_to_use"] is True
+    assert setup[1]["setup"]["performed_by_actor_id"] == \
+        wf.hannah.provider_id
+
+    # Step 4: readiness now open, with the evidence listed.
+    ready = get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness", "hannah")
+    assert ready[0] == 200, ready
+    assert ready[1]["readiness"]["is_ready"] is True
+    assert ready[1]["readiness"]["missing"] == []
+    assert len(ready[1]["consents"]) == 1
+    assert len(ready[1]["setups"]) == 1
+    assert ready[1]["enrollment"]["effective_billing_provider_id"] == \
+        wf.hannah.provider_id
+
+
+def test_readiness_names_the_outstanding_prerequisite(wf):
+    """A clinician can see WHAT is missing without provoking a refusal."""
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+
+    first = get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness", "hannah")
+    assert first[1]["readiness"]["is_ready"] is False
+    assert set(first[1]["readiness"]["missing"]) == {
+        "caregiver_consent_absent", "setup_and_education_absent"}
+
+    post(wf, f"/pilot/rtm-episodes/{episode_id}/consent", "cg-a",
+         CONSENT_BODY)
+    second = get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness", "hannah")
+    assert second[1]["readiness"]["missing"] == [
+        "setup_and_education_absent"]
+
+
+def test_partial_consent_is_reported_as_incomplete_over_http(wf):
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+    partial = dict(CONSENT_BODY)
+    for name in ("acknowledged_withdrawal_right",
+                 "acknowledged_response_expectations"):
+        partial[name] = False
+
+    created = post(wf, f"/pilot/rtm-episodes/{episode_id}/consent", "cg-a",
+                   partial)
+    assert created[0] == 200, created
+    assert created[1]["consent"]["is_complete"] is False
+    assert set(created[1]["consent"]["missing_acknowledgements"]) == {
+        "acknowledged_withdrawal_right",
+        "acknowledged_response_expectations"}
+
+    ready = get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness", "hannah")
+    assert "caregiver_consent_incomplete" in ready[1]["readiness"]["missing"]
+
+
+# -- provider proxy consent ------------------------------------------------
+
+def test_provider_proxy_consent_requires_its_provenance_over_http(wf):
+    """A provider may record consent, never AS the caregiver."""
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+
+    # Without the documentation reference and reason the record cannot form,
+    # and it renders as the standard refusal.
+    bare = post(wf, f"/pilot/rtm-episodes/{episode_id}/consent", "hannah",
+                CONSENT_BODY)
+    assert bare[0] == 403, bare
+
+    with_proxy = dict(CONSENT_BODY)
+    with_proxy.update(proxy_documentation_ref="fictional-signed-form-001",
+                      proxy_reason="Signed on paper in clinic.")
+    created = post(wf, f"/pilot/rtm-episodes/{episode_id}/consent", "hannah",
+                   with_proxy)
+    assert created[0] == 200, created
+    consent = created[1]["consent"]
+    assert consent["attested_by"] == "provider_recorded_proxy"
+    assert consent["proxy_recorded_by_provider_id"] == wf.hannah.provider_id
+    # It is still the CAREGIVER's consent that was recorded.
+    assert consent["caregiver_id"] == wf.principal("cg-a").application_id
+
+
+def test_a_proxy_consent_cannot_be_disguised_as_caregiver_attested(wf):
+    """The stored value is decided by WHO called, never by the body.
+
+    `attested_by` is not an accepted field on this route, so a provider has
+    no way to assert the caregiver performed the act.
+    """
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+    forged = dict(CONSENT_BODY)
+    forged["attested_by"] = "caregiver_attested"
+    refused = post(wf, f"/pilot/rtm-episodes/{episode_id}/consent", "hannah",
+                   forged)
+    assert refused[0] == 403, refused
+
+
+def test_the_consent_route_does_not_accept_a_caregiver_id(wf):
+    """The caregiver comes from the EPISODE, never from the request."""
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+    forged = dict(CONSENT_BODY)
+    forged["caregiver_id"] = "cgvr_someone_else"
+    refused = post(wf, f"/pilot/rtm-episodes/{episode_id}/consent", "cg-a",
+                   forged)
+    assert refused[0] == 403, refused
+
+
+# -- NEGATIVE: wrong caregiver, wrong provider, wrong child ---------------
+
+def test_a_foreign_caregiver_cannot_consent(wf):
+    """Family B's caregiver has no relationship to family A's child."""
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+    refused = post(wf, f"/pilot/rtm-episodes/{episode_id}/consent", "cg-b",
+                   CONSENT_BODY)
+    assert refused[0] == 403, refused
+    assert refused[1] == _FORBIDDEN_BODY, "the refusal body leaked"
+
+
+def test_a_connected_but_non_managing_provider_cannot_enroll_or_set_up(wf):
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+
+    assert post(wf, f"/pilot/children/{wf.child_a}/rtm-episodes", "connected",
+                {"goal_ids": ["clgl_x"],
+                 "authorized_caregiver_id": "cgvr_x",
+                 "clinical_indication": "x",
+                 "clinical_rationale": "y"})[0] == 403
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/setup", "connected",
+                {"configuration_summary": "x",
+                 "education_summary": "y"})[0] == 403
+    assert get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness",
+               "connected")[0] == 403
+
+
+def test_a_foreign_managing_provider_cannot_touch_another_familys_episode(wf):
+    """Family B's managing clinician is managing for the WRONG child."""
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/setup", "foreign",
+                {"configuration_summary": "x",
+                 "education_summary": "y"})[0] == 403
+    assert get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness",
+               "foreign")[0] == 403
+    assert post(wf, f"/pilot/children/{wf.child_a}/rtm-episodes", "foreign",
+                {"goal_ids": ["clgl_x"], "authorized_caregiver_id": "cgvr_x",
+                 "clinical_indication": "x",
+                 "clinical_rationale": "y"})[0] == 403
+
+
+def test_a_caregiver_cannot_enroll_set_up_or_read_readiness(wf):
+    """Enrollment and setup are clinician acts; readiness is a clinician read."""
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+
+    assert post(wf, f"/pilot/children/{wf.child_a}/rtm-episodes", "cg-a",
+                {"goal_ids": ["clgl_x"], "authorized_caregiver_id": "cgvr_x",
+                 "clinical_indication": "x",
+                 "clinical_rationale": "y"})[0] == 403
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/setup", "cg-a",
+                {"configuration_summary": "x",
+                 "education_summary": "y"})[0] == 403
+    assert get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness",
+               "cg-a")[0] == 403
+
+
+def test_an_episode_cannot_name_a_caregiver_from_another_family(wf):
+    (status, body, _), _goal = _open_episode(wf, caregiver_token="cg-b")
+    assert status == 403, body
+
+
+def test_an_unauthenticated_caller_reaches_none_of_the_four_routes(wf):
+    from .test_integration_identity import call
+
+    for method, path in (
+            ("POST", f"/pilot/children/{wf.child_a}/rtm-episodes"),
+            ("POST", "/pilot/rtm-episodes/repi_x/consent"),
+            ("POST", "/pilot/rtm-episodes/repi_x/setup"),
+            ("GET", "/pilot/rtm-episodes/repi_x/readiness")):
+        status, _body, _ = call(wf.app, path, method=method, body=b"{}")
+        assert status == 401, (method, path)
+
+
+def test_an_unknown_episode_is_indistinguishable_from_a_foreign_one(wf):
+    """The no-oracle rule holds on the new routes too."""
+    nonexistent = get(wf, "/pilot/rtm-episodes/repi_nonexistent/readiness",
+                      "hannah")
+    assert nonexistent[0] == 403
+    assert nonexistent[1] == _FORBIDDEN_BODY
+
+
+def test_the_wrong_method_is_refused_on_each_new_route(wf):
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+    assert get(wf, f"/pilot/children/{wf.child_a}/rtm-episodes",
+               "hannah")[0] == 405
+    assert get(wf, f"/pilot/rtm-episodes/{episode_id}/consent",
+               "cg-a")[0] == 405
+    assert get(wf, f"/pilot/rtm-episodes/{episode_id}/setup",
+               "hannah")[0] == 405
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/readiness",
+                "hannah", {})[0] == 405
+
+
+# -- no PHI or oracle in the new payloads ---------------------------------
+
+def test_the_new_payloads_carry_no_clinical_text(wf):
+    """Indication, rationale and the summaries never cross the wire."""
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+    post(wf, f"/pilot/rtm-episodes/{episode_id}/consent", "cg-a",
+         CONSENT_BODY)
+    post(wf, f"/pilot/rtm-episodes/{episode_id}/setup", "hannah",
+         {"configuration_summary": "Weekly plan and reminders set.",
+          "education_summary": "Showed how to record an attempt.",
+          "caregiver_confirmed_able_to_use": True})
+    ready = get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness", "hannah")
+
+    blob = json.dumps([body, ready[1]])
+    for secret in ("expressive-language delay",
+                   "Monitoring home practice between visits",
+                   "Weekly plan and reminders set",
+                   "Showed how to record an attempt"):
+        assert secret not in blob, secret
+    for banned in ("clinical_indication", "clinical_rationale",
+                   "configuration_summary", "education_summary",
+                   "proxy_reason"):
+        assert banned not in blob, banned
+
+
+def test_the_readiness_route_never_leaks_another_familys_existence(wf):
+    """Family B's episode is a 403 for family A's clinician, not a 404."""
+    (a_status, a_body, _), _ = _open_episode(wf)
+    (b_status, b_body, _), _ = _open_episode(
+        wf, child=wf.child_b, token="foreign", caregiver_token="cg-b")
+    assert a_status == 200 and b_status == 200, (a_body, b_body)
+
+    foreign_episode = b_body["episode"]["episode_id"]
+    refused = get(wf, f"/pilot/rtm-episodes/{foreign_episode}/readiness",
+                  "hannah")
+    assert refused[0] == 403
+    assert refused[1] == _FORBIDDEN_BODY
+
+
+# -- audit through HTTP ----------------------------------------------------
+
+def test_the_enrollment_routes_emit_their_audit_actions(wf):
+    from pilot_backend.audit.events import AuditAction
+
+    (status, body, _), _goal = _open_episode(wf)
+    episode_id = body["episode"]["episode_id"]
+    post(wf, f"/pilot/rtm-episodes/{episode_id}/consent", "cg-a",
+         CONSENT_BODY)
+    post(wf, f"/pilot/rtm-episodes/{episode_id}/setup", "hannah",
+         {"configuration_summary": "Configured.",
+          "education_summary": "Taught.",
+          "caregiver_confirmed_able_to_use": True})
+
+    actions = {e.action for e in wf.repos.audit_events.list_all()}
+    assert {AuditAction.RTM_EPISODE_OPENED,
+            AuditAction.RTM_CONSENT_RECORDED,
+            AuditAction.RTM_SETUP_RECORDED} <= actions
+
+    # And the trail carries no clinical text, through HTTP as through the
+    # service.
+    for event in wf.repos.audit_events.list_all():
+        blob = str(event.metadata)
+        assert "expressive-language delay" not in blob
+        assert "Monitoring home practice" not in blob
+        assert "Configured." not in blob
+
+
+# -- RTM readiness is not account access ----------------------------------
+
+def test_ordinary_genex_reads_still_work_before_rtm_prerequisites(wf):
+    """The separation, asserted over HTTP.
+
+    A family whose RTM prerequisites are incomplete keeps using the product.
+    The caregiver's own RTM read also still works — a route that would have
+    403'd had readiness been bolted onto it.
+    """
+    (status, body, _), _goal = _open_episode(wf)
+    assert body["episode"]["readiness"]["is_ready"] is False
+
+    assert get(wf, f"/pilot/children/{wf.child_a}/this-week", "cg-a")[0] == 200
+    assert get(wf, f"/pilot/children/{wf.child_a}/rtm", "cg-a")[0] == 200
+    assert get(wf, "/pilot/me", "cg-a")[0] == 200
+    assert get(wf, "/pilot/me/children", "cg-a")[0] == 200
+
+
+def test_the_caregiver_rtm_read_is_unchanged_by_slice_3c(wf):
+    """CHILD_RTM_ROUTE stays caregiver-readable and carries no readiness.
+
+    Adding readiness there would have required the managing clinician and
+    turned this 200 into a 403. The test pins the decision, not just the
+    behaviour.
+    """
+    (status, body, _), _goal = _open_episode(wf)
+    assert status == 200
+
+    read = get(wf, f"/pilot/children/{wf.child_a}/rtm", "cg-a")
+    assert read[0] == 200, read
+    assert read[1]["episodes"], "the caregiver read no episodes"
+    for entry in read[1]["episodes"]:
+        assert "readiness" not in entry
+        assert "enrollment" not in entry

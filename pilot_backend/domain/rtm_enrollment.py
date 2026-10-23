@@ -371,6 +371,30 @@ class RTMReadiness:
         return not self.missing
 
 
+#: FROZEN DESIGN FOR SLICE 3D — WITHDRAWAL. Recorded here, beside the object
+#: a future implementer would be tempted to misuse.
+#:
+#: Caregiver withdrawal resolves to an EFFECTIVE EPISODE CLOSURE. A withdrawal
+#: record may carry its own reason, effective timestamp and provenance, and it
+#: then INVOKES the existing episode-closure transition. Once closure is
+#: effective:
+#:
+#:     slice 3A's single episode-open gate blocks new time, reviews, actions
+#:     and interactions;
+#:     `open_period` refuses a new RTM month;
+#:     ordinary Genex use continues, untouched.
+#:
+#: WHAT 3D MUST NOT DO: make every accrual path independently re-check
+#: readiness. `assess_readiness` returns a value derived from mutable records,
+#: and scattering that check across five writers would create five places for
+#: the rule to drift and would make withdrawal enforcement depend on a
+#: recomputation rather than on a state transition. The episode-open
+#: chokepoint stays the enforcement mechanism — one gate, already proven.
+#:
+#: This is also why `assess_readiness` is deliberately NOT consulted by the
+#: accrual paths today: adding it there now would pre-build the wrong shape.
+
+
 def assess_readiness(episode, consents: Sequence[RTMConsentAttestation] = (),
                      setups: Sequence[RTMSetupEducation] = ()
                      ) -> RTMReadiness:

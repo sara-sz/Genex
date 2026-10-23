@@ -203,6 +203,13 @@ PERIOD_TIME_ROUTE = "/pilot/rtm-periods/{period_id}/time-entries"
 PERIOD_INTERACTIONS_ROUTE = "/pilot/rtm-periods/{period_id}/interactions"
 PERIOD_REPORT_ROUTE = "/pilot/rtm-periods/{period_id}/report"
 REVIEW_ACTIONS_ROUTE = "/pilot/rtm-reviews/{review_id}/actions"
+# Track 3 slice 3C enrollment surface. The episode is created under the CHILD
+# (it is a thing a child gets), while consent, setup and readiness hang off
+# the EPISODE they establish.
+CHILD_RTM_EPISODES_ROUTE = "/pilot/children/{child_id}/rtm-episodes"
+EPISODE_CONSENT_ROUTE = "/pilot/rtm-episodes/{episode_id}/consent"
+EPISODE_SETUP_ROUTE = "/pilot/rtm-episodes/{episode_id}/setup"
+EPISODE_READINESS_ROUTE = "/pilot/rtm-episodes/{episode_id}/readiness"
 
 #: (method, template, is_public). Explicit; no prefix matching anywhere.
 ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
@@ -241,6 +248,12 @@ ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
     ("POST", PERIOD_INTERACTIONS_ROUTE, False),
     ("POST", PERIOD_REPORT_ROUTE, False),
     ("POST", REVIEW_ACTIONS_ROUTE, False),
+    # Track 3 slice 3C. None public; each takes the standard verified-token
+    # gate and then its own role check.
+    ("POST", CHILD_RTM_EPISODES_ROUTE, False),
+    ("POST", EPISODE_CONSENT_ROUTE, False),
+    ("POST", EPISODE_SETUP_ROUTE, False),
+    ("GET", EPISODE_READINESS_ROUTE, False),
 )
 
 _STATUS_TEXT = {
@@ -718,6 +731,90 @@ def _episode_payload(episode) -> dict:
     }
 
 
+def _enrollment_payload(episode) -> dict:
+    """Slice 3C enrollment metadata, for a clinician reading episode state.
+
+    Carries ids, a status and the two genuinely optional operational values.
+    `clinical_indication` and `clinical_rationale` are deliberately ABSENT:
+    they are clinician-authored clinical text, and this payload is read by a
+    browser over the PHI-serving surface. A clinician who needs the wording
+    reads it in their own record, not from a projection.
+    """
+    return {
+        "authorized_caregiver_id": episode.authorized_caregiver_id,
+        "billing_provider_id": episode.billing_provider_id,
+        "effective_billing_provider_id": (
+            episode.effective_billing_provider_id),
+        "practice_id": episode.practice_id,
+        "expected_duration_months": episode.expected_duration_months,
+        "order_reference": episode.order_reference,
+        "enrollment_complete": episode.enrollment_complete,
+        # (goal_id, version_id) pairs: WHICH approved wording this episode was
+        # opened against, so a reader can tell it from the goal's wording now.
+        "pinned_goal_versions": [
+            {"goal_id": goal_id, "version_id": version_id}
+            for goal_id, version_id in episode.pinned_goal_version_ids],
+    }
+
+
+def _readiness_payload(readiness) -> dict:
+    """Whether monitoring may begin, and which prerequisites are outstanding.
+
+    `missing` holds the short PHI-free reason codes from `rtm_enrollment`. A
+    refusal a clinician cannot act on is a support ticket, so the codes travel
+    even though every refusal body stays constant.
+    """
+    return {
+        "episode_id": readiness.episode_id,
+        "is_ready": readiness.is_ready,
+        "missing": list(readiness.missing),
+    }
+
+
+def _consent_payload(consent) -> dict:
+    """The attestation, as operational provenance.
+
+    No proxy REASON and no document contents: the reason is free text a
+    clinician wrote. Which document version was accepted, by whom, under what
+    authority and when is the part that has to be readable.
+    """
+    return {
+        "consent_id": consent.consent_id,
+        "episode_id": consent.episode_id,
+        "caregiver_id": consent.caregiver_id,
+        "authority": consent.authority.value,
+        "attested_by": consent.attested_by.value,
+        "consent_document_id": consent.consent_document_id,
+        "consent_document_version": consent.consent_document_version,
+        "accepted_at": consent.accepted_at.isoformat(),
+        "is_complete": consent.is_complete,
+        "missing_acknowledgements": list(consent.missing_acknowledgements),
+        "is_current": consent.is_current,
+        "proxy_recorded_by_provider_id": (
+            consent.proxy_recorded_by_provider_id),
+    }
+
+
+def _setup_payload(setup) -> dict:
+    """Setup/education as a documentary fact.
+
+    The configuration and education summaries are clinician-authored text and
+    stay out, exactly as section payloads keep narratives out. What a reader
+    needs is that setup happened, who performed it, when, and whether the
+    caregiver confirmed they can use the system.
+    """
+    return {
+        "setup_id": setup.setup_id,
+        "episode_id": setup.episode_id,
+        "performed_by_actor_id": setup.performed_by_actor_id,
+        "caregiver_id": setup.caregiver_id,
+        "performed_at": setup.performed_at.isoformat(),
+        "caregiver_confirmed_able_to_use": (
+            setup.caregiver_confirmed_able_to_use),
+        "is_current": setup.is_current,
+    }
+
+
 def _report_payload(report) -> dict:
     """A DRAFT month-end report — a preview, not a submission.
 
@@ -1035,6 +1132,13 @@ class PilotWSGIApplication:
                 ("rtm-periods", "interactions", PERIOD_INTERACTIONS_ROUTE, ("POST",)),
                 ("rtm-periods", "report", PERIOD_REPORT_ROUTE, ("POST",)),
                 ("rtm-reviews", "actions", REVIEW_ACTIONS_ROUTE, ("POST",)),
+                # Track 3 slice 3C enrollment surface.
+                ("children", "rtm-episodes", CHILD_RTM_EPISODES_ROUTE,
+                 ("POST",)),
+                ("rtm-episodes", "consent", EPISODE_CONSENT_ROUTE, ("POST",)),
+                ("rtm-episodes", "setup", EPISODE_SETUP_ROUTE, ("POST",)),
+                ("rtm-episodes", "readiness", EPISODE_READINESS_ROUTE,
+                 ("GET",)),
         ):
             resource = _match_resource_subroute(path, collection, tail)
             if resource is None:
@@ -1529,6 +1633,7 @@ class PilotWSGIApplication:
             InteractionModality,
             ParticipantType,
         )
+        from ..domain.rtm_enrollment import ConsentAuthority
         from ..transport.body import (
             enum_member,
             opt_bool,
@@ -1659,6 +1764,128 @@ class PilotWSGIApplication:
             return {"child_id": resource, "released": week is not None,
                     "week": week}
 
+        # --- Track 3 slice 3C enrollment surface -------------------------
+        #
+        # Four routes, one per step of the pilot order. Each delegates to the
+        # frozen service, which owns every authorization rule: the transport
+        # adds no gate of its own, so there is no second place for the
+        # managing-clinician or authorized-caregiver check to drift.
+
+        if route == CHILD_RTM_EPISODES_ROUTE:
+            # Step 1: enrollment. The managing clinician only — enforced by
+            # `open_episode`, which also PINS each goal's approved version.
+            #
+            # `pinned_goal_version_ids` is NOT accepted from the body. The
+            # service reads each goal's current version itself, so a client
+            # cannot name wording the clinician never approved.
+            body = read_json_body(
+                environ,
+                allowed=["goal_ids", "authorized_caregiver_id",
+                         "clinical_indication", "clinical_rationale",
+                         "billing_provider_id", "expected_duration_months",
+                         "order_reference"],
+                required=["goal_ids", "authorized_caregiver_id",
+                          "clinical_indication", "clinical_rationale"])
+            goal_ids = opt_str_list(body, "goal_ids")
+            episode = rtm.open_episode(
+                principal, resource,
+                [GoalRef(GoalKind.CLINICAL, goal_id) for goal_id in goal_ids],
+                authorized_caregiver_id=opt_str(
+                    body, "authorized_caregiver_id"),
+                clinical_indication=opt_str(body, "clinical_indication"),
+                clinical_rationale=opt_str(body, "clinical_rationale"),
+                billing_provider_id=opt_str(body, "billing_provider_id"),
+                order_reference=opt_str(body, "order_reference"),
+                request_id=request_id,
+                **_present(expected_duration_months=opt_int(
+                    body, "expected_duration_months")))
+            payload = _episode_payload(episode)
+            payload["enrollment"] = _enrollment_payload(episode)
+            payload["readiness"] = _readiness_payload(
+                rtm.episode_readiness(principal, episode.episode_id))
+            return {"episode": payload}
+
+        if route == EPISODE_CONSENT_ROUTE:
+            # Step 2: consent. The AUTHORIZED CAREGIVER's own act, reached
+            # through the existing 0.5A caregiver identity — a bootstrapped
+            # auth subject resolving to a Caregiver record, exactly as the
+            # observation route already does. No second identity bridge.
+            #
+            # A provider may also call this, and the service then records
+            # PROVIDER_RECORDED_PROXY, which cannot be formed without the
+            # documentation reference and reason supplied below. The two are
+            # different stored values, so a clinician cannot be mistaken for
+            # the family.
+            body = read_json_body(
+                environ,
+                allowed=["authority", "consent_document_id",
+                         "consent_document_version",
+                         "acknowledged_monitoring",
+                         "acknowledged_billing_and_cost_sharing",
+                         "acknowledged_withdrawal_right",
+                         "acknowledged_communication_expectations",
+                         "acknowledged_response_expectations",
+                         "proxy_documentation_ref", "proxy_reason"],
+                required=["authority", "consent_document_id",
+                          "consent_document_version"])
+            consent = rtm.record_consent(
+                principal, resource,
+                authority=enum_member(ConsentAuthority, body, "authority"),
+                consent_document_id=opt_str(body, "consent_document_id"),
+                consent_document_version=opt_str(
+                    body, "consent_document_version"),
+                acknowledged_monitoring=bool(
+                    opt_bool(body, "acknowledged_monitoring")),
+                acknowledged_billing_and_cost_sharing=bool(
+                    opt_bool(body, "acknowledged_billing_and_cost_sharing")),
+                acknowledged_withdrawal_right=bool(
+                    opt_bool(body, "acknowledged_withdrawal_right")),
+                acknowledged_communication_expectations=bool(
+                    opt_bool(body, "acknowledged_communication_expectations")),
+                acknowledged_response_expectations=bool(
+                    opt_bool(body, "acknowledged_response_expectations")),
+                proxy_documentation_ref=opt_str(
+                    body, "proxy_documentation_ref"),
+                proxy_reason=opt_str(body, "proxy_reason"),
+                request_id=request_id)
+            return {"consent": _consent_payload(consent)}
+
+        if route == EPISODE_SETUP_ROUTE:
+            # Step 3: setup and education. PROVIDER documentation, not
+            # caregiver self-entry — `record_setup` requires the managing
+            # clinician. Distinct from the month-scoped
+            # EDUCATION_OR_COACHING clinical action, which goes through
+            # REVIEW_ACTIONS_ROUTE against a period.
+            body = read_json_body(
+                environ,
+                allowed=["configuration_summary", "education_summary",
+                         "caregiver_confirmed_able_to_use"],
+                required=["configuration_summary", "education_summary"])
+            setup = rtm.record_setup(
+                principal, resource,
+                configuration_summary=opt_str(body, "configuration_summary"),
+                education_summary=opt_str(body, "education_summary"),
+                caregiver_confirmed_able_to_use=bool(
+                    opt_bool(body, "caregiver_confirmed_able_to_use")),
+                request_id=request_id)
+            return {"setup": _setup_payload(setup)}
+
+        if route == EPISODE_READINESS_ROUTE:
+            # Step 4's precondition, readable on its own so a clinician can
+            # see WHICH prerequisite is outstanding without provoking a
+            # refusal to find out.
+            episode = rtm.get_episode(principal, resource)
+            readiness = rtm.episode_readiness(principal, resource)
+            return {
+                "episode": _episode_payload(episode),
+                "enrollment": _enrollment_payload(episode),
+                "readiness": _readiness_payload(readiness),
+                "consents": [_consent_payload(c)
+                             for c in rtm.list_consents(principal, resource)],
+                "setups": [_setup_payload(s)
+                           for s in rtm.list_setups(principal, resource)],
+            }
+
         if route == CHILD_RTM_ROUTE:
             # `list_episodes` authorizes the child first, so the period rows
             # read below belong to an episode the caller is already proven to
@@ -1678,6 +1905,17 @@ class PilotWSGIApplication:
                                                             p.period_id)
                     for p in periods}
                 payload.append(entry)
+            # Slice 3C deliberately does NOT add enrollment or readiness here.
+            #
+            # Every read on this route goes through `_authorize` alone, so a
+            # CAREGIVER can reach it. `episode_readiness` requires the
+            # managing clinician, so calling it here would turn a
+            # caregiver-readable route into a 403 — a role regression dressed
+            # as an enrichment. Relaxing readiness instead would loosen a
+            # provider boundary to suit a payload.
+            #
+            # Enrollment metadata and readiness therefore live on
+            # EPISODE_READINESS_ROUTE, which is provider-only by construction.
             return {"episodes": payload}
 
         if route == PLAN_ALLOCATIONS_ROUTE:

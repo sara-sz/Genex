@@ -575,6 +575,25 @@ def test_route_table_and_apisurface_cannot_disagree():
         "/pilot/rtm-periods/{period_id}/interactions": False,
         "/pilot/rtm-periods/{period_id}/report": False,
         "/pilot/rtm-reviews/{review_id}/actions": False,
+        # Track 3 slice 3C RTM enrollment surface. Protected, every one.
+        #
+        # Three are PROVIDER-only and additionally managing-clinician-only:
+        # opening the episode, recording setup/education, and reading
+        # readiness. Setup is provider/staff documentation, never caregiver
+        # self-entry.
+        #
+        # Consent is the exception, and the reason this surface exists: the
+        # AUTHORIZED CAREGIVER records their own consent, through the 0.5A
+        # caregiver identity that already authenticates the observation route.
+        # A provider calling it is stored as PROVIDER_RECORDED_PROXY, which
+        # cannot be formed without its documentation reference and reason.
+        #
+        # Still ABSENT, deliberately: any route that opens a monitoring
+        # PERIOD. That was HTTP-less before 3C and stays so.
+        "/pilot/children/{child_id}/rtm-episodes": False,
+        "/pilot/rtm-episodes/{episode_id}/consent": False,
+        "/pilot/rtm-episodes/{episode_id}/setup": False,
+        "/pilot/rtm-episodes/{episode_id}/readiness": False,
     }
 
 
