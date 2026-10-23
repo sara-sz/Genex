@@ -129,10 +129,17 @@ def _start(session_id, choice="two_three_words", auth=AUTH_A, domain=SLP):
         json={"entry_choice_id": choice}, headers=auth)
 
 
-def _answer(session_id, skill_key, value, auth=AUTH_A, domain=SLP):
+#: A WELL-FORMED but wrong reference. Used where the test is about auth or
+#: session refusal: the body schema now pins the reference to 32 hex
+#: characters, so a placeholder like "x" would be refused by Pydantic BEFORE
+#: the auth check and the test would stop proving what it exists to prove.
+DUMMY_REF = "0" * 32
+
+
+def _answer(session_id, question_ref, value, auth=AUTH_A, domain=SLP):
     return client.post(
         f"/api/v2/session/{session_id}/baseline/{domain}/answer",
-        json={"skill_key": skill_key, "answer": value}, headers=auth)
+        json={"question_ref": question_ref, "answer": value}, headers=auth)
 
 
 def _finalize(session_id, auth=AUTH_A, domain=SLP):
@@ -160,14 +167,17 @@ MIXED_30M = {
 }
 
 
-def _months_of(client_question):
-    """The canonical month, recovered from the skill key for test assertions.
+def _expected_question(uid, session_id, domain=SLP):
+    """The ENGINE's expected next question, read from the stored record.
 
-    Deliberately NOT read from the response: the parent payload must not carry
-    a developmental month, and a test that read one from there would be
-    asserting the leak back into existence.
+    The client payload carries neither the month nor the canonical key any
+    more, so a test needing either reads the server state. A test that
+    recovered them from the response would be asserting the leak back into
+    existence.
     """
-    return int(client_question["skill_key"].split("\x1f")[2])
+    stored = _reload(uid, session_id)[
+        baseline_v2_api.CANONICAL_STATE_KEY_V2][domain]
+    return fb2.next_question_v2(fb2.record_from_state_v2(stored))
 
 
 def _drive(session_id, overrides=None, auth=AUTH_A, limit=40):
@@ -191,10 +201,11 @@ def _drive(session_id, overrides=None, auth=AUTH_A, limit=40):
         for fragment, answer in overrides.items():
             if fragment in question["milestone"]:
                 value = answer
-        response = _answer(session_id, question["skill_key"], value, auth=auth)
+        months = _expected_question("uid-v2-a", session_id)["months"]
+        response = _answer(session_id, question["question_ref"], value,
+                           auth=auth)
         assert response.status_code == 200, response.text
-        trace.append((_months_of(question), question["milestone"], value,
-                      response.json()))
+        trace.append((months, question["milestone"], value, response.json()))
         view = response.json()
     return trace
 
@@ -221,7 +232,7 @@ def test_http_asks_every_declared_sibling_in_the_30_month_band():
     # The entry descriptor says where to START ASKING: `two_three_words` anchors
     # below 30 months, so the traversal begins at 24 and must finish that band
     # before it may move.
-    assert _months_of(first) == 24
+    assert _expected_question("uid-v2-a", sid)["months"] == 24
     assert "months" not in first, (
         "the parent payload must not carry a developmental month")
 
@@ -452,7 +463,9 @@ def test_a_finalized_v2_baseline_is_immutable():
                         sort_keys=True)
 
     # An answer is refused, a restart is refused, a re-finalize is a no-op.
-    stale_key = fb2.skill_key(SLP, "expressive_language", 30, trace[-1][1])
+    # A WELL-FORMED reference, so the lifecycle guard is what refuses rather
+    # than the body schema.
+    stale_key = DUMMY_REF
     assert _answer(sid, stale_key, "yes").status_code == 409
     assert _start(sid).status_code == 409
     again = _finalize(sid)
@@ -516,7 +529,7 @@ def test_unauthenticated_requests_are_refused_on_every_v2_route():
         ("post", f"/api/v2/session/{sid}/baseline/{SLP}/start",
          {"entry_choice_id": "two_three_words"}),
         ("post", f"/api/v2/session/{sid}/baseline/{SLP}/answer",
-         {"skill_key": "x", "answer": "yes"}),
+         {"question_ref": DUMMY_REF, "answer": "yes"}),
         ("post", f"/api/v2/session/{sid}/baseline/{SLP}/finalize", None),
         ("get", f"/api/v2/session/{sid}/baseline/{SLP}", None),
         ("post", f"/api/v2/session/{sid}/baseline/{SLP}/projection", None),
@@ -543,7 +556,8 @@ def test_a_wrong_session_owner_is_refused_on_every_v2_route():
 
     assert _get(sid, auth=AUTH_B).status_code == 403
     assert _start(sid, auth=AUTH_B).status_code == 403
-    assert _answer(sid, "x", "yes", auth=AUTH_B).status_code == 403
+    assert _answer(sid, DUMMY_REF, "yes",
+                   auth=AUTH_B).status_code == 403
     assert _finalize(sid, auth=AUTH_B).status_code == 403
     assert _entry(sid, auth=AUTH_B).status_code == 403
     assert _project(sid, auth=AUTH_B).status_code == 403
@@ -552,20 +566,29 @@ def test_a_wrong_session_owner_is_refused_on_every_v2_route():
 def test_answering_before_start_is_404_baseline_not_started():
     uid, sid = "uid-v2-a", "sess-v2-before-start"
     _make_session(uid, sid)
-    response = _answer(sid, "anything", "yes")
+    # Well-formed, so the LIFECYCLE guard refuses rather than the body schema.
+    response = _answer(sid, DUMMY_REF, "yes")
     assert response.status_code == 404
     assert response.json()["detail"] == "baseline_not_started"
     assert _get(sid).status_code == 404
 
 
-def test_answering_the_wrong_skill_is_422_and_names_the_expected_key():
+def test_answering_the_wrong_question_is_422_and_names_the_expected_ref():
     uid, sid = "uid-v2-a", "sess-v2-mismatch"
     _make_session(uid, sid)
-    expected = _start(sid).json()["current_question"]["skill_key"]
+    expected = _start(sid).json()["current_question"]["question_ref"]
 
-    response = _answer(sid, expected + "-tampered", "yes")
+    # Well-formed and wrong, so the ENGINE's guard refuses rather than the
+    # body schema.
+    assert DUMMY_REF != expected
+    response = _answer(sid, DUMMY_REF, "yes")
     assert response.status_code == 422
-    assert "Expected" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "Expected" in detail
+    assert expected in detail, "the client is told which reference to use"
+    # And the refusal names only REFERENCES — never the canonical key.
+    assert "\x1f" not in detail
+    assert "milestone" not in detail
     # Nothing was recorded.
     assert _get(sid).json()["skills_assessed"] == 0
 
@@ -579,9 +602,9 @@ def test_a_replayed_answer_is_refused_rather_than_overwriting_evidence():
     uid, sid = "uid-v2-a", "sess-v2-replay-answer"
     _make_session(uid, sid)
     first = _start(sid).json()["current_question"]
-    assert _answer(sid, first["skill_key"], "yes").status_code == 200
+    assert _answer(sid, first["question_ref"], "yes").status_code == 200
 
-    replay = _answer(sid, first["skill_key"], "no")
+    replay = _answer(sid, first["question_ref"], "no")
     assert replay.status_code == 422
     stored = _reload(uid, sid)["functional_baseline_v2"][SLP]
     recorded = [r for r in stored["skills"] if r["milestone"] == first["milestone"]]
@@ -620,7 +643,7 @@ def test_unknown_request_fields_are_refused_not_ignored():
               "chronological_months": 60},
         headers=AUTH_A).status_code == 422
 
-    key = _start(sid).json()["current_question"]["skill_key"]
+    key = _start(sid).json()["current_question"]["question_ref"]
     # A v1-shaped answer body cannot reach a v2 route.
     assert client.post(
         f"/api/v2/session/{sid}/baseline/{SLP}/answer",
@@ -629,11 +652,12 @@ def test_unknown_request_fields_are_refused_not_ignored():
     # Nor can a client assert the state directly.
     assert client.post(
         f"/api/v2/session/{sid}/baseline/{SLP}/answer",
-        json={"skill_key": key, "answer": "yes", "state": "demonstrated"},
+        json={"question_ref": key, "answer": "yes",
+              "state": "demonstrated"},
         headers=AUTH_A).status_code == 422
     assert client.post(
         f"/api/v2/session/{sid}/baseline/{SLP}/answer",
-        json={"skill_key": key, "answer": "definitely"},
+        json={"question_ref": key, "answer": "definitely"},
         headers=AUTH_A).status_code == 422
 
 
@@ -660,7 +684,7 @@ def test_start_is_idempotent_while_in_progress():
     uid, sid = "uid-v2-a", "sess-v2-restart"
     _make_session(uid, sid)
     first = _start(sid).json()["current_question"]
-    _answer(sid, first["skill_key"], "yes")
+    _answer(sid, first["question_ref"], "yes")
 
     again = _start(sid, choice="single_words")
     assert again.status_code == 200
@@ -952,7 +976,7 @@ def test_a_v2_skill_key_cannot_be_posted_to_a_v1_route():
                 json={"entry_choice_id": "many_single_words"}, headers=AUTH_A)
     assert client.post(
         f"/api/v1/session/{sid}/baseline/{SLP}/answer",
-        json={"skill_key": "x", "answer": "yes"},
+        json={"skill_key": "x", "answer": "yes"},   # the V1 field name
         headers=AUTH_A).status_code == 422
 
 

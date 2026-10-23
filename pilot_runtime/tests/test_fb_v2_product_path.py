@@ -33,6 +33,7 @@ os.environ.pop("OPENAI_API_KEY", None)
 from api import baseline_outcome as PARENT_OUTCOME            # noqa: E402
 from api import baseline_projection_gate as PROJECTION_GATE  # noqa: E402
 from api import functional_baseline_v2_api as PARENT_API      # noqa: E402
+from genex_core import functional_baseline_v2 as PARENT_V2    # noqa: E402
 
 from pilot_backend.domain.suggestion_generation_v2 import (   # noqa: E402
     BAND_MASTERED,
@@ -134,11 +135,16 @@ def parent_projection(overrides, *, choice="two_three_words", chrono=30,
         for fragment, value in overrides.items():
             if fragment in question["milestone"]:
                 answer = value
-        # The Parent client payload no longer carries a developmental month;
-        # the canonical month is the third field of the skill key.
-        asked.append((int(question["skill_key"].split("\x1f")[2]),
+        # The Parent client payload carries neither the developmental month
+        # nor the canonical key. Both are read from the SERVER record, which
+        # is where they still live.
+        stored = doc[PARENT_API.CANONICAL_STATE_KEY_V2][DOMAIN]
+        engine_question = PARENT_V2.next_question_v2(
+            PARENT_V2.record_from_state_v2(stored))
+        asked.append((int(engine_question["months"]),
                       question["milestone"], answer))
-        view = PARENT_API.answer(doc, DOMAIN, question["skill_key"], answer)
+        view = PARENT_API.answer(doc, DOMAIN, question["question_ref"],
+                                 answer)
     PARENT_API.finalize_baseline(doc, DOMAIN)
 
     # Built through the UNGATED constructor, and the Parent-side

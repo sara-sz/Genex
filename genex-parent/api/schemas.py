@@ -202,20 +202,27 @@ class BaselineV2StartRequest(BaseModel):
 class BaselineV2AnswerRequest(BaseModel):
     """One structured answer to the skill the v2 engine actually asked.
 
-    `skill_key` is the engine's full canonical identity for one skill, echoed
-    back from the question the client was just served. It replaces v1's
-    `question_id`, which embedded `milestone[:48]` and so could collide between
-    two milestones sharing a 48-character prefix.
+    `question_ref` is the OPAQUE reference the client was just served, echoed
+    back. It is a fixed-width digest of the engine's full canonical identity
+    under this session's salt — see `api/baseline_question_ref.py`.
 
-    The length bound is generous because the key carries the complete milestone
-    text, and bounded anyway so an unbounded string never reaches the engine.
-    The same five-value answer vocabulary as v1, because it is the same
-    vocabulary the engine's `_classify` accepts.
+    It replaces `skill_key`, which carried the canonical identity in plain
+    text: splitting it on its unit separator recovered the developmental MONTH
+    and the subdomain the question payload deliberately withholds, so the month
+    reached the browser however the field was labelled. The reference is
+    injective in the canonical key for a fixed salt, so the retry guard is
+    exactly as strong while publishing neither.
+
+    The length bound is now EXACT rather than generous: the reference is a
+    32-character hex digest, so anything else is malformed and Pydantic refuses
+    it before the engine sees it. The same five-value answer vocabulary as v1,
+    because it is the same vocabulary the engine's `_classify` accepts.
     """
 
     model_config = {"extra": "forbid"}
 
-    skill_key: str = Field(..., min_length=1, max_length=1024)
+    question_ref: str = Field(..., min_length=32, max_length=32,
+                              pattern=r"^[0-9a-f]{32}$")
     answer: Literal["yes", "sometimes", "with_help", "no", "not_sure"]
 
 

@@ -909,7 +909,7 @@ def _drive_v2_over_http(session_id, uid, entry_choice, answer_for,
             break
         answered = client.post(
             f"{base}/answer",
-            json={"skill_key": question["skill_key"],
+            json={"question_ref": question["question_ref"],
                   "answer": answer_for(question)},
             headers=auth)
         assert answered.status_code == 200, answered.text
@@ -932,10 +932,10 @@ def test_a_withheld_projection_is_a_409_carrying_the_finding():
     """
     base = _drive_v2_over_http(
         "s-withheld", "uid-proj-a", "no_words_yet",
-        # Month recovered from the skill key: the parent payload no longer
-        # carries one.
-        lambda q: ("sometimes"
-                   if int(q["skill_key"].split("\x1f")[2]) <= 9 else "yes"))
+        # The client payload carries neither the month nor the canonical key,
+        # so the branch keys on the milestone text the caregiver is shown.
+        lambda q: ("sometimes" if "different sounds" in q["milestone"]
+                   or "mama" in q["milestone"] else "yes"))
     result = _outcome_of("uid-proj-a", "s-withheld")
     # ASSERTED, not skipped. A skip here would let the one end-to-end proof of
     # the slice-8 block go quietly vacuous if routing ever changed.

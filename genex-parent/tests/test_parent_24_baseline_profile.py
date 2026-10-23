@@ -445,7 +445,7 @@ def _finalized_doc(age=36):
         question = view.get("current_question")
         if not question:
             break
-        api.answer(doc, DOMAIN, question["skill_key"], "yes")
+        api.answer(doc, DOMAIN, question["question_ref"], "yes")
     if not api.view(doc, DOMAIN).get("finalized"):
         api.finalize_baseline(doc, DOMAIN)
     return doc

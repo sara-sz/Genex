@@ -172,7 +172,7 @@ describe the *area*, not the assessment algorithm. **Do not branch on it.**
 ```
 
 `current_question` when present:
-`{ skill_key, milestone, parent_explanation }`.
+`{ question_ref, milestone, parent_explanation }`.
 
 ### BREAKING for the Parent dev UI — developmental months removed
 
@@ -198,12 +198,42 @@ The canonical months are **unchanged server-side** — the record stores them, t
 traversal routes on them, and the A2 v2 projection still sends them (§4). Only the
 browser stops receiving them.
 
-**Known residue:** `skill_key` is `domain · subdomain · months · milestone` joined
-by `U+001F`, so splitting it recovers the month and the subdomain. It cannot be
-changed here — the client echoes it on `/answer` and that is the entire retry guard
-(§3), so it is a frozen request contract rather than a display. **Clients must not
-parse `skill_key`.** Treat it as opaque: echo it back, never decode it, and never
-render any part of it.
+### `skill_key` → `question_ref` — also BREAKING
+
+`skill_key` carried `domain · subdomain · months · milestone` joined by `U+001F`,
+so splitting it recovered the month and the subdomain. Instructing clients to treat
+it as opaque did not make it opaque, so it is **removed**.
+
+The question payload and the `/answer` body now use **`question_ref`**: a
+32-character lowercase-hex digest, salted per baseline session.
+
+```
+POST .../baseline/{domain}/answer
+{"question_ref": "<32 hex>", "answer": "yes"}
+```
+
+| | Was | Now |
+|---|---|---|
+| question field | `skill_key` | `question_ref` |
+| `/answer` body field | `skill_key` | `question_ref` |
+| 422 mismatch body | echoed the canonical key | echoes **references** only |
+
+**Client rules:**
+
+- Echo `question_ref` back **verbatim**. It is opaque by construction — there is
+  nothing in it to parse, and nothing to render.
+- It is **stable** while the same question is outstanding, so a retry with the same
+  reference behaves exactly as before, and a stale one still `422`s with the
+  expected reference in the message so you can recover.
+- It is **session-scoped**: the same question in a different session has a
+  different reference. Never cache one across sessions.
+- The body schema pins it to exactly 32 hex characters, so a malformed value is
+  refused by validation (`422`) before any session or lifecycle check. If you are
+  testing an auth or lifecycle refusal, send a well-formed reference.
+
+The canonical identity is unchanged server-side and still travels in the A2 v2
+projection (§4). The per-session salt lives in the lifecycle envelope, never in the
+baseline record, so no projection id and no finalized evidence moves.
 
 ### `outcome` — ADDITIVE, present only once `finalized` is true
 

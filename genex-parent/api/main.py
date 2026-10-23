@@ -3327,13 +3327,16 @@ def _baseline_v2_http(exc: Exception) -> HTTPException:
             detail={"error": "projection_withheld",
                     **exc.decision.as_dict()})
     if isinstance(exc, baseline_v2_api.BaselineV2SkillMismatch):
-        # The expected key is echoed so a client can recover by answering the
-        # right skill. It is the client's OWN previous question, so this reveals
-        # nothing it was not already served — and it contains no child data.
+        # Both values are OPAQUE REFERENCES, never canonical keys. The expected
+        # one is echoed so a client can recover by answering the right
+        # question; it is the reference the client was already served, and a
+        # digest carries no month, no subdomain and no milestone text. Echoing
+        # the canonical key here — as this did before the reference existed —
+        # would have reopened the leak in a 422 body.
         return HTTPException(
             status_code=422,
             detail=(
-                f"Unexpected skill_key {exc.received!r}. "
+                f"Unexpected question_ref {exc.received!r}. "
                 f"Expected {exc.expected!r}. Answers must be submitted "
                 f"in order."
             ),
@@ -3422,8 +3425,8 @@ async def session_baseline_v2_answer(
 ):
     """Record one skill's evidence against the skill the engine asked.
 
-    `skill_key` must match the engine's expected next skill. That is what makes
-    a retry safe, and it matters MORE here than in v1: the v2 engine's
+    `question_ref` must match the engine's expected next skill. That is what
+    makes a retry safe, and it matters MORE here than in v1: the v2 engine's
     `record_answer_v2` REPLACES evidence for a skill rather than appending, so
     without this guard a late retry could overwrite a corrected answer. Once
     evidence lands the expected key changes, so the stale retry is refused.
@@ -3434,7 +3437,7 @@ async def session_baseline_v2_answer(
     """
     doc = _require_session(auth.uid, session_id)
     try:
-        result = baseline_v2_api.answer(doc, domain, body.skill_key,
+        result = baseline_v2_api.answer(doc, domain, body.question_ref,
                                        body.answer)
     except Exception as exc:
         raise _baseline_v2_http(exc)

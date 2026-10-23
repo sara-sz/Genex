@@ -265,7 +265,8 @@ def test_the_frozen_policy_survives_a_later_default_change():
     api.start(doc, DOMAIN, "many_single_words")
     frozen = doc[v2.STATE_KEY_V2][DOMAIN]["policy_id"]
     api.answer(doc, DOMAIN,
-               api.view(doc, DOMAIN)["current_question"]["skill_key"], "yes")
+               api.view(doc, DOMAIN)["current_question"]["question_ref"],
+               "yes")
     assert doc[v2.STATE_KEY_V2][DOMAIN]["policy_id"] == frozen
 
 

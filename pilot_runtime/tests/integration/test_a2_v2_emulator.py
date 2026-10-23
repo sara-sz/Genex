@@ -148,7 +148,8 @@ def _drive_baseline(parent, session_id, overrides, *,
                 answer = value
         response = client.post(
             base + "/answer",
-            json={"skill_key": question["skill_key"], "answer": answer},
+            json={"question_ref": question["question_ref"],
+                  "answer": answer},
             headers=auth)
         assert response.status_code == 200, response.text
         trace.append((question["months"], question["milestone"], answer))

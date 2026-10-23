@@ -65,6 +65,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from api import baseline_contract
 from api import baseline_policy
+from api import baseline_question_ref as question_ref_mod
 from api import baseline_projection_gate as projection_gate
 from genex_core.functional_baseline import (
     BaselineError,
@@ -197,6 +198,25 @@ def _envelope(doc: Dict[str, Any], domain: str) -> Dict[str, Any]:
     return (doc.get(ENVELOPE_STATE_KEY_V2) or {}).get(domain) or {}
 
 
+def _question_salt(doc: Dict[str, Any], domain: str) -> str:
+    """This session's question-reference salt, minted on first use.
+
+    Minted here rather than only at `start()` so a session begun before this
+    change keeps working. There are no real-family sessions yet, so there is no
+    migration — but a fixture or a replayed fictional session must not 500.
+
+    Written into the ENVELOPE, never the canonical record: the A2 source digest
+    is taken over `record_to_state_v2` alone, so this cannot move a projection
+    id.
+    """
+    envelope = doc.setdefault(ENVELOPE_STATE_KEY_V2, {}).setdefault(domain, {})
+    salt = question_ref_mod.salt_from_envelope(envelope)
+    if salt is None:
+        salt = question_ref_mod.new_salt()
+        envelope[question_ref_mod.ENVELOPE_SALT_FIELD] = salt
+    return salt
+
+
 def is_finalized(doc: Dict[str, Any], domain: str) -> bool:
     return bool(_envelope(doc, domain).get("finalized"))
 
@@ -300,15 +320,18 @@ def policy_for_record(record: BaselineRecordV2):
                                          record.policy_digest or "")
 
 
-def answer(doc: Dict[str, Any], domain: str, requested_skill_key: str,
+def answer(doc: Dict[str, Any], domain: str, requested_question_ref: str,
            value: str) -> Dict[str, Any]:
     """Record one skill's evidence against the skill the engine asked next.
 
-    THE SKILL-KEY CHECK IS WHAT MAKES RETRIES SAFE, and it is strictly stronger
+    THE REFERENCE CHECK IS WHAT MAKES RETRIES SAFE, and it is strictly stronger
     than v1's. v1's `question_id` embedded `milestone[:48]`, so two milestones
     sharing a 48-character prefix shared an id and an answer could land on the
-    wrong rung. v2's key is the full canonical identity joined on a separator
-    that cannot occur in the data, so it identifies exactly one skill.
+    wrong rung. The v2 reference is a digest of the FULL canonical identity
+    under this session's salt, so it identifies exactly one skill — injective
+    in `skill_key` for a fixed salt, which is what keeps the guard as strong as
+    comparing the keys themselves while publishing neither the month nor the
+    subdomain.
 
     A resubmitted answer is REFUSED rather than re-recorded: once evidence
     lands, the engine's next question is a different skill, so the stale key no
@@ -335,9 +358,14 @@ def answer(doc: Dict[str, Any], domain: str, requested_skill_key: str,
     question = next_question_v2(record)
     if question is None:
         raise BaselineV2NotInProgress(key)
-    if question["skill_key"] != requested_skill_key:
-        raise BaselineV2SkillMismatch(question["skill_key"],
-                                      requested_skill_key)
+    salt = _question_salt(doc, key)
+    expected_ref = question_ref_mod.question_ref(salt, question["skill_key"])
+    if expected_ref != (requested_question_ref or ""):
+        # Both sides are REFERENCES. The canonical key is never echoed back in
+        # a refusal: the 422 body is client-visible, so echoing it there would
+        # reopen the leak the reference exists to close.
+        raise BaselineV2SkillMismatch(expected_ref,
+                                      str(requested_question_ref or ""))
 
     # `_classify` raises BaselineError on an unsupported answer. Pydantic has
     # already constrained the vocabulary, so this is the engine's own second
@@ -383,7 +411,8 @@ def finalize_baseline(doc: Dict[str, Any], domain: str
 # the client view
 # ---------------------------------------------------------------------------
 
-def _client_question(question: Optional[Dict[str, Any]]
+def _client_question(question: Optional[Dict[str, Any]],
+                     salt: Optional[str] = None
                      ) -> Optional[Dict[str, Any]]:
     """The parent-facing part of a question, and nothing else.
 
@@ -392,8 +421,9 @@ def _client_question(question: Optional[Dict[str, Any]]
     is track membership. Neither is anything a parent answering a question
     needs.
 
-    `skill_key` IS returned, because the client must echo it back on `/answer` —
-    that is the whole retry guard.
+    `question_ref` IS returned, because the client must echo it back on
+    `/answer` — that is the whole retry guard. It is an OPAQUE digest, not the
+    canonical key; see `api/baseline_question_ref.py`.
 
     ## `months` IS WITHHELD — PRE-DEPLOY CLEANUP
 
@@ -407,18 +437,21 @@ def _client_question(question: Optional[Dict[str, Any]]
     presented by `milestone` and `parent_explanation`. The canonical month is
     unchanged server-side.
 
-    ## KNOWN RESIDUE, REPORTED NOT FIXED
+    ## THE `skill_key` RESIDUE IS CLOSED
 
-    `skill_key` is `skill_key(domain, subdomain, months, milestone)` joined by a
-    unit separator, so a client that splits it recovers the month — and the
-    subdomain this function deliberately withholds. The docstring above once
-    claimed it "tells the client nothing it was not just shown"; that was
-    wrong.
+    An earlier revision returned `skill_key` here and told clients to treat it
+    as opaque. It is not: splitting it on the unit separator recovers the month
+    and the subdomain this function withholds, so the month still reached the
+    browser. The canonical key now stays server-side entirely.
     """
     if question is None:
         return None
+    if not salt:
+        raise question_ref_mod.QuestionRefError(
+            "a client question needs this session's reference salt")
     return {
-        "skill_key": question["skill_key"],
+        "question_ref": question_ref_mod.question_ref(salt,
+                                                      question["skill_key"]),
         "milestone": question["milestone"],
         "parent_explanation": question.get("parent_explanation", ""),
     }
@@ -497,7 +530,8 @@ def view(doc: Dict[str, Any], domain: str) -> Dict[str, Any]:
         "status": record.status,
         "skills_assessed": len(record.skills),
         "bands": _band_progress(record),
-        "current_question": _client_question(question),
+        "current_question": _client_question(question,
+                                            _question_salt(doc, key)),
         # SUFFICIENCY, and it currently carries no evidence threshold of its
         # own: it reports the traversal's verdict, nothing more. The approved
         # target behaviour requires an explicit sufficiency predicate here.

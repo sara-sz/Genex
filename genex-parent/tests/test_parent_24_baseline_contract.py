@@ -86,7 +86,7 @@ def _live_doc(age=36, choice="many_single_words", answer="yes"):
         question = api.view(doc, DOMAIN).get("current_question")
         if not question:
             break
-        api.answer(doc, DOMAIN, question["skill_key"], answer)
+        api.answer(doc, DOMAIN, question["question_ref"], answer)
     return doc
 
 

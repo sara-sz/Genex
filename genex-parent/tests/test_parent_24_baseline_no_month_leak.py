@@ -16,16 +16,18 @@ The gates this file installs permanently:
   * internal traversal and target evidence are unchanged
   * projection identity and historical records are unaffected
 
-## THE ONE KNOWN RESIDUE, ASSERTED SO IT CANNOT BE FORGOTTEN
+## THE `skill_key` RESIDUE IS CLOSED
 
-`skill_key` is `skill_key(domain, subdomain, months, milestone)` joined by a
-unit separator, so a client that splits it recovers the month AND the subdomain
-that `_client_question` deliberately withholds. It cannot be removed here: the
-client must echo it back on `/answer` and that is the entire retry guard, so
-changing it would alter a frozen external contract rather than a browser
-display. `test_the_skill_key_residue_is_known_and_unchanged` pins it as a
-DELIBERATE, REPORTED exception — not an oversight, and not permission to add a
-second one.
+An earlier revision of this cleanup left one: `skill_key` is
+`domain · subdomain · months · milestone` joined by a unit separator, so a
+client that split it recovered the month and the subdomain the question payload
+deliberately withholds. Instructing clients to treat it as opaque did not make
+it opaque — the month still arrived.
+
+The browser now receives an opaque `question_ref` instead and the canonical key
+never leaves the server. `test_no_canonical_key_reaches_the_client` and
+`test_the_reference_is_not_invertible_by_parsing` pin that, so the residue
+cannot quietly return.
 """
 
 from __future__ import annotations
@@ -63,7 +65,11 @@ def _live(age=30, choice="two_three_words", answer_for=None, finalize=True):
         question = views[-1].get("current_question")
         if not question:
             break
-        api.answer(doc, DOMAIN, question["skill_key"], answer_for(question))
+        # The month is read from the SERVER record, because the client payload
+        # no longer carries it in any form.
+        enriched = dict(question, months=_months_of(doc))
+        api.answer(doc, DOMAIN, question["question_ref"],
+                   answer_for(enriched))
         views.append(api.view(doc, DOMAIN))
     if finalize and not views[-1]["finalized"]:
         api.finalize_baseline(doc, DOMAIN)
@@ -71,8 +77,24 @@ def _live(age=30, choice="two_three_words", answer_for=None, finalize=True):
     return doc, views
 
 
-def _months_of(question):
-    return int(question["skill_key"].split("\x1f")[2])
+def _at_start(age=30, choice="two_three_words"):
+    """Started, nothing answered — so a next question still exists."""
+    doc = {"brain_state": {"child": {"chronological_months": age}},
+           "age_in_months": age}
+    api.start(doc, DOMAIN, choice)
+    return doc, api.view(doc, DOMAIN)
+
+
+def _months_of(doc):
+    """The canonical month of the question the ENGINE will ask next.
+
+    Read server-side from the record. It can no longer be recovered from the
+    client payload at all — which is the whole point: `_months_of` used to take
+    the client question and split its `skill_key`.
+    """
+    record = v2.record_from_state_v2(doc[api.CANONICAL_STATE_KEY_V2][DOMAIN])
+    question = v2.next_question_v2(record)
+    return None if question is None else int(question["months"])
 
 
 def _integers(node):
@@ -165,11 +187,12 @@ def test_the_whole_month_sweep_across_every_answer_shape():
 
 def test_the_current_question_payload_is_exactly_three_fields():
     _doc, views = _live(finalize=False)
+    views = [_at_start()[1]] + views
     questions = [v["current_question"] for v in views
                  if v.get("current_question")]
     assert questions
     for question in questions:
-        assert set(question) == {"skill_key", "milestone",
+        assert set(question) == {"question_ref", "milestone",
                                  "parent_explanation"}
         assert "months" not in question
         assert "subdomain" not in question
@@ -191,31 +214,119 @@ def test_the_client_question_builder_withholds_months_structurally():
 
 def test_the_engine_question_still_carries_months_for_the_server():
     """The month is withheld from the CLIENT, not removed from the engine."""
+    from api import baseline_question_ref as QR
+
     record = v2.start_baseline_v2(AREA, "two_three_words", 30)
     question = v2.next_question_v2(record)
     assert question["months"] == 24
-    assert api._client_question(question)["skill_key"] == \
-        question["skill_key"]
-    assert "months" not in api._client_question(question)
+    assert question["skill_key"]
+
+    salt = QR.new_salt()
+    client = api._client_question(question, salt)
+    assert "months" not in client
+    assert "skill_key" not in client
+    assert client["question_ref"] == QR.question_ref(salt,
+                                                     question["skill_key"])
 
 
-def test_the_skill_key_residue_is_known_and_unchanged():
-    """DELIBERATE, REPORTED EXCEPTION — see this module's docstring.
+def test_a_client_question_cannot_be_built_without_a_salt():
+    """Fail closed rather than fall back to the canonical key."""
+    from api import baseline_question_ref as QR
 
-    `skill_key` must keep its exact shape: the client echoes it on `/answer`
-    and the engine validates it, so this is a frozen external contract rather
-    than a display. Pinned here so the residue is a recorded decision and a
-    change to the key shape is a visible, reviewed event.
-    """
-    _doc, views = _live(finalize=False)
+    record = v2.start_baseline_v2(AREA, "two_three_words", 30)
+    question = v2.next_question_v2(record)
+    with pytest.raises(QR.QuestionRefError):
+        api._client_question(question, None)
+    with pytest.raises(QR.QuestionRefError):
+        api._client_question(question, "")
+
+
+def test_no_canonical_key_reaches_the_client():
+    """THE RESIDUE, CLOSED. The canonical key never leaves the server."""
+    doc, view = _at_start()
+    views = [view]
+    stored = doc[api.CANONICAL_STATE_KEY_V2][DOMAIN]
+    record = v2.record_from_state_v2(stored)
+    expected = v2.next_question_v2(record)["skill_key"]
+    assert "\x1f" in expected, "the canonical key really is separator-joined"
+
     question = views[0]["current_question"]
-    fields = question["skill_key"].split("\x1f")
-    assert len(fields) == 4
-    assert fields[0] == DOMAIN
-    assert fields[2].isdigit()
-    assert int(fields[2]) in CANONICAL_MONTHS
-    # It is NOT a second display field: nothing else in the payload repeats it.
-    assert "months" not in question
+    assert "skill_key" not in question
+    blob = json.dumps(views[0])
+    assert expected not in blob
+    assert "\u001f" not in blob and "\x1f" not in blob
+
+
+def test_the_reference_is_not_invertible_by_parsing():
+    """It is a digest: no field, no separator, no month, no subdomain."""
+    from api import baseline_question_ref as QR
+
+    _doc, view = _at_start()
+    ref = view["current_question"]["question_ref"]
+    assert len(ref) == QR.REF_HEX_LENGTH
+    assert all(c in "0123456789abcdef" for c in ref)
+    assert "\x1f" not in ref
+    # No canonical month is recoverable from any slice of it.
+    for month in sorted(CANONICAL_MONTHS):
+        assert str(month) != ref
+    assert DOMAIN not in ref
+
+
+def test_the_reference_is_salted_per_session():
+    """Two sessions asking the SAME question produce different references.
+
+    This is what stops the reference being a global, reversible lookup table
+    over the 163 canonical rungs for anyone holding the public taxonomy.
+    """
+    first_doc, first_view = _at_start()
+    second_doc, second_view = _at_start()
+    a = first_view["current_question"]
+    b = second_view["current_question"]
+    assert a["milestone"] == b["milestone"], "the same question, by design"
+    assert a["question_ref"] != b["question_ref"]
+    salt_a = first_doc[api.ENVELOPE_STATE_KEY_V2][DOMAIN]["question_salt"]
+    salt_b = second_doc[api.ENVELOPE_STATE_KEY_V2][DOMAIN]["question_salt"]
+    assert salt_a != salt_b
+
+
+def test_the_reference_is_stable_within_a_session():
+    """Replay and idempotency: re-reading the view yields the same reference."""
+    doc, _view = _at_start()
+    first = api.view(doc, DOMAIN)["current_question"]["question_ref"]
+    second = api.view(doc, DOMAIN)["current_question"]["question_ref"]
+    assert first == second
+
+    api.answer(doc, DOMAIN, first, "yes")
+    # A stale reference is refused, exactly as a stale key was.
+    with pytest.raises(api.BaselineV2SkillMismatch) as caught:
+        api.answer(doc, DOMAIN, first, "yes")
+    # And the refusal echoes REFERENCES, never the canonical key.
+    assert "\x1f" not in caught.value.expected
+    assert "\x1f" not in caught.value.received
+    assert len(caught.value.expected) == 32
+
+
+def test_the_salt_is_never_in_the_canonical_record():
+    """So it cannot move a projection id."""
+    doc, _views = _live()
+    stored = doc[api.CANONICAL_STATE_KEY_V2][DOMAIN]
+    assert "question_salt" not in stored
+    assert "question_salt" not in json.dumps(stored)
+    assert "question_salt" in doc[api.ENVELOPE_STATE_KEY_V2][DOMAIN]
+    # The digest is over the canonical dict, so it is unaffected.
+    assert pv2.canonical_source_digest(stored) == \
+        pv2.canonical_source_digest(
+            v2.record_to_state_v2(v2.record_from_state_v2(
+                copy.deepcopy(stored))))
+
+
+def test_a_session_without_a_salt_still_works():
+    """A pre-existing session mints one on first use rather than 500ing."""
+    doc, _view = _at_start()
+    del doc[api.ENVELOPE_STATE_KEY_V2][DOMAIN]["question_salt"]
+    view = api.view(doc, DOMAIN)
+    assert view["current_question"]["question_ref"]
+    assert doc[api.ENVELOPE_STATE_KEY_V2][DOMAIN]["question_salt"]
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +344,7 @@ def test_position_is_a_dense_one_based_sequence():
 
 def test_position_matches_the_order_the_traversal_entered_bands():
     doc, views = _live(age=30, choice="two_three_words",
-                       answer_for=lambda q: "yes" if _months_of(q) <= 24
+                       answer_for=lambda q: "yes" if q["months"] <= 24
                        else "no")
     entered = doc[api.CANONICAL_STATE_KEY_V2][DOMAIN]["bands_entered"]
     bands = views[-1]["bands"]
@@ -247,7 +358,7 @@ def test_position_matches_the_order_the_traversal_entered_bands():
 
 def test_progress_counts_are_still_reported_per_band():
     doc, views = _live(age=30, choice="two_three_words",
-                       answer_for=lambda q: "yes" if _months_of(q) <= 24
+                       answer_for=lambda q: "yes" if q["months"] <= 24
                        else "no")
     final = views[-1]
     assert len(final["bands"]) == 2
@@ -273,7 +384,7 @@ def test_progress_is_monotonic_as_the_interview_advances():
 
 def test_the_stored_record_still_carries_the_canonical_months():
     doc, _views = _live(age=30, choice="two_three_words",
-                        answer_for=lambda q: "yes" if _months_of(q) <= 24
+                        answer_for=lambda q: "yes" if q["months"] <= 24
                         else "no")
     stored = doc[api.CANONICAL_STATE_KEY_V2][DOMAIN]
     assert stored["bands_entered"] == [24, 30]
@@ -285,7 +396,7 @@ def test_the_outcome_and_target_evidence_are_unchanged():
     from api import baseline_outcome as O
 
     doc, _views = _live(age=30, choice="two_three_words",
-                        answer_for=lambda q: "yes" if _months_of(q) <= 24
+                        answer_for=lambda q: "yes" if q["months"] <= 24
                         else "no")
     record = v2.record_from_state_v2(doc[api.CANONICAL_STATE_KEY_V2][DOMAIN])
     result = O.derive_outcome(record)
@@ -298,13 +409,17 @@ def test_the_outcome_and_target_evidence_are_unchanged():
 def test_the_traversal_is_unaffected_by_the_display_change():
     """The questions asked, and their order, are identical."""
     doc, views = _live(age=30, choice="two_three_words")
-    asked = [v["current_question"]["skill_key"] for v in views
+    asked = [v["current_question"]["question_ref"] for v in views
              if v.get("current_question")]
     assert asked == sorted(set(asked), key=asked.index), "no repeats"
-    months = [int(k.split("\x1f")[2]) for k in asked]
-    assert months == sorted(months) or months[0] == 24
     assert len(asked) == len(
         doc[api.CANONICAL_STATE_KEY_V2][DOMAIN]["skills"])
+    # The traversal order is asserted against the SERVER record, which is the
+    # only place the months live now. All-`yes` from a 24m anchor ascends to
+    # the guardrail, so three bands are entered.
+    entered = doc[api.CANONICAL_STATE_KEY_V2][DOMAIN]["bands_entered"]
+    assert entered == [24, 30, 36]
+    assert entered == sorted(entered), "ascent only"
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +434,7 @@ def test_the_projection_payload_still_carries_the_canonical_months():
     this file is unserved today, so it has no payload to inspect.
     """
     doc, _views = _live(age=24, choice="many_single_words",
-                        answer_for=lambda q: "yes" if _months_of(q) <= 18
+                        answer_for=lambda q: "yes" if q["months"] <= 18
                         else "no")
     payload = api.projection_payload(doc, DOMAIN)
     assert {s["months"] for s in payload["skills"]} == {18, 24}
@@ -357,13 +472,9 @@ def test_the_parent_outcome_block_is_still_parent_safe():
     C.assert_parent_safe(views[-1]["current_question"])
 
 
-def test_the_whole_view_passes_the_parent_month_rule_except_the_skill_key():
-    """The skill key is the one reported exception; everything else is clean."""
-    _doc, views = _live(finalize=False)
-    view = dict(views[0])
-    question = dict(view["current_question"])
-    question.pop("skill_key")
-    view["current_question"] = question
+def test_the_whole_view_passes_the_parent_month_rule_with_no_exception():
+    """No carve-out any more: the ENTIRE payload is scanned."""
+    _doc, view = _at_start()
     blob = json.dumps(view)
     assert "months" not in blob
     for month in sorted(CANONICAL_MONTHS - {2, 4, 6, 9}):
