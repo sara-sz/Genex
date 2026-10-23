@@ -30,6 +30,8 @@ sys.path.insert(0, str(REPO_ROOT / "genex-parent"))
 sys.modules.setdefault("openai", None)
 os.environ.pop("OPENAI_API_KEY", None)
 
+from api import baseline_outcome as PARENT_OUTCOME            # noqa: E402
+from api import baseline_projection_gate as PROJECTION_GATE  # noqa: E402
 from api import functional_baseline_v2_api as PARENT_API      # noqa: E402
 
 from pilot_backend.domain.suggestion_generation_v2 import (   # noqa: E402
@@ -65,6 +67,47 @@ PRONOUNS = "I me or we"
 WH = "ask who or what or where or why"
 
 
+class ParentProjection(tuple):
+    """`(projection, asked)` plus the Parent-side projectability verdict.
+
+    A tuple subclass so every existing `projection, asked = ...` unpacking
+    keeps working unchanged; `parent_withheld` is reached by name.
+    """
+
+    def __new__(cls, projection, asked, parent_withheld):
+        self = super().__new__(cls, (projection, asked))
+        self.parent_withheld = parent_withheld
+        return self
+
+
+def _assert_parent_withholds(result, *, expect_unsupported=True):
+    """SLICE 8 at the cross-system boundary.
+
+    Parent refuses to project an identified-but-unservable target, and the
+    refusal PRESERVES the unsupported-target evidence. Asserted here so the
+    Pilot-side classification tests below also pin the upstream behaviour
+    rather than silently bypassing it.
+    """
+    decision = result.parent_withheld
+    assert decision is not None, (
+        "the Parent product path must withhold this projection")
+    assert decision.status == PROJECTION_GATE.PROJECTION_WITHHELD
+    assert decision.outcome == \
+        PARENT_OUTCOME.OUTCOME_TARGET_UNSUPPORTED_BY_CONTENT
+    assert decision.withheld_because == \
+        PROJECTION_GATE.WITHHELD_UNSUPPORTED_BY_CONTENT
+    # The clinical finding survives the refusal.
+    assert decision.target_band is not None
+    if expect_unsupported:
+        assert decision.unsupported_families or decision.unmappable_skills
+    return decision
+
+
+def _assert_parent_projects(result):
+    assert result.parent_withheld is None, (
+        f"Parent unexpectedly withheld: {result.parent_withheld}")
+
+
 @pytest.fixture(scope="module")
 def rungs():
     return build_static_rung_source()
@@ -98,14 +141,27 @@ def parent_projection(overrides, *, choice="two_three_words", chrono=30,
         view = PARENT_API.answer(doc, DOMAIN, question["skill_key"], answer)
     PARENT_API.finalize_baseline(doc, DOMAIN)
 
-    payload = PARENT_API.projection_payload(doc, DOMAIN)
+    # Built through the UNGATED constructor, and the Parent-side
+    # projectability verdict is returned alongside rather than conflated with
+    # it. This suite exists to prove the PILOT's classification against the
+    # real frozen artifact, and the Pilot is the authority on content
+    # availability — it can only exercise that authority on a payload it can
+    # see. Tests that care about the Parent gate assert `parent_withheld`
+    # explicitly; see `_assert_parent_withholds`.
+    payload = PARENT_API.build_projection_payload(doc, DOMAIN)
+    try:
+        PARENT_API.projection_payload(doc, DOMAIN)
+        parent_withheld = None
+    except PROJECTION_GATE.ProjectionWithheld as exc:
+        parent_withheld = exc.decision
+
     projection = project_baseline_v2(
         rung_source=rung_source, child_id=CHILD, source_session_id=SESSION,
         source_record_digest=DIGEST, summary=payload["summary"],
         skills=payload["skills"],
         band_totals=[(b["months"], b["total_skills"])
                      for b in payload["band_totals"]])
-    return projection, asked
+    return ParentProjection(projection, tuple(asked), parent_withheld)
 
 
 def service(rung_source):
@@ -127,8 +183,11 @@ def ref_of(rung_source, asked, fragment, months=30):
 
 def test_the_real_mixed_30m_case_targets_only_book_naming(rungs, artifact):
     """book=ND, two-word=D, vocab=D, pronouns=unknown, on the real ladder."""
-    projection, asked = parent_projection(
+    result = parent_projection(
         {BOOK: "no", PRONOUNS: "not_sure"}, rung_source=rungs)
+    projection, asked = result
+    # SUPPORTED path: Parent projects it, so the whole product chain is live.
+    _assert_parent_projects(result)
     svc = service(rungs)
 
     views = {view.months: view for view in svc.band_views(projection)}
@@ -164,9 +223,16 @@ def test_the_real_multi_deficit_case_yields_two_targets_and_one_unsupported(
     book=ND, two-word=emerging, vocab=D, pronouns=ND -> two anchored targets
     plus `pronouns` as an unsupported canonical target.
     """
-    projection, asked = parent_projection(
+    result = parent_projection(
         {BOOK: "no", TWO_WORD: "sometimes", PRONOUNS: "no"},
         rung_source=rungs)
+    projection, asked = result
+    # OPTION B. The band holds a served deficit AND an unservable one, so the
+    # whole band is unsupported by the all-families-served rule and Parent
+    # withholds it. The Pilot classification below is still what this test
+    # proves, and it remains reachable for historical projections and for the
+    # Parent/Pilot mismatch check.
+    _assert_parent_withholds(result)
     svc = service(rungs)
 
     band, mappable, unsupported = svc.resolve_targets(projection)
@@ -192,8 +258,10 @@ def test_the_real_multi_deficit_case_yields_two_targets_and_one_unsupported(
 
 
 def test_an_unknown_only_real_band_generates_nothing(rungs):
-    projection, asked = parent_projection({PRONOUNS: "not_sure"},
-                                          rung_source=rungs)
+    result = parent_projection({PRONOUNS: "not_sure"}, rung_source=rungs)
+    projection, asked = result
+    # Unknown-only evidence is projectable: summarisable, never generatable.
+    _assert_parent_projects(result)
     svc = service(rungs)
     band, mappable, unsupported = svc.resolve_targets(projection)
     assert band.months == 30
@@ -209,7 +277,11 @@ def test_an_all_unmappable_real_band_yields_only_unsupported_targets(rungs,
     Zero targets, one unsupported ref, and NO step to a higher band — even
     though higher bands on the real ladder contain mappable rungs.
     """
-    projection, asked = parent_projection({PRONOUNS: "no"}, rung_source=rungs)
+    result = parent_projection({PRONOUNS: "no"}, rung_source=rungs)
+    projection, asked = result
+    # OPTION B: Parent withholds, and names the gap.
+    decision = _assert_parent_withholds(result)
+    assert decision.target_band == 30
     svc = service(rungs)
     band, mappable, unsupported = svc.resolve_targets(projection)
     assert band.months == 30
@@ -238,8 +310,10 @@ def test_a_fully_mastered_real_assessment_selects_no_band(rungs):
 def test_the_other_unmappable_declared_rungs_also_report_as_unsupported(
         rungs, artifact):
     """`wh_question_asking` at 36 months, through the real 36m band."""
-    projection, asked = parent_projection(
+    result = parent_projection(
         {WH: "no"}, choice="short_sentences", chrono=40, rung_source=rungs)
+    projection, asked = result
+    _assert_parent_withholds(result)        # OPTION B
     svc = service(rungs)
     band, mappable, unsupported = svc.resolve_targets(projection)
 
@@ -310,18 +384,26 @@ def test_the_real_target_is_the_failed_skill_not_the_first_by_wording(rungs):
     """
     svc = service(rungs)
     seen = set()
+    withheld = 0
+    projected = 0
     for fragment in (BOOK, TWO_WORD, VOCAB, PRONOUNS):
-        projection, asked = parent_projection({fragment: "no"},
-                                              rung_source=rungs)
+        result = parent_projection({fragment: "no"}, rung_source=rungs)
+        projection, asked = result
         band, mappable, unsupported = svc.resolve_targets(projection)
         expected = ref_of(rungs, asked, fragment)
         assert band.target_refs == (expected,), fragment
         # Mappable ones generate; `pronouns` reports as unsupported.
         if mappable:
             assert [r.rung_ref for r in mappable] == [expected], fragment
+            _assert_parent_projects(result)
+            projected += 1
         else:
             assert unsupported == (expected,), fragment
+            _assert_parent_withholds(result)        # OPTION B
+            withheld += 1
         seen.add(expected)
+    # BOTH cross-system paths exercised here, non-vacuously.
+    assert projected and withheld, (projected, withheld)
     # Four DISTINCT targets for four distinct deficits — not one winner.
     assert len(seen) == 4
 
@@ -336,13 +418,22 @@ def test_the_real_outcome_vocabulary_covers_every_observed_case(rungs):
     }
     svc = service(rungs)
     for expected, overrides in cases.items():
-        projection, _asked = parent_projection(overrides, rung_source=rungs)
+        result = parent_projection(overrides, rung_source=rungs)
+        projection, _asked = result
         band, mappable, unsupported = svc.resolve_targets(projection)
         if expected == OUTCOME_GENERATED:
             assert mappable, expected
+            _assert_parent_projects(result)
         elif expected == OUTCOME_NO_SUPPORTED_TARGET:
             assert not mappable and unsupported, expected
+            # OPTION B: Parent withholds this one upstream, so the Pilot's
+            # `no_supported_target` is reached only by a historical projection
+            # or by the mismatch path — and must stay classifiable either way.
+            _assert_parent_withholds(result)
         elif expected == OUTCOME_INSUFFICIENT_KNOWN_EVIDENCE:
             assert band is not None and not band.target_refs, expected
+            # Reaches the Pilot by design: summarisable, not generatable.
+            _assert_parent_projects(result)
         else:
             assert band is None, expected
+            _assert_parent_projects(result)

@@ -599,17 +599,45 @@ def projection_payload(doc: Dict[str, Any], domain: str) -> Dict[str, Any]:
     session id and digest are added by the CLIENT, which is the module that
     knows it is sending a request.
     """
+    # SLICE 8. Refuse BEFORE building, and refuse HERE rather than at the
+    # route, because this is the one function the product path passes through:
+    # `main.py` calls it for the payload and there is no second way to reach
+    # the Pilot. A check at the route would be bypassed by any future caller.
+    #
+    # The outcome is NOT rewritten — see `api/baseline_projection_gate.py`.
+    key = require_supported_domain(domain)
+    record = record_from_state_v2(finalized_record(doc, key))
+    projection_gate.assert_projectable(record)
+    return build_projection_payload(doc, key)
+
+
+def build_projection_payload(doc: Dict[str, Any],
+                             domain: str) -> Dict[str, Any]:
+    """The payload itself, with NO projectability gate. NOT the product path.
+
+    Separated from `projection_payload` so that two genuinely different
+    questions stop sharing one function:
+
+        may this record be projected?      `projection_payload`
+        what would its payload look like?  this
+
+    The product path is unchanged — `main.py` still calls the gated function,
+    and `test_the_ungated_builder_has_exactly_one_caller_in_api` asserts this
+    one has a single caller inside `api/`, the gated wrapper above. Adding a
+    second would be a visible, reviewed event.
+
+    The split exists because the PILOT is the authority on content
+    availability, and it can only exercise that authority on a payload it can
+    see. Parent's served-family set is a MIRROR of the Pilot's content state;
+    if the mirror were the only way to construct a payload, the mirror would
+    have quietly become the decider, and a Parent/Pilot disagreement could
+    never be detected — let alone failed closed on. Cross-system tests
+    therefore build payloads here and assert the Parent gate's verdict
+    separately.
+    """
     key = require_supported_domain(domain)
     stored = finalized_record(doc, key)
     record = record_from_state_v2(stored)
-
-    # SLICE 8. Refuse here rather than at the route, because this is the one
-    # function every projection passes through: `main.py` calls it for the
-    # payload and there is no second way to build one. A check at the route
-    # would be bypassed by any future caller.
-    #
-    # The outcome is NOT rewritten — see `api/baseline_projection_gate.py`.
-    projection_gate.assert_projectable(record)
 
     missing = [f for f in PROJECTED_SUMMARY_FIELDS if f not in stored]
     if missing:
@@ -661,6 +689,7 @@ __all__ = [
     "finalize_baseline",
     "finalized_record",
     "is_finalized",
+    "build_projection_payload",
     "projection_payload",
     "require_supported_domain",
     "skill_key",

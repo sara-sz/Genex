@@ -148,6 +148,65 @@ def test_the_gate_is_in_the_one_function_every_projection_passes_through():
     assert main_src.count("projection_payload(") == 1
 
 
+def test_the_ungated_builder_has_exactly_one_caller_in_api():
+    """The split must not become a bypass.
+
+    `build_projection_payload` exists so the Pilot can be the authority on
+    content availability — it cannot exercise that authority on a payload it
+    never sees. But exactly one caller inside `api/` may use it: the gated
+    wrapper. A second would be a route reaching the Pilot without the slice-8
+    refusal, which is the whole thing this gate prevents.
+    """
+    import pathlib as _pathlib
+    import re
+
+    callers = {}
+    for path in sorted(_pathlib.Path("api").glob("*.py")):
+        hits = re.findall(r"\bbuild_projection_payload\b", path.read_text())
+        # Subtract the definition itself in the module that declares it.
+        count = len(hits)
+        if path.name == "functional_baseline_v2_api.py":
+            count -= 1          # the `def`
+            count -= 1          # the __all__ entry
+        if count > 0:
+            callers[path.name] = count
+    assert callers == {"functional_baseline_v2_api.py": 1}, callers
+
+
+def test_main_reaches_the_pilot_only_through_the_gated_function():
+    import pathlib as _pathlib
+
+    main_src = _pathlib.Path("api/main.py").read_text()
+    assert "build_projection_payload" not in main_src
+    assert main_src.count("projection_payload(") == 1
+
+
+def test_the_gated_wrapper_refuses_before_it_builds():
+    """Order matters: a withheld record must not even construct a payload."""
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(api.projection_payload).lstrip())
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.Module)) and \
+                ast.get_docstring(node):
+            node.body = node.body[1:]
+    code = ast.unparse(tree)
+    assert code.index("assert_projectable") < \
+        code.index("build_projection_payload")
+
+
+def test_the_ungated_builder_really_is_ungated():
+    """Non-vacuity: it builds the payload slice 8 refuses."""
+    record, _total, _trace = _drive(WITHHELD_PATH)
+    doc = _doc_from(record)
+    with pytest.raises(G.ProjectionWithheld):
+        api.projection_payload(doc, DOMAIN)
+    payload = api.build_projection_payload(doc, DOMAIN)
+    assert set(payload) == {"summary", "skills", "band_totals"}
+    assert payload["skills"]
+
+
 def test_every_withheld_path_is_refused_at_the_api():
     refused = 0
     for _choice, _age, _pattern, record in _all_paths():
