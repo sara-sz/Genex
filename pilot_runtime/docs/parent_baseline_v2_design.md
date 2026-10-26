@@ -417,6 +417,42 @@ is not parent-facing clinical information.
 
 ---
 
+## 14b. A2 v2.1 — authority split, FROZEN
+
+**IMPLEMENTED.** Who decides what, across the Parent/Pilot boundary.
+
+| Question | Authority | Why |
+|---|---|---|
+| the child's evidence and canonical target | **Parent** | it is the system of record for a functional baseline |
+| the derived broad-profile summary | **Parent** | the Channel-B evidence never crosses the boundary, so the Pilot cannot reconstruct it |
+| content availability / serviceability | **Pilot** | the approved activity bank lives there and only there |
+| canonical-rung and content checks | **Pilot** | it owns the frozen rung table and the bank |
+| GoalSuggestion eligibility | **Pilot** | it is the only system that can confirm a target is servable *now* |
+
+Parent's served-family set is a **mirror**, used for caregiver UX and to
+withhold a projection upstream. It is transmitted as provenance so a
+disagreement is diagnosable, and it is **never** authority for generation.
+
+**Disagreement fails closed.** Parent claiming a target is supported while the
+approved bank disagrees refuses the generation, writes nothing — no claim, no
+suggestion, no anchor — and surfaces both digests. The reverse direction does
+not refuse: a mirror that under-reports is a safe stale mirror and the Pilot's
+verdict governs. No near-mapping and no substitution in either direction.
+
+**The gate is the last instruction before the first side effect.** It sits in
+`generate_anchored_suggestion` immediately before the claim is built, so a
+verdict taken earlier cannot authorise a later write. An absent content
+authority is a refusal on the v2 path, not a pass.
+
+**Profile state is structurally unavailable as a target source.** The clinician
+profile is a separate record in a separate collection, never a field on the
+projection the generator reads, so the guarantee is a property of the types
+rather than a promise. The generation path is additionally asserted to contain
+no profile vocabulary and to import neither the Parent API nor its profile
+modules.
+
+---
+
 ## 15. Measured implementation findings
 
 **IMPLEMENTED — measured, not estimated.** Recorded as evidence for the post-pilot

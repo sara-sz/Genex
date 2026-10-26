@@ -284,6 +284,71 @@ def test_no_other_family_is_substituted_when_the_target_is_unsupported():
 
 
 # ---------------------------------------------------------------------------
+# 3b. content changing changes SERVICEABILITY, never the projection
+# ---------------------------------------------------------------------------
+
+def test_content_changing_changes_the_verdict_not_the_projection():
+    """HISTORICAL vs CURRENT, on the Pilot side of the boundary.
+
+    The same stored projection, asked twice under two content states, gets two
+    verdicts — and the projection document is byte-identical both times. The
+    child's evidence is historical; serviceability is current.
+    """
+    import dataclasses
+
+    world = _deficit_world()
+    _band, mappable, _unsupported = world.service.resolve_targets(
+        world.projection)
+    rung = mappable[0]
+    before_docs = world._docs("pilot_parent_baseline_projections_v2")
+
+    rich = content_authority()
+    poor = ActivityBankContentAuthority(
+        FakeActivityBank(served=(), digest="0" * 64))
+
+    assert rich.support_for_target(rung).state == SUPPORT_SUPPORTED
+    assert poor.support_for_target(rung).state == SUPPORT_UNSUPPORTED
+    # Different content states, different digests — attributable.
+    assert rich.support_for_target(rung).content_digest != \
+        poor.support_for_target(rung).content_digest
+
+    # The stored projection did not move.
+    assert world._docs("pilot_parent_baseline_projections_v2") == before_docs
+    # And the rung — the canonical target — is the same object either way.
+    assert dataclasses.asdict(rung) == dataclasses.asdict(mappable[0])
+
+
+def test_content_returning_makes_the_same_record_generatable_again():
+    """Track 2 landing a card must reach a child already projected.
+
+    No migration, no re-interview: the same stored projection, the same
+    canonical target, a different content state, and now a suggestion.
+    """
+    blocked = _deficit_world(
+        authority=ActivityBankContentAuthority(FakeActivityBank(served=())))
+    _band, mappable, _unsupported = blocked.service.resolve_targets(
+        blocked.projection)
+    with pytest.raises(GoalValidationError):
+        blocked.goals.generate_anchored_suggestion(
+            blocked.principal(), CHILD, projection=blocked.projection,
+            canonical_rung=mappable[0],
+            observed=blocked.service._observed_domain(blocked.projection,
+                                                      mappable[0]),
+            generation_policy=GENERATION_POLICY_VERSION_V2)
+    assert blocked._docs("pilot_goal_suggestions") == []
+
+    # The SAME projection and the SAME target, under a stocked bank.
+    blocked.goals._content_authority = content_authority()
+    suggestions, created = blocked.goals.generate_anchored_suggestion(
+        blocked.principal(), CHILD, projection=blocked.projection,
+        canonical_rung=mappable[0],
+        observed=blocked.service._observed_domain(blocked.projection,
+                                                  mappable[0]),
+        generation_policy=GENERATION_POLICY_VERSION_V2)
+    assert created is True and suggestions
+
+
+# ---------------------------------------------------------------------------
 # 4. an absent authority fails closed on the v2 path
 # ---------------------------------------------------------------------------
 

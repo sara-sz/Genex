@@ -400,6 +400,68 @@ determination was made under, so two differing results are always attributable.
 This boundary is frozen in
 [`parent_baseline_v2_design.md` §13](./parent_baseline_v2_design.md).
 
+### A2 v2.1 — the versioned sibling (internal; no frontend surface)
+
+Not a frontend route. Documented here because it is the same Parent→Pilot
+boundary §4 describes, and because a reader of §4 needs to know v2 did **not**
+change.
+
+| | A2 v2 | A2 v2.1 |
+|---|---|---|
+| path | `/internal/parent-baseline-projections-v2` | `/internal/parent-baseline-projections-v21` |
+| body keys | **exactly 5** | **exactly 7** |
+| keys | `source_session_id`, `source_record_digest`, `summary`, `skills`, `band_totals` | the same 5, plus `clinician_profile` and `parent_content_evaluation` |
+| decoder | `projection_v2_request.decode_body` | `projection_v21_request.decode_body_v21` |
+
+**v2 is frozen.** Same five keys, same validation, same `source_record_digest`.
+Dispatch is by **path**, never by body shape, and neither decoder accepts the
+other's body — in either direction.
+
+```json
+"clinician_profile": {
+  "outcome": "TARGET_SUPPORTED",
+  "areas": {"receptive": "concern_observed", "social": "not_assessed"},
+  "not_assessed_causes": {"social": "no_age_appropriate_skill"},
+  "multi_area": "INDETERMINATE",
+  "multi_area_indeterminate_reasons": ["no_age_appropriate_skill"]
+},
+"parent_content_evaluation": {
+  "content_set_id": "talking-served-families-v1",
+  "content_digest": "<64 hex>",
+  "target_serviceability": "supported"
+}
+```
+
+`area` ∈ `concern_observed` · `uncertain` · `no_concern_observed` ·
+`not_assessed`. `not_assessed_causes` may only name a `not_assessed` area.
+`multi_area` ∈ `CONFIRMED` · `NOT_OBSERVED` · `INDETERMINATE`, and an
+`INDETERMINATE` verdict must carry at least one reason while a determinate one
+must carry none.
+
+**Two separate keys, not one nested object.** The profile is derived clinical
+context about the child; the evaluation is provenance about the Genex content
+library. A clinician reading a profile must not be reading a claim about our
+content as if it were a claim about the child.
+
+**Nothing raw travels, and both sides refuse it.** No raw answers, milestone
+prose, developmental months, skill refs, scores or reason codes. The Parent
+builder constructs the profile by name; the Pilot codec refuses forbidden keys,
+and the record refuses them again at construction — including a *numeric* key,
+which is a month wearing a different hat.
+
+**Storage.** The profile is written to its own create-only collection
+`pilot_parent_clinician_profiles_v21`, never as a field on the projection,
+keyed on the same `(source_session_id, domain, source_record_digest)`. That
+separation is why profile information provably cannot influence target
+selection. The content evaluation is **echoed and never stored** — it is
+provenance for a reconciliation that happens at generation time.
+
+**Goal generation is NOT authorised by any of this.** Only the Pilot's own
+approved activity bank authorises a `GoalSuggestion`, checked immediately before
+the write. Parent's evaluation can refuse a generation and can never authorise
+one; if Parent says supported and the bank disagrees, generation fails closed
+with both digests and writes nothing.
+
 ### 503 retry and idempotency — required client behaviour
 
 The Pilot endpoint is **idempotent on `(session, domain, record digest)`**, so an
