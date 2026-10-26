@@ -239,6 +239,21 @@ def profile_block(record, *, policy: policy_mod.BaselinePolicy
 # the three views
 # ---------------------------------------------------------------------------
 
+def _policy_for(record, policy):
+    """The given policy, or the registered default for THIS record.
+
+    `default_policy` takes `(baseline_version, domain)` — it is per-domain, not
+    global — so resolving it needs the record. An earlier revision called it
+    with no arguments; every test passed a policy explicitly, so the branch was
+    never executed and the TypeError sat there unexercised. Resolved from the
+    record here, in one place, so there is one answer to "which policy applies
+    to this baseline".
+    """
+    if policy is not None:
+        return policy
+    return policy_mod.default_policy(record.baseline_version, record.domain)
+
+
 def parent_view(record, *, policy: Optional[
         policy_mod.BaselinePolicy] = None) -> Dict[str, Any]:
     """Caregiver-facing. Non-diagnostic, and carries no clinical vocabulary.
@@ -248,7 +263,7 @@ def parent_view(record, *, policy: Optional[
     ships no sentences, because the copy is a product decision and a backend
     that hardcoded it would make every wording change a deploy.
     """
-    policy = policy or policy_mod.default_policy()
+    policy = _policy_for(record, policy)
     result = outcome_mod.derive_outcome(record)
     decision = projection_gate.projection_decision(record)
     state = _PARENT_STATE_FOR[result.outcome]
@@ -277,7 +292,7 @@ def clinician_summary(record, *, policy: Optional[
     sentence this view exists to support — a clinically appropriate target was
     identified, and there is no approved pilot content for it.
     """
-    policy = policy or policy_mod.default_policy()
+    policy = _policy_for(record, policy)
     history = clinical_history(record)
     return {
         "clinical_history": {
@@ -299,7 +314,7 @@ def provenance(record, *, policy: Optional[
     Not a product surface. It exists so a question count can be explained and
     a decision reproduced, which the two audience views deliberately cannot do.
     """
-    policy = policy or policy_mod.default_policy()
+    policy = _policy_for(record, policy)
     return {
         "clinical_history": clinical_history(record),
         "current_serviceability": current_serviceability(record),

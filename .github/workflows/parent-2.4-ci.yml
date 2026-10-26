@@ -247,6 +247,14 @@ jobs:
         #                 and its salt never enters the canonical record or the
         #                 projection digest
         #
+        #   projection_v21
+        #                 A2 v2.1 is a VERSIONED SIBLING: v2 still builds
+        #                 exactly five keys with the same source digest, v2.1
+        #                 builds seven with the clinician profile and Parent's
+        #                 content evaluation as SEPARATE additions, the profile
+        #                 carries no month/prose/ref/reason code, and content
+        #                 changing moves the evaluation but never the baseline
+        #
         # Run as SEPARATE pytest invocations, matching the rest of this job.
         # The parent suites are not currently isolated from one another's
         # FastAPI auth overrides, so a single combined invocation produces
@@ -256,6 +264,12 @@ jobs:
         # In the dependency-pure job: these modules need the taxonomy workbook
         # (pandas, openpyxl) and nothing else. No fastapi, no firebase.
         run: |
+          # `projection_v21` breaks the `baseline_*` naming because it is a
+          # TRANSPORT client rather than a baseline derivation; listed
+          # explicitly rather than renamed.
+          for t in tests/test_parent_24_projection_v21.py; do
+            if [ -f "$t" ]; then python -m pytest "$t" -q; fi
+          done
           for f in baseline_policy baseline_micro_tracks baseline_traversal \
                    baseline_eligibility baseline_profile baseline_additional \
                    baseline_outcome baseline_projection_gate \

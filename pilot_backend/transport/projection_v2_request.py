@@ -298,8 +298,13 @@ def decode_body(parsed: Any) -> Dict[str, Any]:
     }
 
 
-def read_request(environ: Mapping[str, Any]) -> Dict[str, Any]:
-    """Read, size-check, parse and validate one v2 projection request.
+def read_json_body(environ: Mapping[str, Any]) -> Any:
+    """Read, size-check and parse a request body. NO schema validation.
+
+    Extracted from `read_request` so the A2 v2.1 sibling codec shares this
+    exact size cap and this exact parse rather than carrying a second copy —
+    the limits are a property of the transport, not of a schema version, and
+    two copies would be two numbers to keep in step.
 
     The order is the point: the declared length is checked BEFORE the body is
     read or decoded, so an oversized payload never reaches `json.loads`.
@@ -321,12 +326,22 @@ def read_request(environ: Mapping[str, Any]) -> Dict[str, Any]:
         # The decode error is NOT propagated. `json`'s message quotes the
         # offending document fragment, which here would be milestone prose.
         raise ProjectionV2RequestError("a JSON object body is required")
-    return decode_body(parsed)
+    return parsed
+
+
+def read_request(environ: Mapping[str, Any]) -> Dict[str, Any]:
+    """Read, size-check, parse and validate one v2 projection request.
+
+    Behaviour unchanged: the same cap, the same parse, the same five-key
+    validation. Only the read half now has a name so v2.1 can reuse it.
+    """
+    return decode_body(read_json_body(environ))
 
 
 __all__ = [
     "BAND_TOTAL_KEYS",
     "BODY_KEYS",
+    "read_json_body",
     "MAX_BAND_TOTALS",
     "MAX_BODY_BYTES",
     "MAX_MILESTONE_CHARS",

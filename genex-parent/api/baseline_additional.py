@@ -475,10 +475,25 @@ def phase_for(asked_total: int, *, policy: policy_mod.BaselinePolicy) -> str:
             else PHASE_PROFILE_NORMAL)
 
 
+def _policy_for(record, policy):
+    """The given policy, or the registered default for THIS record.
+
+    `default_policy` takes `(baseline_version, domain)` — it is per-domain, not
+    global — so resolving it needs the record. An earlier revision called it
+    with no arguments; every test passed a policy explicitly, so the branch was
+    never executed and the TypeError sat there unexercised. Resolved from the
+    record here, in one place, so there is one answer to "which policy applies
+    to this baseline".
+    """
+    if policy is not None:
+        return policy
+    return policy_mod.default_policy(record.baseline_version, record.domain)
+
+
 def additional_summary(record, *, policy: Optional[
         policy_mod.BaselinePolicy] = None) -> Dict[str, Any]:
     """What the allowance was spent on. PHI-safe: ordinals and codes only."""
-    policy = policy or policy_mod.default_policy()
+    policy = _policy_for(record, policy)
     ledger: List[Dict[str, Any]] = list(record.additional_reasons)
     by_reason: Dict[str, int] = {}
     for entry in ledger:

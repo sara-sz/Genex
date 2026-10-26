@@ -382,6 +382,21 @@ def uncertain_areas(record) -> Tuple[str, ...]:
 # the whole summary
 # ---------------------------------------------------------------------------
 
+def _policy_for(record, policy):
+    """The given policy, or the registered default for THIS record.
+
+    `default_policy` takes `(baseline_version, domain)` — it is per-domain, not
+    global — so resolving it needs the record. An earlier revision called it
+    with no arguments; every test passed a policy explicitly, so the branch was
+    never executed and the TypeError sat there unexercised. Resolved from the
+    record here, in one place, so there is one answer to "which policy applies
+    to this baseline".
+    """
+    if policy is not None:
+        return policy
+    return policy_mod.default_policy(record.baseline_version, record.domain)
+
+
 def baseline_summary(record, *, policy: Optional[
         policy_mod.BaselinePolicy] = None) -> Dict[str, Any]:
     """Everything a clinician needs, assembled. PHI-safe.
@@ -390,7 +405,7 @@ def baseline_summary(record, *, policy: Optional[
     states and reason codes only. The Parent-facing subset is Slice 9's
     decision; this is the full derived picture.
     """
-    policy = policy or policy_mod.default_policy()
+    policy = _policy_for(record, policy)
     outcome = derive_outcome(record)
     profile_part = profile.profile_summary(record, policy=policy)
     multi_area = multi_area_state(record, policy=policy)

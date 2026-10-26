@@ -182,24 +182,51 @@ def test_the_generation_path_does_not_import_the_parent_api():
                 assert "baseline_contract" not in module, (relative, module)
 
 
-def test_the_whole_pilot_backend_knows_no_profile_vocabulary_yet():
-    """Baseline for the A2 v2.1 work: zero occurrences today.
+#: The ONLY modules allowed to know the profile vocabulary: the v2.1 record
+#: itself and its codec. Everything else — above all the generation path — must
+#: not, and `test_no_profile_concept_appears_on_the_generation_path` keeps that
+#: true independently of this allowlist.
+PROFILE_AWARE_MODULES = frozenset({
+    "domain/parent_clinician_profile_v21.py",
+    "transport/projection_v21_request.py",
+})
 
-    Recorded so that when the v2.1 clinician-profile record lands, the ONLY
-    places these names appear are its own module and its codec — never the
-    generation path, which the test above keeps clean independently.
+
+def test_only_the_v21_record_and_its_codec_know_the_profile_vocabulary():
+    """The A2 v2.1 containment rule.
+
+    This started as "zero occurrences anywhere", recorded before the v2.1 work
+    so the record landing would have to come through here. It now names the
+    two modules that may know these words, which is the same guarantee stated
+    once the record exists: a third module acquiring them is a reviewed event.
     """
     root = _repo_root() / "pilot_backend"
     hits = {}
     for path in sorted(root.rglob("*.py")):
         if "tests" in path.parts:
             continue
+        relative = str(path.relative_to(root))
         code = _code_without_docstrings(path.read_text(encoding="utf-8"))
-        found = [c for c in ("profile_probes", "multi_area", "concern_observed")
-                 if c in code]
-        if found:
-            hits[str(path.relative_to(root))] = found
+        found = [c for c in ("profile_probes", "multi_area",
+                             "concern_observed") if c in code]
+        if found and relative not in PROFILE_AWARE_MODULES:
+            hits[relative] = found
     assert hits == {}, hits
+
+
+def test_the_profile_aware_modules_really_do_carry_the_vocabulary():
+    """Non-vacuity: the allowlist describes reality, not an aspiration."""
+    root = _repo_root() / "pilot_backend"
+    for relative in PROFILE_AWARE_MODULES:
+        code = _code_without_docstrings(
+            (root / relative).read_text(encoding="utf-8"))
+        assert "multi_area" in code, relative
+
+
+def test_no_profile_aware_module_is_on_the_generation_path():
+    """The two sets must stay disjoint, by construction."""
+    generation = {p.split("pilot_backend/", 1)[1] for p in GENERATION_PATH}
+    assert not (generation & PROFILE_AWARE_MODULES)
 
 
 # ---------------------------------------------------------------------------

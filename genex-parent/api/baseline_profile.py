@@ -520,6 +520,21 @@ def plan_profile_step(record: v2.BaselineRecordV2, *,
 # reporting
 # ---------------------------------------------------------------------------
 
+def _policy_for(record, policy):
+    """The given policy, or the registered default for THIS record.
+
+    `default_policy` takes `(baseline_version, domain)` — it is per-domain, not
+    global — so resolving it needs the record. An earlier revision called it
+    with no arguments; every test passed a policy explicitly, so the branch was
+    never executed and the TypeError sat there unexercised. Resolved from the
+    record here, in one place, so there is one answer to "which policy applies
+    to this baseline".
+    """
+    if policy is not None:
+        return policy
+    return policy_mod.default_policy(record.baseline_version, record.domain)
+
+
 def profile_summary(record: v2.BaselineRecordV2, *,
                     policy: Optional[policy_mod.BaselinePolicy] = None
                     ) -> Dict[str, Any]:
@@ -530,7 +545,7 @@ def profile_summary(record: v2.BaselineRecordV2, *,
     as reassurance, so `areas_not_assessed` is reported explicitly rather than
     left to be derived.
     """
-    policy = policy or policy_mod.default_policy()
+    policy = _policy_for(record, policy)
     chronological = int(record.chronological_months)
     areas: Dict[str, Any] = {}
     for profile_area in AREA_SUBDOMAIN:
