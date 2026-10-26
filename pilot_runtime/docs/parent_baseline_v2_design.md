@@ -433,11 +433,29 @@ Parent's served-family set is a **mirror**, used for caregiver UX and to
 withhold a projection upstream. It is transmitted as provenance so a
 disagreement is diagnosable, and it is **never** authority for generation.
 
-**Disagreement fails closed.** Parent claiming a target is supported while the
-approved bank disagrees refuses the generation, writes nothing — no claim, no
-suggestion, no anchor — and surfaces both digests. The reverse direction does
-not refuse: a mirror that under-reports is a safe stale mirror and the Pilot's
-verdict governs. No near-mapping and no substitution in either direction.
+**Disagreement fails closed IN EITHER DIRECTION.** The Pilot remains the
+authoritative decider, but a disagreement proves the Parent mirror and the
+approved bank are not describing the same current product state, and a plan must
+not be generated while the Parent product may still be telling a family the
+target is unavailable.
+
+| Parent | Pilot | Result |
+|---|---|---|
+| supported | unsupported | **fail closed** |
+| unsupported | supported | **fail closed** |
+| supported | supported | potentially eligible |
+| unsupported | unsupported | no generation (the Pilot's own verdict) |
+| `not_applicable` | any | no target, so nothing to generate |
+
+Either refusal writes nothing — no claim, no suggestion, no anchor — and
+surfaces both digests. No near-mapping and no substitution in either direction.
+
+**The global digest is provenance, not the condition.** A content digest moves
+whenever unrelated content changes, so failing on inequality would refuse a
+generation because some other family gained a card. Both digests are preserved
+and a differing pair is reported as a stale mirror; the fail-closed condition is
+the SEMANTIC serviceability of the exact canonical target. `disagrees` is
+asserted to consult no digest at all.
 
 **The gate is the last instruction before the first side effect.** It sits in
 `generate_anchored_suggestion` immediately before the claim is built, so a

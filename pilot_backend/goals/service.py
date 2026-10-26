@@ -41,7 +41,7 @@ mind.
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple, Union
 
@@ -110,6 +110,50 @@ _EDIT_TO_SUGGESTION_STATUS = {
 }
 
 ApprovedGoal = Union[ClinicalGoal, CaregiverApprovedGoal]
+
+
+@dataclass(frozen=True)
+class ContentReconciliation:
+    """The Pilot's content verdict beside what the source system claimed.
+
+    A value object rather than a bare boolean, so staleness is DETECTED and
+    REPORTABLE without being a fail condition: `digests_match` is provenance,
+    `disagrees` is the gate.
+    """
+
+    support: Any
+    declared: Optional[str] = None
+    source_digest: Optional[str] = None
+
+    @property
+    def digests_match(self) -> bool:
+        """Whether both systems evaluated under the same content state."""
+        if self.source_digest is None:
+            return True
+        return self.source_digest == self.support.content_digest
+
+    @property
+    def stale_mirror(self) -> bool:
+        """The source evaluated under a DIFFERENT content state.
+
+        Not a refusal on its own. A global digest moves whenever unrelated
+        content changes, so this is common and benign as long as the target's
+        serviceability agrees.
+        """
+        return not self.digests_match
+
+    @property
+    def disagrees(self) -> bool:
+        """SEMANTIC disagreement about THIS target. The fail-closed condition.
+
+        `not_applicable` is not a disagreement: it means the source identified
+        no target, and such a record cannot generate anyway. `None` means the
+        source sent no evaluation, which the v1 lineage does.
+        """
+        if self.declared is None or self.declared == SUPPORT_NOT_APPLICABLE:
+            return False
+        declared_supported = self.declared == SUPPORT_SUPPORTED
+        return declared_supported != bool(self.support.supported)
 
 
 class GoalService:
@@ -298,8 +342,9 @@ class GoalService:
 
     def _require_current_content_support(self, canonical_rung, *,
                                          generation_policy: str,
-                                         parent_content_evaluation=None):
-        """The Pilot's own content verdict, or a refusal. Writes nothing.
+                                         parent_content_evaluation=None
+                                         ) -> Optional[ContentReconciliation]:
+        """The Pilot's own content verdict, reconciled. Writes nothing.
 
         ## THE AUTHORITY IS REQUIRED ON THE v2 PATH
 
@@ -307,19 +352,38 @@ class GoalService:
         refusal, not a pass. The v1 anchored lineage keeps its existing
         behaviour — it predates this dependency, is gated by its own
         mappability check, and is not a real-family path — so no existing
-        caller changes.
+        caller changes. `test_the_v21_path_cannot_fall_back_to_v1_generation`
+        pins that the real-family path cannot reach the v1 behaviour silently.
 
-        ## PARENT'S EVALUATION IS PROVENANCE, NEVER AUTHORITY
+        ## DISAGREEMENT FAILS CLOSED IN EITHER DIRECTION
 
-        `parent_content_evaluation` is what Parent believed when it projected.
-        It is compared, never trusted: if Parent said supported and the
-        approved bank says otherwise, this refuses with both digests so the
-        disagreement is diagnosable. The reverse direction does NOT refuse —
-        Parent being more conservative than the bank is a stale mirror, which
-        is safe, and the Pilot's verdict governs.
+        The Pilot remains the authoritative decider. But a disagreement proves
+        the Parent mirror and the approved bank are not describing the same
+        current product state, and a plan must not be generated while the
+        Parent product may still be telling a family this target is
+        unavailable. So BOTH directions refuse:
 
-        No near-mapping and no substitution: the only outcomes are this exact
-        target or a refusal.
+            Parent supported    + Pilot unsupported  -> refuse
+            Parent unsupported  + Pilot supported    -> refuse
+            Parent supported    + Pilot supported    -> eligible
+            Parent unsupported  + Pilot unsupported  -> refuse (Pilot's own)
+            Parent not_applicable                    -> no target to generate
+
+        An earlier revision reached the same two refusals through two
+        unrelated branches, and its docstring claimed the second direction was
+        permitted. The code was right and the prose was wrong; stating the rule
+        as one symmetric comparison means the two cannot disagree again.
+
+        ## THE GLOBAL DIGEST IS PROVENANCE, NOT THE CONDITION
+
+        Digests are compared and REPORTED, never used as the fail condition. A
+        global content digest moves whenever unrelated content changes, so
+        failing on inequality would refuse a generation because some other
+        family gained a card. The condition is the SEMANTIC serviceability of
+        this exact canonical target; a differing digest with agreeing
+        serviceability is recorded as a stale mirror and allowed.
+
+        No near-mapping and no substitution: this exact target or a refusal.
         """
         is_v2_path = str(generation_policy) == self._V2_GENERATION_POLICY
         if self._content_authority is None:
@@ -335,25 +399,30 @@ class GoalService:
             raise GoalValidationError(
                 f"the content authority is unavailable: {exc}") from exc
 
+        declared = getattr(parent_content_evaluation, "target_serviceability",
+                           None)
+        source_digest = getattr(parent_content_evaluation, "content_digest",
+                                None)
+        reconciliation = ContentReconciliation(
+            support=support, declared=declared, source_digest=source_digest)
+
+        # The SYMMETRIC condition, stated once.
+        if reconciliation.disagrees:
+            raise GoalValidationError(
+                "content_state_mismatch: the source system reported "
+                f"{declared!r} while the approved activity bank reports "
+                f"{support.state!r} for this canonical target "
+                f"(source_digest={source_digest!r}, "
+                f"pilot_digest={support.content_digest!r})")
+
+        # The Pilot's own verdict governs whatever Parent said.
         if not support.supported:
             raise GoalValidationError(
                 "the canonical target is not currently supported by the "
                 f"approved activity bank (state={support.state!r}, "
                 f"reason={support.reason!r}, "
                 f"content_digest={support.content_digest!r})")
-
-        declared = getattr(parent_content_evaluation, "target_serviceability",
-                           None)
-        if declared is not None and declared not in (SUPPORT_SUPPORTED,
-                                                     SUPPORT_NOT_APPLICABLE):
-            raise GoalValidationError(
-                "content_state_mismatch: the source system reported "
-                f"{declared!r} while the approved activity bank reports "
-                f"{support.state!r} "
-                f"(source_digest="
-                f"{getattr(parent_content_evaluation, 'content_digest', None)!r}, "
-                f"pilot_digest={support.content_digest!r})")
-        return support
+        return reconciliation
 
     def generate_anchored_suggestion(self, principal, child_id: str, *,
                                      projection, canonical_rung,

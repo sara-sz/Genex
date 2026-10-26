@@ -180,8 +180,8 @@ def test_a_non_contradicting_parent_evaluation_does_not_block(declared):
 # 3. Parent supported + Pilot unsupported -> FAIL CLOSED
 # ---------------------------------------------------------------------------
 
-def test_the_pilot_overrides_parent_and_fails_closed():
-    """Parent's mirror cannot authorise what the approved bank will not serve."""
+def test_direction_one_parent_supported_pilot_unsupported_fails_closed():
+    """DIRECTION 1 of the symmetric rule."""
     world = _deficit_world(
         authority=ActivityBankContentAuthority(FakeActivityBank(served=())))
     _band, mappable, _unsupported = world.service.resolve_targets(
@@ -195,9 +195,142 @@ def test_the_pilot_overrides_parent_and_fails_closed():
             generation_policy=GENERATION_POLICY_VERSION_V2,
             parent_content_evaluation=ParentEvaluation(SUPPORT_SUPPORTED))
     message = str(caught.value)
+    assert "content_state_mismatch" in message
+    assert "supported" in message
+    assert "source_digest" in message and "pilot_digest" in message
+    assert world._docs("pilot_goal_suggestions") == []
+
+
+def test_direction_two_parent_unsupported_pilot_supported_fails_closed():
+    """DIRECTION 2. The Pilot is authoritative, but a plan must not be built
+    while the Parent product may still be telling a family this is
+    unavailable."""
+    world = _deficit_world()
+    _band, mappable, _unsupported = world.service.resolve_targets(
+        world.projection)
+    with pytest.raises(GoalValidationError) as caught:
+        world.goals.generate_anchored_suggestion(
+            world.principal(), CHILD,
+            projection=world.projection, canonical_rung=mappable[0],
+            observed=world.service._observed_domain(world.projection,
+                                                    mappable[0]),
+            generation_policy=GENERATION_POLICY_VERSION_V2,
+            parent_content_evaluation=ParentEvaluation(SUPPORT_UNSUPPORTED))
+    message = str(caught.value)
+    assert "content_state_mismatch" in message
+    assert "source_digest" in message and "pilot_digest" in message
+    # Nothing written in this direction either.
+    for collection in ("pilot_goal_suggestions",
+                       "pilot_suggestion_generation_claims",
+                       "pilot_suggestion_canonical_anchors"):
+        assert world._docs(collection) == [], collection
+
+
+def test_the_four_direction_matrix_is_exactly_as_specified():
+    """One table, both directions, stated once."""
+    from pilot_backend.goals.service import ContentReconciliation
+    from pilot_backend.domain.content_authority import TargetSupport
+
+    def reconcile(declared, pilot_state):
+        return ContentReconciliation(
+            support=TargetSupport(state=pilot_state, content_digest="x" * 64),
+            declared=declared, source_digest="y" * 64)
+
+    assert reconcile(SUPPORT_SUPPORTED, SUPPORT_UNSUPPORTED).disagrees is True
+    assert reconcile(SUPPORT_UNSUPPORTED, SUPPORT_SUPPORTED).disagrees is True
+    assert reconcile(SUPPORT_SUPPORTED, SUPPORT_SUPPORTED).disagrees is False
+    assert reconcile(SUPPORT_UNSUPPORTED,
+                     SUPPORT_UNSUPPORTED).disagrees is False
+    # `not_applicable` and absent are not disagreements.
+    assert reconcile(SUPPORT_NOT_APPLICABLE,
+                     SUPPORT_SUPPORTED).disagrees is False
+    assert reconcile(None, SUPPORT_SUPPORTED).disagrees is False
+
+
+def test_both_unsupported_still_refuses_on_the_pilots_own_verdict():
+    """Agreement that a target is unservable is not permission."""
+    world = _deficit_world(
+        authority=ActivityBankContentAuthority(FakeActivityBank(served=())))
+    _band, mappable, _unsupported = world.service.resolve_targets(
+        world.projection)
+    with pytest.raises(GoalValidationError) as caught:
+        world.goals.generate_anchored_suggestion(
+            world.principal(), CHILD,
+            projection=world.projection, canonical_rung=mappable[0],
+            observed=world.service._observed_domain(world.projection,
+                                                    mappable[0]),
+            generation_policy=GENERATION_POLICY_VERSION_V2,
+            parent_content_evaluation=ParentEvaluation(SUPPORT_UNSUPPORTED))
+    message = str(caught.value)
     assert "not currently supported" in message
     assert REASON_FAMILY_NOT_SERVED in message
-    assert "content_digest" in message
+
+
+def test_a_differing_global_digest_with_agreeing_serviceability_is_allowed():
+    """THE DIGEST NUANCE.
+
+    A global content digest moves whenever UNRELATED content changes. Failing
+    on inequality would refuse a generation because some other family gained a
+    card. Both digests are preserved and the staleness is reported; the
+    condition is the semantic serviceability of THIS target.
+    """
+    world = _deficit_world(
+        authority=ActivityBankContentAuthority(
+            FakeActivityBank(digest="1" * 64)))
+    _band, mappable, _unsupported = world.service.resolve_targets(
+        world.projection)
+    evaluation = ParentEvaluation(SUPPORT_SUPPORTED, digest="2" * 64)
+    assert evaluation.content_digest != "1" * 64
+
+    reconciliation = world.goals._require_current_content_support(
+        mappable[0], generation_policy=GENERATION_POLICY_VERSION_V2,
+        parent_content_evaluation=evaluation)
+    # Detected and reported...
+    assert reconciliation.digests_match is False
+    assert reconciliation.stale_mirror is True
+    assert reconciliation.source_digest == "2" * 64
+    assert reconciliation.support.content_digest == "1" * 64
+    # ...but NOT a refusal, and generation proceeds.
+    assert reconciliation.disagrees is False
+    suggestions, created = world.goals.generate_anchored_suggestion(
+        world.principal(), CHILD, projection=world.projection,
+        canonical_rung=mappable[0],
+        observed=world.service._observed_domain(world.projection, mappable[0]),
+        generation_policy=GENERATION_POLICY_VERSION_V2,
+        parent_content_evaluation=evaluation)
+    assert created is True and suggestions
+
+
+def test_identical_digests_report_no_staleness():
+    world = _deficit_world(
+        authority=ActivityBankContentAuthority(
+            FakeActivityBank(digest="3" * 64)))
+    _band, mappable, _unsupported = world.service.resolve_targets(
+        world.projection)
+    reconciliation = world.goals._require_current_content_support(
+        mappable[0], generation_policy=GENERATION_POLICY_VERSION_V2,
+        parent_content_evaluation=ParentEvaluation(SUPPORT_SUPPORTED,
+                                                  digest="3" * 64))
+    assert reconciliation.digests_match is True
+    assert reconciliation.stale_mirror is False
+
+
+def test_the_digest_is_never_the_fail_condition():
+    """Structural: `disagrees` does not consult a digest at all."""
+    import ast
+    import inspect
+    import textwrap
+
+    from pilot_backend.goals.service import ContentReconciliation
+
+    tree = ast.parse(textwrap.dedent(
+        inspect.getsource(ContentReconciliation.disagrees.fget)))
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.Module)) and \
+                ast.get_docstring(node):
+            node.body = node.body[1:]
+    code = ast.unparse(tree)
+    assert "digest" not in code
 
 
 def test_nothing_is_written_when_the_content_gate_refuses():
@@ -240,25 +373,11 @@ def test_a_stale_parent_claim_of_support_is_detected_not_trusted():
     assert "b" * 64 in message, "the Pilot digest is diagnosable"
 
 
-def test_parent_being_more_conservative_does_not_block():
-    """A stale mirror that UNDER-reports is safe; the Pilot's verdict governs.
-
-    This direction must not refuse: Parent withholding is an upstream UX
-    decision, and if a projection reaches the Pilot anyway while the bank does
-    serve the target, the bank is right.
-    """
-    world = _deficit_world()
-    _band, mappable, _unsupported = world.service.resolve_targets(
-        world.projection)
-    with pytest.raises(GoalValidationError) as caught:
-        world.goals.generate_anchored_suggestion(
-            world.principal(), CHILD,
-            projection=world.projection, canonical_rung=mappable[0],
-            observed=world.service._observed_domain(world.projection,
-                                                    mappable[0]),
-            generation_policy=GENERATION_POLICY_VERSION_V2,
-            parent_content_evaluation=ParentEvaluation(SUPPORT_UNSUPPORTED))
-    assert "content_state_mismatch" in str(caught.value)
+# `test_parent_being_more_conservative_does_not_block` lived here and was
+# MISNAMED: it asserted a refusal while its name and the implementation's
+# docstring both claimed the direction was permitted. The code was right and
+# the prose was wrong. It is now
+# `test_direction_two_parent_unsupported_pilot_supported_fails_closed` above.
 
 
 def test_no_other_family_is_substituted_when_the_target_is_unsupported():
@@ -377,6 +496,65 @@ def test_the_v1_anchored_lineage_is_unchanged_without_an_authority():
     service = GoalService(repos=None, content_authority=None)
     assert service._require_current_content_support(
         object(), generation_policy="some-v1-policy") is None
+
+
+def test_the_v21_path_cannot_fall_back_to_v1_generation():
+    """THE SCOPED-DECISION GATE.
+
+    Requiring the content authority only on the v2 policy is approved, so the
+    v1 anchored lineage keeps its behaviour. The risk that creates is a
+    real-family generation silently taking the v1 path and skipping the content
+    check. It cannot:
+
+      * the v2 generation service passes `GENERATION_POLICY_VERSION_V2`
+        EXPLICITLY on every call — it never relies on the default
+      * the policy is part of the CLAIM KEY, so a v1-policy claim and a
+        v2-policy claim for the same target are different documents and
+        neither can be mistaken for the other
+      * the default is v1's constant, so a caller that forgot to pass one
+        would be visibly generating under the v1 policy rather than invisibly
+        skipping a check on the v2 one
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    from pilot_backend.domain.suggestion_generation import (
+        GENERATION_POLICY_VERSION,
+    )
+    from pilot_backend.integration.baseline_suggestion_generation_v2 import (
+        BaselineSuggestionGenerationV2Service,
+    )
+
+    # 1. the v2 service always names the v2 policy at the call site.
+    source = inspect.getsource(
+        BaselineSuggestionGenerationV2Service.generate_for_child)
+    tree = ast.parse(textwrap.dedent(source))
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.Module)) and \
+                ast.get_docstring(node):
+            node.body = node.body[1:]
+    code = ast.unparse(tree)
+    assert "generation_policy=GENERATION_POLICY_VERSION_V2" in code
+
+    # 2. the two policies are different values, so the gate can tell them apart.
+    assert GENERATION_POLICY_VERSION != GENERATION_POLICY_VERSION_V2
+
+    # 3. the policy is part of the claim key, so the paths cannot share a claim.
+    from pilot_backend.domain.suggestion_generation import (
+        GoalSuggestionGenerationClaim,
+    )
+    claim_source = inspect.getsource(GoalSuggestionGenerationClaim)
+    assert "generation_policy" in claim_source
+
+    # 4. and a v2-policy call with no authority REFUSES rather than degrading.
+    service = GoalService(repos=None, content_authority=None)
+    with pytest.raises(GoalValidationError):
+        service._require_current_content_support(
+            object(), generation_policy=GENERATION_POLICY_VERSION_V2)
+    # ...while the v1 policy is untouched, which is the approved carve-out.
+    assert service._require_current_content_support(
+        object(), generation_policy=GENERATION_POLICY_VERSION) is None
 
 
 def test_the_v2_policy_constant_matches_the_domain():
