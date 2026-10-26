@@ -80,6 +80,22 @@ MAPPABLE_30 = (BOOK, TWO_WORD, VOCAB)
 WRITERS = 8
 
 
+def _content_authority():
+    """The REAL approved activity bank, as the content authority.
+
+    The emulator suites exist to exercise the real artifacts, so this uses the
+    shipped bank rather than a fake: a fixture here would make the A2 v2.1
+    content gate pass against content that does not exist.
+    """
+    from pilot_backend.domain.content_authority import (
+        ActivityBankContentAuthority,
+    )
+    from pilot_runtime.integration.static_activity_bank import (
+        build_static_activity_bank,
+    )
+    return ActivityBankContentAuthority(build_static_activity_bank())
+
+
 def _rung(milestone, months):
     return CanonicalRung.build(
         domain_key=DOMAIN, source_rung_months=months,
@@ -150,7 +166,8 @@ def world(repos, unique_suffix):
     repos.parent_baseline_projections_v2.create(projection)
 
     recorder = AuditRecorder(repos.audit_events, environment="test")
-    goals = GoalService(repos=repos, recorder=recorder, now=lambda: NOW)
+    goals = GoalService(repos=repos, recorder=recorder, now=lambda: NOW,
+                        content_authority=_content_authority())
 
     class Bundle:
         pass

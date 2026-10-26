@@ -84,6 +84,22 @@ class SeedRefused(Exception):
     PHI_SAFE_MESSAGE = True
 
 
+def _content_authority():
+    """The REAL approved activity bank, as the content authority.
+
+    The emulator suites exist to exercise the real artifacts, so this uses the
+    shipped bank rather than a fake: a fixture here would make the A2 v2.1
+    content gate pass against content that does not exist.
+    """
+    from pilot_backend.domain.content_authority import (
+        ActivityBankContentAuthority,
+    )
+    from pilot_runtime.integration.static_activity_bank import (
+        build_static_activity_bank,
+    )
+    return ActivityBankContentAuthority(build_static_activity_bank())
+
+
 def _settings() -> PilotSettings:
     settings = PilotSettings.from_env(os.environ)
     if settings.environment.is_prod:
@@ -140,7 +156,8 @@ def main(argv) -> int:
 
     # Developmental inputs -> suggestions, through the frozen engine.
     month = datetime.now(timezone.utc).strftime("%Y-%m")
-    goals = GoalService(repos=repos)
+    goals = GoalService(repos=repos,
+                        content_authority=_content_authority())
     already = goals.list_suggestions(principal, child.child_id)
     if already:
         print(f"suggestions: {len(already)} already present (no new ones)")

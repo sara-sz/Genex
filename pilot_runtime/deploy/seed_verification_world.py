@@ -76,6 +76,22 @@ class SeedRefused(Exception):
     PHI_SAFE_MESSAGE = True
 
 
+def _content_authority():
+    """The REAL approved activity bank, as the content authority.
+
+    The emulator suites exist to exercise the real artifacts, so this uses the
+    shipped bank rather than a fake: a fixture here would make the A2 v2.1
+    content gate pass against content that does not exist.
+    """
+    from pilot_backend.domain.content_authority import (
+        ActivityBankContentAuthority,
+    )
+    from pilot_runtime.integration.static_activity_bank import (
+        build_static_activity_bank,
+    )
+    return ActivityBankContentAuthority(build_static_activity_bank())
+
+
 def main(argv) -> int:
     if len(argv) != 3:
         print(__doc__)
@@ -114,7 +130,8 @@ def main(argv) -> int:
         print(f"child      : {child.child_id} (created)")
 
     connections = ProviderConnectionService(repos=repos, recorder=recorder)
-    goals = GoalService(repos=repos, recorder=recorder)
+    goals = GoalService(repos=repos, recorder=recorder,
+                        content_authority=_content_authority())
     plans = MonthlyPlanService(repos=repos, recorder=recorder)
     weekly = WeeklyService(repos=repos, recorder=recorder)
 

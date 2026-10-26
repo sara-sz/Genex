@@ -46,6 +46,22 @@ FAMILIES = {AT_24: "expressive_vocabulary_growth",
             VOCAB: "expressive_vocabulary_growth"}
 
 
+def _content_authority():
+    """The REAL approved activity bank, as the content authority.
+
+    The emulator suites exist to exercise the real artifacts, so this uses the
+    shipped bank rather than a fake: a fixture here would make the A2 v2.1
+    content gate pass against content that does not exist.
+    """
+    from pilot_backend.domain.content_authority import (
+        ActivityBankContentAuthority,
+    )
+    from pilot_runtime.integration.static_activity_bank import (
+        build_static_activity_bank,
+    )
+    return ActivityBankContentAuthority(build_static_activity_bank())
+
+
 def _call(app, path, *, method="GET", bearer=None, body=b""):
     environ = {"REQUEST_METHOD": method, "PATH_INFO": path, "QUERY_STRING": "",
                "SERVER_NAME": "testserver", "SERVER_PORT": "80",
@@ -310,7 +326,8 @@ def test_the_whole_chain_through_the_real_routes(stack):
     from pilot_backend.auth.interface import VerifiedToken
     from pilot_backend.auth.resolver import resolve_principal
 
-    goals = GoalService(repos=stack.repos, recorder=None, now=lambda: NOW)
+    goals = GoalService(repos=stack.repos, recorder=None, now=lambda: NOW,
+                        content_authority=_content_authority())
     principal = resolve_principal(
         VerifiedToken(subject=stack.provider_subject), stack.repos)
     goals.revise_goal(principal, GoalRef(GoalKind.CLINICAL, goal_id),

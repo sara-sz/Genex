@@ -53,6 +53,22 @@ FAMILY_BY_MILESTONE = {
 }
 
 
+def _content_authority():
+    """The REAL approved activity bank, as the content authority.
+
+    The emulator suites exist to exercise the real artifacts, so this uses the
+    shipped bank rather than a fake: a fixture here would make the A2 v2.1
+    content gate pass against content that does not exist.
+    """
+    from pilot_backend.domain.content_authority import (
+        ActivityBankContentAuthority,
+    )
+    from pilot_runtime.integration.static_activity_bank import (
+        build_static_activity_bank,
+    )
+    return ActivityBankContentAuthority(build_static_activity_bank())
+
+
 def _rung(milestone, months, families):
     from pilot_backend.domain.canonical_rung import (
         ActivityFamilyBinding,
@@ -154,7 +170,8 @@ def world(repos, unique_suffix):
             now=NOW))
 
     recorder = AuditRecorder(repos.audit_events, environment="test")
-    goals = GoalService(repos=repos, recorder=recorder, now=lambda: NOW)
+    goals = GoalService(repos=repos, recorder=recorder, now=lambda: NOW,
+                        content_authority=_content_authority())
     principal = resolve_principal(
         VerifiedToken(subject=topo.provider_alpha.auth_subject), repos)
 

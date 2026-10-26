@@ -73,6 +73,22 @@ class _AdvancingClock:
         return self._start + timedelta(seconds=tick)
 
 
+def _content_authority():
+    """The REAL approved activity bank, as the content authority.
+
+    The emulator suites exist to exercise the real artifacts, so this uses the
+    shipped bank rather than a fake: a fixture here would make the A2 v2.1
+    content gate pass against content that does not exist.
+    """
+    from pilot_backend.domain.content_authority import (
+        ActivityBankContentAuthority,
+    )
+    from pilot_runtime.integration.static_activity_bank import (
+        build_static_activity_bank,
+    )
+    return ActivityBankContentAuthority(build_static_activity_bank())
+
+
 def _rung():
     return CanonicalRung.build(
         domain_key=SUPPORTED_DOMAIN, source_rung_months=24,
@@ -100,6 +116,7 @@ def generation(repos, unique_suffix):
     bundle = Bundle()
     bundle.repos = repos
     bundle.goals = GoalService(repos=repos, recorder=recorder,
+                              content_authority=_content_authority(),
                               now=_AdvancingClock(T0))
     bundle.source = InMemoryGoldStandardRungSource(rungs=(_rung(),))
     bundle.service = BaselineSuggestionGenerationService(
