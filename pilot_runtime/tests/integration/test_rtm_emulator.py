@@ -257,15 +257,37 @@ def test_every_rtm_record_round_trips_in_real_firestore(rt):
                                                period.period_id)
     report = rt.rtm.generate_report(rt.provider_alpha, period.period_id)
 
+    # Slice 3C adds two persisted record types, and they belong in this list
+    # for the reason the list exists: `FakeDocumentStore` is a plain dict and
+    # accepts shapes the real client refuses. The enrollment records are
+    # already WRITTEN to the real emulator by `_prepare` — the episode cannot
+    # become ready otherwise — but written is not the same as round-tripping,
+    # and the nested-array defect this suite caught was a write that
+    # succeeded in the fake and failed in Firestore.
+    consents = rt.repos.rtm_consents.list_for_episode(episode.episode_id)
+    setups = rt.repos.rtm_setups.list_for_episode(episode.episode_id)
+    assert consents and setups, "3C enrollment evidence did not persist"
+
     for record in (episode,
                    rt.repos.rtm_periods.get_by_id(period.period_id),
                    *rt.repos.rtm_technologies.list_for_episode(episode.episode_id),
+                   *consents,
+                   *setups,
                    *rt.repos.therapist_reviews.list_for_period(period.period_id),
                    *rt.repos.clinical_actions.list_for_period(period.period_id),
                    *rt.repos.time_entries.list_for_period(period.period_id),
                    *rt.repos.synchronous_interactions.list_for_period(period.period_id),
                    evidence, coding, report):
         assert decode(type(record), encode(record)) == record
+
+    # The 3B/3C additions specifically: a pinned goal version is a PAIR, which
+    # `_PairTuple` stores as `{key, value}` maps because Firestore refuses an
+    # array whose element is an array. Asserted against the real client rather
+    # than trusted from the codec's docstring.
+    assert episode.pinned_goal_version_ids, "goal versions were not pinned"
+    assert evidence.observed_event_ids or evidence.total_distinct_observation_events == 0
+    for line in evidence.per_goal_evidence:
+        assert line.attributed_attempts == len(line.event_ids)
 
     # 42 CURRENT minutes reached through a correction — the no-double-count
     # property holding against a real store.
