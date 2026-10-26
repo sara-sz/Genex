@@ -189,7 +189,13 @@ def test_the_generation_path_does_not_import_the_parent_api():
 PROFILE_AWARE_MODULES = frozenset({
     "domain/parent_clinician_profile_v21.py",
     "transport/projection_v21_request.py",
+    "transport/projection_v21_wsgi.py",
 })
+#: `persistence/firestore_repos.py` and `persistence/collections.py` are
+#: deliberately NOT here. They store and name the profile record without ever
+#: mentioning a profile CONCEPT: the repository is keyed on the source
+#: identity, the collection is a string. Storage that does not know what it is
+#: storing cannot leak it.
 
 
 def test_only_the_v21_record_and_its_codec_know_the_profile_vocabulary():

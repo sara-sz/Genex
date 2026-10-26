@@ -32,11 +32,13 @@ Firestore emulator, both of which satisfy the same port.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 from typing import Any, List, Optional, Sequence, Type
 
 from ..audit.events import AuditEvent
 from ..domain.adaptation import AdaptationRecord
+from ..domain.parent_clinician_profile_v21 import ClinicianProfileV21
 from ..domain.alignment import (
     ActivityGoalAlignment,
     CapacityLedger,
@@ -693,6 +695,57 @@ class FirestoreParentBaselineProjectionV2Repository(_BaseRepo):
         """
         found = self._query("source_session_id", source_session_id)
         return [p for p in found if p.domain == domain]
+
+
+class FirestoreClinicianProfileV21Repository(_BaseRepo):
+    """A2 v2.1 derived clinician profiles. CREATE-ONLY and FIND-ONLY.
+
+    A SEPARATE repository over a SEPARATE collection from the v2 projection.
+    Neither reads the other's documents, and that is what makes "profile
+    information cannot influence target selection" a property of the storage
+    rather than a rule someone has to remember.
+
+    No `update` and no `delete`, for the v2 projection's reasons: this is
+    DERIVED from an immutable finalized Parent baseline, so there is no
+    legitimate operation that edits one. A changed baseline yields a different
+    source digest, hence a different id, hence a new document.
+
+    Keyed deterministically on `(source_session_id, domain,
+    source_record_digest)` — the same identity the projection id is derived
+    from — so an exact retry collides rather than duplicating, and a clinician
+    surface holding a projection can address the profile without a query.
+    """
+
+    record_type = "parent_clinician_profile_v21"
+    model = ClinicianProfileV21
+
+    @staticmethod
+    def profile_id_for(source_session_id: str, domain: str,
+                       source_record_digest: str) -> str:
+        digest = hashlib.sha256(
+            "\x1f".join((str(source_session_id), str(domain),
+                          str(source_record_digest))).encode("utf-8")
+        ).hexdigest()
+        return "pcpv21_" + digest[:32]
+
+    def create(self, profile: ClinicianProfileV21) -> ClinicianProfileV21:
+        return self._create(
+            self.profile_id_for(profile.source_session_id, profile.domain,
+                                profile.source_record_digest),
+            profile)
+
+    def find(self, source_session_id: str, domain: str,
+             source_record_digest: str):
+        """The profile, or None. Absence is a normal state, not an error."""
+        try:
+            return self._get(self.profile_id_for(
+                source_session_id, domain, source_record_digest))
+        except RecordNotFound:
+            return None
+
+    def list_for_child(self, child_id: str):
+        """Every profile for one child. The clinician surface's read."""
+        return list(self._query("child_id", child_id))
 
 
 class FirestoreParentSessionClaimRepository(_BaseRepo):
@@ -1453,6 +1506,9 @@ class FirestoreRepositories:
             FirestoreParentBaselineProjectionRepository(store))
         self.parent_baseline_projections_v2 = (
             FirestoreParentBaselineProjectionV2Repository(store))
+        # A2 v2.1. A SEPARATE repository, never a field on the projection.
+        self.parent_clinician_profiles_v21 = (
+            FirestoreClinicianProfileV21Repository(store))
         self.parent_session_claims = (
             FirestoreParentSessionClaimRepository(store))
         self.suggestion_generation_claims = (

@@ -71,6 +71,14 @@ COLLECTIONS: Mapping[str, str] = {
     # unless every caller remembered to check a discriminator first.
     "parent_baseline_projection_v2":
         PILOT_COLLECTION_PREFIX + "parent_baseline_projections_v2",
+    # A2 v2.1 derived clinician profile. A SEPARATE collection from the v2
+    # projection on purpose, and the separation is the safety property rather
+    # than tidiness: the projection is the document goal generation reads, so
+    # profile state living in it would hand the generator a legitimate
+    # reference to profile state. Keyed by the SAME source identity, so a
+    # clinician surface can join the two without the generator being able to.
+    "parent_clinician_profile_v21":
+        PILOT_COLLECTION_PREFIX + "parent_clinician_profiles_v21",
     # 0.5F-A3 Parent session handoff capability. Written ONLY by the
     # authenticated Parent service through the internal bootstrap endpoint, and
     # create-only: redemption is recorded as an identity claim, never as an edit

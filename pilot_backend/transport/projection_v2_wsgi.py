@@ -86,6 +86,11 @@ from .projection_wsgi import bearer_from_environ
 
 PROJECTION_V2_ROUTE = "/internal/parent-baseline-projections-v2"
 
+#: A2 v2.1's sibling path. Declared here, beside v2's, so the two route
+#: constants cannot drift apart; the app that serves it lives in
+#: `projection_v21_wsgi`.
+PROJECTION_V21_ROUTE = "/internal/parent-baseline-projections-v21"
+
 HTTP_OK = 200
 HTTP_CREATED = 201
 HTTP_BAD_REQUEST = 400
@@ -224,9 +229,16 @@ class InternalProjectionRouter:
     is no second 404 in this package that could drift away from the first.
     """
 
-    def __init__(self, *, v1_app: Any, v2_app: Any) -> None:
+    def __init__(self, *, v1_app: Any, v2_app: Any, v21_app: Any = None
+                 ) -> None:
         self._v1 = v1_app
         self._v2 = v2_app
+        #: A2 v2.1. Defaulted None so a deployment that has not enabled the
+        #: v2.1 route behaves exactly as before: the path falls through to the
+        #: v1 app's 404, which is indistinguishable from any other unrouted
+        #: internal path. That is the activation gate — the route's absence,
+        #: not a flag inside a handler.
+        self._v21 = v21_app
 
     @property
     def v1_app(self) -> Any:
@@ -235,6 +247,10 @@ class InternalProjectionRouter:
     @property
     def v2_app(self) -> Any:
         return self._v2
+
+    @property
+    def v21_app(self) -> Any:
+        return self._v21
 
     @property
     def verifies_tokens(self) -> bool:
@@ -251,22 +267,30 @@ class InternalProjectionRouter:
         mode assertions and the deployed auth probe keep working against the
         composed application rather than having to reach inside it.
         """
-        v1 = bool(getattr(self._v1, "verifies_tokens", False))
-        v2 = bool(getattr(self._v2, "verifies_tokens", False))
-        if v1 != v2:
+        modes = {bool(getattr(self._v1, "verifies_tokens", False)),
+                 bool(getattr(self._v2, "verifies_tokens", False))}
+        if self._v21 is not None:
+            modes.add(bool(getattr(self._v21, "verifies_tokens", False)))
+        if len(modes) != 1:
             raise ValueError(
                 "the internal projection routes disagree about app-level "
                 "verification; one declared mode governs the whole service")
-        return v1
+        return modes.pop()
 
     def __call__(self, environ, start_response):
         path = (environ.get("PATH_INFO") or "").rstrip("/")
+        # DISPATCH BY PATH, never by body shape. A v2.1 body posted to the v2
+        # route is read by the v2 decoder and refused; a v2 body posted to the
+        # v2.1 route likewise. Neither version can be reached by accident.
+        if self._v21 is not None and path == PROJECTION_V21_ROUTE:
+            return self._v21(environ, start_response)
         if path == PROJECTION_V2_ROUTE:
             return self._v2(environ, start_response)
         return self._v1(environ, start_response)
 
 
 __all__ = [
+    "PROJECTION_V21_ROUTE",
     "PROJECTION_V2_ROUTE",
     "InternalProjectionRouter",
     "ProjectionV2App",
