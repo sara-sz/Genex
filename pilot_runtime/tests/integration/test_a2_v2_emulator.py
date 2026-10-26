@@ -152,7 +152,11 @@ def _drive_baseline(parent, session_id, overrides, *,
                   "answer": answer},
             headers=auth)
         assert response.status_code == 200, response.text
-        trace.append((question["months"], question["milestone"], answer))
+        # The month is NOT read from the client payload: it no longer carries
+        # one, and a test that took it from there would be asserting the leak
+        # back into existence. Recorded by milestone and resolved from the
+        # stored record below.
+        trace.append((question["milestone"], answer))
         view = response.json()
 
     finalized = client.post(base + "/finalize", headers=auth)
@@ -161,8 +165,16 @@ def _drive_baseline(parent, session_id, overrides, *,
 
     parent["store"]._cache.clear()
     doc = parent["store"].load(parent["uid"], session_id, force_remote=True)
-    return (trace,
-            parent["api"].finalized_record(doc, DOMAIN),
+    record = parent["api"].finalized_record(doc, DOMAIN)
+
+    # Resolve each asked milestone to its canonical month from the SERVER
+    # record, so the trace keeps its `(months, milestone, answer)` shape for
+    # every caller while the months come from the only place they still live.
+    months_by_milestone = {s["milestone"]: int(s["months"])
+                           for s in record["skills"]}
+    resolved = [(months_by_milestone[milestone], milestone, answer)
+                for milestone, answer in trace]
+    return (resolved, record,
             parent["api"].projection_payload(doc, DOMAIN))
 
 
