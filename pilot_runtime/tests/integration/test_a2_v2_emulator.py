@@ -174,8 +174,27 @@ def _drive_baseline(parent, session_id, overrides, *,
                            for s in record["skills"]}
     resolved = [(months_by_milestone[milestone], milestone, answer)
                 for milestone, answer in trace]
+
+    # The UNGATED builder. This suite proves the A2 v2 PILOT boundary — that
+    # the Pilot canonicalises, classifies and refuses correctly — and some of
+    # its cases deliberately target a rung with no reviewed content, which the
+    # Parent-side slice-8 gate withholds upstream. Asking for the payload
+    # through the gated function would make those cases untestable rather than
+    # testing anything.
+    #
+    # The Parent verdict is NOT silently bypassed: it is asserted alongside, so
+    # a case that is withheld upstream says so.
+    from api import baseline_projection_gate as parent_gate
+    try:
+        parent["api"].projection_payload(doc, DOMAIN)
+        withheld = None
+    except parent_gate.ProjectionWithheld as exc:
+        withheld = exc.decision
+        assert withheld.target_band is not None, (
+            "a withheld projection must still name its identified target")
+
     return (resolved, record,
-            parent["api"].projection_payload(doc, DOMAIN))
+            parent["api"].build_projection_payload(doc, DOMAIN))
 
 
 @pytest.fixture()
