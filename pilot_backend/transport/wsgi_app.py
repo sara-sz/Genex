@@ -1480,7 +1480,18 @@ class PilotWSGIApplication:
         from ..weekly.service import WeeklyService
 
         shared = {"repos": self._repos, "recorder": self._recorder}
-        return (GoalService(**shared), MonthlyPlanService(**shared),
+        # A2 v2.1. The content authority is built HERE, from the activity bank
+        # this application was composed with, so the goal-generation write path
+        # can confirm a target is currently servable. No bank means no
+        # authority, and the v2 generation policy then refuses — which is the
+        # same fail-closed shape the Week 1 release route already has, applied
+        # one step earlier so nothing is written either.
+        authority = None
+        if self._activity_bank is not None:
+            from ..domain.content_authority import ActivityBankContentAuthority
+            authority = ActivityBankContentAuthority(self._activity_bank)
+        return (GoalService(content_authority=authority, **shared),
+                MonthlyPlanService(**shared),
                 WeeklyService(**shared), RTMService(**shared))
 
     def _handle_workflow(self, environ, route: str, method: str,

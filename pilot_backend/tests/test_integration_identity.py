@@ -1963,7 +1963,7 @@ class _ExplodingInput:
         raise AssertionError("the request body must never be iterated")
 
 
-def build_http(*, parent_source=None, rung_source=None):
+def build_http(*, parent_source=None, rung_source=None, activity_bank=None):
     """Settings, repositories, verifier, recorder and the WSGI application."""
     settings = PilotSettings.from_env({
         "PILOT_ENVIRONMENT": "dev",
@@ -1991,6 +1991,15 @@ def build_http(*, parent_source=None, rung_source=None):
                             # caller is unaffected and the generation route
                             # fails closed when no Gold Standard is configured.
                             rung_source=rung_source,
+                            # A2 v2.1: the goal-generation write path builds its
+                            # content authority from this. Defaulted None so
+                            # every existing caller is unaffected and the v2
+                            # generation policy fails closed without one — the
+                            # same shape as `rung_source` above, and the same
+                            # lesson the activity-bank composition defect
+                            # taught: a route test that builds its own
+                            # application must inject what production injects.
+                            activity_bank=activity_bank,
                             log_sink=logs)
 
     class Bundle:

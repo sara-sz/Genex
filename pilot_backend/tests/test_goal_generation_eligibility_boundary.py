@@ -94,8 +94,13 @@ def test_the_chokepoint_signature_is_exactly_these_inputs():
         GoalService.generate_anchored_suggestion).parameters)
     assert params == [
         "self", "principal", "child_id", "projection", "canonical_rung",
-        "observed", "policy", "generation_policy", "request_id",
+        "observed", "policy", "generation_policy",
+        "parent_content_evaluation", "request_id",
     ], params
+    # `parent_content_evaluation` is ADVISORY provenance, never authority —
+    # see `_require_current_content_support`. It can refuse a generation; it
+    # can never authorise one, and it can never name a different target.
+    assert "parent_content_evaluation" in params
 
 
 def test_the_chokepoint_receives_its_target_and_does_not_select_one():

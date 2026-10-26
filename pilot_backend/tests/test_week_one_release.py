@@ -153,6 +153,27 @@ class Chain:
             weekly=self.weekly, activity_bank=self.bank, now=lambda: NOW)
         self.suggestions = self.world.generate()
 
+    def withdraw_release_content(self):
+        """Model content withdrawn AFTER generation.
+
+        The RELEASE service is rebuilt over a bank that serves nothing, while
+        the suggestions and goals generated under the previous content state
+        stay exactly as they were. That separation is the whole point: the two
+        checks read the content state at two different moments.
+        """
+        class WithdrawnBank:
+            def served_families(self):
+                return ()
+
+            @property
+            def artifact_digest(self):
+                return "0" * 64
+
+        self.bank = WithdrawnBank()
+        self.service = WeekOneReleaseService(
+            repos=self.repos, goals=self.goals, plans=self.plans,
+            weekly=self.weekly, activity_bank=self.bank, now=lambda: NOW)
+
     def approve(self, index=0):
         """Hannah approves one F-B v2 suggestion VERBATIM. The real path."""
         suggestion_id = self.suggestions.generated[index].suggestion_ids[0]
@@ -352,14 +373,54 @@ def test_release_refuses_an_unmappable_goal():
     assert chain.docs("pilot_weekly_cycles") == []
 
 
-def test_release_refuses_when_the_goals_family_has_no_reviewed_content():
-    """`require_all_families_served` refuses BEFORE anything is written."""
-    chain = Chain(unserved_for_book=True)
-    chain.approve()
+def test_generation_now_refuses_an_unserved_family_before_release_can():
+    """A2 v2.1 moved this refusal EARLIER, and that is the point.
+
+    This case used to reach `approve()` and be refused by the release path's
+    `require_all_families_served`. Generation now consults the Pilot's content
+    authority immediately before it writes, so an unservable family never
+    becomes a suggestion at all — and therefore never becomes a goal that
+    could be approved and released.
+
+    The release-level check is not removed; it is now defence in depth for
+    content WITHDRAWN AFTER generation, which the test below covers.
+    """
+    from pilot_backend.goals.errors import GoalValidationError
+
+    # `Chain.__init__` runs generation, so the refusal lands there — which is
+    # itself the proof that nothing downstream was ever reachable.
+    with pytest.raises(GoalValidationError) as caught:
+        Chain(unserved_for_book=True)
+    message = str(caught.value)
+    assert "not currently supported" in message
+    assert "bound_family_not_served" in message
+    assert "content_digest" in message, "the refusal names its content state"
+
+
+def test_release_still_refuses_content_withdrawn_after_generation():
+    """Defence in depth. Generation passed under one content state; the bank
+    no longer serves the family by release time.
+
+    This is the scenario the earlier version of this test could not model,
+    because generation and release shared one content state. It is also the
+    realistic one: content is withdrawn between a goal being approved and a
+    week being built.
+    """
     from pilot_backend.integration.activity_bank import FamilyNotServed
+
+    chain = Chain()
+    chain.approve()          # generated and approved while the family served
+    # Withdraw the family from the bank the RELEASE path reads.
+    chain.withdraw_release_content()
 
     with pytest.raises(FamilyNotServed):
         chain.release()
+    # No PLAN SNAPSHOT: nothing caregiver-visible was produced.
+    #
+    # A weekly CYCLE is created before the families check, which is
+    # pre-existing release-path ordering and not changed here. Worth recording
+    # rather than asserting away: the cycle is an empty container, but a
+    # refusal that leaves one behind is not quite "writes nothing".
     assert chain.docs("pilot_weekly_plan_snapshots") == []
 
 

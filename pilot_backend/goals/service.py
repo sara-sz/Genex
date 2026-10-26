@@ -48,6 +48,11 @@ from typing import List, Optional, Tuple, Union
 from ..audit.events import AuditAction, AuditResult
 from ..authz.decisions import AccessDecision
 from ..authz.policy import authorize_child_access
+from ..domain.content_authority import (
+    SUPPORT_NOT_APPLICABLE,
+    SUPPORT_SUPPORTED,
+    ContentAuthorityUnavailable,
+)
 from ..domain.goal_anchor import ClinicalGoalAnchor, SuggestionCanonicalAnchor
 from ..domain.goals import (
     CaregiverApprovedGoal,
@@ -111,9 +116,20 @@ class GoalService:
     """Authorized reads and writes for suggestions, goals and goal versions."""
 
     def __init__(self, *, repos, recorder=None, now=None,
-                 repos_factory=None) -> None:
+                 repos_factory=None, content_authority=None) -> None:
         self._repos = repos
         self._recorder = recorder
+        #: A2 v2.1. The PILOT's authority on whether a canonical target is
+        #: currently servable by the approved activity bank. Read-only, and the
+        #: narrowest thing that answers the question: one method plus a digest.
+        #:
+        #: Defaulted to None so every existing construction site is unaffected,
+        #: and REQUIRED by the v2 generation policy — see
+        #: `_require_current_content_support`. A v2 write with no authority
+        #: refuses rather than proceeding, because an absent bank that
+        #: silently authorised a write is the activity-bank composition defect
+        #: in its invisible form.
+        self._content_authority = content_authority
         #: Injectable clock for deterministic tests. No request parameter
         #: reaches it.
         self._now = now
@@ -273,11 +289,78 @@ class GoalService:
                     policy_version=policy.policy_version)
         return suggestions
 
+    #: The generation policy that marks the A2 v2 / v2.1 real-family path.
+    #: Held as a value rather than imported, to keep this module's dependency
+    #: direction unchanged; `test_the_v2_policy_constant_matches_the_domain`
+    #: asserts it equals `GENERATION_POLICY_VERSION_V2`, so the two cannot
+    #: drift into disagreeing about which path is gated.
+    _V2_GENERATION_POLICY = "goal-suggestion-generation-policy-v2-evidence"
+
+    def _require_current_content_support(self, canonical_rung, *,
+                                         generation_policy: str,
+                                         parent_content_evaluation=None):
+        """The Pilot's own content verdict, or a refusal. Writes nothing.
+
+        ## THE AUTHORITY IS REQUIRED ON THE v2 PATH
+
+        On the A2 v2 / v2.1 generation policy an absent content authority is a
+        refusal, not a pass. The v1 anchored lineage keeps its existing
+        behaviour — it predates this dependency, is gated by its own
+        mappability check, and is not a real-family path — so no existing
+        caller changes.
+
+        ## PARENT'S EVALUATION IS PROVENANCE, NEVER AUTHORITY
+
+        `parent_content_evaluation` is what Parent believed when it projected.
+        It is compared, never trusted: if Parent said supported and the
+        approved bank says otherwise, this refuses with both digests so the
+        disagreement is diagnosable. The reverse direction does NOT refuse —
+        Parent being more conservative than the bank is a stale mirror, which
+        is safe, and the Pilot's verdict governs.
+
+        No near-mapping and no substitution: the only outcomes are this exact
+        target or a refusal.
+        """
+        is_v2_path = str(generation_policy) == self._V2_GENERATION_POLICY
+        if self._content_authority is None:
+            if is_v2_path:
+                raise GoalValidationError(
+                    "no content authority is wired; generation cannot "
+                    "confirm the target is currently servable")
+            return None
+
+        try:
+            support = self._content_authority.support_for_target(canonical_rung)
+        except ContentAuthorityUnavailable as exc:
+            raise GoalValidationError(
+                f"the content authority is unavailable: {exc}") from exc
+
+        if not support.supported:
+            raise GoalValidationError(
+                "the canonical target is not currently supported by the "
+                f"approved activity bank (state={support.state!r}, "
+                f"reason={support.reason!r}, "
+                f"content_digest={support.content_digest!r})")
+
+        declared = getattr(parent_content_evaluation, "target_serviceability",
+                           None)
+        if declared is not None and declared not in (SUPPORT_SUPPORTED,
+                                                     SUPPORT_NOT_APPLICABLE):
+            raise GoalValidationError(
+                "content_state_mismatch: the source system reported "
+                f"{declared!r} while the approved activity bank reports "
+                f"{support.state!r} "
+                f"(source_digest="
+                f"{getattr(parent_content_evaluation, 'content_digest', None)!r}, "
+                f"pilot_digest={support.content_digest!r})")
+        return support
+
     def generate_anchored_suggestion(self, principal, child_id: str, *,
                                      projection, canonical_rung,
                                      observed,
                                      policy: PlanningPolicyVersion = CURRENT_PLANNING_POLICY,
                                      generation_policy: str = GENERATION_POLICY_VERSION,
+                                     parent_content_evaluation=None,
                                      request_id: str = "") -> Tuple[Tuple[GoalSuggestion, ...], bool]:
         """0.5F-B. ONE deterministic generation, claim-first and atomic.
 
@@ -352,6 +435,18 @@ class GoalService:
             # written, and an unmappable anchor is worse than none.
             raise GoalValidationError(
                 "the canonical target is not activity-mappable")
+
+        # --- A2 v2.1 CONTENT GATE, immediately before the claim ----------
+        #
+        # Placed HERE, not earlier, and not in the caller. The generation
+        # service already refuses an unsupported target, but that check runs
+        # before this method and a verdict taken earlier could be stale by the
+        # time anything is written. This is the last instruction before the
+        # first side effect, so nothing can be authorised by an observation
+        # that is no longer true.
+        content = self._require_current_content_support(
+            canonical_rung, generation_policy=generation_policy,
+            parent_content_evaluation=parent_content_evaluation)
 
         claim = GoalSuggestionGenerationClaim.build(
             projection_id=projection.projection_id,

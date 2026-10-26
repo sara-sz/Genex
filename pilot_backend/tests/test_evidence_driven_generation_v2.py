@@ -33,6 +33,9 @@ import pytest
 from pilot_backend.audit.recorder import AuditRecorder
 from pilot_backend.auth.interface import VerifiedToken
 from pilot_backend.auth.resolver import resolve_principal
+from pilot_backend.domain.content_authority import (
+    ActivityBankContentAuthority,
+)
 from pilot_backend.domain.canonical_rung import (
     ActivityFamilyBinding,
     CanonicalRung,
@@ -184,23 +187,66 @@ def _projection(*, states_30, state_24="demonstrated", omit_30=(),
 ALL_DEMONSTRATED = {m: "demonstrated" for m in MAPPABLE_30 + (PRONOUNS,)}
 
 
+#: Distinguishes "not given" from an explicit None, so a test can model an
+#: UNWIRED authority as well as a differently-stocked bank.
+_UNSET = object()
+
+
 def mixed(**overrides):
     states = dict(ALL_DEMONSTRATED)
     states.update(overrides)
     return states
 
 
+#: The fixture served set MIRRORS the real approved activity bank's four
+#: families by name. A fake is necessary — this suite is dependency-pure and
+#: must not reach into `pilot_runtime` for the artifact, the same reason it
+#: uses a fixture rung source — but a fake with INVENTED family names would
+#: make every support verdict here vacuous. `test_the_fixture_served_set_still
+#: _matches_the_approved_bank` in the cross-system suite keeps the two in step.
+FIXTURE_FAMILY = "expressive_vocabulary_growth"
+FIXTURE_SERVED_FAMILIES = (
+    "book_object_naming", "expressive_vocabulary_growth",
+    "sentence_building", "two_word_phrases",
+)
+FIXTURE_CONTENT_DIGEST = "c" * 64
+
+
+class FakeActivityBank:
+    """The narrowest thing the content authority reads: served set + digest."""
+
+    def __init__(self, served=FIXTURE_SERVED_FAMILIES,
+                 digest=FIXTURE_CONTENT_DIGEST):
+        self._served = tuple(served)
+        self.artifact_digest = digest
+
+    def served_families(self):
+        return self._served
+
+
+def content_authority(served=FIXTURE_SERVED_FAMILIES,
+                      digest=FIXTURE_CONTENT_DIGEST):
+    return ActivityBankContentAuthority(FakeActivityBank(served, digest))
+
+
 class World:
     """A fictional child, a managing provider, a Parent link and a v2 projection."""
 
     def __init__(self, *, projection=None, source=None, with_link=True,
-                 with_projection=True, managing=True):
+                 with_projection=True, managing=True, authority=_UNSET):
         self.store = FakeDocumentStore()
         self.repos = FirestoreRepositories(self.store)
         self.recorder = AuditRecorder(self.repos.audit_events,
                                       environment="test")
+        # A2 v2.1: the v2 generation policy REQUIRES a content authority, so
+        # the write path fails closed when none is wired. Passed explicitly
+        # here, and overridable so a test can model a bank that does not serve
+        # the target.
+        self.content_authority = (content_authority()
+                                  if authority is _UNSET else authority)
         self.goals = GoalService(repos=self.repos, recorder=self.recorder,
-                                 now=lambda: NOW)
+                                 now=lambda: NOW,
+                                 content_authority=self.content_authority)
         self.source = source or _source()
         self.service = BaselineSuggestionGenerationV2Service(
             repos=self.repos, goals=self.goals, rung_source=self.source)
@@ -1069,14 +1115,17 @@ from pilot_backend.transport.wsgi_app import (  # noqa: E402
 
 
 def _http_world(*, source=None, states=None, managing=True, child="alpha",
-                with_projection=True):
+                with_projection=True, activity_bank=_UNSET):
     """The secure topology, plus a Parent link and a v2 projection for its child.
 
     The topology ships provider connections but NO managing-clinician
     assignment — that gate is 0.4A's and is asserted separately — so the
     assignment is made here when the test needs the positive path.
     """
-    http = build_http(rung_source=source or _source())
+    http = build_http(
+        rung_source=source or _source(),
+        activity_bank=(FakeActivityBank() if activity_bank is _UNSET
+                       else activity_bank))
     topo = http.topo
     child_id = (topo.child_alpha if child == "alpha" else topo.child_beta
                 ).child_id
