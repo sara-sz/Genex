@@ -75,11 +75,35 @@ PILOT_BACKEND_PREFIX = "pilot_backend/"
 #: refused.
 PILOT_RUNTIME_PREFIX = "pilot_runtime/"
 
+#: Track 2's clinical-review workspace: candidate activity content, the
+#: exact-template-id review ledger and the clinician review tooling.
+#:
+#: It is deliberately top-level, and the reason is a build-context fact rather
+#: than a preference. All four container build contexts
+#: (`pilot_runtime/deploy/gcloudignore*`) ignore everything and then re-admit
+#: `pilot_backend/**` and `pilot_runtime/**` WHOLESALE, so candidate — that is,
+#: clinically UNREVIEWED — content placed under either would be copied into the
+#: PHI-serving image. At the repository root it is excluded from every image
+#: automatically. The CI no-mirror gate independently forbids several canonical
+#: activity-family identifiers under those two trees, which a review ledger
+#: must record.
+#:
+#: This guard predates that decision, so treating `clinical_review/` as an
+#: unrelated top-level path became incorrect rather than strict. Founder
+#: decision, recorded here as a CI/integrity-policy correction.
+#:
+#: Same reasoning as the two extensions above: one named directory, and
+#: `test_guard_still_rejects_unrelated_top_level_paths` proves every other
+#: top-level path — including the near-miss `clinical_review_extra/` — is still
+#: refused. Nothing here admits arbitrary repository-root paths.
+CLINICAL_REVIEW_PREFIX = "clinical_review/"
+
 PARENT_ALLOWED_PREFIXES = (
     "genex-parent/",
     ".github/workflows/parent-2.4-ci.yml",
     PILOT_BACKEND_PREFIX,
     PILOT_RUNTIME_PREFIX,
+    CLINICAL_REVIEW_PREFIX,
 )
 
 #: The immutable Gold Standard input snapshot (PARENT-0.2).
@@ -263,6 +287,8 @@ def test_guard_still_rejects_unrelated_top_level_paths() -> None:
     assert "pilot_backend/domain/entities.py".startswith(PARENT_ALLOWED_PREFIXES)
     assert PILOT_RUNTIME_PREFIX in PARENT_ALLOWED_PREFIXES
     assert "pilot_runtime/auth/firebase_decoder.py".startswith(PARENT_ALLOWED_PREFIXES)
+    assert CLINICAL_REVIEW_PREFIX in PARENT_ALLOWED_PREFIXES
+    assert "clinical_review/review_ledger.json".startswith(PARENT_ALLOWED_PREFIXES)
 
     must_still_fail = (
         "therapist_api/app/domain/models.py",
@@ -275,6 +301,8 @@ def test_guard_still_rejects_unrelated_top_level_paths() -> None:
         "pilot_backend_extra/thing.py",   # near-miss: not the approved namespace
         "pilot_runtime_extra/thing.py",   # near-miss for the 0.3 namespace
         "pilot/thing.py",                 # prefix of both, approved as neither
+        "clinical_review_extra/thing.py",  # near-miss for the Track 2 namespace
+        "clinical/thing.py",              # prefix of it, approved as neither
         "docs/plan.md",
     )
     leaked = [p for p in must_still_fail if p.startswith(PARENT_ALLOWED_PREFIXES)]
