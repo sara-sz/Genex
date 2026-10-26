@@ -210,6 +210,10 @@ CHILD_RTM_EPISODES_ROUTE = "/pilot/children/{child_id}/rtm-episodes"
 EPISODE_CONSENT_ROUTE = "/pilot/rtm-episodes/{episode_id}/consent"
 EPISODE_SETUP_ROUTE = "/pilot/rtm-episodes/{episode_id}/setup"
 EPISODE_READINESS_ROUTE = "/pilot/rtm-episodes/{episode_id}/readiness"
+# The monitoring START. Audited in the 3C transport review and found to have
+# NO product path at all: every `open_period` caller in the repository was a
+# test, so a ready episode could not actually begin monitoring.
+EPISODE_PERIODS_ROUTE = "/pilot/rtm-episodes/{episode_id}/periods"
 
 #: (method, template, is_public). Explicit; no prefix matching anywhere.
 ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
@@ -254,6 +258,7 @@ ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
     ("POST", EPISODE_CONSENT_ROUTE, False),
     ("POST", EPISODE_SETUP_ROUTE, False),
     ("GET", EPISODE_READINESS_ROUTE, False),
+    ("POST", EPISODE_PERIODS_ROUTE, False),
 )
 
 _STATUS_TEXT = {
@@ -1139,6 +1144,7 @@ class PilotWSGIApplication:
                 ("rtm-episodes", "setup", EPISODE_SETUP_ROUTE, ("POST",)),
                 ("rtm-episodes", "readiness", EPISODE_READINESS_ROUTE,
                  ("GET",)),
+                ("rtm-episodes", "periods", EPISODE_PERIODS_ROUTE, ("POST",)),
         ):
             resource = _match_resource_subroute(path, collection, tail)
             if resource is None:
@@ -1869,6 +1875,27 @@ class PilotWSGIApplication:
                     opt_bool(body, "caregiver_confirmed_able_to_use")),
                 request_id=request_id)
             return {"setup": _setup_payload(setup)}
+
+        if route == EPISODE_PERIODS_ROUTE:
+            # Step 4: monitoring BEGINS. Provider-only, and the readiness,
+            # closed-episode, plan-ownership and uniqueness rules all stay in
+            # `open_period` — this handler reads one field and delegates.
+            #
+            # The focus plan supplies the cycle month AND the timezone of
+            # record, so neither is accepted from the body: a client-supplied
+            # month could open a period that disagrees with the plan it
+            # monitors.
+            #
+            # NOT idempotent, deliberately. A repeat collides on the
+            # deterministic (episode, cycle_month) claim and refuses, because
+            # one episode-month is one monitoring period; returning the
+            # existing one would make a double-submit look like two months.
+            body = read_json_body(environ, allowed=["focus_plan_id"],
+                                  required=["focus_plan_id"])
+            period = rtm.open_period(
+                principal, resource, opt_str(body, "focus_plan_id"),
+                request_id=request_id)
+            return {"period": _period_payload(period)}
 
         if route == EPISODE_READINESS_ROUTE:
             # Step 4's precondition, readable on its own so a clinician can

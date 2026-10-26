@@ -912,3 +912,338 @@ def test_the_caregiver_rtm_read_is_unchanged_by_slice_3c(wf):
     for entry in read[1]["episodes"]:
         assert "readiness" not in entry
         assert "enrollment" not in entry
+
+
+# ===========================================================================
+# THE MONITORING START — the step that had no product path
+# ===========================================================================
+#
+# The 3C transport review audited this and found every `open_period` caller in
+# the repository was a TEST. A ready episode could not actually begin
+# monitoring, so the chain
+#
+#   episode -> consent -> setup -> readiness.is_ready -> open_period(...)
+#
+# was broken at the last link in the real product. This route closes it, and
+# delegates: readiness, closed-episode, plan-ownership and uniqueness all stay
+# inside `RTMService.open_period`, so the single readiness gate from slice 3C
+# remains the only authority.
+
+
+def _plan_for(wf, child, token="hannah"):
+    """An ACTIVE monthly focus plan, through the real three-step sequence."""
+    from pilot_backend.goals.service import GoalService
+    from pilot_backend.goals.suggestion_engine import (
+        EvidenceSource,
+        ObservationSnapshot,
+        ObservedDomain,
+    )
+
+    domain = "talking_and_communicating"
+    offered = GoalService(repos=wf.repos).generate_suggestions(
+        wf.principal(token), child,
+        ObservationSnapshot(child, _CURRENT_MONTH, (
+            ObservedDomain(domain, True,
+                           EvidenceSource.CLINICIAN_OBSERVATION,
+                           functional_baseline_area="requesting",
+                           canonical_rung=_rung_for(domain)),)))
+    goal = post(wf, f"/pilot/children/{child}/goals", token,
+                {"edit_type": "modified",
+                 "suggestion_id": offered[0].suggestion_id,
+                 "text": "Fictional target",
+                 "reason": "Fictional rationale"})[1]["goal"]
+    plan_id = post(wf, f"/pilot/children/{child}/monthly-plan", token,
+                   {"cycle_month": _CURRENT_MONTH,
+                    "timezone_of_record": "UTC"})[1]["plan"]["focus_plan_id"]
+    post(wf, f"/pilot/monthly-plans/{plan_id}/allocations", token,
+         {"goal_kind": "clinical", "goal_id": goal["goal_id"],
+          "priority_rank": 1, "emphasis_weight": 2})
+    activated = post(wf, f"/pilot/monthly-plans/{plan_id}/activate", token)
+    assert activated[0] == 200, activated
+    return goal, plan_id
+
+
+def _ready_episode(wf, child=None, token="hannah", caregiver_token="cg-a",
+                   consent=True, setup=True, confirmed=True):
+    """An episode carried through as much of the enrollment order as asked."""
+    child = child or wf.child_a
+    goal, plan_id = _plan_for(wf, child, token)
+    opened = post(
+        wf, f"/pilot/children/{child}/rtm-episodes", token,
+        {"goal_ids": [goal["goal_id"]],
+         "authorized_caregiver_id": wf.principal(
+             caregiver_token).application_id,
+         "clinical_indication": "Fictional expressive-language delay",
+         "clinical_rationale": "Monitoring home practice between visits.",
+         "expected_duration_months": 6})
+    assert opened[0] == 200, opened
+    episode_id = opened[1]["episode"]["episode_id"]
+    if consent:
+        assert post(wf, f"/pilot/rtm-episodes/{episode_id}/consent",
+                    caregiver_token, CONSENT_BODY)[0] == 200
+    if setup:
+        assert post(wf, f"/pilot/rtm-episodes/{episode_id}/setup", token,
+                    {"configuration_summary": "Configured.",
+                     "education_summary": "Taught.",
+                     "caregiver_confirmed_able_to_use": confirmed})[0] == 200
+    return episode_id, plan_id
+
+
+# -- the happy path: readiness -> monitoring begins ------------------------
+
+def test_a_ready_episode_can_begin_monitoring_over_http(wf):
+    """THE CHAIN, end to end, entirely over the product surface."""
+    episode_id, plan_id = _ready_episode(wf)
+
+    ready = get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness", "hannah")
+    assert ready[1]["readiness"]["is_ready"] is True
+
+    opened = post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                  {"focus_plan_id": plan_id})
+    assert opened[0] == 200, opened
+    period = opened[1]["period"]
+    assert period["episode_id"] == episode_id
+    assert period["focus_plan_id"] == plan_id
+    assert period["cycle_month"] == _CURRENT_MONTH
+    # The plan supplies the month AND the timezone, so the period cannot
+    # disagree with what it monitors.
+    assert period["timezone_of_record"] == "UTC"
+    assert period["status"] == "active"
+
+    # The period is now visible on the existing RTM read.
+    read = get(wf, f"/pilot/children/{wf.child_a}/rtm", "hannah")
+    assert read[0] == 200
+    ids = [p["period_id"] for e in read[1]["episodes"] for p in e["periods"]]
+    assert period["period_id"] in ids
+
+
+def test_the_month_and_timezone_cannot_be_supplied_by_the_client(wf):
+    """Only `focus_plan_id` is accepted; the plan is the source of both."""
+    episode_id, plan_id = _ready_episode(wf)
+    refused = post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                   {"focus_plan_id": plan_id, "cycle_month": "2099-01",
+                    "timezone_of_record": "America/New_York"})
+    assert refused[0] == 403, refused
+
+
+# -- the readiness gate, through the route --------------------------------
+
+def test_monitoring_cannot_begin_without_consent_over_http(wf):
+    episode_id, plan_id = _ready_episode(wf, consent=False)
+    assert "caregiver_consent_absent" in get(
+        wf, f"/pilot/rtm-episodes/{episode_id}/readiness",
+        "hannah")[1]["readiness"]["missing"]
+
+    refused = post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                   {"focus_plan_id": plan_id})
+    assert refused[0] == 403, refused
+    assert refused[1] == _FORBIDDEN_BODY
+    assert wf.repos.rtm_periods.list_for_episode(episode_id) == []
+
+
+def test_monitoring_cannot_begin_without_setup_over_http(wf):
+    episode_id, plan_id = _ready_episode(wf, setup=False)
+    assert "setup_and_education_absent" in get(
+        wf, f"/pilot/rtm-episodes/{episode_id}/readiness",
+        "hannah")[1]["readiness"]["missing"]
+
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                {"focus_plan_id": plan_id})[0] == 403
+    assert wf.repos.rtm_periods.list_for_episode(episode_id) == []
+
+
+def test_monitoring_cannot_begin_without_caregiver_confirmation(wf):
+    """Setup exists, but the caregiver did not confirm they can use it."""
+    episode_id, plan_id = _ready_episode(wf, confirmed=False)
+    missing = get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness",
+                  "hannah")[1]["readiness"]["missing"]
+    assert "caregiver_did_not_confirm_able_to_use" in missing
+
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                {"focus_plan_id": plan_id})[0] == 403
+
+
+def test_monitoring_cannot_begin_on_incomplete_enrollment(wf):
+    """A pre-3C-shaped episode: stored, decodable, and never RTM-ready.
+
+    Written through the repository rather than the route, because the route
+    cannot create one — `open_episode` requires the metadata. That is the
+    point: the only way to hold an incomplete episode is to have stored it
+    before 3C existed, and such an episode must not begin monitoring.
+    """
+    from dataclasses import replace
+
+    episode_id, plan_id = _ready_episode(wf)
+    stored = wf.repos.rtm_episodes.get_by_id(episode_id)
+    wf.repos.rtm_episodes.update(
+        replace(stored, clinical_indication="", clinical_rationale=""))
+
+    missing = get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness",
+                  "hannah")[1]["readiness"]["missing"]
+    assert "enrollment_metadata_incomplete" in missing
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                {"focus_plan_id": plan_id})[0] == 403
+
+
+def test_monitoring_cannot_begin_without_a_pinned_goal_version(wf):
+    from dataclasses import replace
+
+    episode_id, plan_id = _ready_episode(wf)
+    stored = wf.repos.rtm_episodes.get_by_id(episode_id)
+    wf.repos.rtm_episodes.update(
+        replace(stored, pinned_goal_version_ids=()))
+
+    missing = get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness",
+                  "hannah")[1]["readiness"]["missing"]
+    assert "approved_goal_versions_not_pinned" in missing
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                {"focus_plan_id": plan_id})[0] == 403
+
+
+# -- authorization --------------------------------------------------------
+
+def test_a_caregiver_cannot_open_a_monitoring_period(wf):
+    """Monitoring is a clinician act, even for the consenting caregiver."""
+    episode_id, plan_id = _ready_episode(wf)
+    refused = post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "cg-a",
+                   {"focus_plan_id": plan_id})
+    assert refused[0] == 403, refused
+    assert wf.repos.rtm_periods.list_for_episode(episode_id) == []
+
+
+def test_a_non_managing_or_foreign_provider_cannot_open_a_period(wf):
+    episode_id, plan_id = _ready_episode(wf)
+    for token in ("connected", "paused", "revoked", "foreign"):
+        refused = post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", token,
+                       {"focus_plan_id": plan_id})
+        assert refused[0] == 403, (token, refused)
+        assert refused[1] == _FORBIDDEN_BODY, token
+    assert wf.repos.rtm_periods.list_for_episode(episode_id) == []
+
+
+def test_an_unauthenticated_caller_cannot_open_a_period(wf):
+    from .test_integration_identity import call
+
+    status, _body, _ = call(wf.app, "/pilot/rtm-episodes/repi_x/periods",
+                            method="POST", body=b'{"focus_plan_id":"mfpl_x"}')
+    assert status == 401
+
+
+def test_a_foreign_episode_is_a_constant_refusal_not_an_oracle(wf):
+    """Family B's episode, asked for by family A's clinician."""
+    a_episode, a_plan = _ready_episode(wf)
+    b_episode, b_plan = _ready_episode(
+        wf, child=wf.child_b, token="foreign", caregiver_token="cg-b")
+
+    cross = post(wf, f"/pilot/rtm-episodes/{b_episode}/periods", "hannah",
+                 {"focus_plan_id": b_plan})
+    assert cross[0] == 403
+    assert cross[1] == _FORBIDDEN_BODY
+
+    unknown = post(wf, "/pilot/rtm-episodes/repi_nonexistent/periods",
+                   "hannah", {"focus_plan_id": a_plan})
+    assert unknown[0] == 403
+    assert unknown[1] == _FORBIDDEN_BODY
+    # Indistinguishable: a prober learns nothing about which episodes exist.
+    assert cross[1] == unknown[1]
+
+
+def test_a_plan_from_another_child_cannot_be_monitored(wf):
+    a_episode, _a_plan = _ready_episode(wf)
+    _b_episode, b_plan = _ready_episode(
+        wf, child=wf.child_b, token="foreign", caregiver_token="cg-b")
+
+    refused = post(wf, f"/pilot/rtm-episodes/{a_episode}/periods", "hannah",
+                   {"focus_plan_id": b_plan})
+    assert refused[0] == 403, refused
+    assert wf.repos.rtm_periods.list_for_episode(a_episode) == []
+
+
+# -- uniqueness and closure ----------------------------------------------
+
+def test_a_repeated_request_respects_the_episode_month_uniqueness(wf):
+    """One episode-month is one period. A repeat REFUSES, by design.
+
+    Not idempotent: returning the existing period would make a double-submit
+    indistinguishable from two monitored months. The deterministic
+    (episode, cycle_month) claim collides and the second call refuses.
+    """
+    episode_id, plan_id = _ready_episode(wf)
+    first = post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                 {"focus_plan_id": plan_id})
+    assert first[0] == 200, first
+
+    second = post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                  {"focus_plan_id": plan_id})
+    assert second[0] == 403, second
+
+    # Exactly ONE period exists, and it is the first one.
+    periods = wf.repos.rtm_periods.list_for_episode(episode_id)
+    assert len(periods) == 1
+    assert periods[0].period_id == first[1]["period"]["period_id"]
+
+
+def test_a_closed_episode_cannot_open_a_monitoring_period(wf):
+    """Slice 3A's rule, reached through the new route."""
+    episode_id, plan_id = _ready_episode(wf)
+    wf.repos.rtm_episodes.update(
+        wf.repos.rtm_episodes.get_by_id(episode_id).close(
+            actor_id=wf.hannah.provider_id, reason="discharged"))
+
+    refused = post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                   {"focus_plan_id": plan_id})
+    assert refused[0] == 403, refused
+    assert wf.repos.rtm_periods.list_for_episode(episode_id) == []
+
+
+def test_completing_consent_and_setup_does_not_auto_open_a_period(wf):
+    """Readiness is a PRECONDITION, never a trigger.
+
+    Nothing opens a month because the prerequisites became complete: a
+    clinician decides when monitoring starts, and an auto-opened month would
+    begin billable monitoring nobody asked for.
+    """
+    episode_id, _plan_id = _ready_episode(wf)
+    assert get(wf, f"/pilot/rtm-episodes/{episode_id}/readiness",
+               "hannah")[1]["readiness"]["is_ready"] is True
+    assert wf.repos.rtm_periods.list_for_episode(episode_id) == []
+
+
+# -- audit, no clinical text, and the product is unaffected --------------
+
+def test_opening_a_period_emits_its_audit_event_without_clinical_text(wf):
+    from pilot_backend.audit.events import AuditAction
+
+    episode_id, plan_id = _ready_episode(wf)
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                {"focus_plan_id": plan_id})[0] == 200
+
+    events = wf.repos.audit_events.list_all()
+    assert AuditAction.RTM_PERIOD_OPENED in {e.action for e in events}
+    for event in events:
+        blob = str(event.metadata)
+        assert "expressive-language delay" not in blob
+        assert "Monitoring home practice" not in blob
+        assert "Configured." not in blob
+
+
+def test_a_refused_period_still_records_nothing_and_leaves_genex_working(wf):
+    """A refused monitoring start changes nothing the family can see."""
+    episode_id, plan_id = _ready_episode(wf, consent=False)
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                {"focus_plan_id": plan_id})[0] == 403
+
+    assert wf.repos.rtm_periods.list_for_episode(episode_id) == []
+    assert get(wf, f"/pilot/children/{wf.child_a}/this-week", "cg-a")[0] == 200
+    assert get(wf, f"/pilot/children/{wf.child_a}/monthly-plan",
+               "cg-a")[0] == 200
+    assert get(wf, f"/pilot/children/{wf.child_a}/rtm", "cg-a")[0] == 200
+    assert get(wf, "/pilot/me", "cg-a")[0] == 200
+
+
+def test_the_period_route_rejects_a_missing_or_wrong_method(wf):
+    episode_id, _plan_id = _ready_episode(wf)
+    assert get(wf, f"/pilot/rtm-episodes/{episode_id}/periods",
+               "hannah")[0] == 405
+    assert post(wf, f"/pilot/rtm-episodes/{episode_id}/periods", "hannah",
+                {})[0] == 403

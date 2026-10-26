@@ -594,6 +594,12 @@ def test_route_table_and_apisurface_cannot_disagree():
         "/pilot/rtm-episodes/{episode_id}/consent": False,
         "/pilot/rtm-episodes/{episode_id}/setup": False,
         "/pilot/rtm-episodes/{episode_id}/readiness": False,
+        # The monitoring START. Provider-only, managing-clinician-only, and
+        # gated by readiness inside `open_period`. Added after the 3C
+        # transport audit found that every `open_period` caller in the
+        # repository was a test — a ready episode had no way to actually
+        # begin monitoring.
+        "/pilot/rtm-episodes/{episode_id}/periods": False,
     }
 
 
