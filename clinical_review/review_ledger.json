@@ -46,6 +46,69 @@
       "supersedes": null,
       "adapted_from": null
     },
+    "atpl1:8fae563260053854936649de7078d5d2": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder BEFORE clinical review; no clinician input, and reviewer/decided_on are deliberately null. Supersedes atpl1:d970973944e15ae69ffa5dec3e819126, which was never approved and carries no approval to transfer. Support gradient step 1 of 5, most supported: the caregiver performs the action, so the referent is live and shared. VERB SET IS CONSTRAINED BY A MACHINE RULE, NOT BY CLINICAL CHOICE: the content validator treats jump, hop, toss, throw, catch, race and climb as critical failures in any language card, so this family uses eating, drinking, reading, sleeping, washing, brushing, coloring and playing instead. Confirm that a verb set without the blocked ones is clinically adequate for action labeling; if a blocked verb is clinically necessary, say so and it will be raised as a separate decision rather than worked around. CHANGE: the card is now explicit pretend play with recognisable props and alternating turns, with make_harder progressing to body-only acting. The superseded make_easier accepted 'a point or a look toward the answer', which let a RECEPTIVE response stand in for the expressive target; that is removed, and a nonverbal choice is now scaffolding only.",
+      "supersedes": "atpl1:d970973944e15ae69ffa5dec3e819126",
+      "adapted_from": null
+    },
+    "atpl1:36ad9d1a0549634de0b49ebca0454f4e": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:99eb7ec785da7ba1fb85ffe9972a0662, which was never approved. Support gradient step 2 of 5: the child's own action, the easiest referent after the caregiver's. CHANGE: make_easier now offers two SPOKEN choices and states outright that 'A nonverbal choice does not count as expressive success'; make_harder adds optional phrase expansion that is explicitly not required for success. Review focus: whether interrupting a child's own play to ask a question is appropriate here, and whether the natural-pause instruction is sufficient protection.",
+      "supersedes": "atpl1:99eb7ec785da7ba1fb85ffe9972a0662",
+      "adapted_from": null
+    },
+    "atpl1:02dd4cfcf20572b9c8ba754fe7b581a8": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:0874e5c5a23ae528e47b27bf5f38fce9, which was never approved. Support gradient step 3 of 5: a still image, but of familiar people. CHANGE: the photo count dropped from four or five to two or three, the card now steers away from working a stack like flash cards, and the child's own photos are named first. FOUNDER DECISION, 2026-10-27: on this card the optional expansion is guarded by 'keep action labeling as the primary target' rather than by the word 'optional' used on cards 2, 4 and 7. That wording is ACCEPTED as written — any related follow-up conversation happens only once action labeling is already easy, and the explicit success_criteria remains the authoritative definition of success. The card and its template id are unchanged for this decision. A clinician may still tighten this wording during clinical review, in which case the normal content-addressed id and provenance rules apply and the edit gets a new id. Review focus: whether family photos are a clinically useful intermediate step between live action and book pictures, or whether they add nothing over a book page.",
+      "supersedes": "atpl1:0874e5c5a23ae528e47b27bf5f38fce9",
+      "adapted_from": null
+    },
+    "atpl1:68ccd77cda669e1f57032064fc2c5b7d": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:e7cc3a3e61ff9161939bc1124bfe9b79, which was never approved. Support gradient step 4 of 5, and the milestone's OWN context: the canonical rung text names a picture or book. CHANGE: the card now stops naturally while reading rather than working five or six pages, and make_easier states that a nonverbal choice 'demonstrates understanding but does not count as expressive success'. Sentence expansion is offered and marked optional. Review focus: page count, and whether one character per page is the right level of selectivity.",
+      "supersedes": "atpl1:e7cc3a3e61ff9161939bc1124bfe9b79",
+      "adapted_from": null
+    },
+    "atpl1:36bf25ed15831196383629982ff1de86": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:493c8827f98983d85001907eff03d284 ('Busy Picture'), which was never approved. Support gradient step 5 of 5, least supported: several agents in one image. CHANGE: retitled to 'Pick One Action' and RE-ORDERED — the card now starts with ONE child-chosen action and only moves to a second in make_harder, where the superseded card asked for two actions in the base instructions and made two actions the success criterion. The superseded make_harder asked the child to find someone doing a NAMED action, which is a receptive task in an expressive family; that is removed. Review focus: whether two actions is the right ceiling for this rung.",
+      "supersedes": "atpl1:493c8827f98983d85001907eff03d284",
+      "adapted_from": null
+    },
+    "atpl1:77a95a163e5ed1218f6fd358e4a2b4d7": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. NEW SIXTH CANDIDATE, authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. It supersedes nothing. NOT PART OF THE ORIGINAL FIVE-STEP SUPPORT GRADIENT: it sits between gradient steps 1 and 3 — the referent is live and shared as at step 1, but with NO props at all, so it is less supported than the pretend-play card and more supported than a still image. Kept deliberately distinct from 'What Am I Doing?': that card is prop-supported pretend play progressing to body-only acting, while this one is an explicit guessing game with role reversal and no materials. FOUNDER DECISION, 2026-10-27: the core support gradient STAYS FIVE STEPS across the first five cards and is deliberately NOT converted into a seven-step linear difficulty gradient. This card and 'Mini Action Story' sit alongside that progression rather than extending it, and the 'step N of 5' records in the Track 2 suite are preserved as-is. No card wording changed for this decision. Review focus: whether a charades frame is appropriate at 36m, and whether having the child act out an action for the caregiver to guess competes with the expressive labeling target.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:6b2a95bc76183ba4279fbf22893a88b9": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. NEW SEVENTH CANDIDATE, authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. It supersedes nothing. NOT PART OF THE ORIGINAL FIVE-STEP SUPPORT GRADIENT: it sits beyond step 5 — several still pictures held together by a narrative frame. DELIBERATELY NOT A SEQUENCING OR NARRATION INTERVENTION: success is 'at least one action word while helping with the story'; the make_harder related-actions variation states that the main goal remains naming each action, and that understanding the order, producing 'first' and 'then', or retelling the sequence is an optional extension that must not be required for success. Review focus: whether a story frame risks drifting this family away from single-action labeling, and whether the two-related-actions variation belongs here or in a later narrative family.",
+      "supersedes": null,
+      "adapted_from": null
+    },
     "atpl1:69702817b90ba435e5c7b575db187291": {
       "activity_family_ref": "expressive_first_words",
       "status": "generated_candidate",
@@ -109,6 +172,69 @@
       "supersedes": null,
       "adapted_from": null
     },
+    "atpl1:79e480b2ccc99485f2d7ecb0630fd964": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. This wording was revised by the founder BEFORE clinical review and has had no clinician input; the status is still generated_candidate and reviewer/decided_on are deliberately null. Supersedes atpl1:69702817b90ba435e5c7b575db187291, which was never approved and therefore carries no approval to transfer. CHANGE: the activity moved from an arrival/departure moment to a small set of photos of familiar people, with the live-arrival version kept only as a secondary opportunity, so practice no longer depends on somebody entering the room. Review focus: is a familiar-person name the right first target here, and is a photo set an adequate referent at the 12m rung?",
+      "supersedes": "atpl1:69702817b90ba435e5c7b575db187291",
+      "adapted_from": null
+    },
+    "atpl1:03857398879347566cacc0d6280d2517": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:c04d588bb0437f1c6c56db0a000ea1b4 ('Peek and Name'), which was never approved. CHANGE: retitled to 'Peekaboo Names'; the person who hides is now any very familiar person rather than the caregiver's own face, and an optional mirror variation was added. The mirror variation deliberately keeps the target on FAMILIAR-PERSON names and does not ask the child to identify themselves, which would be a different self-recognition target. Review focus: round count, whether a reveal game competes with the naming target, and whether the mirror variation belongs inside this card or as a card of its own.",
+      "supersedes": "atpl1:c04d588bb0437f1c6c56db0a000ea1b4",
+      "adapted_from": null
+    },
+    "atpl1:a12d0335f334b1ab0c320d4cec1aeb41": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:f562e541df79bc55108f3607b75bebb4 ('One Word, One Thing'), which was never approved. CHANGE: retitled to 'Favorite Things', and it REVERSES the earlier narrowing — the array is back to two or three familiar favorite objects rather than a single item. make_easier now adds an explicit receptive step ('Give me the ball' / 'Where's the ball?') and states that a correct look, point or hand-over shows participation and understanding but does NOT count as spoken-word success. Review focus: confirm that re-widening the array is right for a first-words target, and confirm the receptive-step wording leaves the expressive success criterion unambiguous.",
+      "supersedes": "atpl1:f562e541df79bc55108f3607b75bebb4",
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['expressive_word'][0] 'Pick Your Toy'"
+    },
+    "atpl1:1dc565ad660e3551e3707e2497f82d2c": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:b9030e455771b9fc0213d75e9d00530e ('Snack Words'), which was never approved. CHANGE: retitled to 'Snack Choices'; the activity is now a two-item CHOICE rather than naming a single food, and what_to_avoid was strengthened — it now forbids withholding the snack, demanding 'Say ___', and requiring correct pronunciation. make_easier states that choosing correctly shows communication and understanding but need not count as spoken-word success. Review focus: the what_to_avoid line is still the load-bearing part — food must never be contingent on a word.",
+      "supersedes": "atpl1:b9030e455771b9fc0213d75e9d00530e",
+      "adapted_from": null
+    },
+    "atpl1:dc14cad0ff29afbf65f43725330f5abd": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:7015cc812377ad0cb64e04e09ff02b90, which was never approved. The TITLE is unchanged ('Bath and Bedtime Words'); the body changed, so the id changed. CHANGE: the dose moved from 'the same word every night' to the same word across several days, and what_to_avoid now adds an explicit bath-time supervision sentence. THAT SUPERVISION SENTENCE IS CANDIDATE LANGUAGE DRAFTED OUTSIDE CLINICAL REVIEW AND NEEDS AN EXPLICIT DECISION: approve it, replace it, or supply standing wording. Review focus: whether several-day repetition of one word is the right dose, and whether bath time is an appropriate window at all.",
+      "supersedes": "atpl1:7015cc812377ad0cb64e04e09ff02b90",
+      "adapted_from": null
+    },
+    "atpl1:8ce3a7e5bb00817c5754654af54899db": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. This is a COMPLETE REPLACEMENT of atpl1:75020d1045c22f79ba398d154d1be321 ('Say It Your Way'), not an edit of it. The superseded card's target was the CAREGIVER's response — treating an approximation as the word rather than as an error — and its ledger note asked whether that was clinically distinct from the simplification card or collapsed into it. The founder resolved that by replacing it with a different activity: a surprise box producing one familiar object at a time. Review focus: confirm the recast/expansion concept is adequately covered by the 'accept any attempt, then model the full word' instruction now carried by every card in this family, or say so if it needs a card of its own.",
+      "supersedes": "atpl1:75020d1045c22f79ba398d154d1be321",
+      "adapted_from": null
+    },
+    "atpl1:b0eb9f7e0e847c69984900b04429ec79": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. This is a COMPLETE REPLACEMENT of atpl1:c062d182c4ec09fd4432dc9a348cb742 ('Words Around the House'), not an edit of it. The superseded card targeted generalisation of a known word across rooms; this one targets object-to-photo matching with the object's name modelled at the moment of the match. Its success criterion is deliberately TWO-PART — the match shows understanding, the sound or word attempt is the expressive part — so a child who matches silently has not met it. Review focus: whether a matching task belongs in an EXPRESSIVE family at all rather than a receptive one, and whether the make_harder step (a different photo of the same kind of object) is the right generalisation move for the 18m rung.",
+      "supersedes": "atpl1:c062d182c4ec09fd4432dc9a348cb742",
+      "adapted_from": null
+    },
     "atpl1:cdc591d639808c7ef952fb057634d515": {
       "activity_family_ref": "early_vocalizations",
       "status": "generated_candidate",
@@ -160,6 +286,69 @@
       "reviewer": null,
       "decided_on": null,
       "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Spans the whole band: the same sound at the same step of one daily routine. This card absorbed two earlier concepts (routine-embedded cooing and routine-embedded babble) that proved to be one activity at different rungs.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:4f63d51c374a30ac751bdfc7f85db41d": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder BEFORE clinical review; no clinician input, and reviewer/decided_on are deliberately null. Supersedes atpl1:cdc591d639808c7ef952fb057634d515, which was never approved and carries no approval to transfer. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION: the positioning and supervision sentence in what_to_avoid is founder-drafted and is not established guidance. CHANGE: the specific 'eight to twelve inches apart' distance and the 'wait five seconds' timing were dropped in favour of comfortable positioning and a short pause. More importantly, the superseded make_easier counted 'a change in breathing, a look, or a small movement' as a response, which blurred engagement into vocalization; the new make_easier names those as engagement and then says explicitly to wait for a vocal sound before counting vocalization success. Review focus: confirm the supervision wording, and confirm the engagement-versus-vocalization split reads correctly at the 2m end of the span.",
+      "supersedes": "atpl1:cdc591d639808c7ef952fb057634d515",
+      "adapted_from": null
+    },
+    "atpl1:2e4054d572b465aa6b94bc42baf7df82": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:1f6ba8efea00dc1bf54d44f979aebf55 ('Blow and Buzz'), which was never approved. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. CHANGE: retitled to 'Silly Mouth Sounds'. The superseded card told the caregiver to 'stick your tongue out and blow gently' and made watching the caregiver's mouth part of the success criterion. The new card drops the tongue protrusion, models only a gentle raspberry or lip buzz, and makes success any non-crying sound or playful lip attempt. what_to_avoid now explicitly forbids manipulating the child's lips or tongue and forbids physically showing them how to make the sound. Review focus: confirm this reads as sound PLAY carrying no oral-motor treatment implication, and confirm the no-manipulation sentence is worded correctly.",
+      "supersedes": "atpl1:1f6ba8efea00dc1bf54d44f979aebf55",
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['sound'][2] 'Silly Sounds Mirror'"
+    },
+    "atpl1:6d747e0685b58f2d15bc9d4f572eaa36": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:9c8fc5e0bb249f3cc1db3f034b08e9a4 ('High and Low'), which was never approved. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. CHANGE: retitled to 'High and Low Sounds', and LOUDNESS WAS DELIBERATELY REMOVED AS A TARGET. The superseded card contrasted quiet against louder and accepted 'a change in loudness' as success; its ledger note asked whether squealing is something a caregiver should be prompted to elicit at all. The new card contrasts only gentle PITCH, and what_to_avoid now forbids trying to make the child louder, encouraging screaming, or making very loud sounds close to the child. REVIEW FOCUS, AND A REAL TENSION TO RESOLVE: this family binds a 6m squealing rung concerned with pitch AND intensity range. Confirm that dropping loudness and squealing as elicited targets is clinically right; if squealing must remain an explicit target, say so and it will be raised as its own decision rather than quietly reinstated.",
+      "supersedes": "atpl1:9c8fc5e0bb249f3cc1db3f034b08e9a4",
+      "adapted_from": null
+    },
+    "atpl1:8c420f415652dd6f1cacc93f50b6e519": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:05904049483a92bd232d54e5944807cf, which was never approved. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. CHANGE: the superseded card required copying the child's sound 'exactly as they made it' and specified four or five turns each; the new card asks for a copy or a similar sound and leaves the length open. success_criteria now requires a vocal sound AND participation in at least one back-and-forth exchange, with make_easier making clear the exchange may begin from a sound the child made spontaneously — so a child who cannot yet respond to a model is not excluded. Review focus: confirm the two-part success criterion is reachable at the 2m end of the span.",
+      "supersedes": "atpl1:05904049483a92bd232d54e5944807cf",
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['sound'][2] 'Silly Sounds Mirror' + [4] 'Noisy Toy Turn'"
+    },
+    "atpl1:fd23380c10138915fe9ca99895c5f178": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:be7588fa50653b56ecc1e822d8123978, which was never approved and carries no approval to transfer. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. CHANGE: success_criteria was split so the family span is carried INSIDE the card — any vocal sound meets it, and a consonant-vowel attempt such as 'ba' or 'ma' is named as an ADDITIONAL sign of progress for a child who is already babbling while being explicitly not required. FOUNDER-DIRECTED SCHEMA DECISION: the people/photos variation was folded into instructions as an optional sentence rather than added as a tenth field, so CARD_FIELDS is unchanged and no second content schema exists. It is phrased as interest-based and rung-neutral ('if your child enjoys looking at familiar people or family photos') and states that the goal is back-and-forth sound play, not getting the child to say the person's name. CONSISTENCY EDIT, same founder pass: materials now reads 'No materials needed; optional photo of a familiar person.' so the field agrees with the optional variation while the core activity still needs nothing. That edit changed the authored bytes and therefore the id; `supersedes` deliberately still names the last COMMITTED candidate rather than the intermediate working-tree revision, which exists in no commit. Review focus: confirm the optional photo variation does not pull this pre-verbal card toward a naming target.",
+      "supersedes": "atpl1:be7588fa50653b56ecc1e822d8123978",
+      "adapted_from": null
+    },
+    "atpl1:810ffec4fb72c5d3ebf851c2553eb45f": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:84d62c7bb7803faf47361eba8e933e60, which was never approved. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. CHANGE: FEEDING WAS REMOVED FROM THE SUGGESTED ROUTINES. The superseded card offered 'changing, bathing, or feeding' as examples; the new materials offers diaper changing, getting dressed, bath time, stroller time and getting ready for bed, so no card in this family now embeds sound play in a feeding routine. make_easier also adds that the child does not need to copy the caregiver's sound. Review focus: confirm that excluding feeding is correct, and confirm the routine list carries no oral-motor or feeding-treatment implication.",
+      "supersedes": "atpl1:84d62c7bb7803faf47361eba8e933e60",
+      "adapted_from": null
+    },
+    "atpl1:ad700dd91c3c4062f4b052b7c8eae7c7": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. NEW SEVENTH CANDIDATE, authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. It supersedes nothing — this is the card that takes the family from 6 candidates to 7. PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION: the startle guidance in what_to_avoid ('do not suddenly shout Boo! or try to startle your child') is founder-drafted and is not established guidance. CONCEPT: a peekaboo reveal used as the occasion for a sound exchange, with success allowing vocalization in ANTICIPATION of the reveal as well as after it. Review focus: whether a hiding-and-reveal game is appropriate across the full 2-9 month span, given that object permanence is not established at the early end, and whether anticipatory vocalization is a defensible success marker at this age.",
       "supersedes": null,
       "adapted_from": null
     }

@@ -32,13 +32,21 @@ Three in-scope families, all candidates, none approved, none promoted:
 | Family | Canonical rungs | Candidate cards |
 |---|---|---|
 | `expressive_first_words` | 12m, 15m, 18m | 7 |
-| `early_vocalizations` | 2m, 4m, 6m ×3, 9m | 6 |
-| `action_picture_labeling` | 36m | 5 |
+| `early_vocalizations` | 2m, 4m, 6m ×3, 9m | 7 |
+| `action_picture_labeling` | 36m | 7 |
 
-Counts are **derived, not quotas**. `early_vocalizations` is 6 rather than 7
-because two proposed concepts — routine-embedded cooing and routine-embedded
-babble — turned out to be one activity at two rungs and were merged rather than
-kept apart to reach a number.
+Counts are **derived, not quotas**. `early_vocalizations` was 6 at the original
+checkpoint because two proposed concepts — routine-embedded cooing and
+routine-embedded babble — turned out to be one activity at two rungs and were
+merged rather than kept apart to reach a number. It is 7 as of the
+founder/product review on 2026-10-27, which added `Peekaboo Sounds` as a
+deliberate seventh concept. **That merge still stands**; the seventh card is an
+addition, not an un-merge.
+
+The same counts are pinned in `EXPECTED_COUNTS`
+(`pilot_runtime/tests/test_clinical_review_ledger.py`), which is what makes a
+silent pad or thin impossible — a family whose size changes has to say so in
+both places.
 
 ### A content constraint imposed by a machine rule
 
@@ -49,8 +57,10 @@ language-domain card — and the single rejected card in the live bank
 (`_BUCKET_VARIANTS[expressive_word][7]`, "Action Word Match") is an
 action-labeling card that failed exactly this way.
 
-The five candidates therefore use `eating`, `washing`, `reading`, `drinking`,
-`playing` and `sleeping`. All three verbs in the canonical rung text itself —
+The seven candidates therefore use `eating`, `drinking`, `reading`, `sleeping`,
+`washing`, `brushing`, `coloring` and `playing` — the last two added by the
+founder/product review on 2026-10-27, which also took this family from five
+candidates to seven. All three verbs in the canonical rung text itself —
 running, eating, playing — are safe.
 
 **If the reviewing clinician needs a blocked verb, that is flagged as a

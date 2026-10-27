@@ -38,10 +38,26 @@ PRE_VERBAL = "early_vocalizations"
 ACTION_PICTURE = "action_picture_labeling"
 
 #: Candidate counts, each DERIVED and recorded so a later edit that pads or
-#: thins a family has to say so here. `early_vocalizations` is 6 rather than 7
-#: because two proposed concepts — routine-embedded cooing and routine-embedded
-#: babble — proved to be one activity at different rungs.
-EXPECTED_COUNTS = {FIRST_WORDS: 7, PRE_VERBAL: 6, ACTION_PICTURE: 5}
+#: thins a family has to say so here.
+#:
+#: `early_vocalizations` was 6 at the Track 2 checkpoint, because two proposed
+#: concepts — routine-embedded cooing and routine-embedded babble — proved to be
+#: one activity at different rungs and were merged rather than kept apart to
+#: reach a number. It is 7 as of the founder/product review on 2026-10-27, which
+#: added `Peekaboo Sounds` as a deliberate seventh concept. That merge still
+#: stands; the seventh card is an addition, not an un-merge.
+#:
+#: `action_picture_labeling` was 5 at the Track 2 checkpoint — the five steps of
+#: the support gradient. It is 7 as of the founder/product review on 2026-10-27,
+#: which added `Action Charades` and `Mini Action Story`. THE GRADIENT IS STILL
+#: FIVE STEPS: both new cards sit alongside it rather than extending it, which is
+#: why `test_action_picture_support_gradient_is_recorded_for_review` still looks
+#: for "step N of 5" and why that assertion was NOT widened to 7.
+#:
+#: `test_promotion_plan_is_empty_while_nothing_is_approved` takes its total from
+#: `sum(EXPECTED_COUNTS.values())` rather than a second literal, so this dict
+#: stays the only place a count is stated.
+EXPECTED_COUNTS = {FIRST_WORDS: 7, PRE_VERBAL: 7, ACTION_PICTURE: 7}
 
 #: The migration baseline: the 18 cards admitted under `reviewed_cards/` before
 #: this ledger existed. Pinned so `assert_register_never_grew` has something to
@@ -217,21 +233,39 @@ def test_an_unknown_status_is_refused(tmp_path):
 def test_an_edit_invalidates_the_approval():
     """THE CENTRAL GUARANTEE.
 
-    Approve a card, change one word, and the approved id no longer describes
-    any card on disk — so the edited wording is unapproved and unpromotable.
-    There is no transfer step to get it wrong.
+    Approve a card, change any authored content, and the approved id no longer
+    describes any card on disk — so the edited wording is unapproved and
+    unpromotable. There is no transfer step to get it wrong.
+
+    THE MUTATION IS DERIVED FROM THE SCHEMA, NOT FROM TODAY'S PROSE. An earlier
+    version of this test replaced the literal phrase "Wait five seconds" in the
+    first candidate's instructions. A founder content revision removed that
+    phrase, `str.replace` silently became a no-op, and the test fell over on its
+    own `edited != card` guard — it was pinned to wording that was always going
+    to change. Iterating `card_fields()` instead means no editorial revision can
+    turn the mutation into a no-op, and it widens the claim: EVERY authored
+    field is now shown to be load-bearing for identity, not just `instructions`.
     """
     card, approved_id = _first_candidate()
-    edited = dict(card)
-    edited["instructions"] = card["instructions"].replace(
-        "Wait five seconds", "Wait ten seconds")
-    assert edited["instructions"] != card["instructions"]
-
-    edited_id = L.compute_card_id(FIRST_WORDS, edited)
-    assert edited_id != approved_id
-
     approved = frozenset({approved_id})
-    assert edited_id not in approved
+
+    seen = {approved_id}
+    for field in L.card_fields():
+        edited = dict(card)
+        # Appended text must be NON-whitespace: `compute_template_id` strips
+        # each value, so a whitespace-only "edit" is correctly not an edit.
+        edited[field] = card[field] + " (edited)"
+        assert edited[field] != card[field], field
+
+        edited_id = L.compute_card_id(FIRST_WORDS, edited)
+        assert edited_id != approved_id, field
+        assert edited_id not in approved, field
+        # Distinct per field: the digest joins values positionally, so the same
+        # suffix in a different field is a different template.
+        assert edited_id not in seen, field
+        seen.add(edited_id)
+
+    assert len(seen) == len(L.card_fields()) + 1, sorted(seen)
 
 
 def test_an_approval_for_the_wrong_family_cannot_promote(tmp_path):
