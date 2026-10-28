@@ -820,3 +820,113 @@ def test_families_are_immutable():
     entry = AF.get_taxonomy().families["beading_threading"]
     with pytest.raises(Exception):
         entry.primary_domain = "sensory"
+
+
+# ---------------------------------------------------------------------------
+# the unresolved-family register (registered-unresolved slice)
+#
+# The two constants above were the ONLY record of which unresolved identifiers
+# are intentional. They lived in a test file, so no runtime could read them —
+# which is how an approved deferral and a data defect became indistinguishable
+# to band selection. The workbook now carries the register, and these tests
+# assert the two agree rather than restating the list a third time.
+# ---------------------------------------------------------------------------
+
+
+def test_the_register_matches_the_founder_reviewed_constants():
+    """The workbook sheet IS the two categories, with nothing added or lost."""
+    register = AF.unresolved_register()
+    deferred = {k for k, e in register.items()
+                if e.resolution_status == "deferred_post_pilot"}
+    ambiguous = {k for k, e in register.items()
+                 if e.resolution_status == "ambiguous_unresolved"}
+    assert deferred == set(DEFERRED_MISSING_FAMILIES), deferred
+    assert ambiguous == set(AMBIGUOUS_UNRESOLVED), ambiguous
+    assert len(register) == len(DEFERRED_MISSING_FAMILIES) + \
+        len(AMBIGUOUS_UNRESOLVED) == 11
+
+
+def test_every_register_entry_carries_a_review_note():
+    """A status without a reason is a label, not a decision."""
+    for key, entry in AF.unresolved_register().items():
+        assert entry.review_note.strip(), key
+        assert len(entry.review_note) > 20, key
+
+
+def test_the_register_makes_nothing_mappable():
+    """THE LOAD-BEARING INVARIANT.
+
+    Band selection may pass over a registered deficit. If registering a family
+    also made it resolvable, that pass-over would skip a target the system
+    could actually have planned for.
+    """
+    for key in AF.unresolved_register():
+        assert AF.allowed_domains(key) is None, key
+        assert not AF.is_known_family(key), key
+        assert AF.resolve_family_key(key) == key, key
+
+
+def test_a_register_entry_may_not_also_be_a_family_or_an_alias():
+    """Refused at LOAD time, in both directions."""
+    taxonomy = AF.get_taxonomy()
+    assert not (set(taxonomy.unresolved) & set(taxonomy.families))
+    assert not (set(taxonomy.unresolved) & set(taxonomy.aliases))
+
+
+def test_resolution_status_distinguishes_all_three_states():
+    """`None` is returned for two DIFFERENT reasons, and the caller must ask.
+
+    A known family and an unregistered unknown both answer `None`; only
+    `is_known_family` separates them. That is the asymmetry a consumer has to
+    respect, and pinning it here stops a future reader treating `None` as
+    "registered".
+    """
+    assert AF.resolution_status("wh_question_asking") == "deferred_post_pilot"
+    assert AF.resolution_status("expressive_name_response") == \
+        "ambiguous_unresolved"
+    # a real family
+    assert AF.resolution_status("sentence_building") is None
+    assert AF.is_known_family("sentence_building")
+    # a genuine unknown
+    assert AF.resolution_status("no_such_family_anywhere") is None
+    assert not AF.is_known_family("no_such_family_anywhere")
+
+
+def test_the_register_did_not_change_the_family_or_alias_population():
+    """Independent of the workbook digest, as the 0.5E-B rotation was."""
+    taxonomy = AF.get_taxonomy()
+    assert len(taxonomy.families) == EXPECTED_FAMILY_COUNT == 56
+    assert len(taxonomy.aliases) == 14
+    counts = {}
+    for entry in taxonomy.families.values():
+        counts[entry.primary_domain] = counts.get(entry.primary_domain, 0) + 1
+    assert counts == {
+        "talking_and_communicating": 17, "social_and_emotional": 12,
+        "learning_and_thinking": 9, "gross_motor": 7, "fine_motor": 6,
+        "daily_living": 5}
+    assert sum(1 for e in taxonomy.families.values()
+               if e.secondary_domains) == 27
+
+
+def test_an_unknown_resolution_status_is_refused():
+    """NON-VACUITY: the status vocabulary is closed.
+
+    Built over a temporary workbook copy rather than asserted in prose, so the
+    loader's refusal is demonstrated instead of described.
+    """
+    import pathlib
+    import shutil
+    import tempfile
+
+    import openpyxl
+
+    original = pathlib.Path(AF._find_workbook())
+    with tempfile.TemporaryDirectory() as tmp:
+        copy = pathlib.Path(tmp) / "taxonomy.xlsx"
+        shutil.copy(original, copy)
+        book = openpyxl.load_workbook(copy)
+        book["unresolved_family_register"].append(
+            ["something_new", "probably_fine", "a status nobody approved"])
+        book.save(copy)
+        with pytest.raises(AF.ActivityTaxonomyError, match="resolution_status"):
+            AF._load(copy)

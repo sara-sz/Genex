@@ -92,9 +92,12 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from pilot_backend.domain.canonical_rung import normalize_milestone_text
+from pilot_backend.domain.suggestion_generation_v2 import (
+    REASON_REGISTERED_UNRESOLVED,
+)
 from pilot_backend.integration.gold_standard_source import (
     GoldStandardSourceError,
     RungTarget,
@@ -218,8 +221,13 @@ def _rung_entry(rung) -> Dict[str, Any]:
     }
 
 
+
+
 def _unresolved_entry(months: int, milestone: str, subdomain: str,
-                      refusal: str, rung_ref: str) -> Dict[str, Any]:
+                      refusal: str, rung_ref: str,
+                      unresolved_families: Sequence[str] = (),
+                      statuses: Optional[Mapping[str, Optional[str]]] = None,
+                      ) -> Dict[str, Any]:
     """One declared-track rung the frozen adapter refused.
 
     `family_bindings` is EMPTY rather than partial, and that is the honest
@@ -227,14 +235,37 @@ def _unresolved_entry(months: int, milestone: str, subdomain: str,
     taxonomy does not define, because its allowed domains are what makes it a
     binding and there are none to read. A partial list would describe a rung
     nobody authored.
+
+    ## THREE STATES, NOT TWO
+
+    `unresolved_reason` previously carried the refusal's Python class name for
+    every failure, which left an intentional product deferral and a taxonomy
+    defect indistinguishable in the artifact — so band selection could only
+    treat them the same way.
+
+      * EVERY unresolved family registered -> `registered_unresolved`, and
+        `unresolved_families` carries one row per family with its status. A
+        consumer may act on this.
+      * ANY unresolved family unregistered -> the exception name, exactly as
+        before. A consumer must fail closed: that is a data defect, and the
+        register is the only thing that makes a pass-over honest.
+
+    The rung stays `mappable: False` either way. Nothing here grants a family
+    allowed domains or content.
     """
+    rows = [{"family_key": family,
+             "resolution_status": (statuses or {}).get(family)}
+            for family in unresolved_families]
+    registered = bool(rows) and all(r["resolution_status"] for r in rows)
     return {
         "rung_ref": rung_ref,
         "source_rung_months": months,
         "milestone_text": milestone,
         "subdomain": subdomain,
         "mappable": False,
-        "unresolved_reason": refusal,
+        "unresolved_reason": (REASON_REGISTERED_UNRESOLVED if registered
+                              else refusal),
+        "unresolved_families": rows,
         "family_bindings": [],
         "track_ref": None,
     }
@@ -304,9 +335,18 @@ def build_artifact(parent_root: Optional[Path] = None) -> Dict[str, Any]:
         ref = compute_rung_ref(DOMAIN_KEY, key[1], key[2])
         if ref in rungs:
             raise RungTableError("a rung is both usable and refused")
+        # The refusal carries the identifiers that failed; their statuses come
+        # from the taxonomy's own register. Neither is re-derived from the
+        # workbook here — see `_unresolved_entry` and the comment above on why
+        # the family column is never re-read in this module.
+        failed = tuple(getattr(refusal, "unresolved_families", ()) or ())
+        statuses = {family: activity_families.resolution_status(family)
+                    for family in failed}
         rungs[ref] = _unresolved_entry(key[1], info["milestone"],
                                        subdomains[0],
-                                       type(refusal).__name__, ref)
+                                       type(refusal).__name__, ref,
+                                       unresolved_families=failed,
+                                       statuses=statuses)
         unresolved_count += 1
 
     # -- the step table, one entry per integer input ------------------------

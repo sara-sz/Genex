@@ -87,7 +87,25 @@ class RungNotMappableError(GoldStandardSourceError):
     reconciled yet" need different responses. The first is a bug in the
     caller; the second is known, expected content work, and the correct
     handling is to leave the domain unanchored so a clinician reviews it.
+
+    ## WHY IT CARRIES THE FAMILY IDENTIFIERS
+
+    `unresolved_families` names the identifiers that failed to resolve. Without
+    it a consumer can see THAT a rung is unmappable but not WHICH family caused
+    it — and that difference is now load-bearing, because the taxonomy's
+    unresolved register records an intentional deferral per family key. The
+    alternative was for the rung-table generator to re-read the workbook's
+    `activity_family` column, which its own comment forbids: a second reader of
+    that column is a second interpretation of it.
+
+    Empty when the rung names no activity family at all, which is a genuinely
+    different refusal from "it names one that does not resolve". Defaulted, so
+    every existing `raise RungNotMappableError("...")` site is unaffected.
     """
+
+    def __init__(self, *args, unresolved_families=()) -> None:
+        super().__init__(*args)
+        self.unresolved_families = tuple(unresolved_families)
 
 
 class RungTrackUndeclaredError(GoldStandardSourceError):
@@ -232,12 +250,22 @@ class InMemoryGoldStandardRungSource:
     `unmappable` holds targets the fixture should refuse as not-reconciled, so
     a test can exercise the fail-closed path without needing a rung whose
     families genuinely do not resolve.
+
+    `registered_unresolved` marks some of those unmappable targets as recorded
+    in the taxonomy's unresolved register: `{RungTarget: (status, family_keys)}`.
+    It is keyed by target rather than by ref so a fixture names the same thing
+    `unmappable` names, instead of a digest a reader cannot check by eye. An
+    unmappable target absent from this map is treated as an UNREGISTERED defect,
+    which is the strict default on purpose — a test wanting a pass-over has to
+    say so, and a test that forgets gets the fail-closed path.
     """
 
     def __init__(self, rungs: Tuple[CanonicalRung, ...] = (),
-                 unmappable: Tuple[RungTarget, ...] = ()) -> None:
+                 unmappable: Tuple[RungTarget, ...] = (),
+                 registered_unresolved=None) -> None:
         self._rungs = tuple(rungs)
         self._unmappable = tuple(unmappable)
+        self._registered = dict(registered_unresolved or {})
 
     @staticmethod
     def _key(domain_key: str, months: int, milestone: str) -> Tuple[str, int, str]:
@@ -310,6 +338,54 @@ class InMemoryGoldStandardRungSource:
         except Exception:
             return False
         return True
+
+    def ref_support_state(self, domain_key: str, rung_ref: str) -> str:
+        """Which of the three planning states this ref is in.
+
+        The fixture's DEFAULT for an unmappable ref is
+        `unregistered_unmappable`, which is deliberately the strict answer: a
+        test that wants a pass-over has to say so by registering the ref, and a
+        test that forgets gets the fail-closed path rather than a silent skip.
+
+        `registered_unresolved` is keyed by `RungTarget` in the constructor so a
+        fixture names the same thing `unmappable` names, instead of a ref digest
+        a reader cannot check by eye.
+        """
+        from ..domain.suggestion_generation_v2 import (
+            REF_MAPPABLE, REF_REGISTERED_UNRESOLVED,
+            REF_UNREGISTERED_UNMAPPABLE,
+        )
+        if self.is_mappable_ref(domain_key, rung_ref):
+            return REF_MAPPABLE
+        status = self._unresolved_status_for(domain_key, rung_ref)
+        if status is None:
+            return REF_UNREGISTERED_UNMAPPABLE
+        return f"{REF_REGISTERED_UNRESOLVED}:{status}"
+
+    def unresolved_family_keys(self, domain_key: str,
+                               rung_ref: str) -> Tuple[str, ...]:
+        """Stable family labels for a registered-unresolved ref, if configured."""
+        wanted_domain = (domain_key or "").strip()
+        ref = (rung_ref or "").strip()
+        for target, (_status, families) in self._registered.items():
+            if target.domain_key.strip() != wanted_domain:
+                continue
+            if compute_rung_ref(target.domain_key, target.source_rung_months,
+                                target.milestone_text) == ref:
+                return tuple(families)
+        return ()
+
+    def _unresolved_status_for(self, domain_key: str,
+                               rung_ref: str) -> Optional[str]:
+        wanted_domain = (domain_key or "").strip()
+        ref = (rung_ref or "").strip()
+        for target, (status, _families) in self._registered.items():
+            if target.domain_key.strip() != wanted_domain:
+                continue
+            if compute_rung_ref(target.domain_key, target.source_rung_months,
+                                target.milestone_text) == ref:
+                return status
+        return None
 
     def declared_band_roster(self, domain_key: str, months: int
                              ) -> Tuple[str, ...]:

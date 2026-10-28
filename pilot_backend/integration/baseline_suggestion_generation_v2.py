@@ -79,11 +79,14 @@ from ..domain.suggestion_generation_v2 import (
     OUTCOME_GENERATED,
     OUTCOME_INSUFFICIENT_KNOWN_EVIDENCE,
     OUTCOME_NO_SUPPORTED_TARGET,
+    OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS,
     OUTCOME_NO_UNRESOLVED_BAND,
     BandView,
     GenerationV2Error,
+    PassedOverDeficit,
     classify_band,
     require_v2_projection,
+    scan_bands,
     select_target_band,
 )
 from ..goals.suggestion_engine import EvidenceSource, ObservedDomain
@@ -126,6 +129,21 @@ class GenerationV2Outcome:
     #: Assessed-but-unanswerable skills in the selected band. They keep it off
     #: "mastered" and are never targets.
     unknown_refs: Tuple[str, ...] = ()
+    #: REGISTERED-unresolved deficits Genex knows about and cannot support this
+    #: cycle — both the ones in bands skipped to reach the selected band and the
+    #: ones sitting beside its mappable targets.
+    #:
+    #: Separate from `unsupported_target_refs` because the two are different
+    #: claims: that one means "in the selected band, canonical but unmappable";
+    #: this one means "known, deliberately unsupported, and here is the status
+    #: saying why". A caller that dropped this field would reproduce the
+    #: concealment the bounded pass-over exists to prevent.
+    passed_over: Tuple[PassedOverDeficit, ...] = ()
+
+    @property
+    def has_registered_gaps(self) -> bool:
+        """Whether any known deficit was reported rather than planned for."""
+        return bool(self.passed_over)
 
     @property
     def suggestion_ids(self) -> Tuple[str, ...]:
@@ -223,8 +241,18 @@ class BaselineSuggestionGenerationV2Service:
                     "declared-track roster")
             states = {evidence.rung_ref: evidence.state
                       for evidence in projection.assessed_in_band(months)}
+            # The support map is ALWAYS supplied. `classify_band` defaults to
+            # "every deficit is mappable" for callers that settle support
+            # downstream, and a product path relying on that default would
+            # reintroduce the band trap by treating a registered deferral and a
+            # data defect alike. `test_the_service_always_supplies_ref_support`
+            # pins that this argument is passed.
+            support = {ref: self._rungs.ref_support_state(projection.domain,
+                                                          ref)
+                       for ref in roster}
             views.append(classify_band(months=months, roster=roster,
-                                       states_by_ref=states))
+                                       states_by_ref=states,
+                                       support_by_ref=support))
         if not views:
             raise GenerationV2Error(
                 "a v2 projection must declare at least one band")
@@ -239,10 +267,35 @@ class BaselineSuggestionGenerationV2Service:
         named. Mappability is ASKED (`is_mappable_ref`) rather than discovered by
         catching an exception, so an unmappable deficit is a reported finding
         instead of a failure that would abort its siblings.
+
+        The 3-tuple is kept EXACTLY as published. The registered-unresolved
+        slice needed a fourth value, and widening this signature would have
+        edited every existing caller to read something most of them do not use —
+        so `resolve_targets_with_gaps` carries it instead and this delegates.
         """
-        band = select_target_band(self.band_views(projection))
+        band, rungs, unsupported, _gaps = \
+            self.resolve_targets_with_gaps(projection)
+        return band, rungs, unsupported
+
+    def resolve_targets_with_gaps(
+            self, projection) -> Tuple[Optional[BandView], Tuple[Any, ...],
+                                       Tuple[str, ...],
+                                       Tuple[PassedOverDeficit, ...]]:
+        """As `resolve_targets`, plus the registered deficits passed over.
+
+        `passed_over` carries the REGISTERED-unresolved deficits — both the ones
+        in bands skipped to reach this band and the ones sitting beside the
+        mappable targets in this band. Kept separate from
+        `unsupported_target_refs` because the two are different claims:
+        `unsupported` means "in the selected band, canonical but unmappable",
+        while `passed_over` means "known, deliberately unsupported, and here is
+        the status that says why".
+        """
+        scan = scan_bands(self.band_views(projection))
+        band = scan.selected
+        gaps = self._labelled(projection, scan.passed_over)
         if band is None:
-            return None, (), ()
+            return None, (), (), gaps
 
         rungs: List[Any] = []
         unsupported: List[str] = []
@@ -254,7 +307,25 @@ class BaselineSuggestionGenerationV2Service:
             # named. No step, no question_at, no tiebreak.
             rungs.append(self._rungs.rung_by_ref(
                 projection.domain, ref, expected_months=band.months))
-        return band, tuple(rungs), tuple(unsupported)
+        return band, tuple(rungs), tuple(unsupported), gaps
+
+    def _labelled(self, projection, deficits
+                  ) -> Tuple[PassedOverDeficit, ...]:
+        """Attach the stable family keys a reported deficit is labelled by.
+
+        The keys come from the artifact, not from a second lookup table, and
+        they are the only human-meaningful identifier a reported deficit
+        carries — the v2 route's no-prose contract forbids the milestone text,
+        and inventing a readable sentence here would smuggle clinical copy into
+        an API response.
+        """
+        return tuple(
+            PassedOverDeficit(
+                months=deficit.months, rung_ref=deficit.rung_ref,
+                resolution_status=deficit.resolution_status,
+                family_keys=self._rungs.unresolved_family_keys(
+                    projection.domain, deficit.rung_ref))
+            for deficit in deficits)
 
     def _observed_domain(self, projection, rung) -> ObservedDomain:
         """The smallest valid observation carrying this projection's lineage.
@@ -288,7 +359,8 @@ class BaselineSuggestionGenerationV2Service:
         """
         session_id = self._current_parent_session(child_id)
         projection = self._applicable_projection(child_id, session_id)
-        band, rungs, unsupported = self.resolve_targets(projection)
+        band, rungs, unsupported, passed_over = \
+            self.resolve_targets_with_gaps(projection)
 
         def _result(outcome: str, generated=()) -> GenerationV2Outcome:
             return GenerationV2Outcome(
@@ -298,9 +370,17 @@ class BaselineSuggestionGenerationV2Service:
                 target_band_months=None if band is None else band.months,
                 generated=tuple(generated),
                 unsupported_target_refs=unsupported,
-                unknown_refs=() if band is None else band.unknown_refs)
+                unknown_refs=() if band is None else band.unknown_refs,
+                passed_over=passed_over)
 
         if band is None:
+            # No band holds a mappable deficit. WHICH finding that is depends
+            # entirely on whether anything was passed over, and the two must not
+            # share an outcome: `no_unresolved_band` asserts the child has no
+            # unresolved skills, which is false once a registered deficit was
+            # skipped.
+            if passed_over:
+                return _result(OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS)
             # Every band complete and mastered. No target, and NO step to a
             # higher band: without evidence up there, a target would be invented.
             return _result(OUTCOME_NO_UNRESOLVED_BAND)

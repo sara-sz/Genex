@@ -273,8 +273,17 @@ class ParentGoldStandardSource:
             # domains to read, so no binding can be built for it.
             allowed = activity_families.allowed_domains(family)
             if allowed is None:
+                # ALL unresolved identifiers for this rung are reported, not
+                # just the first: a rung naming two unresolved families is one
+                # where resolving a single one still leaves it unmappable, and
+                # a consumer deciding whether the gap is an intentional
+                # deferral has to see every reason.
+                unresolved = tuple(
+                    f for f in families
+                    if activity_families.allowed_domains(f) is None)
                 raise RungNotMappableError(
-                    "an activity family does not resolve in the taxonomy")
+                    "an activity family does not resolve in the taxonomy",
+                    unresolved_families=unresolved)
             canonical_family = activity_families.resolve_family_key(family)
             bindings.append(ActivityFamilyBinding(
                 family_ref=canonical_family,

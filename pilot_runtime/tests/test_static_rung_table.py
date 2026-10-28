@@ -72,7 +72,7 @@ EXPECTED_SUBDOMAIN = "expressive_language"
 RUNG_WORKBOOK_SHA = \
     "a16ce10fe9c932bc7ca6e3275748541b3c8a1e15a0d8a2702b0560a56ddc5fd6"
 TAXONOMY_SHA = \
-    "e5835969ead556129530f01d4629c584b823729a1b4e4425e5e3d29ddba4d262"
+    "2f3e258efbcfa3b9d19936e89fa94bc6354bb04ebafc8bad6abe839a163c9f97"
 GOLD_STANDARD_SNAPSHOT_SHA = \
     "c2b6735d9f099c916973c98c1953e7eb1f2ca8e1a60430011f805a3bf9c3487c"
 
@@ -264,22 +264,89 @@ def test_the_declared_track_population_is_twenty_one(artifact):
 
 
 def test_the_four_unresolved_rungs_are_the_expected_ones(artifact):
-    """Identified by months + refusal, with the milestone text pinned.
+    """Identified by months + reason, with the milestone text pinned.
 
     Pinned explicitly so that an unresolved rung BECOMING mappable is a visible
     test failure requiring review, rather than a quiet coverage improvement.
+
+    The reason is now the PRODUCT state `registered_unresolved` rather than the
+    `RungNotMappableError` class name. All four of these families are in the
+    taxonomy's unresolved register, so all four are intentional deferrals — and
+    the artifact says so instead of reporting a Python exception. An
+    unregistered failure still records the class name; see
+    `test_an_unregistered_failure_still_records_the_exception_name`.
     """
     unresolved = sorted(
         (e["source_rung_months"], e["unresolved_reason"], e["milestone_text"])
         for e in artifact["rungs"].values() if not e["mappable"])
     assert unresolved == [
-        (4, "RungNotMappableError", "makes sounds back when you talk to him"),
-        (30, "RungNotMappableError", "says words like I me or we"),
-        (36, "RungNotMappableError",
+        (4, "registered_unresolved", "makes sounds back when you talk to him"),
+        (30, "registered_unresolved", "says words like I me or we"),
+        (36, "registered_unresolved",
          "ask who or what or where or why questions like where is mommy "
          "or where is daddy"),
-        (36, "RungNotMappableError", "says first name when asked"),
+        (36, "registered_unresolved", "says first name when asked"),
     ]
+
+
+def test_each_unresolved_rung_names_its_family_and_status(artifact):
+    """The register's verdict travels WITH the rung, per family.
+
+    Without this the artifact would say "intentional" without saying which
+    family made it so, and a consumer could not label the gap.
+    """
+    rows = {}
+    for entry in artifact["rungs"].values():
+        if entry["mappable"]:
+            # A mappable rung carries NO unresolved families. The key is
+            # omitted rather than written as an empty list, so the 17 usable
+            # entries stay byte-identical to the pre-registry artifact.
+            assert not entry.get("unresolved_families")
+            continue
+        for row in entry["unresolved_families"]:
+            rows[row["family_key"]] = row["resolution_status"]
+    assert rows == {
+        "sound_response_orientation": "deferred_post_pilot",
+        "pronouns": "deferred_post_pilot",
+        "wh_question_asking": "deferred_post_pilot",
+        "expressive_name_response": "ambiguous_unresolved",
+    }
+
+
+def test_an_unregistered_failure_still_records_the_exception_name():
+    """NON-VACUITY for the product state above.
+
+    If `_unresolved_entry` wrote `registered_unresolved` unconditionally, the
+    pin above would pass while the three-state distinction had collapsed into
+    one. Built directly, with a family carrying NO status.
+    """
+    from pilot_runtime.integration.rung_table_generator import _unresolved_entry
+
+    registered = _unresolved_entry(
+        36, "m", "expressive_language", "RungNotMappableError", "rung1:" + "a" * 32,
+        unresolved_families=("wh_question_asking",),
+        statuses={"wh_question_asking": "deferred_post_pilot"})
+    assert registered["unresolved_reason"] == "registered_unresolved"
+
+    unregistered = _unresolved_entry(
+        36, "m", "expressive_language", "RungNotMappableError", "rung1:" + "a" * 32,
+        unresolved_families=("something_nobody_registered",),
+        statuses={"something_nobody_registered": None})
+    assert unregistered["unresolved_reason"] == "RungNotMappableError"
+
+    # A rung naming TWO families, only one registered, is also a defect.
+    mixed = _unresolved_entry(
+        36, "m", "expressive_language", "RungNotMappableError", "rung1:" + "a" * 32,
+        unresolved_families=("pronouns", "something_nobody_registered"),
+        statuses={"pronouns": "deferred_post_pilot",
+                  "something_nobody_registered": None})
+    assert mixed["unresolved_reason"] == "RungNotMappableError"
+
+    # And no families at all is the OTHER refusal, never "registered".
+    none_named = _unresolved_entry(
+        36, "m", "expressive_language", "RungNotMappableError",
+        "rung1:" + "a" * 32)
+    assert none_named["unresolved_reason"] == "RungNotMappableError"
 
 
 def test_no_off_track_talking_rung_is_admitted(artifact):

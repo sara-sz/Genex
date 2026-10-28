@@ -1,5 +1,5 @@
 {
-  "artifact_digest": "609fff91ba98b9afbf09d6d1c64cee23c59650d0bd3e8e53841083b1ab95b437",
+  "artifact_digest": "9f306d542ba7af704776f79285755eb178babdc4b4294a8981ddf035a4e24dfe",
   "artifact_schema_version": "pilot-rung-table-v1",
   "declared_track": {
     "domain_key": "talking_and_communicating",
@@ -22,7 +22,7 @@
     "rung_workbook_relpath": "data/parent_2_4/cdc_milestones_parent_2_4_candidate.xlsx",
     "rung_workbook_sha256": "a16ce10fe9c932bc7ca6e3275748541b3c8a1e15a0d8a2702b0560a56ddc5fd6",
     "taxonomy_relpath": "data/parent_2_4/activity_family_taxonomy_v1.xlsx",
-    "taxonomy_sha256": "e5835969ead556129530f01d4629c584b823729a1b4e4425e5e3d29ddba4d262",
+    "taxonomy_sha256": "2f3e258efbcfa3b9d19936e89fa94bc6354bb04ebafc8bad6abe839a163c9f97",
     "taxonomy_version": "activity_family_taxonomy_v1"
   },
   "rungs": {
@@ -136,7 +136,13 @@
       "source_rung_months": 30,
       "subdomain": "expressive_language",
       "track_ref": null,
-      "unresolved_reason": "RungNotMappableError"
+      "unresolved_families": [
+        {
+          "family_key": "pronouns",
+          "resolution_status": "deferred_post_pilot"
+        }
+      ],
+      "unresolved_reason": "registered_unresolved"
     },
     "rung1:4e1877a1f264bb1c6d13e3823d15668f": {
       "family_bindings": [
@@ -181,7 +187,13 @@
       "source_rung_months": 36,
       "subdomain": "expressive_language",
       "track_ref": null,
-      "unresolved_reason": "RungNotMappableError"
+      "unresolved_families": [
+        {
+          "family_key": "expressive_name_response",
+          "resolution_status": "ambiguous_unresolved"
+        }
+      ],
+      "unresolved_reason": "registered_unresolved"
     },
     "rung1:6c8e17d12c4ca2ab1d583e94635100d3": {
       "family_bindings": [
@@ -294,7 +306,13 @@
       "source_rung_months": 36,
       "subdomain": "expressive_language",
       "track_ref": null,
-      "unresolved_reason": "RungNotMappableError"
+      "unresolved_families": [
+        {
+          "family_key": "wh_question_asking",
+          "resolution_status": "deferred_post_pilot"
+        }
+      ],
+      "unresolved_reason": "registered_unresolved"
     },
     "rung1:b96066b98cb53fe54c3487cd17ac72c8": {
       "family_bindings": [
@@ -338,7 +356,13 @@
       "source_rung_months": 4,
       "subdomain": "early_vocalization_and_babbling",
       "track_ref": null,
-      "unresolved_reason": "RungNotMappableError"
+      "unresolved_families": [
+        {
+          "family_key": "sound_response_orientation",
+          "resolution_status": "deferred_post_pilot"
+        }
+      ],
+      "unresolved_reason": "registered_unresolved"
     },
     "rung1:feb590cf2788978b383c11062ce67c1b": {
       "family_bindings": [

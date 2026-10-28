@@ -1,5 +1,5 @@
 {
-  "artifact_digest": "d36cca0f5c20d72f23071ee5ac324d431304f7cb76c8c8456b11a60b9abc3bcf",
+  "artifact_digest": "1c0c3a8607f24cbc71b3fd9aff2bf1b114a4e6c82b86278bb63ed7f72da42f40",
   "artifact_schema_version": "pilot-activity-bank-v1",
   "domain_key": "talking_and_communicating",
   "family_bucket_resolution": {
@@ -35,7 +35,7 @@
       "two_word_phrases": "367c3d85cf75171e14b73cf11f7da49fd2c135ccb0b5c25040a9e6267d83921b"
     },
     "taxonomy_relpath": "data/parent_2_4/activity_family_taxonomy_v1.xlsx",
-    "taxonomy_sha256": "e5835969ead556129530f01d4629c584b823729a1b4e4425e5e3d29ddba4d262",
+    "taxonomy_sha256": "2f3e258efbcfa3b9d19936e89fa94bc6354bb04ebafc8bad6abe839a163c9f97",
     "taxonomy_version": "activity_family_taxonomy_v1"
   },
   "rejected_cards": [

@@ -52,7 +52,7 @@ blocking those modules and importing anyway.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, FrozenSet, Mapping, Optional, Tuple
@@ -67,6 +67,31 @@ ACTIVITY_TAXONOMY_VERSION = "activity_family_taxonomy_v1"
 _WORKBOOK_RELPATH = Path("data") / "parent_2_4" / "activity_family_taxonomy_v1.xlsx"
 _FAMILIES_SHEET = "activity_families"
 _ALIASES_SHEET = "activity_family_aliases"
+
+#: The register of family identifiers the workbook REFERENCES but the taxonomy
+#: deliberately does not define. Optional sheet: a workbook without it loads
+#: with an empty register, so this read is additive.
+_REGISTER_SHEET = "unresolved_family_register"
+
+#: The two founder-approved resolution statuses.
+#:
+#: `deferred_post_pilot`  — a genuinely missing family. It needs a reviewed
+#:                          definition, allowed domains, disciplines and
+#:                          activity content before it exists.
+#: `ambiguous_unresolved` — more than one existing family could claim it, so
+#:                          aliasing one would be a guess recorded as
+#:                          provenance. Left unresolved on purpose.
+#:
+#: BOTH mean "not mappable". The distinction is about WHY, and it exists so a
+#: consumer can tell an intentional product deferral from a data defect.
+#: Neither status makes a family resolvable — see `_load`, which refuses a
+#: register entry that is also a family or an alias.
+STATUS_DEFERRED_POST_PILOT = "deferred_post_pilot"
+STATUS_AMBIGUOUS_UNRESOLVED = "ambiguous_unresolved"
+
+RESOLUTION_STATUSES: FrozenSet[str] = frozenset({
+    STATUS_DEFERRED_POST_PILOT, STATUS_AMBIGUOUS_UNRESOLVED,
+})
 
 #: Vocabularies the workbook may use. Sourced from its own `professional_roles`
 #: sheet; restated here only so load-time validation can fail closed without a
@@ -104,9 +129,26 @@ class ActivityFamily:
 
 
 @dataclass(frozen=True)
+class UnresolvedFamily:
+    """One family identifier the taxonomy deliberately does not define.
+
+    Carries WHY it is unresolved, so a consumer can distinguish an intentional
+    product deferral from a taxonomy defect. It is NOT a family: it has no
+    primary domain and no allowed domains, and nothing here makes it mappable.
+    """
+
+    key: str
+    resolution_status: str
+    review_note: str = ""
+
+
+@dataclass(frozen=True)
 class ActivityTaxonomy:
     families: Mapping[str, ActivityFamily]
     aliases: Mapping[str, str]
+    #: Keyed by the RAW workbook identifier. Empty when the workbook carries no
+    #: register sheet, which keeps this read additive.
+    unresolved: Mapping[str, UnresolvedFamily] = field(default_factory=dict)
 
     def resolve_key(self, family: str) -> str:
         """Apply alias resolution. Unknown keys pass through unchanged."""
@@ -116,6 +158,16 @@ class ActivityTaxonomy:
     def get(self, family: str) -> Optional[ActivityFamily]:
         """Return the family after alias resolution, or None when unknown."""
         return self.families.get(self.resolve_key(family))
+
+    def unresolved_entry(self, family: str) -> Optional[UnresolvedFamily]:
+        """The register entry for an identifier, or None if not registered.
+
+        Deliberately does NOT alias-resolve: the register keys the identifier
+        the workbook actually writes, and an alias-resolved key is by definition
+        a real family. Looking one up here would always miss, and making it
+        succeed would mean a registered key had become mappable.
+        """
+        return self.unresolved.get((family or "").strip().lower())
 
 
 def _split(cell: object) -> Tuple[str, ...]:
@@ -234,7 +286,67 @@ def _load(path: Path) -> ActivityTaxonomy:
         if canonical in aliases:
             raise ActivityTaxonomyError(f"alias chain/cycle detected: {legacy!r} -> {canonical!r}")
 
-    return ActivityTaxonomy(families=families, aliases=aliases)
+    unresolved = _load_register(path, families, aliases)
+    return ActivityTaxonomy(families=families, aliases=aliases,
+                            unresolved=unresolved)
+
+
+def _load_register(path: Path, families: Mapping[str, ActivityFamily],
+                   aliases: Mapping[str, str]
+                   ) -> Dict[str, "UnresolvedFamily"]:
+    """The register of deliberately-undefined family identifiers.
+
+    ## THE SHEET IS OPTIONAL, THE VALIDATION IS NOT
+
+    A workbook without the sheet yields an empty register, so this read is
+    additive and an older workbook still loads. But every row that IS present is
+    validated, because the whole point of the register is to be trustworthy
+    enough for band selection to act on.
+
+    ## A REGISTER ENTRY MUST NOT BE RESOLVABLE
+
+    Refused when the identifier is already a family or already an alias. Both
+    would be contradictions with real consequences: the register exists to say
+    "this names nothing the taxonomy defines", and an entry that also resolved
+    would let a caller read a resolution status for something that is in fact
+    mappable — turning a deferral record into a second, disagreeing answer about
+    whether content exists.
+    """
+    import pandas as pd  # local: same reason as `_load`
+
+    try:
+        reg_df = pd.read_excel(path, sheet_name=_REGISTER_SHEET,
+                               dtype=str).fillna("")
+    except ValueError:
+        # No such sheet. An empty register is the honest representation.
+        return {}
+
+    register: Dict[str, UnresolvedFamily] = {}
+    for row in reg_df.to_dict(orient="records"):
+        key = str(row.get("family_key", "")).strip().lower()
+        status = str(row.get("resolution_status", "")).strip()
+        if not key and not status:
+            continue
+        if not key:
+            raise ActivityTaxonomyError("blank family_key in the unresolved register")
+        if key in register:
+            raise ActivityTaxonomyError(
+                f"duplicate unresolved-register entry for {key!r}")
+        if status not in RESOLUTION_STATUSES:
+            raise ActivityTaxonomyError(
+                f"{key!r}: resolution_status {status!r} is not one of "
+                f"{sorted(RESOLUTION_STATUSES)}")
+        if key in families:
+            raise ActivityTaxonomyError(
+                f"{key!r} is registered as unresolved but IS a taxonomy family")
+        if key in aliases:
+            raise ActivityTaxonomyError(
+                f"{key!r} is registered as unresolved but resolves through an "
+                "alias")
+        register[key] = UnresolvedFamily(
+            key=key, resolution_status=status,
+            review_note=str(row.get("review_note", "")).strip())
+    return register
 
 
 @lru_cache(maxsize=1)
@@ -270,3 +382,26 @@ def is_known_family(family: str) -> bool:
 def resolve_family_key(family: str) -> str:
     """Alias-resolved key, e.g. `helper_context` -> `helper_role_chores`."""
     return get_taxonomy().resolve_key(family)
+
+
+def resolution_status(family: str) -> Optional[str]:
+    """Why this identifier is deliberately not a taxonomy family, or None.
+
+    `None` means one of two genuinely different things, and the caller must not
+    conflate them:
+
+      * the identifier IS a known family — check `is_known_family` first; or
+      * it is unknown AND unregistered, i.e. a taxonomy/data defect.
+
+    This function never makes a family mappable and never widens
+    `allowed_domains`: a registered identifier still has no allowed domains, so
+    `allowed_domains()` keeps returning `None` for it and every existing
+    mappability check behaves exactly as before.
+    """
+    entry = get_taxonomy().unresolved_entry(family)
+    return None if entry is None else entry.resolution_status
+
+
+def unresolved_register() -> Mapping[str, UnresolvedFamily]:
+    """The whole register, keyed by raw workbook identifier. Read-only."""
+    return get_taxonomy().unresolved

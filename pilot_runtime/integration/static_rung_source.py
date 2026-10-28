@@ -63,6 +63,12 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from pilot_backend.domain.suggestion_generation_v2 import (
+    REASON_REGISTERED_UNRESOLVED,
+    REF_MAPPABLE,
+    REF_REGISTERED_UNRESOLVED,
+    REF_UNREGISTERED_UNMAPPABLE,
+)
 from pilot_backend.domain.canonical_rung import (
     ActivityFamilyBinding,
     CanonicalRung,
@@ -95,6 +101,13 @@ _REFUSALS = {
     "RungNotMappableError": RungNotMappableError,
     "RungTrackUndeclaredError": RungTrackUndeclaredError,
     "RungNotFoundError": RungNotFoundError,
+    # A REGISTERED-unresolved rung still refuses with exactly the same
+    # exception. The register changes whether BAND SELECTION may pass the rung
+    # over; it does not make the rung askable. Mapping it to anything softer —
+    # or leaving it out of this table, which made it an "unknown refusal" —
+    # would turn a planning limit into a lookup error and lose the 30 -> 36
+    # fail-closed behaviour the step table depends on.
+    REASON_REGISTERED_UNRESOLVED: RungNotMappableError,
 }
 
 
@@ -341,6 +354,66 @@ class StaticRungTableSource:
             return False
         entry = self._rungs.get((rung_ref or "").strip())
         return bool(entry is not None and entry.get("mappable"))
+
+    def ref_support_state(self, domain_key: str, rung_ref: str) -> str:
+        """Which of the THREE planning states this ref is in.
+
+        Returns one of:
+
+          `mappable`
+              a real target.
+          `registered_unresolved:<status>`
+              canonical, deliberately unsupported, with the taxonomy's
+              unresolved register saying why. Reportable, and safe to pass over.
+          `unregistered_unmappable`
+              unmappable with no register entry — a taxonomy/data defect, and
+              the caller must fail closed.
+
+        ## WHY THE STATUS IS APPENDED RATHER THAN RETURNED SEPARATELY
+
+        One string keeps this a pure value the domain can partition without a
+        second lookup, and makes "registered but with no status"
+        unrepresentable — which is the condition that would otherwise let an
+        unregistered rung read as registered. The generator refuses to write
+        `registered_unresolved` unless EVERY unresolved family on the rung
+        carries a status, so a tail is always present when the prefix is.
+
+        An UNKNOWN ref answers `unregistered_unmappable`: the honest reading of
+        "this artifact does not carry it" is that nothing authorised skipping
+        it, so the caller must refuse rather than assume.
+        """
+        if (domain_key or "").strip() != self._domain:
+            return REF_UNREGISTERED_UNMAPPABLE
+        entry = self._rungs.get((rung_ref or "").strip())
+        if entry is None:
+            return REF_UNREGISTERED_UNMAPPABLE
+        if entry.get("mappable"):
+            return REF_MAPPABLE
+        if entry.get("unresolved_reason") != REASON_REGISTERED_UNRESOLVED:
+            return REF_UNREGISTERED_UNMAPPABLE
+        statuses = sorted({str(row.get("resolution_status") or "")
+                           for row in (entry.get("unresolved_families") or ())})
+        if not statuses or not all(statuses):
+            # Declared registered but missing a status: treated as a defect,
+            # not as permission. The two must never be confusable.
+            return REF_UNREGISTERED_UNMAPPABLE
+        return f"{REF_REGISTERED_UNRESOLVED}:{'|'.join(statuses)}"
+
+    def unresolved_family_keys(self, domain_key: str,
+                               rung_ref: str) -> Tuple[str, ...]:
+        """The family identifiers that left this ref unmappable, if any.
+
+        Stable machine-readable labels for a reported deficit — the thing a
+        clinician-facing surface can show without quoting milestone prose.
+        Empty for a mappable ref, an unknown ref, or a pre-registry artifact.
+        """
+        if (domain_key or "").strip() != self._domain:
+            return ()
+        entry = self._rungs.get((rung_ref or "").strip()) or {}
+        return tuple(sorted(
+            str(row.get("family_key"))
+            for row in (entry.get("unresolved_families") or ())
+            if row.get("family_key")))
 
     def next_rung_target(self, domain_key: str, from_months: int
                          ) -> Optional[RungTarget]:

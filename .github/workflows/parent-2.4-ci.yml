@@ -789,8 +789,8 @@ jobs:
               "a16ce10fe9c932bc7ca6e3275748541b3c8a1e15a0d8a2702b0560a"
               "56ddc5fd6"), prov
           assert prov["taxonomy_sha256"] == (
-              "e5835969ead556129530f01d4629c584b823729a1b4e4425e5e3d29"
-              "ddba4d262"), prov
+              "2f3e258efbcfa3b9d19936e89fa94bc6354bb04ebafc8bad6abe839"
+              "a163c9f97"), prov
           assert prov["gold_standard_snapshot_sha256"] == (
               "c2b6735d9f099c916973c98c1953e7eb1f2ca8e1a60430011f805a3"
               "bf9c3487c"), prov
@@ -1827,21 +1827,34 @@ jobs:
         # family -> allowed domain. Pinned so a silent content edit fails the
         # gate rather than quietly changing which activity cards are blocked.
         #
-        # ROTATED ONCE, 0.5E-B (Scenario C). The previous digest was
-        # 9165c653be075c560bfb957beba29c5780fc358737740d3558ab64b6451be30e.
-        # The only change between the two is 13 founder-approved rows appended
-        # to the `activity_family_aliases` sheet — no `activity_families` row
-        # was added, removed or edited, which the assertions below re-prove
-        # independently of the digest: the family count stays 56, the
-        # primary-domain histogram is unchanged, and allowed_domains stays
-        # derived. The Gold Standard milestone workbook
+        # ROTATED TWICE.
+        #
+        #   0.5E-B (Scenario C), from
+        #   9165c653be075c560bfb957beba29c5780fc358737740d3558ab64b6451be30e:
+        #   13 founder-approved rows appended to `activity_family_aliases`.
+        #
+        #   registered-unresolved slice, from
+        #   e5835969ead556129530f01d4629c584b823729a1b4e4425e5e3d29ddba4d262:
+        #   ONE NEW SHEET, `unresolved_family_register`, carrying the 11
+        #   identifiers the taxonomy deliberately does not define (7
+        #   `deferred_post_pilot` + 4 `ambiguous_unresolved`). No alias row was
+        #   added either, so the alias count stays 14.
+        #
+        # NEITHER rotation added, removed or edited an `activity_families` row,
+        # which the assertions below re-prove INDEPENDENTLY of the digest: the
+        # family count stays 56, the primary-domain histogram is unchanged, and
+        # allowed_domains stays derived. The register makes nothing mappable —
+        # the loader refuses an entry that is also a family or an alias, and
+        # `allowed_domains` still returns None for all 11.
+        #
+        # The Gold Standard milestone workbook
         # (cdc_milestones_with_bridges_family_cleaned_final_app_ready.xlsx,
         # c2b6735d...) is a DIFFERENT file and is not touched by this slice.
         run: |
           python - <<'PY'
           import hashlib, pathlib, sys
           sys.path.insert(0, ".")
-          EXPECTED = "e5835969ead556129530f01d4629c584b823729a1b4e4425e5e3d29ddba4d262"
+          EXPECTED = "2f3e258efbcfa3b9d19936e89fa94bc6354bb04ebafc8bad6abe839a163c9f97"
           p = pathlib.Path("data/parent_2_4/activity_family_taxonomy_v1.xlsx")
           got = hashlib.sha256(p.read_bytes()).hexdigest()
           assert got == EXPECTED, f"activity-family taxonomy changed: {got}"
@@ -1887,6 +1900,29 @@ jobs:
               ), e.key
               assert e.allowed_domains <= set(BY_KEY), e.key
           assert sum(1 for e in t.families.values() if e.secondary_domains) == 27
+
+          # The unresolved register: 11 entries, two statuses, and NOTHING in
+          # it resolvable. The last three assertions are what make a pass-over
+          # in band selection safe to act on.
+          assert len(t.unresolved) == 11, sorted(t.unresolved)
+          by_status = {}
+          for entry in t.unresolved.values():
+              by_status.setdefault(entry.resolution_status, []).append(entry.key)
+          assert {k: len(v) for k, v in by_status.items()} == {
+              "deferred_post_pilot": 7, "ambiguous_unresolved": 4}, by_status
+          assert not (set(t.unresolved) & set(t.families))
+          assert not (set(t.unresolved) & set(t.aliases))
+          assert len(t.aliases) == 14, sorted(t.aliases)
+          for key in t.unresolved:
+              # Resolved through the taxonomy's OWN lookup, which is what every
+              # mappability check in the pilot ultimately calls.
+              assert t.get(key) is None, key
+              assert t.resolve_key(key) == key, key
+          # The two merges the founder forbade are still forbidden.
+          assert "wh_question_asking" in t.unresolved
+          assert "story_comprehension" in t.unresolved
+          assert "function_question_answering" in t.families
+          assert "narration_storytelling" in t.families
 
           # The retired dict must not come back.
           from genex_core import activity_validator

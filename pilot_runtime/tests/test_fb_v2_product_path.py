@@ -41,8 +41,12 @@ from pilot_backend.domain.suggestion_generation_v2 import (   # noqa: E402
     OUTCOME_GENERATED,
     OUTCOME_INSUFFICIENT_KNOWN_EVIDENCE,
     OUTCOME_NO_SUPPORTED_TARGET,
+    OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS,
     OUTCOME_NO_UNRESOLVED_BAND,
     BandAssessmentIncomplete,
+)
+from pilot_backend.integration.gold_standard_source import (  # noqa: E402
+    RungNotMappableError,
 )
 from pilot_backend.integration.baseline_skill_projection import (  # noqa: E402
     project_baseline_v2,
@@ -276,12 +280,19 @@ def test_an_unknown_only_real_band_generates_nothing(rungs):
     assert band.unknown_refs == (ref_of(rungs, asked, PRONOUNS),)
 
 
-def test_an_all_unmappable_real_band_yields_only_unsupported_targets(rungs,
-                                                                     artifact):
-    """`pronouns` is the only deficit, and it has no reconciled family.
+def test_a_registered_real_deficit_is_passed_over_and_reported(rungs,
+                                                               artifact):
+    """`pronouns` is the only deficit, and it is a REGISTERED deferral.
 
-    Zero targets, one unsupported ref, and NO step to a higher band — even
-    though higher bands on the real ladder contain mappable rungs.
+    REVISED by the registered-unresolved decision. This previously asserted
+    that the 30-month band was selected and produced one unsupported ref with
+    no step upward. The real taxonomy records `pronouns` as
+    `deferred_post_pilot`, so the band is now passed over and the deficit is
+    REPORTED instead of blocking everything above it.
+
+    Here every higher band is mastered, so there is nothing to select and the
+    honest answer is "no supported target, and here is the gap" — never
+    "no unresolved band".
     """
     result = parent_projection({PRONOUNS: "no"}, rung_source=rungs)
     projection, asked = result
@@ -289,19 +300,20 @@ def test_an_all_unmappable_real_band_yields_only_unsupported_targets(rungs,
     decision = _assert_parent_withholds(result)
     assert decision.target_band == 30
     svc = service(rungs)
-    band, mappable, unsupported = svc.resolve_targets(projection)
-    assert band.months == 30
-    assert band.target_refs == (ref_of(rungs, asked, PRONOUNS),)
-    assert mappable == ()
-    assert unsupported == (ref_of(rungs, asked, PRONOUNS),)
-    assert artifact["rungs"][unsupported[0]]["mappable"] is False
+    band, mappable, unsupported, gaps = svc.resolve_targets_with_gaps(projection)
+    pronoun_ref = ref_of(rungs, asked, PRONOUNS)
+    assert band is None and mappable == () and unsupported == ()
+    assert [(g.months, g.rung_ref, g.family_keys, g.resolution_status)
+            for g in gaps] == [
+        (30, pronoun_ref, ("pronouns",), "deferred_post_pilot")]
+    assert artifact["rungs"][pronoun_ref]["mappable"] is False
+    assert artifact["rungs"][pronoun_ref]["unresolved_reason"] == \
+        "registered_unresolved"
 
-    # Proof the refusal is a decision rather than an absence of options: the
-    # real table has mappable rungs above 30 months.
-    higher = [ref for ref, entry in artifact["rungs"].items()
-              if int(entry["source_rung_months"]) > 30 and entry["mappable"]]
-    assert higher, "the artifact has no mappable rung above 30m"
-    assert not set(higher) & set(unsupported)
+    # The pass-over is still bounded: asking for that rung refuses exactly as
+    # before, so nothing downstream can plan for it.
+    with pytest.raises(RungNotMappableError):
+        rungs.rung_by_ref(DOMAIN, pronoun_ref, expected_months=30)
 
 
 def test_a_fully_mastered_real_assessment_selects_no_band(rungs):
@@ -313,24 +325,27 @@ def test_a_fully_mastered_real_assessment_selects_no_band(rungs):
     assert band is None and mappable == () and unsupported == ()
 
 
-def test_the_other_unmappable_declared_rungs_also_report_as_unsupported(
+def test_the_registered_wh_question_deficit_is_reported_at_36m(
         rungs, artifact):
-    """`wh_question_asking` at 36 months, through the real 36m band."""
+    """`wh_question_asking` at 36 months, through the real 36m band.
+
+    The pilot's own trap: a 4.5-5y child who does not ask wh-questions. The
+    deficit is real, Genex has no content for it, and the taxonomy says so —
+    so it is reported with its status rather than silently blocking the run.
+    """
     result = parent_projection(
         {WH: "no"}, choice="short_sentences", chrono=40, rung_source=rungs)
     projection, asked = result
     _assert_parent_withholds(result)        # OPTION B
     svc = service(rungs)
-    band, mappable, unsupported = svc.resolve_targets(projection)
+    band, mappable, unsupported, gaps = svc.resolve_targets_with_gaps(projection)
 
     wh_ref = ref_of(rungs, asked, WH, months=36)
     assert artifact["rungs"][wh_ref]["mappable"] is False
-    if band is not None and band.months == 36:
-        assert wh_ref in band.target_refs
-        assert wh_ref in unsupported
-        assert wh_ref not in {r.rung_ref for r in mappable}
-    else:  # pragma: no cover - the traversal entered a lower band first
-        pytest.fail(f"expected the 36m band, got {band and band.months}")
+    assert band is None and mappable == () and unsupported == ()
+    assert [(g.months, g.rung_ref, g.family_keys, g.resolution_status)
+            for g in gaps] == [
+        (36, wh_ref, ("wh_question_asking",), "deferred_post_pilot")]
 
 
 # ===========================================================================
@@ -395,16 +410,19 @@ def test_the_real_target_is_the_failed_skill_not_the_first_by_wording(rungs):
     for fragment in (BOOK, TWO_WORD, VOCAB, PRONOUNS):
         result = parent_projection({fragment: "no"}, rung_source=rungs)
         projection, asked = result
-        band, mappable, unsupported = svc.resolve_targets(projection)
+        band, mappable, unsupported, gaps = \
+            svc.resolve_targets_with_gaps(projection)
         expected = ref_of(rungs, asked, fragment)
-        assert band.target_refs == (expected,), fragment
-        # Mappable ones generate; `pronouns` reports as unsupported.
+        # Mappable ones generate; `pronouns` is a REGISTERED deferral and is
+        # reported in `passed_over` instead of selecting its band.
         if mappable:
+            assert band.target_refs == (expected,), fragment
             assert [r.rung_ref for r in mappable] == [expected], fragment
             _assert_parent_projects(result)
             projected += 1
         else:
-            assert unsupported == (expected,), fragment
+            assert band is None, fragment
+            assert [g.rung_ref for g in gaps] == [expected], fragment
             _assert_parent_withholds(result)        # OPTION B
             withheld += 1
         seen.add(expected)
@@ -415,10 +433,18 @@ def test_the_real_target_is_the_failed_skill_not_the_first_by_wording(rungs):
 
 
 def test_the_real_outcome_vocabulary_covers_every_observed_case(rungs):
-    """Each of the four outcomes is reachable from a real baseline."""
+    """Each outcome is reachable from a REAL baseline, and they stay distinct.
+
+    `no_supported_target_registered_gaps` replaces the old
+    `no_supported_target` case here: on the real table every unmappable
+    declared rung is REGISTERED, so a lone unmappable deficit now reports a gap
+    rather than selecting an unsupportable band. The two outcomes must not
+    collapse — the last assertion is what keeps "no unresolved skills" from
+    being said about a child who has one.
+    """
     cases = {
         OUTCOME_GENERATED: {BOOK: "no"},
-        OUTCOME_NO_SUPPORTED_TARGET: {PRONOUNS: "no"},
+        OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS: {PRONOUNS: "no"},
         OUTCOME_INSUFFICIENT_KNOWN_EVIDENCE: {PRONOUNS: "not_sure"},
         OUTCOME_NO_UNRESOLVED_BAND: {},
     }
@@ -426,20 +452,23 @@ def test_the_real_outcome_vocabulary_covers_every_observed_case(rungs):
     for expected, overrides in cases.items():
         result = parent_projection(overrides, rung_source=rungs)
         projection, _asked = result
-        band, mappable, unsupported = svc.resolve_targets(projection)
+        band, mappable, unsupported, gaps = \
+            svc.resolve_targets_with_gaps(projection)
         if expected == OUTCOME_GENERATED:
             assert mappable, expected
             _assert_parent_projects(result)
-        elif expected == OUTCOME_NO_SUPPORTED_TARGET:
-            assert not mappable and unsupported, expected
+        elif expected == OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS:
+            assert not mappable and not unsupported, expected
+            assert gaps, expected
             # OPTION B: Parent withholds this one upstream, so the Pilot's
-            # `no_supported_target` is reached only by a historical projection
+            # reported-gap outcome is reached only by a historical projection
             # or by the mismatch path — and must stay classifiable either way.
             _assert_parent_withholds(result)
         elif expected == OUTCOME_INSUFFICIENT_KNOWN_EVIDENCE:
             assert band is not None and not band.target_refs, expected
+            assert not gaps, expected
             # Reaches the Pilot by design: summarisable, not generatable.
             _assert_parent_projects(result)
         else:
-            assert band is None, expected
+            assert band is None and not gaps, expected
             _assert_parent_projects(result)

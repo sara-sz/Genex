@@ -75,11 +75,18 @@ from pilot_backend.domain.suggestion_generation_v2 import (
     OUTCOME_GENERATED,
     OUTCOME_INSUFFICIENT_KNOWN_EVIDENCE,
     OUTCOME_NO_SUPPORTED_TARGET,
+    OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS,
     OUTCOME_NO_UNRESOLVED_BAND,
+    REF_MAPPABLE,
+    REF_REGISTERED_UNRESOLVED,
+    REF_UNREGISTERED_UNMAPPABLE,
     BandAssessmentIncomplete,
     GenerationV2Error,
+    PassedOverDeficit,
     ProjectionNotEvidenceDriven,
+    UnregisteredUnmappableSkill,
     classify_band,
+    scan_bands,
     select_target_band,
     v1_claim_is_not_reusable_for_v2,
 )
@@ -139,15 +146,28 @@ def ref_for(milestone, months):
     return compute_rung_ref(SUPPORTED_DOMAIN, months, milestone)
 
 
-def _source(*, extra_mappable=(), unmappable_30=(PRONOUNS,)):
-    """The fixture rung source: 24m plus four 30m skills, one unmappable."""
+def _source(*, extra_mappable=(), unmappable_30=(PRONOUNS,), register=True):
+    """The fixture rung source: 24m plus four 30m skills, one unmappable.
+
+    `register=True` marks the unmappable 30m skills as recorded in the
+    taxonomy's unresolved register, which is what the REAL taxonomy says about
+    `pronouns` — it is a `deferred_post_pilot` entry. Without that the fixture
+    would describe a rung that is unmappable for no recorded reason, which is a
+    data defect and now correctly FAILS CLOSED; `register=False` exists so a
+    test can construct exactly that negative control on purpose.
+    """
     rungs = [_rung(AT_24, 24)] + [_rung(m, 30) for m in MAPPABLE_30]
     rungs.extend(_rung(m, months) for m, months in extra_mappable)
+    blocked = tuple(RungTarget(domain_key=SUPPORTED_DOMAIN,
+                               source_rung_months=30, milestone_text=m)
+                    for m in unmappable_30)
+    registered = {}
+    if register:
+        registered = {target: ("deferred_post_pilot", ("pronouns",))
+                      for target in blocked}
     return InMemoryGoldStandardRungSource(
-        rungs=tuple(rungs),
-        unmappable=tuple(RungTarget(domain_key=SUPPORTED_DOMAIN,
-                                    source_rung_months=30, milestone_text=m)
-                         for m in unmappable_30))
+        rungs=tuple(rungs), unmappable=blocked,
+        registered_unresolved=registered)
 
 
 def _projection(*, states_30, state_24="demonstrated", omit_30=(),
@@ -604,12 +624,22 @@ def test_three_mappable_deficits_yield_three_suggestions():
 # ===========================================================================
 
 
-def test_an_all_unmappable_deficit_band_generates_nothing_and_says_so():
-    """Item 6. Zero suggestions, explicit unsupported targets, NO step upward.
+def test_a_registered_only_band_is_passed_over_and_the_higher_band_is_used():
+    """Item 6, REVISED by the registered-unresolved decision.
 
-    The 36-month band here is fully mappable and fully unresolved, so a step
-    upward would have found a convenient target — proving the refusal is a
-    decision rather than an absence of options.
+    This test previously asserted `no_supported_target` with the 30-month band
+    selected: an all-unmappable band generated nothing and never stepped up.
+    That was the right behaviour while the artifact could not tell an
+    intentional deferral from a data defect. It now can, and the founder
+    approved a BOUNDED pass-over, so a band whose only deficit is REGISTERED is
+    skipped and the 36-month mappable deficit is used.
+
+    What has NOT changed is that nothing is concealed: the 30-month deficit is
+    reported in `passed_over` with the status that authorised the skip. The
+    fail-closed case moved to
+    `test_an_unregistered_unmappable_deficit_fails_closed`, which is the same
+    fixture with the register entry removed — so the pass-over is demonstrably
+    the register's doing and not a general willingness to skip.
     """
     source = _source(extra_mappable=((TWO_WORD, 36),))
     projection = _projection(
@@ -618,15 +648,40 @@ def test_an_all_unmappable_deficit_band_generates_nothing_and_says_so():
     world = World(projection=projection, source=source)
     outcome = world.generate()
 
-    assert outcome.outcome == OUTCOME_NO_SUPPORTED_TARGET
-    assert outcome.generated == ()
-    assert outcome.target_band_months == 30
-    assert outcome.unsupported_target_refs == (ref_for(PRONOUNS, 30),)
+    assert outcome.outcome == OUTCOME_GENERATED
+    assert outcome.target_band_months == 36
+    assert [t.rung_ref for t in outcome.generated] == [ref_for(TWO_WORD, 36)]
+    # The skipped deficit is REPORTED, not dropped.
+    assert [(d.months, d.rung_ref, d.resolution_status)
+            for d in outcome.passed_over] == [
+        (30, ref_for(PRONOUNS, 30), "deferred_post_pilot")]
+    # ...and it is not misfiled as a selected-band unsupported target.
+    assert outcome.unsupported_target_refs == ()
 
-    # Nothing was written, and the mappable 36-month deficit was NOT substituted.
+
+def test_an_unregistered_unmappable_deficit_fails_closed():
+    """SCENARIO E. The negative control for the pass-over above.
+
+    Same fixture, same evidence, with ONE difference: the 30-month unmappable
+    deficit is not in the unresolved register. The skip is refused, and the
+    mappable 36-month deficit — which the previous test proves is reachable and
+    attractive — is NOT substituted.
+
+    Without this control the pass-over would be indistinguishable from a
+    general willingness to step past any deficit Genex has no content for.
+    """
+    source = _source(extra_mappable=((TWO_WORD, 36),), register=False)
+    projection = _projection(
+        states_30=mixed(**{PRONOUNS: "not_demonstrated"}),
+        extra_bands=((36, ((TWO_WORD, "not_demonstrated"),), 1),))
+    world = World(projection=projection, source=source)
+
+    with pytest.raises(UnregisteredUnmappableSkill):
+        world.generate()
+
+    # Nothing was written, and no higher-band target was invented.
     assert world.claims() == [] and world.suggestions() == []
     assert world.anchors() == []
-    assert ref_for(TWO_WORD, 36) not in outcome.unsupported_target_refs
 
 
 def test_an_unknown_only_band_generates_nothing_and_does_not_advance():
@@ -1077,7 +1132,8 @@ def test_the_outcome_exposes_no_prose_and_no_parent_identifier():
         "rung_ref", "months", "suggestion_ids", "created"}
     assert {f.name for f in dataclasses.fields(GenerationV2Outcome)} == {
         "projection_id", "generation_policy", "outcome", "target_band_months",
-        "generated", "unsupported_target_refs", "unknown_refs"}
+        "generated", "unsupported_target_refs", "unknown_refs",
+        "passed_over"}
 
     world = World(projection=_projection(states_30=mixed(**{
         BOOK: "not_demonstrated", PRONOUNS: "not_demonstrated"})))
@@ -1087,15 +1143,45 @@ def test_the_outcome_exposes_no_prose_and_no_parent_identifier():
                       "skill_key", "claim_id", SESSION, "not_demonstrated"):
         assert forbidden not in blob, forbidden
 
+    # `passed_over` is the new field, so the no-prose rule is re-asserted
+    # against ITS payload specifically rather than trusting the blob sweep: a
+    # reported deficit is the one place a readable sentence would be tempting.
+    assert outcome.passed_over, "the fixture must exercise a reported deficit"
+    for deficit in outcome.passed_over:
+        rendered = json.dumps(deficit.as_dict())
+        assert set(deficit.as_dict()) == {
+            "months", "rung_ref", "resolution_status", "family_keys"}
+        for forbidden in (BOOK, PRONOUNS, VOCAB, "milestone", "subdomain"):
+            assert forbidden not in rendered, forbidden
+        # A taxonomy FAMILY KEY is permitted and is the point: it is a stable
+        # identifier, not clinical copy, and the same outcome already publishes
+        # canonical rung refs.
+        assert deficit.family_keys == ("pronouns",)
+        assert deficit.resolution_status == "deferred_post_pilot"
 
-def test_the_four_outcomes_are_distinguishable():
-    from pilot_backend.domain.suggestion_generation_v2 import OUTCOMES
 
-    assert len(set(OUTCOMES)) == 4
+def test_the_five_outcomes_are_distinguishable():
+    """Five as of the registered-unresolved slice, not four.
+
+    `no_supported_target_registered_gaps` was added deliberately rather than
+    folded into `no_unresolved_band`: the latter reads as "this child has no
+    unresolved skills", which is FALSE when a registered deficit was passed
+    over. Collapsing them would turn "we cannot help with this yet" into "this
+    is not a problem".
+    """
+    from pilot_backend.domain.suggestion_generation_v2 import (
+        OUTCOMES, OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS)
+
+    assert len(set(OUTCOMES)) == 5
     assert OUTCOME_GENERATED in OUTCOMES
     assert OUTCOME_NO_SUPPORTED_TARGET in OUTCOMES
     assert OUTCOME_INSUFFICIENT_KNOWN_EVIDENCE in OUTCOMES
     assert OUTCOME_NO_UNRESOLVED_BAND in OUTCOMES
+    assert OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS in OUTCOMES
+    # ...and the new one is genuinely distinct from the "nothing unresolved"
+    # finding it must never be mistaken for.
+    assert (OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS
+            != OUTCOME_NO_UNRESOLVED_BAND)
 
 
 # ===========================================================================
@@ -1269,16 +1355,22 @@ def test_the_route_response_carries_no_prose_and_no_claim_id():
         "target_band_months", "unknown_refs", "unsupported_target_refs"]
 
 
-def test_the_route_returns_200_for_the_three_zero_suggestion_outcomes():
+def test_the_route_returns_200_for_every_zero_suggestion_outcome():
     """A true finding is not a refusal.
 
     Rendering these as 403 would tell Hannah her request failed when it in fact
     answered, and would push her to retry something that will answer the same.
+
+    FOUR cases as of the registered-unresolved slice, not three. A 30-month
+    deficit that is registered and has no higher mappable sibling now answers
+    `no_supported_target_registered_gaps` — still a finding, still a 200, and
+    NOT the `no_unresolved_band` it must never be mistaken for.
     """
     cases = {
         OUTCOME_NO_UNRESOLVED_BAND: ALL_DEMONSTRATED,
         OUTCOME_INSUFFICIENT_KNOWN_EVIDENCE: mixed(**{PRONOUNS: "unknown"}),
-        OUTCOME_NO_SUPPORTED_TARGET: mixed(**{PRONOUNS: "not_demonstrated"}),
+        OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS:
+            mixed(**{PRONOUNS: "not_demonstrated"}),
     }
     for expected, states in cases.items():
         http = _http_world(states=states)
@@ -1318,3 +1410,344 @@ def test_no_child_id_or_ref_reaches_a_log_line():
     assert BOOK not in joined
     # The route TEMPLATE is logged, never the populated path.
     assert GENERATE_SUGGESTIONS_V2_ROUTE in joined
+
+
+# ===========================================================================
+# 17. THE REGISTERED-UNRESOLVED SCENARIOS (founder-pinned A-F)
+#
+# The bounded pass-over, exercised on a band shape that mirrors the REAL
+# declared track for the 3-5y pilot rather than the generic fixture above:
+#
+#   36m  action-picture labeling   mappable
+#        first-name response       registered `ambiguous_unresolved`
+#        wh-question asking        registered `deferred_post_pilot`
+#   48m  four-or-more-word sentences   mappable
+#        function-question answering   mappable
+#
+# Those statuses are the ones the taxonomy workbook actually records, so a
+# scenario that passes here is a statement about the shipped register and not
+# about a convenient fixture.
+# ===========================================================================
+
+SC_ACTION_PIC = "says what action is happening in a picture or book"
+SC_FIRST_NAME = "says first name when asked"
+SC_WH_ASKING = "ask who or what or where or why questions"
+SC_SENTENCES = "says sentences with four or more words"
+SC_FUNCTION_Q = "answers simple questions like what is a coat for"
+
+#: family_key + status exactly as the shipped `unresolved_family_register` has
+#: them. Restated here so a test failure points at the disagreement.
+SC_REGISTERED = {
+    SC_FIRST_NAME: ("ambiguous_unresolved", ("expressive_name_response",)),
+    SC_WH_ASKING: ("deferred_post_pilot", ("wh_question_asking",)),
+}
+
+
+def _scenario_source(*, unregistered=()):
+    """24m + 30m as the base fixture, plus a real-shaped 36m and 48m band.
+
+    `unregistered` names scenario skills to leave OUT of the register, which is
+    how Scenario E builds a genuine data defect.
+    """
+    rungs = [_rung(AT_24, 24)] + [_rung(m, 30) for m in MAPPABLE_30]
+    rungs.append(_rung(SC_ACTION_PIC, 36, ("action_picture_labeling",)))
+    rungs.append(_rung(SC_SENTENCES, 48, ("sentence_building",)))
+    rungs.append(_rung(SC_FUNCTION_Q, 48, ("function_question_answering",)))
+
+    blocked = [RungTarget(domain_key=SUPPORTED_DOMAIN, source_rung_months=30,
+                          milestone_text=PRONOUNS)]
+    blocked += [RungTarget(domain_key=SUPPORTED_DOMAIN, source_rung_months=36,
+                           milestone_text=m)
+                for m in (SC_FIRST_NAME, SC_WH_ASKING)]
+    registered = {blocked[0]: ("deferred_post_pilot", ("pronouns",))}
+    for target in blocked[1:]:
+        if target.milestone_text in unregistered:
+            continue
+        registered[target] = SC_REGISTERED[target.milestone_text]
+    return InMemoryGoldStandardRungSource(
+        rungs=tuple(rungs), unmappable=tuple(blocked),
+        registered_unresolved=registered)
+
+
+def _scenario_projection(*, at_30=None, at_36, at_48=None, source=None):
+    """A projection over the scenario band shape. 24m always demonstrated."""
+    bands = [(36, tuple(at_36.items()), 3)]
+    if at_48:
+        bands.append((48, tuple(at_48.items()), 2))
+    return _projection(states_30=at_30 or ALL_DEMONSTRATED,
+                       extra_bands=tuple(bands))
+
+
+#: The scenarios below isolate BAND SELECTION, so their bank serves every
+#: scenario family. That is deliberately NOT the real served set:
+#: `action_picture_labeling` and `function_question_answering` have no reviewed
+#: content today, so with `FIXTURE_SERVED_FAMILIES` these runs would fail on the
+#: A2 v2.1 content gate and the tests would pass or fail for a reason that has
+#: nothing to do with the pass-over.
+#:
+#: The content gate is NOT weakened by this — it is proven still to bite, on the
+#: real served set, in
+#: `test_the_content_gate_still_refuses_a_selected_but_unserved_target`.
+SCENARIO_SERVED_FAMILIES = FIXTURE_SERVED_FAMILIES + (
+    "action_picture_labeling", "function_question_answering",
+)
+
+
+def _scenario(*, at_30=None, at_36, at_48=None, unregistered=(),
+              served=SCENARIO_SERVED_FAMILIES):
+    source = _scenario_source(unregistered=unregistered)
+    projection = _scenario_projection(at_30=at_30, at_36=at_36, at_48=at_48)
+    return World(projection=projection, source=source,
+                 authority=content_authority(served=served))
+
+
+def _gaps(outcome):
+    """`(months, family_keys, status)` per reported deficit, order-stable."""
+    return sorted((d.months, d.family_keys, d.resolution_status)
+                  for d in outcome.passed_over)
+
+
+def test_scenario_a_a_deferred_only_lower_band_is_reported_and_48m_is_used():
+    """SCENARIO A. The pilot's headline case.
+
+    36m holds ONE deficit and it is the registered wh-question skill; 48m holds
+    two real mappable deficits. Before this slice the 36m band was selected and
+    the run produced ZERO suggestions, so a 4.5-5y child with two genuine 48m
+    deficits got nothing.
+    """
+    world = _scenario(
+        at_36={SC_ACTION_PIC: "demonstrated", SC_FIRST_NAME: "demonstrated",
+               SC_WH_ASKING: "not_demonstrated"},
+        at_48={SC_SENTENCES: "not_demonstrated", SC_FUNCTION_Q: "emerging"})
+    outcome = world.generate()
+
+    assert outcome.outcome == OUTCOME_GENERATED
+    assert outcome.target_band_months == 48
+    # BOTH 48m siblings survive independently. No winner, no ranking.
+    assert sorted(t.rung_ref for t in outcome.generated) == sorted(
+        (ref_for(SC_SENTENCES, 48), ref_for(SC_FUNCTION_Q, 48)))
+    # ...and the 36m gap is reported rather than dropped.
+    assert _gaps(outcome) == [
+        (36, ("wh_question_asking",), "deferred_post_pilot")]
+
+
+def test_scenario_b_a_mixed_band_selects_the_lower_band_and_reports_its_sibling():
+    """SCENARIO B. THE CRITICAL ONE.
+
+    36m holds a MAPPABLE deficit and a registered one. The mappable deficit
+    wins the band, its registered sibling is reported, and 48m is NOT reached —
+    the lowest band Genex can act on is still the one the child needs next.
+
+    If this test ever selects 48m, the bounded pass-over has become an
+    unbounded one and the "lower bands first" principle is gone.
+    """
+    world = _scenario(
+        at_36={SC_ACTION_PIC: "not_demonstrated",
+               SC_FIRST_NAME: "demonstrated",
+               SC_WH_ASKING: "not_demonstrated"},
+        at_48={SC_SENTENCES: "not_demonstrated", SC_FUNCTION_Q: "emerging"})
+    outcome = world.generate()
+
+    assert outcome.outcome == OUTCOME_GENERATED
+    assert outcome.target_band_months == 36, "48m must NOT be reached"
+    assert [t.rung_ref for t in outcome.generated] == [
+        ref_for(SC_ACTION_PIC, 36)]
+    assert _gaps(outcome) == [
+        (36, ("wh_question_asking",), "deferred_post_pilot")]
+    # The 48m deficits exist and were deliberately not touched.
+    assert ref_for(SC_SENTENCES, 48) not in {
+        t.rung_ref for t in outcome.generated}
+
+
+def test_scenario_c_an_ambiguous_only_band_is_reported_and_progression_allowed():
+    """SCENARIO C. `ambiguous_unresolved` passes over exactly like deferred.
+
+    The two statuses differ in WHY the family is unresolved, never in whether a
+    band may be passed over — both mean "the taxonomy deliberately does not
+    define this", and the status travels so a clinician sees which it was.
+    """
+    world = _scenario(
+        at_36={SC_ACTION_PIC: "demonstrated",
+               SC_FIRST_NAME: "not_demonstrated",
+               SC_WH_ASKING: "demonstrated"},
+        at_48={SC_SENTENCES: "not_demonstrated", SC_FUNCTION_Q: "emerging"})
+    outcome = world.generate()
+
+    assert outcome.outcome == OUTCOME_GENERATED
+    assert outcome.target_band_months == 48
+    assert _gaps(outcome) == [
+        (36, ("expressive_name_response",), "ambiguous_unresolved")]
+
+
+def test_scenario_d_a_deferred_30m_pronoun_does_not_block_a_36m_target():
+    """SCENARIO D. The trap one band lower.
+
+    The 30m pronoun deferral used to block EVERY later target, including a
+    mappable 36m deficit. It is now reported and stepped past.
+    """
+    world = _scenario(
+        at_30=mixed(**{PRONOUNS: "not_demonstrated"}),
+        at_36={SC_ACTION_PIC: "not_demonstrated",
+               SC_FIRST_NAME: "demonstrated", SC_WH_ASKING: "demonstrated"},
+        at_48={SC_SENTENCES: "not_demonstrated", SC_FUNCTION_Q: "emerging"})
+    outcome = world.generate()
+
+    assert outcome.outcome == OUTCOME_GENERATED
+    assert outcome.target_band_months == 36
+    assert [t.rung_ref for t in outcome.generated] == [
+        ref_for(SC_ACTION_PIC, 36)]
+    assert _gaps(outcome) == [(30, ("pronouns",), "deferred_post_pilot")]
+
+
+def test_scenario_e_an_unregistered_unmappable_skill_fails_closed():
+    """SCENARIO E. The negative control that makes every pass-over meaningful.
+
+    Identical to Scenario A except the wh-question skill is NOT in the
+    register. The 48m targets Scenario A reaches are present and attractive,
+    and the run refuses anyway.
+    """
+    world = _scenario(
+        at_36={SC_ACTION_PIC: "demonstrated", SC_FIRST_NAME: "demonstrated",
+               SC_WH_ASKING: "not_demonstrated"},
+        at_48={SC_SENTENCES: "not_demonstrated", SC_FUNCTION_Q: "emerging"},
+        unregistered=(SC_WH_ASKING,))
+
+    with pytest.raises(UnregisteredUnmappableSkill):
+        world.generate()
+    assert world.claims() == [] and world.suggestions() == []
+    assert world.anchors() == []
+
+
+def test_scenario_f_only_registered_gaps_remain_and_the_outcome_says_so():
+    """SCENARIO F. Every mappable skill demonstrated, one registered gap left.
+
+    The outcome must NOT be `no_unresolved_band`: that asserts the child has no
+    unresolved skills, and this child has one. It must also not invent a target.
+    """
+    world = _scenario(
+        at_36={SC_ACTION_PIC: "demonstrated", SC_FIRST_NAME: "demonstrated",
+               SC_WH_ASKING: "not_demonstrated"},
+        at_48={SC_SENTENCES: "demonstrated", SC_FUNCTION_Q: "demonstrated"})
+    outcome = world.generate()
+
+    assert outcome.outcome == OUTCOME_NO_SUPPORTED_TARGET_REGISTERED_GAPS
+    assert outcome.outcome != OUTCOME_NO_UNRESOLVED_BAND
+    assert outcome.generated == ()
+    assert outcome.target_band_months is None
+    assert outcome.has_registered_gaps
+    assert _gaps(outcome) == [
+        (36, ("wh_question_asking",), "deferred_post_pilot")]
+    # No invented intervention.
+    assert world.claims() == [] and world.suggestions() == []
+
+
+def test_a_fully_mastered_child_still_reports_no_unresolved_band():
+    """Non-vacuity for Scenario F: the OTHER outcome must still be reachable.
+
+    Without this, `no_supported_target_registered_gaps` could have replaced
+    `no_unresolved_band` everywhere and Scenario F would pass while saying
+    nothing.
+    """
+    world = _scenario(
+        at_36={SC_ACTION_PIC: "demonstrated", SC_FIRST_NAME: "demonstrated",
+               SC_WH_ASKING: "demonstrated"},
+        at_48={SC_SENTENCES: "demonstrated", SC_FUNCTION_Q: "demonstrated"})
+    outcome = world.generate()
+
+    assert outcome.outcome == OUTCOME_NO_UNRESOLVED_BAND
+    assert outcome.passed_over == ()
+    assert not outcome.has_registered_gaps
+
+
+def test_an_unknown_sibling_prevents_a_pass_over():
+    """A band is passable only when every state in it is KNOWN.
+
+    The 36m band's known deficits are all registered, but one sibling is
+    `unknown` — so we do not know whether that band holds a mappable deficit,
+    and passing it over would infer mastery from missing evidence.
+    """
+    world = _scenario(
+        at_36={SC_ACTION_PIC: "unknown", SC_FIRST_NAME: "demonstrated",
+               SC_WH_ASKING: "not_demonstrated"},
+        at_48={SC_SENTENCES: "not_demonstrated", SC_FUNCTION_Q: "emerging"})
+    outcome = world.generate()
+
+    assert outcome.target_band_months == 36, "48m must NOT be reached"
+    assert outcome.outcome == OUTCOME_NO_SUPPORTED_TARGET
+    assert outcome.unknown_refs == (ref_for(SC_ACTION_PIC, 36),)
+
+
+def test_a_pass_over_is_impossible_without_a_report():
+    """Structural: `scan_bands` cannot skip a band without returning the reason.
+
+    Asserted over the function rather than through a scenario, because the
+    failure mode is a future edit that keeps the skip and drops the report —
+    which every behavioural test above would still pass.
+    """
+    import inspect
+    import textwrap
+
+    tree = ast.parse(textwrap.dedent(inspect.getsource(scan_bands)))
+    # Every `continue`/fall-through path that skips a band must have extended
+    # `passed_over` first: there is exactly one `extend` and one `return` of a
+    # scan, and the extend is the only way past an unresolved band.
+    extends = [n for n in ast.walk(tree)
+               if isinstance(n, ast.Attribute) and n.attr == "extend"]
+    assert extends, "the skip path must record what it skipped"
+    returns = [n for n in ast.walk(tree) if isinstance(n, ast.Return)]
+    assert returns and all(
+        isinstance(r.value, ast.Call)
+        and getattr(r.value.func, "id", "") == "BandScan"
+        for r in returns), "every exit must return a BandScan"
+
+
+def test_the_service_always_supplies_ref_support():
+    """`classify_band`'s permissive default must never reach the product path.
+
+    Omitting `support_by_ref` makes every deficit look mappable, which would
+    reinstate the band trap. The service is pinned to pass it.
+    """
+    import inspect
+    source = inspect.getsource(
+        BaselineSuggestionGenerationV2Service.band_views)
+    assert "support_by_ref=" in source
+    assert "ref_support_state" in source
+
+
+def test_the_three_support_states_are_distinct_and_exhaustive():
+    assert len({REF_MAPPABLE, REF_REGISTERED_UNRESOLVED,
+                REF_UNREGISTERED_UNMAPPABLE}) == 3
+    # The registered state is a PREFIX carrying a status tail, so it must not
+    # be confusable with the bare unregistered marker.
+    assert not REF_UNREGISTERED_UNMAPPABLE.startswith(
+        REF_REGISTERED_UNRESOLVED)
+    assert not REF_MAPPABLE.startswith(REF_REGISTERED_UNRESOLVED)
+
+
+def test_the_content_gate_still_refuses_a_selected_but_unserved_target():
+    """The pass-over changes SELECTION, never content approval.
+
+    Scenario A's shape with the REAL served set. Band selection still reaches
+    48m and still reports the 36m gap — and then the A2 v2.1 content authority
+    refuses, because `function_question_answering` has no reviewed content.
+    That refusal is the correct current pilot state, and this test exists so the
+    scenarios' widened fixture bank cannot be mistaken for a weakened gate.
+    """
+    from pilot_backend.goals.errors import GoalValidationError
+
+    world = _scenario(
+        at_36={SC_ACTION_PIC: "demonstrated", SC_FIRST_NAME: "demonstrated",
+               SC_WH_ASKING: "not_demonstrated"},
+        at_48={SC_SENTENCES: "not_demonstrated", SC_FUNCTION_Q: "emerging"},
+        served=FIXTURE_SERVED_FAMILIES)
+
+    # Selection is unaffected and the gap is still reported.
+    band, rungs, _unsupported, gaps = \
+        world.service.resolve_targets_with_gaps(world.projection)
+    assert band.months == 48
+    assert [(d.months, d.family_keys) for d in gaps] == [
+        (36, ("wh_question_asking",))]
+
+    # ...and the write refuses on the unserved family.
+    with pytest.raises(GoalValidationError, match="not currently supported"):
+        world.generate()
