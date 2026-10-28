@@ -27,13 +27,33 @@ simply data.
 
 ## Scope of this checkpoint
 
-Three in-scope families, all candidates, none approved, none promoted:
+Four in-scope families, all candidates, none approved, none promoted:
 
 | Family | Canonical rungs | Candidate cards |
 |---|---|---|
 | `expressive_first_words` | 12m, 15m, 18m | 7 |
 | `early_vocalizations` | 2m, 4m, 6m ×3, 9m | 7 |
 | `action_picture_labeling` | 36m | 7 |
+| `function_question_answering` | 48m | 7 |
+
+`function_question_answering` was added in the 3–5y content phase and is the
+first family here authored from nothing rather than revised. It is the
+48-month sibling of `sentence_building` — the band a 4.5–5-year-old with a mild
+expressive delay most likely anchors in — and it had zero candidate and zero
+reviewed content, so a legitimate target produced a generation refusal instead
+of a plan.
+
+**Nothing was reused to build it.** The only curated card in the Parent engine
+that mentions a function question is `_BUCKET_VARIANTS['expressive_word'][6]`
+"Quick Naming Walk", whose success criterion is *naming* objects and whose
+function question is a `make_harder` aside. Reusing it would have substituted
+object naming for the function skill, and the family is absent from
+`BUCKET_REUSE_APPROVED`, so the generator would admit none of it in any case.
+
+Its success criteria are **semantic, not syntactic**: a one-word answer counts
+when it accurately gives the use. No card here requires four or more words —
+that is `sentence_building`'s rung, and importing its bar would turn a
+conceptual skill into a sentence-length test.
 
 Counts are **derived, not quotas**. `early_vocalizations` was 6 at the original
 checkpoint because two proposed concepts — routine-embedded cooing and

@@ -36,6 +36,7 @@ from clinical_review.tools import promote_approved as PROMOTE
 FIRST_WORDS = "expressive_first_words"
 PRE_VERBAL = "early_vocalizations"
 ACTION_PICTURE = "action_picture_labeling"
+FUNCTION_Q = "function_question_answering"
 
 #: Candidate counts, each DERIVED and recorded so a later edit that pads or
 #: thins a family has to say so here.
@@ -54,10 +55,20 @@ ACTION_PICTURE = "action_picture_labeling"
 #: why `test_action_picture_support_gradient_is_recorded_for_review` still looks
 #: for "step N of 5" and why that assertion was NOT widened to 7.
 #:
+#: `function_question_answering` is a FOURTH family as of the 3-5y content
+#: phase. It had zero candidate and zero reviewed content, and it is the 48m
+#: sibling of `sentence_building` — the band a 4.5-5y child most likely anchors
+#: in — so its absence turned a legitimate target into a generation refusal. Its
+#: 7 cards are seven DIFFERENT mechanisms for answering a function question, not
+#: seven variations of one; see the ledger notes, which record each card's
+#: mechanism and why it is not redundant with its siblings.
+#:
 #: `test_promotion_plan_is_empty_while_nothing_is_approved` takes its total from
-#: `sum(EXPECTED_COUNTS.values())` rather than a second literal, so this dict
-#: stays the only place a count is stated.
-EXPECTED_COUNTS = {FIRST_WORDS: 7, PRE_VERBAL: 7, ACTION_PICTURE: 7}
+#: `sum(EXPECTED_COUNTS.values())` rather than a second literal, and
+#: `test_packet_renders_every_candidate_with_its_id` takes its packet count from
+#: `len(EXPECTED_COUNTS)`, so this dict stays the only place a count is stated.
+EXPECTED_COUNTS = {FIRST_WORDS: 7, PRE_VERBAL: 7, ACTION_PICTURE: 7,
+                   FUNCTION_Q: 7}
 
 #: The migration baseline: the 18 cards admitted under `reviewed_cards/` before
 #: this ledger existed. Pinned so `assert_register_never_grew` has something to
@@ -95,8 +106,15 @@ def real_ledger():
 # ---------------------------------------------------------------------------
 
 
-def test_all_three_in_scope_families_have_candidates():
+def test_every_in_scope_family_has_candidates():
+    """Set equality in BOTH directions.
+
+    A candidate file on disk that nobody declared would be unreviewed content
+    arriving silently, and a declared family with no file would be a count
+    nobody can check. Four families as of the 3-5y content phase.
+    """
     assert set(L.candidate_families()) == set(EXPECTED_COUNTS)
+    assert len(EXPECTED_COUNTS) == 4
 
 
 def test_candidate_counts_are_the_derived_ones():
@@ -501,3 +519,88 @@ def test_packet_reports_resolver_reach_honestly(tmp_path):
     rungs = PACKET.rungs_for_family(FIRST_WORDS)
     assert [r["months"] for r in rungs] == [12, 15, 18]
     assert all(r["reachable_from"] for r in rungs)
+
+
+# ---------------------------------------------------------------------------
+# function_question_answering — the 3-5y content phase
+# ---------------------------------------------------------------------------
+
+
+def test_function_question_cards_require_a_SPOKEN_function_answer():
+    """The family's defining boundary, asserted rather than described.
+
+    `function_question_answering` is the child ANSWERING what an object is used
+    for. Every neighbouring skill is a different family — asking wh-questions,
+    naming an object, following a direction, matching to a picture — and each of
+    those is a plausible thing a card could drift into. So every success
+    criterion must demand a SPOKEN answer, and no receptive or non-verbal
+    response may satisfy one on its own.
+    """
+    import re
+
+    says = re.compile(r"\bsays?\b", re.I)
+    nonverbal_in_success = re.compile(
+        r"\b(points?|pointing|fetch(es)?|matches|matching|chooses? correctly)\b",
+        re.I)
+    for card in L.read_cards(L.CANDIDATES_DIR / f"{FUNCTION_Q}.json"):
+        success = card["success_criteria"]
+        assert says.search(success), card["title"]
+        assert not nonverbal_in_success.search(success), card["title"]
+
+
+def test_function_question_cards_impose_no_sentence_length_bar():
+    """Semantic skill, not a syntactic one.
+
+    The 48m band holds TWO skills and `sentence_building` owns the four-or-more
+    word bar. Importing that bar here would make a child who knows perfectly
+    well what a cup is for fail for saying "drinking" — and would make the two
+    siblings test the same thing.
+    """
+    import re
+
+    length_bar = re.compile(
+        r"four or more|4\+ word|complete sentence|full sentence|sentence with",
+        re.I)
+    for card in L.read_cards(L.CANDIDATES_DIR / f"{FUNCTION_Q}.json"):
+        assert not length_bar.search(card["success_criteria"]), card["title"]
+        # ...and the family says so positively at least once.
+    blob = " ".join(c["success_criteria"]
+                    for c in L.read_cards(L.CANDIDATES_DIR / f"{FUNCTION_Q}.json"))
+    assert re.search(r"single word|one-word|short phrase|accurate word", blob, re.I)
+
+
+def test_function_question_make_harder_stays_inside_the_rung():
+    """The out-of-scope directions the founder named, asserted as absent.
+
+    Abstract why-reasoning, category definitions, multi-step inference,
+    narration and child-asked wh-questions are each a DIFFERENT canonical skill.
+    A `make_harder` that reached into one of them would quietly retarget the
+    card.
+    """
+    import re
+
+    out_of_scope = re.compile(
+        r"\bwhy\b|category|categor|riddle|guessing game|multi-step|"
+        r"several steps|tell (me )?a story|narrat", re.I)
+    for card in L.read_cards(L.CANDIDATES_DIR / f"{FUNCTION_Q}.json"):
+        assert not out_of_scope.search(card["make_harder"]), card["title"]
+
+
+def test_each_function_question_card_records_its_mechanism_for_review():
+    """Seven mechanisms, numbered, so a reviewer can check for padding.
+
+    The founder asked for seven genuinely different ways of answering a
+    function question rather than seven flash-card variants. The ledger note on
+    each card states which mechanism it is and why it is not redundant; this
+    asserts all seven are present and distinct, which is the cheapest guard
+    against a later card being added without that justification.
+    """
+    ledger = L.read_ledger()
+    notes = []
+    for card in L.read_cards(L.CANDIDATES_DIR / f"{FUNCTION_Q}.json"):
+        entry = ledger["entries"][L.compute_card_id(FUNCTION_Q, card)]
+        notes.append(entry["note"])
+    for n in range(1, 8):
+        assert any(f"Mechanism {n} of 7" in note for note in notes), n
+    # The no-reuse decision is recorded on every card, not just one.
+    assert all("NO EXISTING CONTENT WAS REUSED" in note for note in notes)
