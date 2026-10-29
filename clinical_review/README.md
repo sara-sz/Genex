@@ -27,7 +27,7 @@ simply data.
 
 ## Scope of this checkpoint
 
-Five in-scope families, all candidates, none approved, none promoted:
+Six in-scope families, all candidates, none approved, none promoted:
 
 | Family | Canonical rungs | Candidate cards |
 |---|---|---|
@@ -36,6 +36,7 @@ Five in-scope families, all candidates, none approved, none promoted:
 | `action_picture_labeling` | 36m | 7 |
 | `function_question_answering` | 48m | 7 |
 | `sentence_building` | 48m | 7 |
+| `narration_storytelling` | 60m | 7 |
 
 `function_question_answering` was added in the 3–5y content phase and is the
 first family here authored from nothing rather than revised. It is the
@@ -77,6 +78,47 @@ into an empty slot. It now asserts the thing that actually matters — that no
 candidate card's id appears in the admitted set — which is strictly stronger:
 a promoted candidate appended to an already-existing file would have slipped
 past the old form.
+
+`narration_storytelling` closes the 3–5y content gap and is the last planned
+family before clinical review. Its target is **event structure, not utterance
+length**: at least two connected events told out loud. No card imposes a word
+count — that is `sentence_building`'s rung, and the two are kept apart by event
+count. `sentence_building`'s `Tell Me What Happened` deliberately requires
+**one** event with a 4+ word sentence; narration requires **two or more** with
+no length bar, and a semantic test asserts the difference from both sides.
+
+**Founder correction, 2026-10-29 — the child must express both events.** Two
+cards scaffold by design (`What Happened Next?` and `Make Up a Tiny Story`:
+the caregiver starts the story and the child adds the rest). Both originally
+read as full success when the child supplied *one* of the two events. That is
+appropriate scaffolding and useful emerging performance, but the child has
+then expressed a single event — which is `sentence_building`'s 48m target — so
+scoring it here would credit the 60m rung on lower-rung evidence. Both
+criteria now require the child to express **both** events in words, and
+`make_easier` labels the caregiver start as scaffolding toward the target
+rather than the target. Independent recall, perfect grammar, transition words,
+sequencing vocabulary and originality remain **not** required, and a model may
+still come first. Two semantic tests pin it, because the pre-existing
+"criterion mentions two events" check passed happily on the old wording:
+one asserts the child is the subject of the telling with the two-event
+quantity attached to that same clause and that no criterion credits a partial
+contribution, the other that `make_easier` never promises success for the
+scaffolded form.
+
+**Nothing was reused to build it, and the search was not cursory.** Fifteen
+curated Parent-engine cards match narrative-sounding wording — and every one
+matched on `first`/`then` *sequencing language in a caregiver instruction*
+while its success criterion measures naming, pointing, placing objects in
+order, completing steps, producing a sound, or making a mark. Not one measures
+a child telling two events. The family is also absent from
+`BUCKET_REUSE_APPROVED`.
+
+Two adjacent skills must stay out, and both are deliberately unresolved in the
+taxonomy: `story_comprehension` is the **60m receptive** rung ("answers simple
+questions about a book or a story"), with a dedicated test forbidding its alias
+onto this family; and `daily_recall_narrative` is a **48m** rung ("talks about
+at least one thing that happened during her day"), which the two-event
+requirement is exactly what separates from this one.
 
 Counts are **derived, not quotas**. `early_vocalizations` was 6 at the original
 checkpoint because two proposed concepts — routine-embedded cooing and

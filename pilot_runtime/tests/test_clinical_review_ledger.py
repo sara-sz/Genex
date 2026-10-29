@@ -38,6 +38,7 @@ PRE_VERBAL = "early_vocalizations"
 ACTION_PICTURE = "action_picture_labeling"
 FUNCTION_Q = "function_question_answering"
 SENTENCES = "sentence_building"
+NARRATION = "narration_storytelling"
 
 #: Candidate families that ALSO have live legacy content under
 #: `reviewed_cards/`. `sentence_building` is the first of these: it carries six
@@ -83,12 +84,18 @@ FAMILIES_WITH_LEGACY_CONTENT = (SENTENCES,)
 #: expansion were absent. The seven candidates are a balanced replacement SET
 #: offered for review; the live six are untouched.
 #:
+#: `narration_storytelling` is the SIXTH family and the last planned 3-5y one.
+#: It had zero candidate and zero reviewed content. Its target is EVENT
+#: STRUCTURE — at least two connected events told out loud — which is why no
+#: card here imposes a word count: that is `sentence_building`'s rung, and the
+#: two families are kept apart by event count, not by utterance length.
+#:
 #: `test_promotion_plan_is_empty_while_nothing_is_approved` takes its total from
 #: `sum(EXPECTED_COUNTS.values())` rather than a second literal, and
 #: `test_packet_renders_every_candidate_with_its_id` takes its packet count from
 #: `len(EXPECTED_COUNTS)`, so this dict stays the only place a count is stated.
 EXPECTED_COUNTS = {FIRST_WORDS: 7, PRE_VERBAL: 7, ACTION_PICTURE: 7,
-                   FUNCTION_Q: 7, SENTENCES: 7}
+                   FUNCTION_Q: 7, SENTENCES: 7, NARRATION: 7}
 
 #: The migration baseline: the 18 cards admitted under `reviewed_cards/` before
 #: this ledger existed. Pinned so `assert_register_never_grew` has something to
@@ -131,10 +138,10 @@ def test_every_in_scope_family_has_candidates():
 
     A candidate file on disk that nobody declared would be unreviewed content
     arriving silently, and a declared family with no file would be a count
-    nobody can check. Five families as of the 3-5y content phase.
+    nobody can check. Six families as of the 3-5y content phase.
     """
     assert set(L.candidate_families()) == set(EXPECTED_COUNTS)
-    assert len(EXPECTED_COUNTS) == 5
+    assert len(EXPECTED_COUNTS) == 6
 
 
 def test_candidate_counts_are_the_derived_ones():
@@ -911,3 +918,313 @@ def test_the_legacy_count_is_derived_from_the_directory(tmp_path):
     (tmp_path / f"{SENTENCES}.json").write_text(
         json.dumps([card, card], indent=2), encoding="utf-8")
     assert PACKET.legacy_admitted_count(SENTENCES, reviewed_dir=tmp_path) == 2
+
+
+# ---------------------------------------------------------------------------
+# narration_storytelling — the 60m two-event family
+#
+# This family is defined by EVENT STRUCTURE, and every neighbouring skill is a
+# plausible place for a card to drift: one-event recount (sentence_building),
+# answering questions about a story (story_comprehension, deliberately
+# unresolved), ordering pictures (receptive sequencing), naming what is in a
+# photo (object naming), and pretend play. `_family_bucket` resolves this
+# family to `general`, so the validator imposes nothing — the boundaries are
+# held by the success criteria, and so they are pinned.
+# ---------------------------------------------------------------------------
+
+
+def _narration_cards():
+    return L.read_cards(L.CANDIDATES_DIR / f"{NARRATION}.json")
+
+
+def test_every_narration_success_requires_at_least_two_events():
+    """The canonical 60m target is a story with at least two events.
+
+    Semantic rather than literal: any criterion that commits to two events
+    passes, however it words it — "at least TWO things", "BOTH events", "a
+    two-event story". What must not appear is a criterion satisfiable by one.
+    """
+    import re
+
+    two = re.compile(
+        r"at least two\b|both events\b|two-event story|holds? two\b", re.I)
+    for card in _narration_cards():
+        assert two.search(card["success_criteria"]), card["title"]
+
+
+def test_the_ledger_file_contains_no_duplicate_keys():
+    """A shadowed duplicate key parses cleanly and hides stale content.
+
+    Added because it actually happened: a note was patched by appending the new
+    line without removing the old one, so two entries carried two `note` keys.
+    `json.load` keeps the LAST, so every consumer — the gate, the packet, the
+    promotion plan, this suite — read the corrected text and passed, while the
+    superseded note (including a review question the founder had already
+    answered) was still physically in the file. A review ledger is an audit
+    record, so text that is present but unread is exactly the wrong failure
+    mode: the only way to catch it is to parse strictly.
+    """
+    def no_duplicates(pairs):
+        seen = set()
+        for key, _ in pairs:
+            if key in seen:
+                raise AssertionError(f"duplicate key in the ledger: {key!r}")
+            seen.add(key)
+        return dict(pairs)
+
+    raw = L.LEDGER_PATH.read_text(encoding="utf-8")
+    json.loads(raw, object_pairs_hook=no_duplicates)
+    # Non-vacuity: the hook really does reject a duplicate.
+    with pytest.raises(AssertionError, match="duplicate key"):
+        json.loads('{"note": "old", "note": "new"}',
+                   object_pairs_hook=no_duplicates)
+
+
+def test_full_narration_success_requires_the_child_to_express_both_events():
+    """FOUNDER CORRECTION: a split telling is scaffolding, not full success.
+
+    The failure mode is subtle, and the two-event test above did NOT catch it.
+    A criterion can name a two-event story and still be satisfied when the
+    CAREGIVER supplied event one and the child supplied only event two. The
+    child has then expressed a single event — which is precisely
+    `sentence_building`'s 48m target — so the 60m rung would be credited on
+    lower-rung evidence. Caregiver scaffolding stays legitimate; what must not
+    happen is scaffolding being scored as the target.
+
+    Asserted three ways rather than by one literal string, so a rewording that
+    preserves the meaning passes and a rewording that loses it fails:
+
+      1. the child is the subject of the telling AND the two-event quantity is
+         attached to that same telling, in one clause;
+      2. no criterion credits a partial contribution;
+      3. polarity — where a criterion raises the caregiver-supplied case, it
+         must deny it full success rather than award it.
+    """
+    import re
+
+    # 1. "The child tells ... <two events>", with no sentence boundary between
+    #    the subject and the quantity, so the two cannot be attributed apart.
+    child_tells_both = re.compile(
+        r"the child tells\b[^.]{0,120}?"
+        r"(at least two\b|both events\b|two-event story)", re.I)
+    for card in _narration_cards():
+        assert child_tells_both.search(card["success_criteria"]), card["title"]
+
+    # 2. A partial contribution must never be the criterion. This is the exact
+    #    shape the founder correction removed from cards 3 and 7.
+    partial = re.compile(
+        r"(supplying|supplies|supply|contribut\w*|adds?|tells?)\s+"
+        r"(at least\s+)?(one|either)\s+of\s+the\s+(two\s+)?events", re.I)
+    for card in _narration_cards():
+        assert not partial.search(card["success_criteria"]), card["title"]
+    # Non-vacuity: the pattern really does catch the wording that was removed,
+    # so this is a live check and not decoration.
+    assert partial.search(
+        "with the child supplying at least one of the events in words")
+
+    # 3. The two cards that scaffold by design must say which side of the line
+    #    the scaffolded form falls on.
+    split = re.compile(
+        r"caregiver supplies|you supply|supplies the first|"
+        r"supply the first event", re.I)
+    denied = re.compile(
+        r"not yet|does not yet count|scaffolding|toward the target|"
+        r"full success is recorded when", re.I)
+    raised = 0
+    for card in _narration_cards():
+        if split.search(card["success_criteria"]):
+            assert denied.search(card["success_criteria"]), card["title"]
+            raised += 1
+    assert raised >= 2, raised
+
+
+def test_narration_scaffolding_is_labelled_as_scaffolding_not_as_the_target():
+    """The other half of the correction: `make_easier` must not promise success.
+
+    `make_easier` is where the caregiver start and the spoken choices live, so
+    it is the field most likely to read as "and that counts". It has to offer
+    the support AND say the support is not yet the target — otherwise the
+    criterion says one thing and the ladder beside it says another.
+    """
+    import re
+
+    scaffold = re.compile(
+        r"supply the first event|give the first event|offer two spoken|"
+        r"two spoken endings|caregiver supplies", re.I)
+    # Deliberately formulation-agnostic. The two corrected cards say
+    # "scaffolding toward the target"; cards 1, 2 and 5 said the same thing
+    # first, in the founder-accepted form "one event is a real step ... but
+    # only two events meet this target". Both distinguish the support from the
+    # target, which is the whole invariant — so both must pass, and a regex
+    # that only knew the newer wording would have demanded edits to accepted
+    # content to satisfy itself.
+    labelled = re.compile(
+        r"scaffolding|not (yet )?the target|toward the target|"
+        r"what to look for|full success is|is a real step|"
+        r"(meet|is|are) (this )?the target|meet this target", re.I)
+    checked = 0
+    for card in _narration_cards():
+        easier = card["make_easier"]
+        if scaffold.search(easier):
+            assert labelled.search(easier), card["title"]
+            checked += 1
+    assert checked >= 2, checked
+    # Non-vacuity: a make_easier that offers the scaffold and says nothing
+    # about where the target sits must fail, or this test proves nothing.
+    assert not labelled.search(
+        "Supply the first event yourself and let your child add the second.")
+
+
+def test_one_event_production_is_never_narration_success():
+    """A single event, or a single sentence, must not satisfy this family.
+
+    The failure mode is a criterion that reads as satisfied by one good
+    sentence — which is exactly `sentence_building`'s target and would make the
+    two families measure the same thing.
+    """
+    import re
+
+    single_ok = re.compile(
+        r"success.{0,40}\bone (event|sentence|thing)\b|"
+        r"\bone (event|sentence|thing)\b.{0,30}(counts|is success|is enough)",
+        re.I)
+    for card in _narration_cards():
+        assert not single_ok.search(card["success_criteria"]), card["title"]
+    # ...and at least one card states the exclusion positively, so the
+    # distinction is visible to a reviewer rather than merely implied.
+    stated = [c["title"] for c in _narration_cards()
+              if re.search(r"one event.{0,80}not success|"
+                           r"one event on its own is not", c["success_criteria"],
+                           re.I)]
+    assert stated, "no card states the one-event exclusion explicitly"
+
+
+def test_nonverbal_ordering_or_naming_is_never_narration_success():
+    """Ordering, pointing and naming are each a DIFFERENT family's skill.
+
+    Where a criterion mentions one of them it must be to exclude it. Checked on
+    polarity, not absence — a card that names the trap in order to rule it out
+    is doing the right thing.
+    """
+    import re
+
+    nonverbal = re.compile(
+        r"\b(point(ing)?|right order|arrang\w*|naming|acted out|"
+        r"moving the toys|doing the actions)\b", re.I)
+    excluded = re.compile(
+        r"not success|is not enough|NOT success|rather than", re.I)
+    checked = 0
+    for card in _narration_cards():
+        success = card["success_criteria"]
+        if nonverbal.search(success):
+            assert excluded.search(success), card["title"]
+            checked += 1
+    assert checked >= 4, checked
+
+
+def test_no_narration_card_imposes_a_word_count():
+    """Event structure, not utterance length.
+
+    `sentence_building` owns the four-or-more-word bar. Importing it here would
+    fail a child who said "we went out and then we ate" — two events in seven
+    words — for the wrong reason, and would blur the two rungs.
+    """
+    import re
+
+    length = re.compile(
+        r"four or more words|at least four words|\d+\+? words?\b|"
+        r"complete sentence|full sentence", re.I)
+    for card in _narration_cards():
+        assert not length.search(card["success_criteria"]), card["title"]
+    # The family says so positively at least once: grammar is not the measure.
+    blob = " ".join(c["success_criteria"] for c in _narration_cards())
+    assert re.search(r"imperfect grammar|not required|does not (need|have) to",
+                     blob, re.I)
+
+
+def test_the_set_holds_both_real_event_and_invented_mechanisms():
+    """The milestone says "heard or made up", so the set must cover both.
+
+    Derived from the ledger's mechanism notes rather than from titles, so a
+    retitled card cannot quietly collapse the coverage.
+    """
+    ledger = L.read_ledger()
+    notes = {c["title"]: ledger["entries"][L.compute_card_id(NARRATION, c)]["note"]
+             for c in _narration_cards()}
+    assert any("REAL RECENT EVENTS" in n for n in notes.values())
+    assert any("PERSONAL PHOTOS" in n for n in notes.values())
+    assert any("INVENTED story" in n for n in notes.values())
+    assert any("ENACTED EVENTS" in n for n in notes.values())
+    for n in range(1, 8):
+        assert any(f"Mechanism {n} of 7" in note for note in notes.values()), n
+
+
+def test_narration_and_sentence_building_measure_different_things():
+    """THE BOUNDARY TEST THE FOUNDER ASKED FOR, asserted from both sides.
+
+    `sentence_building`'s `Tell Me What Happened` deliberately requires ONE
+    event and a 4+ word sentence. `narration_storytelling` requires TWO events
+    and NO word count. If either family drifted toward the other, the 48m and
+    60m rungs would be measuring the same skill from one child's evidence.
+    """
+    import re
+
+    recount = [c for c in L.read_cards(L.CANDIDATES_DIR / f"{SENTENCES}.json")
+               if c["title"] == "Tell Me What Happened"][0]
+    # sentence_building side: one event, with a length bar.
+    assert re.search(r"\bONE\b", recount["success_criteria"])
+    assert re.search(r"at least four words", recount["success_criteria"])
+    assert re.search(r"two events.{0,80}NOT required", recount["success_criteria"])
+
+    # narration side: two events, with no length bar anywhere.
+    two = re.compile(r"at least two\b|both events\b|two-event story", re.I)
+    length = re.compile(r"at least four words|four or more words", re.I)
+    for card in _narration_cards():
+        assert two.search(card["success_criteria"]), card["title"]
+        assert not length.search(card["success_criteria"]), card["title"]
+
+
+def test_no_narration_card_requires_exact_recall_or_perfect_grammar():
+    """Supports are free; accurate independent recall is not the target."""
+    import re
+
+    forbidden = re.compile(
+        r"word[- ]for[- ]word|exactly as|correct grammar|accurate(ly)? recall|"
+        r"remembers? every", re.I)
+    # Scoped to the fields that can IMPOSE something. An earlier version swept
+    # all nine and failed on "Do not correct grammar while a story is being
+    # told" — a PROHIBITION in `what_to_avoid`, i.e. the rule working, not a
+    # violation of it. Requirement and prohibition are opposite claims and only
+    # the first belongs in this sweep.
+    for card in _narration_cards():
+        for field in ("success_criteria", "make_harder", "instructions"):
+            assert not forbidden.search(card[field]), (card["title"], field)
+    # ...and the prohibition really is stated, which is the other half.
+    avoid = " ".join(c["what_to_avoid"] for c in _narration_cards())
+    assert re.search(r"memory is wrong", avoid, re.I)
+    assert re.search(r"not correct grammar|do not correct", avoid, re.I)
+    assert re.search(r"quiz", avoid, re.I)
+
+
+def test_narration_make_harder_stays_narration():
+    """Progression adds events and removes supports — never abstract reasoning.
+
+    Complex causal reasoning, story grammar, multiple characters and exact
+    transition vocabulary are each a different and later skill; a `make_harder`
+    reaching into one of them would retarget the card.
+    """
+    import re
+
+    out_of_scope = re.compile(
+        r"\bwhy\b|because of|cause and effect|beginning, middle|story grammar|"
+        r"several characters|moral of", re.I)
+    # Every legitimate progression for THIS family: add an event, remove a
+    # support, reduce the salience of the cue, or hand the telling over.
+    progression = re.compile(
+        r"third event|third picture|third thing|no (choices|model|cue|photo|starter)|"
+        r"invent both|supply both|put (them|the photos) away|set (them|it) aside|"
+        r"longer|unseen|not seen before|has not seen|detail|less obvious|"
+        r"let your child (tell|decide|invent|start)", re.I)
+    for card in _narration_cards():
+        assert not out_of_scope.search(card["make_harder"]), card["title"]
+        assert progression.search(card["make_harder"]), card["title"]
