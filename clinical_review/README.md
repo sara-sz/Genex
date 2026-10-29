@@ -27,7 +27,7 @@ simply data.
 
 ## Scope of this checkpoint
 
-Four in-scope families, all candidates, none approved, none promoted:
+Five in-scope families, all candidates, none approved, none promoted:
 
 | Family | Canonical rungs | Candidate cards |
 |---|---|---|
@@ -35,6 +35,7 @@ Four in-scope families, all candidates, none approved, none promoted:
 | `early_vocalizations` | 2m, 4m, 6m ×3, 9m | 7 |
 | `action_picture_labeling` | 36m | 7 |
 | `function_question_answering` | 48m | 7 |
+| `sentence_building` | 48m | 7 |
 
 `function_question_answering` was added in the 3–5y content phase and is the
 first family here authored from nothing rather than revised. It is the
@@ -54,6 +55,28 @@ Its success criteria are **semantic, not syntactic**: a one-word answer counts
 when it accurately gives the use. No card here requires four or more words —
 that is `sentence_building`'s rung, and importing its bar would turn a
 conceptual skill into a sentence-length test.
+
+`sentence_building` is the first family here authored **beside live legacy
+content** rather than into an empty slot. Six cards are already admitted under
+`pilot_runtime/data/reviewed_cards/sentence_building.json`; they are untouched,
+their ids are unchanged, and all six remain in `legacy_unresolved` — which
+asserts only that they were admitted before this ledger existed, never that
+anyone approved them. **The seven candidates do not replace them.** Replacement
+is a later, explicit promotion decision.
+
+The audit that prompted the set found that none of the legacy six required the
+canonical four or more words (criteria said "three-to-four", which three
+satisfy), five of the six were requests or fixed social formulas, and
+commenting, single-event past recount, negation and systematic 2–3 → 4+ word
+expansion were absent entirely.
+
+**That family also broke an assumption the promotion check relied on.**
+`test_nothing_has_been_promoted` used to assert that no candidate family had a
+`reviewed_cards/` file at all, which held only while every family was authored
+into an empty slot. It now asserts the thing that actually matters — that no
+candidate card's id appears in the admitted set — which is strictly stronger:
+a promoted candidate appended to an already-existing file would have slipped
+past the old form.
 
 Counts are **derived, not quotas**. `early_vocalizations` was 6 at the original
 checkpoint because two proposed concepts — routine-embedded cooing and

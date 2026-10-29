@@ -43,6 +43,7 @@ from .ledger import (
     CANDIDATES_DIR,
     OUT_DIR,
     REPO_ROOT,
+    REVIEWED_CARDS_DIR,
     LedgerError,
     assert_outside_guarded_trees,
     candidate_families,
@@ -74,23 +75,40 @@ def rungs_for_family(family: str,
     is produced by traversing the frozen Parent ladder once, and a second
     traversal here would be a second clinical opinion about ordering.
 
-    Also reports whether each rung is reachable as a step target, measured from
-    the artifact's own enumerated step table — a clinician should know that a
-    rung exists but that the resolver may not currently select it.
+    ## NO RESOLVER-REACH FIELD, DELIBERATELY
+
+    This used to report, per rung, which monthly floors the resolver would step
+    from to reach it — read out of the artifact's enumerated `steps` table. That
+    table IS the F-B v1 month-stepping mechanism, which the evidence-driven v2
+    path replaced: v2 selects a band from projected per-skill evidence and
+    anchors on the `rung_ref` the evidence named, never on a month step. So the
+    column told a clinician something that is no longer how targets are chosen,
+    and it read as a judgement about the CONTENT in front of them. It said
+    "not currently selected by the resolver" against the 48m sentence rung, the
+    36m action-picture rung and three pre-verbal rungs — all five of them
+    legitimate v2 targets.
+
+    It was removed rather than re-derived. A v2-accurate replacement would have
+    to be `mappable`, and that is a CONSTANT here: this function filters on
+    non-empty `family_bindings`, and the four unmappable declared-track rungs
+    have empty bindings, so no unmappable rung can ever appear in any family's
+    table. A column that always says the same thing is the boilerplate-nobody-
+    reads failure the span-requirement block is careful to avoid.
+
+    Anything more faithful — whether a band is complete, whether a skill is a
+    deficit — is a property of ONE CHILD's projection, not of the content, and
+    computing it here would couple a clinical-content review tool to runtime
+    selection logic. Which rungs a family binds is the question this packet
+    needs answered, and that is what it returns.
     """
     path = Path(artifact_path) if artifact_path is not None else RUNG_ARTIFACT
     body = json.loads(path.read_text(encoding="utf-8"))
-    reachable_from: Dict[str, List[int]] = {}
-    for from_months, step in body.get("steps", {}).items():
-        reachable_from.setdefault(step["target_rung_ref"], []).append(
-            int(from_months))
 
     rows = []
     for rung in body.get("rungs", {}).values():
         if not any(b["family_ref"] == family
                    for b in rung.get("family_bindings", ())):
             continue
-        floors = sorted(reachable_from.get(rung["rung_ref"], ()))
         rows.append({
             "months": rung["source_rung_months"],
             "rung_ref": rung["rung_ref"],
@@ -99,7 +117,6 @@ def rungs_for_family(family: str,
             "co_bound": sorted(b["family_ref"]
                                for b in rung["family_bindings"]
                                if b["family_ref"] != family),
-            "reachable_from": floors,
         })
     return sorted(rows, key=lambda r: (r["months"], r["milestone_text"]))
 
@@ -149,9 +166,32 @@ def _style() -> str:
     """
 
 
+def legacy_admitted_count(family: str,
+                          reviewed_dir: Optional[Path] = None) -> int:
+    """How many cards this family ALREADY has under `reviewed_cards/`.
+
+    DERIVED from the directory rather than listed here, for the same reason the
+    family set is: a second record of which families have live content is what
+    drifts.
+
+    A non-zero count means the packet must not be read as a description of what
+    is live. `sentence_building` carries six cards admitted before this ledger
+    existed, and a reviewer shown seven candidates with no further context could
+    reasonably conclude the seven had replaced them. Returns 0 for a family with
+    no admitted content, which is the ordinary case and renders nothing extra.
+    """
+    directory = Path(reviewed_dir) if reviewed_dir is not None \
+        else REVIEWED_CARDS_DIR
+    path = directory / f"{family}.json"
+    if not path.is_file():
+        return 0
+    return len(read_cards(path))
+
+
 def render_family(family: str, cards: Sequence[Dict[str, str]],
                   rungs: Sequence[Dict[str, Any]],
-                  ledger: Dict[str, Any]) -> str:
+                  ledger: Dict[str, Any],
+                  legacy_count: int = 0) -> str:
     """One family's packet as a standalone HTML document."""
     esc = html.escape
     parts: List[str] = [
@@ -171,22 +211,50 @@ def render_family(family: str, cards: Sequence[Dict[str, str]],
         "before it can be built.</div>",
     ]
 
+    if legacy_count:
+        # ONLY for a family that already has admitted content. A reviewer
+        # looking at seven candidates for a family with six live cards has to be
+        # told which is which, and that nothing in this packet has changed the
+        # live set. Absent for every other family, so it cannot decay into
+        # boilerplate that appears everywhere and is therefore read nowhere —
+        # the same reasoning as the span-requirement block below, and a test
+        # asserts both the presence and that absence.
+        parts.append(
+            "<div class='require'>"
+            "<div class='require-h'>This family already has live content</div>"
+            f"<p><strong>{legacy_count} card(s) for this family are already "
+            "admitted</strong> in the activity bank's reviewed input. They were "
+            "admitted <em>before explicit clinical-review provenance "
+            "existed</em> and are recorded as <code>legacy_unresolved</code>, "
+            "which asserts only that &mdash; it does <strong>not</strong> mean "
+            "anyone approved them.</p>"
+            "<p><strong>The cards below are NEW founder-review candidates and "
+            "have not replaced anything.</strong> The live content is "
+            "unchanged, its template ids are unchanged, and it stays in use "
+            "until a separate, explicit promotion decision is taken. Approving "
+            "a candidate here does not retire a live card, and rejecting one "
+            "does not restore anything.</p>"
+            "<p>Where a candidate is a direct revision of a live card, its "
+            "<em>For review</em> note names the live template id it revises. "
+            "Where a candidate draws on several live cards, the note says so in "
+            "words rather than claiming a single lineage.</p>"
+            "</div>")
+
     parts.append("<h2>Canonical rungs this family binds</h2>")
+    # No resolver-reach column. See `rungs_for_family` for why it was removed
+    # rather than re-derived: it reported the F-B v1 month-stepping table, which
+    # the evidence-driven v2 path replaced, and it labelled five legitimate v2
+    # targets as "not currently selected".
     parts.append("<table class='rungs'><tr><th>Age</th><th>Milestone "
-                 "(verbatim)</th><th>Subdomain</th><th>Resolver reach</th></tr>")
+                 "(verbatim)</th><th>Subdomain</th></tr>")
     for rung in rungs:
-        if rung["reachable_from"]:
-            floors = rung["reachable_from"]
-            reach = f"selected for baselines at {floors[0]}&ndash;{floors[-1]}m"
-        else:
-            reach = "not currently selected by the resolver"
         co = (f"<br><em>also binds: {esc(', '.join(rung['co_bound']))}</em>"
               if rung["co_bound"] else "")
         parts.append(
             f"<tr><td>{rung['months']}m</td>"
             f"<td>{esc(rung['milestone_text'])}{co}"
             f"<div class='tid'>{esc(rung['rung_ref'])}</div></td>"
-            f"<td>{esc(rung['subdomain'])}</td><td>{reach}</td></tr>")
+            f"<td>{esc(rung['subdomain'])}</td></tr>")
     parts.append("</table>")
 
     if len(rungs) > 1:
@@ -271,7 +339,8 @@ def build(out_dir: Optional[Path] = None,
         if not source.is_file():
             raise LedgerError(f"no candidate file for {family!r}")
         cards = read_cards(source)
-        page = render_family(family, cards, rungs_for_family(family), ledger)
+        page = render_family(family, cards, rungs_for_family(family), ledger,
+                             legacy_admitted_count(family))
         target = assert_outside_guarded_trees(
             destination / f"{family}_review_packet.html")
         target.write_text(page, encoding="utf-8")
