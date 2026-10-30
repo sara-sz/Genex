@@ -1,0 +1,305 @@
+# Clinical review — candidate activity content
+
+Track 2's workspace. Candidate activity cards are drafted here, reviewed by a
+clinician here, and only then promoted into the activity bank's admitted input.
+
+**Nothing in this directory is approved, released, or in use.**
+
+## Why this sits at the repository root and not under `pilot_runtime/`
+
+Two independent reasons, both measured rather than assumed.
+
+**It would ship.** All four container build contexts
+(`pilot_runtime/deploy/gcloudignore{,-generation,-projection,-bootstrap}`)
+ignore everything and then re-admit `pilot_backend/**` and `pilot_runtime/**`
+wholesale, excluding only tests and `__pycache__`. Candidate content placed
+under `pilot_runtime/` would therefore be copied into the PHI-serving browser
+image — unreviewed clinical material inside the serving container, for no
+reason. At the repository root it is excluded from every image automatically.
+
+**The ledger could not be written there.** The CI no-mirror gate forbids six
+canonical activity-family identifiers anywhere under those two trees, exempting
+only two named constants in the activity-bank generator. A ledger row reading
+`"activity_family_ref": "early_vocalizations"` would fail that gate. Here it is
+simply data.
+
+## Layout
+
+## Scope of this checkpoint
+
+Six in-scope families, all candidates, none approved, none promoted:
+
+| Family | Canonical rungs | Candidate cards |
+|---|---|---|
+| `expressive_first_words` | 12m, 15m, 18m | 7 |
+| `early_vocalizations` | 2m, 4m, 6m ×3, 9m | 7 |
+| `action_picture_labeling` | 36m | 7 |
+| `function_question_answering` | 48m | 7 |
+| `sentence_building` | 48m | 7 |
+| `narration_storytelling` | 60m | 7 |
+
+`function_question_answering` was added in the 3–5y content phase and is the
+first family here authored from nothing rather than revised. It is the
+48-month sibling of `sentence_building` — the band a 4.5–5-year-old with a mild
+expressive delay most likely anchors in — and it had zero candidate and zero
+reviewed content, so a legitimate target produced a generation refusal instead
+of a plan.
+
+**Nothing was reused to build it.** The only curated card in the Parent engine
+that mentions a function question is `_BUCKET_VARIANTS['expressive_word'][6]`
+"Quick Naming Walk", whose success criterion is *naming* objects and whose
+function question is a `make_harder` aside. Reusing it would have substituted
+object naming for the function skill, and the family is absent from
+`BUCKET_REUSE_APPROVED`, so the generator would admit none of it in any case.
+
+Its success criteria are **semantic, not syntactic**: a one-word answer counts
+when it accurately gives the use. No card here requires four or more words —
+that is `sentence_building`'s rung, and importing its bar would turn a
+conceptual skill into a sentence-length test.
+
+`sentence_building` is the first family here authored **beside live legacy
+content** rather than into an empty slot. Six cards are already admitted under
+`pilot_runtime/data/reviewed_cards/sentence_building.json`; they are untouched,
+their ids are unchanged, and all six remain in `legacy_unresolved` — which
+asserts only that they were admitted before this ledger existed, never that
+anyone approved them. **The seven candidates do not replace them.** Replacement
+is a later, explicit promotion decision.
+
+The audit that prompted the set found that none of the legacy six required the
+canonical four or more words (criteria said "three-to-four", which three
+satisfy), five of the six were requests or fixed social formulas, and
+commenting, single-event past recount, negation and systematic 2–3 → 4+ word
+expansion were absent entirely.
+
+**That family also broke an assumption the promotion check relied on.**
+`test_nothing_has_been_promoted` used to assert that no candidate family had a
+`reviewed_cards/` file at all, which held only while every family was authored
+into an empty slot. It now asserts the thing that actually matters — that no
+candidate card's id appears in the admitted set — which is strictly stronger:
+a promoted candidate appended to an already-existing file would have slipped
+past the old form.
+
+`narration_storytelling` closes the 3–5y content gap and is the last planned
+family before clinical review. Its target is **event structure, not utterance
+length**: at least two connected events told out loud. No card imposes a word
+count — that is `sentence_building`'s rung, and the two are kept apart by event
+count. `sentence_building`'s `Tell Me What Happened` deliberately requires
+**one** event with a 4+ word sentence; narration requires **two or more** with
+no length bar, and a semantic test asserts the difference from both sides.
+
+**Founder correction, 2026-10-29 — the child must express both events.** Two
+cards scaffold by design (`What Happened Next?` and `Make Up a Tiny Story`:
+the caregiver starts the story and the child adds the rest). Both originally
+read as full success when the child supplied *one* of the two events. That is
+appropriate scaffolding and useful emerging performance, but the child has
+then expressed a single event — which is `sentence_building`'s 48m target — so
+scoring it here would credit the 60m rung on lower-rung evidence. Both
+criteria now require the child to express **both** events in words, and
+`make_easier` labels the caregiver start as scaffolding toward the target
+rather than the target. Independent recall, perfect grammar, transition words,
+sequencing vocabulary and originality remain **not** required, and a model may
+still come first. Two semantic tests pin it, because the pre-existing
+"criterion mentions two events" check passed happily on the old wording:
+one asserts the child is the subject of the telling with the two-event
+quantity attached to that same clause and that no criterion credits a partial
+contribution, the other that `make_easier` never promises success for the
+scaffolded form.
+
+**Nothing was reused to build it, and the search was not cursory.** Fifteen
+curated Parent-engine cards match narrative-sounding wording — and every one
+matched on `first`/`then` *sequencing language in a caregiver instruction*
+while its success criterion measures naming, pointing, placing objects in
+order, completing steps, producing a sound, or making a mark. Not one measures
+a child telling two events. The family is also absent from
+`BUCKET_REUSE_APPROVED`.
+
+Two adjacent skills must stay out, and both are deliberately unresolved in the
+taxonomy: `story_comprehension` is the **60m receptive** rung ("answers simple
+questions about a book or a story"), with a dedicated test forbidding its alias
+onto this family; and `daily_recall_narrative` is a **48m** rung ("talks about
+at least one thing that happened during her day"), which the two-event
+requirement is exactly what separates from this one.
+
+Counts are **derived, not quotas**. `early_vocalizations` was 6 at the original
+checkpoint because two proposed concepts — routine-embedded cooing and
+routine-embedded babble — turned out to be one activity at two rungs and were
+merged rather than kept apart to reach a number. It is 7 as of the
+founder/product review on 2026-10-27, which added `Peekaboo Sounds` as a
+deliberate seventh concept. **That merge still stands**; the seventh card is an
+addition, not an un-merge.
+
+The same counts are pinned in `EXPECTED_COUNTS`
+(`pilot_runtime/tests/test_clinical_review_ledger.py`), which is what makes a
+silent pad or thin impossible — a family whose size changes has to say so in
+both places.
+
+### A content constraint imposed by a machine rule
+
+`action_picture_labeling` cannot use the most natural action-picture verbs.
+`activity_validator._MOTOR_GAME_PATTERN` makes `jump`, `hop`, `toss`, `throw`,
+`catch`, `race` and `climb` **critical failures** in the instructions of any
+language-domain card — and the single rejected card in the live bank
+(`_BUCKET_VARIANTS[expressive_word][7]`, "Action Word Match") is an
+action-labeling card that failed exactly this way.
+
+The seven candidates therefore use `eating`, `drinking`, `reading`, `sleeping`,
+`washing`, `brushing`, `coloring` and `playing` — the last two added by the
+founder/product review on 2026-10-27, which also took this family from five
+candidates to seven. All three verbs in the canonical rung text itself —
+running, eating, playing — are safe.
+
+**If the reviewing clinician needs a blocked verb, that is flagged as a
+separate decision and never resolved by weakening the validator.** The ledger
+note on card 1 asks for exactly that confirmation.
+
+## Layout
+
+```
+clinical_review/
+  candidates/<family>.json     nine-field cards; NOT the generator's input
+  review_ledger.json           the sidecar: clinical status, keyed by template id
+  tools/ledger.py              every ledger rule, in one place
+  tools/build_review_packet.py renders the clinician's packet
+  tools/promote_approved.py    the only route into the bank; human-run
+  out/                         generated packets. GITIGNORED, never committed.
+```
+
+The filename stem is the canonical activity family, matching the convention the
+activity-bank generator already uses for `pilot_runtime/data/reviewed_cards/`.
+Nothing lists the families; they are derived from the filenames.
+
+## The schema is the production schema
+
+Candidate cards use **exactly** the nine fields in
+`pilot_backend/domain/activity_template.py::CARD_FIELDS`, and nothing else.
+There is no `review_status` field, no difficulty tier, no duration and no
+frequency — a card file that carries an extra key is refused here and would be
+refused by the generator too.
+
+Review status is a **sidecar** because `activity_template_id` is a digest over
+the family plus those nine fields. Adding a tenth would change the id of every
+template that already exists, along with the artifact digest and any evidence
+row naming a template.
+
+`source_tier` is **not** review status. It records where a card's words came
+from (`family_curated` / `bucket_curated`) and is deliberately not renamed to
+anything resembling clinical sign-off. Origin and approval are different claims
+and live in different places.
+
+## The lifecycle
+
+```
+generated_candidate → clinician_edited → clinician_approved → promoted
+                   ↘ rejected
+```
+
+**Approval names exact bytes.** Change one word and the template id changes, so
+the edited card has no approval and cannot be promoted; the old approval still
+refers to wording nobody will ship. "Approve with edits" needs no special
+handling — the edited card simply gets a new id, a new entry, and a
+`supersedes` pointer back. There is no transfer step, so there is nothing to
+get wrong.
+
+## Workflow
+
+```bash
+# 1. render the packets (writes to clinical_review/out/, gitignored)
+PYTHONPATH=. python -m clinical_review.tools.build_review_packet
+
+# 2. export the packets to the reviewing clinician; record each decision in
+#    review_ledger.json. A clinician_approved entry needs reviewer + decided_on.
+
+# 3. see what would be promoted. Dry run is the DEFAULT.
+PYTHONPATH=. python -m clinical_review.tools.promote_approved
+PYTHONPATH=. python -m clinical_review.tools.promote_approved --write
+
+# 4. regenerate the bank; every existing gate then runs unchanged
+PYTHONPATH=genex-parent python -m pilot_runtime.integration.activity_bank_generator
+```
+
+### Clinical approval does not bypass machine validation
+
+Promotion only moves bytes into the generator's input directory. The nine-field
+check, Parent's real `validate_activity`, the template-id computation and the
+CI drift gate all run afterwards exactly as before. An approved card whose
+`make_harder` says "climb higher" still fails the build. Both checks are
+necessary; neither is sufficient.
+
+## Packets are never committed
+
+A packet shows the clinician verbatim canonical milestone text and concrete
+`rung1:` references so a decision is made against the clinical target rather
+than against a card in isolation. Both are forbidden under `pilot_backend/` and
+`pilot_runtime/`, so packets render to `out/`, which is gitignored, and
+`assert_outside_guarded_trees` refuses any destination under either tree —
+checked on the resolved path, so `../pilot_runtime/x` is caught too.
+
+The durable record is the **ledger**: template ids, statuses, reviewer, date,
+and no milestone prose at all. A content-addressed id already identifies
+exactly which wording was approved.
+
+## `legacy_unresolved` is a migration register, not a status
+
+The 18 cards already admitted under `pilot_runtime/data/reviewed_cards/`
+predate this ledger. There is no evidence in the repository that a clinician
+explicitly approved them, and presence in a directory is not evidence. They are
+listed in `legacy_unresolved`, which asserts exactly one thing:
+
+> this template was admitted before explicit clinical-review provenance existed
+
+It never implies approval by Hannah or anyone else. The register **may shrink**
+as legacy cards receive real review; it **must never grow**. CI pins the
+migration baseline and fails on any addition, so a newly admitted card cannot
+be filed as "unresolved" instead of being approved.
+
+## One family serves several rungs — read this before judging difficulty
+
+The activity bank selects content by **family**, never by rung: the nine-field
+schema has no rung field, and `templates_for_families` returns every template
+for the families a goal's canonical anchor binds. So a family spanning a wide
+developmental range serves that whole range from one pool.
+
+`early_vocalizations` binds six rungs from 2 to 9 months. A child whose target
+is the 4-month cooing rung and a child whose target is the 9-month babble rung
+receive the **same** candidate pool. Each card must therefore be safe and
+useful across the whole span, with `make_easier` and `make_harder` carrying the
+range *inside* the card.
+
+### This is an explicit clinical-review requirement, not a note
+
+Founder decision: **the reviewing clinician must confirm that every
+`early_vocalizations` card is clinically safe and useful across the full 2–9
+month family span, not merely at its nominal anchor.** A card that is only
+right at its anchor must be rejected or rewritten, because there is currently
+no mechanism to restrict it to that rung.
+
+The review packet renders this as a bordered **Review requirement** block on
+every multi-rung family, naming the rung count and the span in months. It is
+deliberately absent on single-rung families such as `action_picture_labeling`,
+where there is no span to confirm; a test asserts both the presence and that
+absence, so the block cannot decay into boilerplate that appears everywhere
+and is therefore read nowhere.
+
+### Future architecture item — not a pilot blocker
+
+**Rung-level activity eligibility / filtering** would let a goal select only
+the cards appropriate to its target rung, instead of every card its families
+bind. That would need a rung dimension the card schema does not have, and
+adding one to `CARD_FIELDS` would rewrite every existing template id — so it
+is a versioned decision of its own, not an incremental change.
+
+Recorded here as a possible future direction. **Not built in Track 2, and not
+blocking the pilot**: the in-card `make_easier` / `make_harder` range plus the
+clinician's span confirmation is the approved strategy for now.
+
+## Known dependency, not addressed here
+
+Weekly allocation is deterministic and takes **no prior-cycle input**:
+`pilot_backend/weekly/allocator.py::allocate()` has no history parameter, and
+`difficulty_tier` has no consumer anywhere in `pilot_backend/` or
+`pilot_runtime/`. With the same goal and the same approved pool, Week 2 places
+the same activities as Week 1, however large the pool is. Extra approved
+content is necessary for rotation but not sufficient.
+
+Deferred to the later pilot plan by founder decision. **The allocator is not
+modified by Track 2.**

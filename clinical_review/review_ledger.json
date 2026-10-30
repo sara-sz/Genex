@@ -1,0 +1,565 @@
+{
+  "ledger_version": "genex-clinical-review-ledger-v1",
+  "entries": {
+    "atpl1:d970973944e15ae69ffa5dec3e819126": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Support gradient step 1 of 5, most supported: the caregiver performs the action, so the referent is live and shared. VERB SET IS CONSTRAINED BY A MACHINE RULE, NOT BY CLINICAL CHOICE: the content validator treats jump, hop, toss, throw, catch, race and climb as critical failures in any language card, so this card uses eating, washing and reading instead. Confirm that a verb set without those is clinically adequate for action labeling; if a blocked verb is clinically necessary, say so and it will be raised as a separate decision rather than worked around.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:99eb7ec785da7ba1fb85ffe9972a0662": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Support gradient step 2 of 5: the child's own action, which is the easiest referent after the caregiver's. Review focus: whether interrupting a child's own play to ask a question is appropriate here, and whether the natural-pause instruction is sufficient protection.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:0874e5c5a23ae528e47b27bf5f38fce9": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Support gradient step 3 of 5: a still image, but of familiar people. Review focus: whether family photos are a clinically useful intermediate step between live action and book pictures, or whether they add nothing over a book page.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:e7cc3a3e61ff9161939bc1124bfe9b79": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Support gradient step 4 of 5, and the milestone's OWN context: the canonical rung text names a picture or book. Review focus: page count, and whether one character per page is the right level of selectivity.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:493c8827f98983d85001907eff03d284": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Support gradient step 5 of 5, least supported: two agents in one image, requiring the child to hold one action while labeling another. Review focus: whether two actions is the right ceiling for this rung, and whether the make_harder reversal (find who is doing a named action) belongs here or in a receptive family.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:8fae563260053854936649de7078d5d2": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder BEFORE clinical review; no clinician input, and reviewer/decided_on are deliberately null. Supersedes atpl1:d970973944e15ae69ffa5dec3e819126, which was never approved and carries no approval to transfer. Support gradient step 1 of 5, most supported: the caregiver performs the action, so the referent is live and shared. VERB SET IS CONSTRAINED BY A MACHINE RULE, NOT BY CLINICAL CHOICE: the content validator treats jump, hop, toss, throw, catch, race and climb as critical failures in any language card, so this family uses eating, drinking, reading, sleeping, washing, brushing, coloring and playing instead. Confirm that a verb set without the blocked ones is clinically adequate for action labeling; if a blocked verb is clinically necessary, say so and it will be raised as a separate decision rather than worked around. CHANGE: the card is now explicit pretend play with recognisable props and alternating turns, with make_harder progressing to body-only acting. The superseded make_easier accepted 'a point or a look toward the answer', which let a RECEPTIVE response stand in for the expressive target; that is removed, and a nonverbal choice is now scaffolding only.",
+      "supersedes": "atpl1:d970973944e15ae69ffa5dec3e819126",
+      "adapted_from": null
+    },
+    "atpl1:36ad9d1a0549634de0b49ebca0454f4e": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:99eb7ec785da7ba1fb85ffe9972a0662, which was never approved. Support gradient step 2 of 5: the child's own action, the easiest referent after the caregiver's. CHANGE: make_easier now offers two SPOKEN choices and states outright that 'A nonverbal choice does not count as expressive success'; make_harder adds optional phrase expansion that is explicitly not required for success. Review focus: whether interrupting a child's own play to ask a question is appropriate here, and whether the natural-pause instruction is sufficient protection.",
+      "supersedes": "atpl1:99eb7ec785da7ba1fb85ffe9972a0662",
+      "adapted_from": null
+    },
+    "atpl1:02dd4cfcf20572b9c8ba754fe7b581a8": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:0874e5c5a23ae528e47b27bf5f38fce9, which was never approved. Support gradient step 3 of 5: a still image, but of familiar people. CHANGE: the photo count dropped from four or five to two or three, the card now steers away from working a stack like flash cards, and the child's own photos are named first. FOUNDER DECISION, 2026-10-27: on this card the optional expansion is guarded by 'keep action labeling as the primary target' rather than by the word 'optional' used on cards 2, 4 and 7. That wording is ACCEPTED as written — any related follow-up conversation happens only once action labeling is already easy, and the explicit success_criteria remains the authoritative definition of success. The card and its template id are unchanged for this decision. A clinician may still tighten this wording during clinical review, in which case the normal content-addressed id and provenance rules apply and the edit gets a new id. Review focus: whether family photos are a clinically useful intermediate step between live action and book pictures, or whether they add nothing over a book page.",
+      "supersedes": "atpl1:0874e5c5a23ae528e47b27bf5f38fce9",
+      "adapted_from": null
+    },
+    "atpl1:68ccd77cda669e1f57032064fc2c5b7d": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:e7cc3a3e61ff9161939bc1124bfe9b79, which was never approved. Support gradient step 4 of 5, and the milestone's OWN context: the canonical rung text names a picture or book. CHANGE: the card now stops naturally while reading rather than working five or six pages, and make_easier states that a nonverbal choice 'demonstrates understanding but does not count as expressive success'. Sentence expansion is offered and marked optional. Review focus: page count, and whether one character per page is the right level of selectivity.",
+      "supersedes": "atpl1:e7cc3a3e61ff9161939bc1124bfe9b79",
+      "adapted_from": null
+    },
+    "atpl1:36bf25ed15831196383629982ff1de86": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:493c8827f98983d85001907eff03d284 ('Busy Picture'), which was never approved. Support gradient step 5 of 5, least supported: several agents in one image. CHANGE: retitled to 'Pick One Action' and RE-ORDERED — the card now starts with ONE child-chosen action and only moves to a second in make_harder, where the superseded card asked for two actions in the base instructions and made two actions the success criterion. The superseded make_harder asked the child to find someone doing a NAMED action, which is a receptive task in an expressive family; that is removed. Review focus: whether two actions is the right ceiling for this rung.",
+      "supersedes": "atpl1:493c8827f98983d85001907eff03d284",
+      "adapted_from": null
+    },
+    "atpl1:77a95a163e5ed1218f6fd358e4a2b4d7": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. NEW SIXTH CANDIDATE, authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. It supersedes nothing. NOT PART OF THE ORIGINAL FIVE-STEP SUPPORT GRADIENT: it sits between gradient steps 1 and 3 — the referent is live and shared as at step 1, but with NO props at all, so it is less supported than the pretend-play card and more supported than a still image. Kept deliberately distinct from 'What Am I Doing?': that card is prop-supported pretend play progressing to body-only acting, while this one is an explicit guessing game with role reversal and no materials. FOUNDER DECISION, 2026-10-27: the core support gradient STAYS FIVE STEPS across the first five cards and is deliberately NOT converted into a seven-step linear difficulty gradient. This card and 'Mini Action Story' sit alongside that progression rather than extending it, and the 'step N of 5' records in the Track 2 suite are preserved as-is. No card wording changed for this decision. Review focus: whether a charades frame is appropriate at 36m, and whether having the child act out an action for the caregiver to guess competes with the expressive labeling target.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:6b2a95bc76183ba4279fbf22893a88b9": {
+      "activity_family_ref": "action_picture_labeling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. NEW SEVENTH CANDIDATE, authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. It supersedes nothing. NOT PART OF THE ORIGINAL FIVE-STEP SUPPORT GRADIENT: it sits beyond step 5 — several still pictures held together by a narrative frame. DELIBERATELY NOT A SEQUENCING OR NARRATION INTERVENTION: success is 'at least one action word while helping with the story'; the make_harder related-actions variation states that the main goal remains naming each action, and that understanding the order, producing 'first' and 'then', or retelling the sequence is an optional extension that must not be required for success. Review focus: whether a story frame risks drifting this family away from single-action labeling, and whether the two-related-actions variation belongs here or in a later narrative family.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:69702817b90ba435e5c7b575db187291": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Anchored at the 12m person-naming rung. Review focus: is a familiar-person name the right first target here, and is the arrival/departure moment frequent enough to be practicable?",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:c04d588bb0437f1c6c56db0a000ea1b4": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Anchored at the 12m person-naming rung, high-repetition variant. Review focus: round count and whether a reveal game competes with the naming target.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:f562e541df79bc55108f3607b75bebb4": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "12m to 15m bridge: maximum array simplification, one item only. Review focus: the adaptation narrowed the source from a two-item choice to one item and removed 'reach' from success, because a reach is a gesture outcome rather than a first-word outcome. Confirm that narrowing.",
+      "supersedes": null,
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['expressive_word'][0] 'Pick Your Toy'"
+    },
+    "atpl1:b9030e455771b9fc0213d75e9d00530e": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Anchored at 15m object naming, embedded in the snack routine. Review focus: the what_to_avoid line is the load-bearing part — food must never be contingent on a word.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:7015cc812377ad0cb64e04e09ff02b90": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "15m to 18m, embedded in bath and bedtime routines. Review focus: whether nightly repetition of one word is the right dose, and whether bedtime is an appropriate window at all.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:75020d1045c22f79ba398d154d1be321": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "15m recast/expansion card. Its target is the CAREGIVER's response: treating an approximation as the word rather than as an error. Review focus: is this clinically distinct from 'One Word, One Thing' (simplification) or do the two collapse into one activity?",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:c062d182c4ec09fd4432dc9a348cb742": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "Anchored at 18m: generalisation of a known word across contexts rather than acquisition of a new one. Review focus: whether generalisation or breadth of new words is the better 18m target.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:79e480b2ccc99485f2d7ecb0630fd964": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. This wording was revised by the founder BEFORE clinical review and has had no clinician input; the status is still generated_candidate and reviewer/decided_on are deliberately null. Supersedes atpl1:69702817b90ba435e5c7b575db187291, which was never approved and therefore carries no approval to transfer. CHANGE: the activity moved from an arrival/departure moment to a small set of photos of familiar people, with the live-arrival version kept only as a secondary opportunity, so practice no longer depends on somebody entering the room. Review focus: is a familiar-person name the right first target here, and is a photo set an adequate referent at the 12m rung?",
+      "supersedes": "atpl1:69702817b90ba435e5c7b575db187291",
+      "adapted_from": null
+    },
+    "atpl1:03857398879347566cacc0d6280d2517": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:c04d588bb0437f1c6c56db0a000ea1b4 ('Peek and Name'), which was never approved. CHANGE: retitled to 'Peekaboo Names'; the person who hides is now any very familiar person rather than the caregiver's own face, and an optional mirror variation was added. The mirror variation deliberately keeps the target on FAMILIAR-PERSON names and does not ask the child to identify themselves, which would be a different self-recognition target. Review focus: round count, whether a reveal game competes with the naming target, and whether the mirror variation belongs inside this card or as a card of its own.",
+      "supersedes": "atpl1:c04d588bb0437f1c6c56db0a000ea1b4",
+      "adapted_from": null
+    },
+    "atpl1:a12d0335f334b1ab0c320d4cec1aeb41": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:f562e541df79bc55108f3607b75bebb4 ('One Word, One Thing'), which was never approved. CHANGE: retitled to 'Favorite Things', and it REVERSES the earlier narrowing — the array is back to two or three familiar favorite objects rather than a single item. make_easier now adds an explicit receptive step ('Give me the ball' / 'Where's the ball?') and states that a correct look, point or hand-over shows participation and understanding but does NOT count as spoken-word success. Review focus: confirm that re-widening the array is right for a first-words target, and confirm the receptive-step wording leaves the expressive success criterion unambiguous.",
+      "supersedes": "atpl1:f562e541df79bc55108f3607b75bebb4",
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['expressive_word'][0] 'Pick Your Toy'"
+    },
+    "atpl1:1dc565ad660e3551e3707e2497f82d2c": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:b9030e455771b9fc0213d75e9d00530e ('Snack Words'), which was never approved. CHANGE: retitled to 'Snack Choices'; the activity is now a two-item CHOICE rather than naming a single food, and what_to_avoid was strengthened — it now forbids withholding the snack, demanding 'Say ___', and requiring correct pronunciation. make_easier states that choosing correctly shows communication and understanding but need not count as spoken-word success. Review focus: the what_to_avoid line is still the load-bearing part — food must never be contingent on a word.",
+      "supersedes": "atpl1:b9030e455771b9fc0213d75e9d00530e",
+      "adapted_from": null
+    },
+    "atpl1:dc14cad0ff29afbf65f43725330f5abd": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:7015cc812377ad0cb64e04e09ff02b90, which was never approved. The TITLE is unchanged ('Bath and Bedtime Words'); the body changed, so the id changed. CHANGE: the dose moved from 'the same word every night' to the same word across several days, and what_to_avoid now adds an explicit bath-time supervision sentence. THAT SUPERVISION SENTENCE IS CANDIDATE LANGUAGE DRAFTED OUTSIDE CLINICAL REVIEW AND NEEDS AN EXPLICIT DECISION: approve it, replace it, or supply standing wording. Review focus: whether several-day repetition of one word is the right dose, and whether bath time is an appropriate window at all.",
+      "supersedes": "atpl1:7015cc812377ad0cb64e04e09ff02b90",
+      "adapted_from": null
+    },
+    "atpl1:8ce3a7e5bb00817c5754654af54899db": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. This is a COMPLETE REPLACEMENT of atpl1:75020d1045c22f79ba398d154d1be321 ('Say It Your Way'), not an edit of it. The superseded card's target was the CAREGIVER's response — treating an approximation as the word rather than as an error — and its ledger note asked whether that was clinically distinct from the simplification card or collapsed into it. The founder resolved that by replacing it with a different activity: a surprise box producing one familiar object at a time. Review focus: confirm the recast/expansion concept is adequately covered by the 'accept any attempt, then model the full word' instruction now carried by every card in this family, or say so if it needs a card of its own.",
+      "supersedes": "atpl1:75020d1045c22f79ba398d154d1be321",
+      "adapted_from": null
+    },
+    "atpl1:b0eb9f7e0e847c69984900b04429ec79": {
+      "activity_family_ref": "expressive_first_words",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. This is a COMPLETE REPLACEMENT of atpl1:c062d182c4ec09fd4432dc9a348cb742 ('Words Around the House'), not an edit of it. The superseded card targeted generalisation of a known word across rooms; this one targets object-to-photo matching with the object's name modelled at the moment of the match. Its success criterion is deliberately TWO-PART — the match shows understanding, the sound or word attempt is the expressive part — so a child who matches silently has not met it. Review focus: whether a matching task belongs in an EXPRESSIVE family at all rather than a receptive one, and whether the make_harder step (a different photo of the same kind of object) is the right generalisation move for the 18m rung.",
+      "supersedes": "atpl1:c062d182c4ec09fd4432dc9a348cb742",
+      "adapted_from": null
+    },
+    "atpl1:cdc591d639808c7ef952fb057634d515": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION: the positioning and supervision sentence in what_to_avoid was drafted by Track 2 and is not established guidance. Approve it, replace it, or supply standing wording. Content anchored at the 4m cooing rung, reaching down to 2m via make_easier.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:1f6ba8efea00dc1bf54d44f979aebf55": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Anchored at the 6m raspberry/tongue rung. The adaptation dropped the source card's spoken cue ('Say you try!'), which presumes verbal comprehension the 6m rung does not assume, and reduced it to model, pause, answer.",
+      "supersedes": null,
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['sound'][2] 'Silly Sounds Mirror'"
+    },
+    "atpl1:9c8fc5e0bb249f3cc1db3f034b08e9a4": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Anchored at the 6m squealing rung (pitch and intensity range). Review focus: the loudness guidance, and whether squealing is a target a caregiver should be prompted to elicit at all.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:05904049483a92bd232d54e5944807cf": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Anchored at the 6m sound turn-taking rung. The adaptation kept the 'copy it back exactly' contingency from the source card but removed the toy, because the rung is VOCAL turn-taking rather than object-mediated turn-taking.",
+      "supersedes": null,
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['sound'][2] 'Silly Sounds Mirror' + [4] 'Noisy Toy Turn'"
+    },
+    "atpl1:be7588fa50653b56ecc1e822d8123978": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Anchored at the 9m reduplicated-babble rung. make_easier deliberately reaches down to any single vowel so the card stays safe if it is allocated to a child whose target is 4m — see README on why one family serves a 2m-to-9m span.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:84d62c7bb7803faf47361eba8e933e60": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. Spans the whole band: the same sound at the same step of one daily routine. This card absorbed two earlier concepts (routine-embedded cooing and routine-embedded babble) that proved to be one activity at different rungs.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:4f63d51c374a30ac751bdfc7f85db41d": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder BEFORE clinical review; no clinician input, and reviewer/decided_on are deliberately null. Supersedes atpl1:cdc591d639808c7ef952fb057634d515, which was never approved and carries no approval to transfer. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION: the positioning and supervision sentence in what_to_avoid is founder-drafted and is not established guidance. CHANGE: the specific 'eight to twelve inches apart' distance and the 'wait five seconds' timing were dropped in favour of comfortable positioning and a short pause. More importantly, the superseded make_easier counted 'a change in breathing, a look, or a small movement' as a response, which blurred engagement into vocalization; the new make_easier names those as engagement and then says explicitly to wait for a vocal sound before counting vocalization success. Review focus: confirm the supervision wording, and confirm the engagement-versus-vocalization split reads correctly at the 2m end of the span.",
+      "supersedes": "atpl1:cdc591d639808c7ef952fb057634d515",
+      "adapted_from": null
+    },
+    "atpl1:2e4054d572b465aa6b94bc42baf7df82": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:1f6ba8efea00dc1bf54d44f979aebf55 ('Blow and Buzz'), which was never approved. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. CHANGE: retitled to 'Silly Mouth Sounds'. The superseded card told the caregiver to 'stick your tongue out and blow gently' and made watching the caregiver's mouth part of the success criterion. The new card drops the tongue protrusion, models only a gentle raspberry or lip buzz, and makes success any non-crying sound or playful lip attempt. what_to_avoid now explicitly forbids manipulating the child's lips or tongue and forbids physically showing them how to make the sound. Review focus: confirm this reads as sound PLAY carrying no oral-motor treatment implication, and confirm the no-manipulation sentence is worded correctly.",
+      "supersedes": "atpl1:1f6ba8efea00dc1bf54d44f979aebf55",
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['sound'][2] 'Silly Sounds Mirror'"
+    },
+    "atpl1:6d747e0685b58f2d15bc9d4f572eaa36": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:9c8fc5e0bb249f3cc1db3f034b08e9a4 ('High and Low'), which was never approved. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. CHANGE: retitled to 'High and Low Sounds', and LOUDNESS WAS DELIBERATELY REMOVED AS A TARGET. The superseded card contrasted quiet against louder and accepted 'a change in loudness' as success; its ledger note asked whether squealing is something a caregiver should be prompted to elicit at all. The new card contrasts only gentle PITCH, and what_to_avoid now forbids trying to make the child louder, encouraging screaming, or making very loud sounds close to the child. REVIEW FOCUS, AND A REAL TENSION TO RESOLVE: this family binds a 6m squealing rung concerned with pitch AND intensity range. Confirm that dropping loudness and squealing as elicited targets is clinically right; if squealing must remain an explicit target, say so and it will be raised as its own decision rather than quietly reinstated.",
+      "supersedes": "atpl1:9c8fc5e0bb249f3cc1db3f034b08e9a4",
+      "adapted_from": null
+    },
+    "atpl1:8c420f415652dd6f1cacc93f50b6e519": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:05904049483a92bd232d54e5944807cf, which was never approved. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. CHANGE: the superseded card required copying the child's sound 'exactly as they made it' and specified four or five turns each; the new card asks for a copy or a similar sound and leaves the length open. success_criteria now requires a vocal sound AND participation in at least one back-and-forth exchange, with make_easier making clear the exchange may begin from a sound the child made spontaneously — so a child who cannot yet respond to a model is not excluded. Review focus: confirm the two-part success criterion is reachable at the 2m end of the span.",
+      "supersedes": "atpl1:05904049483a92bd232d54e5944807cf",
+      "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['sound'][2] 'Silly Sounds Mirror' + [4] 'Noisy Toy Turn'"
+    },
+    "atpl1:fd23380c10138915fe9ca99895c5f178": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:be7588fa50653b56ecc1e822d8123978, which was never approved and carries no approval to transfer. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. CHANGE: success_criteria was split so the family span is carried INSIDE the card — any vocal sound meets it, and a consonant-vowel attempt such as 'ba' or 'ma' is named as an ADDITIONAL sign of progress for a child who is already babbling while being explicitly not required. FOUNDER-DIRECTED SCHEMA DECISION: the people/photos variation was folded into instructions as an optional sentence rather than added as a tenth field, so CARD_FIELDS is unchanged and no second content schema exists. It is phrased as interest-based and rung-neutral ('if your child enjoys looking at familiar people or family photos') and states that the goal is back-and-forth sound play, not getting the child to say the person's name. CONSISTENCY EDIT, same founder pass: materials now reads 'No materials needed; optional photo of a familiar person.' so the field agrees with the optional variation while the core activity still needs nothing. That edit changed the authored bytes and therefore the id; `supersedes` deliberately still names the last COMMITTED candidate rather than the intermediate working-tree revision, which exists in no commit. Review focus: confirm the optional photo variation does not pull this pre-verbal card toward a naming target.",
+      "supersedes": "atpl1:be7588fa50653b56ecc1e822d8123978",
+      "adapted_from": null
+    },
+    "atpl1:810ffec4fb72c5d3ebf851c2553eb45f": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:84d62c7bb7803faf47361eba8e933e60, which was never approved. PRE-VERBAL SAFETY WORDING IS STILL CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION. CHANGE: FEEDING WAS REMOVED FROM THE SUGGESTED ROUTINES. The superseded card offered 'changing, bathing, or feeding' as examples; the new materials offers diaper changing, getting dressed, bath time, stroller time and getting ready for bed, so no card in this family now embeds sound play in a feeding routine. make_easier also adds that the child does not need to copy the caregiver's sound. Review focus: confirm that excluding feeding is correct, and confirm the routine list carries no oral-motor or feeding-treatment implication.",
+      "supersedes": "atpl1:84d62c7bb7803faf47361eba8e933e60",
+      "adapted_from": null
+    },
+    "atpl1:ad700dd91c3c4062f4b052b7c8eae7c7": {
+      "activity_family_ref": "early_vocalizations",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. NEW SEVENTH CANDIDATE, authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. It supersedes nothing — this is the card that takes the family from 6 candidates to 7. PRE-VERBAL SAFETY WORDING IS CANDIDATE LANGUAGE AND NEEDS AN EXPLICIT DECISION: the startle guidance in what_to_avoid ('do not suddenly shout Boo! or try to startle your child') is founder-drafted and is not established guidance. CONCEPT: a peekaboo reveal used as the occasion for a sound exchange, with success allowing vocalization in ANTICIPATION of the reveal as well as after it. Review focus: whether a hiding-and-reveal game is appropriate across the full 2-9 month span, given that object permanence is not established at the early end, and whether anticipatory vocalization is a defensible success marker at this age.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:9c31400b90e046d319c28d1317cd1f51": {
+      "activity_family_ref": "function_question_answering",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: function_question_answering had ZERO candidate and ZERO reviewed content before this card. NO EXISTING CONTENT WAS REUSED \u2014 the only curated card in the Parent engine that mentions a function question is `_BUCKET_VARIANTS['expressive_word'][6]` 'Quick Naming Walk', whose success criterion is NAMING objects and whose function question is a make_harder aside; reusing it would have substituted object naming for the function skill, and this family is not in BUCKET_REUSE_APPROVED so the generator would admit none of it anyway. SUCCESS IS SEMANTIC, NOT SYNTACTIC: a one-word answer counts when it gives the use, and no card requires four or more words \u2014 sentence length belongs to sentence_building. Mechanism 1 of 7 \u2014 REAL OBJECTS, direct question. The most supported form: the referent is in the child's hands and the question is asked about it directly. This is the baseline the other six vary from, and the only card where the object, the question and the answer all sit in the same moment. make_easier names the three NONVERBAL responses that must not count (pointing, demonstrating the use, picking the object up) and says to wait for a spoken answer. Review focus: is a one-word answer such as 'drinking' the right floor for this rung, and is the 'less obvious use' example (a towel, a lid) still familiar enough at 48 months?",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:477b5663ae56d734795c1ebb860af36c": {
+      "activity_family_ref": "function_question_answering",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: function_question_answering had ZERO candidate and ZERO reviewed content before this card. NO EXISTING CONTENT WAS REUSED \u2014 the only curated card in the Parent engine that mentions a function question is `_BUCKET_VARIANTS['expressive_word'][6]` 'Quick Naming Walk', whose success criterion is NAMING objects and whose function question is a make_harder aside; reusing it would have substituted object naming for the function skill, and this family is not in BUCKET_REUSE_APPROVED so the generator would admit none of it anyway. SUCCESS IS SEMANTIC, NOT SYNTACTIC: a one-word answer counts when it gives the use, and no card requires four or more words \u2014 sentence length belongs to sentence_building. Mechanism 2 of 7 \u2014 RECEPTIVE CHOICE AS SCAFFOLD, then the expressive question. Distinct from card 1 because the child first locates the object BY ITS USE and only then says what it is for, so the receptive and expressive halves are separated and can be scaffolded independently. success_criteria states outright that the choice is scaffolding and does not count on its own. FOUNDER DECISION, 2026-10-28: retitled from 'Choose, Then Say Why' to 'Choose, Then Tell Me'. The original heading could be read as causal or abstract why-reasoning, which is explicitly outside this family; the card never asks 'why' and must not. The title is authored content, so this re-keyed the card to a new content-addressed id. NOTHING ELSE CHANGED \u2014 the theme, materials, instructions, success criterion, easier/harder progression, group line and what_to_avoid are byte-identical, and `supersedes` stays null because the pre-rename id existed only inside this one uncommitted authoring session and must not survive as committed provenance.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:99f8919922943160eb1b03ceb18a2bfd": {
+      "activity_family_ref": "function_question_answering",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: function_question_answering had ZERO candidate and ZERO reviewed content before this card. NO EXISTING CONTENT WAS REUSED \u2014 the only curated card in the Parent engine that mentions a function question is `_BUCKET_VARIANTS['expressive_word'][6]` 'Quick Naming Walk', whose success criterion is NAMING objects and whose function question is a make_harder aside; reusing it would have substituted object naming for the function skill, and this family is not in BUCKET_REUSE_APPROVED so the generator would admit none of it anyway. SUCCESS IS SEMANTIC, NOT SYNTACTIC: a one-word answer counts when it gives the use, and no card requires four or more words \u2014 sentence length belongs to sentence_building. Mechanism 3 of 7 \u2014 ROUTINE-EMBEDDED, object not yet in hand. Distinct from cards 1 and 2 because the question arrives inside something the family already does and the answer precedes the object rather than describing it. That is also what makes the safety line load-bearing: what_to_avoid forbids delaying or holding back a coat, a toothbrush, food or the bathroom while waiting for an answer, and says to hand it over and ask another day. Review focus: confirm one question per occasion is the right dose, and that fetching the item without speaking is correctly treated as understanding rather than success.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:6cd9b0480acc68d037922c129f0c397c": {
+      "activity_family_ref": "function_question_answering",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: function_question_answering had ZERO candidate and ZERO reviewed content before this card. NO EXISTING CONTENT WAS REUSED \u2014 the only curated card in the Parent engine that mentions a function question is `_BUCKET_VARIANTS['expressive_word'][6]` 'Quick Naming Walk', whose success criterion is NAMING objects and whose function question is a make_harder aside; reusing it would have substituted object naming for the function skill, and this family is not in BUCKET_REUSE_APPROVED so the generator would admit none of it anyway. SUCCESS IS SEMANTIC, NOT SYNTACTIC: a one-word answer counts when it gives the use, and no card requires four or more words \u2014 sentence length belongs to sentence_building. Mechanism 4 of 7 \u2014 VIOLATION OF EXPECTATION. Distinct from every other card because the child is not answering a neutral question but correcting a deliberate, obvious error, which recruits function knowledge through protest rather than through recall. success_criteria is explicit that laughing or saying 'no' is a good start but is NOT the success; the spoken real use is. Review focus: whether a deliberate-error game is appropriate at 48 months, and whether the safety framing is sufficient \u2014 what_to_avoid requires every mix-up to be harmless if imitated, states that the only thing corrected is the caregiver's own playful mistake, and says to stop if the child seems confused rather than amused.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:39dd0275f870b7aeb32ff9bf5e0e97de": {
+      "activity_family_ref": "function_question_answering",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: function_question_answering had ZERO candidate and ZERO reviewed content before this card. NO EXISTING CONTENT WAS REUSED \u2014 the only curated card in the Parent engine that mentions a function question is `_BUCKET_VARIANTS['expressive_word'][6]` 'Quick Naming Walk', whose success criterion is NAMING objects and whose function question is a make_harder aside; reusing it would have substituted object naming for the function skill, and this family is not in BUCKET_REUSE_APPROVED so the generator would admit none of it anyway. SUCCESS IS SEMANTIC, NOT SYNTACTIC: a one-word answer counts when it gives the use, and no card requires four or more words \u2014 sentence length belongs to sentence_building. Mechanism 5 of 7 \u2014 REPRESENTATIONAL STEP. The object is a picture rather than a thing, which is a real cognitive step up from card 1 and the reason this is not redundant with it. DELIBERATELY NOT AN OBJECT-NAMING CARD: success_criteria states that naming the pictured object is not the success on its own, and the instructions tell the caregiver to say a volunteered name back and then re-ask the use question. make_easier bridges real object -> picture of the same object. Review focus: confirm the naming/use boundary is drawn clearly enough that this cannot drift into book_object_naming.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:d4d39c15bf1b7cfc7607b1ac05c29701": {
+      "activity_family_ref": "function_question_answering",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: function_question_answering had ZERO candidate and ZERO reviewed content before this card. NO EXISTING CONTENT WAS REUSED \u2014 the only curated card in the Parent engine that mentions a function question is `_BUCKET_VARIANTS['expressive_word'][6]` 'Quick Naming Walk', whose success criterion is NAMING objects and whose function question is a make_harder aside; reusing it would have substituted object naming for the function skill, and this family is not in BUCKET_REUSE_APPROVED so the generator would admit none of it anyway. SUCCESS IS SEMANTIC, NOT SYNTACTIC: a one-word answer counts when it gives the use, and no card requires four or more words \u2014 sentence length belongs to sentence_building. Mechanism 6 of 7 \u2014 MORE THAN ONE USE. Distinct because it probes the breadth of a function concept rather than its presence: the same object has two everyday uses. ONE answer remains the target \u2014 success_criteria says a second use is welcome but not required, and what_to_avoid forbids pressing for a second once the first has been given. Review focus: whether multi-use objects are developmentally fair at 48 months, and whether the chosen examples (towel, chair, paper) have two uses a 4-5 year old has genuinely SEEN rather than two an adult can think of.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:9ea14c597af4e8895fa5c1f8b017a8c7": {
+      "activity_family_ref": "function_question_answering",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: function_question_answering had ZERO candidate and ZERO reviewed content before this card. NO EXISTING CONTENT WAS REUSED \u2014 the only curated card in the Parent engine that mentions a function question is `_BUCKET_VARIANTS['expressive_word'][6]` 'Quick Naming Walk', whose success criterion is NAMING objects and whose function question is a make_harder aside; reusing it would have substituted object naming for the function skill, and this family is not in BUCKET_REUSE_APPROVED so the generator would admit none of it anyway. SUCCESS IS SEMANTIC, NOT SYNTACTIC: a one-word answer counts when it gives the use, and no card requires four or more words \u2014 sentence length belongs to sentence_building. Mechanism 7 of 7 \u2014 FUNCTION-TO-OBJECT, the reverse direction. Every other card gives the object and asks the use; this one gives the need and asks for the object. That inversion is why it is not redundant with card 3, which also starts from a situation but names the activity rather than describing a problem. Bounded deliberately: what_to_avoid rules out riddles, guessing games and anything needing several steps of reasoning, and requires every situation to be ordinary and safe. Review focus: confirm the three example situations are concrete enough, and that this stays function retrieval rather than becoming inference.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:90384269c8fd75738ea7694ecd509fce": {
+      "activity_family_ref": "sentence_building",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. THESE DO NOT REPLACE THE LIVE SIX. `pilot_runtime/data/reviewed_cards/sentence_building.json` is untouched, its six ids are unchanged, and all six remain in `legacy_unresolved` \u2014 which asserts only that they were admitted before explicit clinical-review provenance existed, never that anyone approved them. Replacement is a later, explicit promotion decision. THE 48m TARGET IS FOUR OR MORE WORDS and this set measures it: the audit found none of the legacy six required it, five of six were requests or fixed social formulas, and commenting, single-event recount, negation and systematic expansion were absent. ENTIRELY NEW \u2014 no legacy card does this. Mechanism: direct expansion of the child's OWN spontaneous 2-3 word message into a 4+ word sentence, with the caregiver answering the meaning first so the exchange stays a conversation. This is the card that owns the milestone bar: the legacy set had the recast habit scattered through its make_easier lines but no card whose target was the expansion itself. Review focus: is caregiver expansion the right primary mechanism at 48m, and is 'three or four moments across a day' the right dose?",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:ed33ca1b6566b26857fb48175cc71be2": {
+      "activity_family_ref": "sentence_building",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. THESE DO NOT REPLACE THE LIVE SIX. `pilot_runtime/data/reviewed_cards/sentence_building.json` is untouched, its six ids are unchanged, and all six remain in `legacy_unresolved` \u2014 which asserts only that they were admitted before explicit clinical-review provenance existed, never that anyone approved them. Replacement is a later, explicit promotion decision. THE 48m TARGET IS FOUR OR MORE WORDS and this set measures it: the audit found none of the legacy six required it, five of six were requests or fixed social formulas, and commenting, single-event recount, negation and systematic expansion were absent. DIRECT REVISION of the legacy card 'Who Is Doing What' (atpl1:2c317105a4151f55be1d2122a16fc3fc), which the audit found to be the only strongly generative card in the live six. `supersedes` names that legacy id and this is the ONLY card in this set that does. CHANGE: the legacy success criterion accepted 'a three-to-four word sentence', so three words satisfied it; this one requires four or more and says outright that a single action word is NOT success, which is the boundary against action_picture_labeling. The legacy make_harder changed one element of the scene \u2014 variety, not length \u2014 so this one extends the sentence instead. FOUNDER DECISION, 2026-10-28: what_to_avoid was rewritten. The earlier wording said not to correct word order or pronunciation 'while the meaning is clear', which read as though syntax were irrelevant \u2014 and syntax is precisely what a SENTENCE-building family is about. It now forbids interrupting the interaction to correct grammar, word order or pronunciation, and directs the caregiver to model the natural version back once and continue. Corrective drilling is still excluded; the implication that structure does not matter is gone. That edit re-keyed the card; `supersedes` still names the same legacy id and no approval transfers, because there was never one to transfer. Review focus: confirm raising the bar from three to four is right for this rung, and that 'model the natural version back once' is the right level of support.",
+      "supersedes": "atpl1:2c317105a4151f55be1d2122a16fc3fc",
+      "adapted_from": null
+    },
+    "atpl1:e484811455e5541d94d984bb8df0185f": {
+      "activity_family_ref": "sentence_building",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. THESE DO NOT REPLACE THE LIVE SIX. `pilot_runtime/data/reviewed_cards/sentence_building.json` is untouched, its six ids are unchanged, and all six remain in `legacy_unresolved` \u2014 which asserts only that they were admitted before explicit clinical-review provenance existed, never that anyone approved them. Replacement is a later, explicit promotion decision. THE 48m TARGET IS FOUR OR MORE WORDS and this set measures it: the audit found none of the legacy six required it, five of six were requests or fixed social formulas, and commenting, single-event recount, negation and systematic expansion were absent. ENTIRELY NEW. Mechanism: extend a subject-action sentence with a LOCATION, which is the cheapest reliable way to cross from three words to four or more. Deliberately NOT a preposition test \u2014 what_to_avoid says that if the place word is wrong but the sentence is long, that is still success. A spoken place is required; pointing at it does not count. Review focus: whether location is the right first expansion element, or whether an object or a describing word would be easier at 48m.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:a1f5fc896bbe22d84eada9799f84bd89": {
+      "activity_family_ref": "sentence_building",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. THESE DO NOT REPLACE THE LIVE SIX. `pilot_runtime/data/reviewed_cards/sentence_building.json` is untouched, its six ids are unchanged, and all six remain in `legacy_unresolved` \u2014 which asserts only that they were admitted before explicit clinical-review provenance existed, never that anyone approved them. Replacement is a later, explicit promotion decision. THE 48m TARGET IS FOUR OR MORE WORDS and this set measures it: the audit found none of the legacy six required it, five of six were requests or fixed social formulas, and commenting, single-event recount, negation and systematic expansion were absent. ENTIRELY NEW, and it fills the function the audit found entirely absent: talking about something that happened. DELIBERATELY BELOW narration_storytelling. success_criteria is ONE event in one sentence and states that two events, an order of events, and a beginning and end are NOT required \u2014 the 60m narration rung owns those, and importing them here would make two families test the same thing. what_to_avoid repeats the boundary in caregiver language. Review focus: confirm single-event recount belongs in sentence_building rather than being deferred to the narration family.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:0cc74abe5a8961b8373173edc60035be": {
+      "activity_family_ref": "sentence_building",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. THESE DO NOT REPLACE THE LIVE SIX. `pilot_runtime/data/reviewed_cards/sentence_building.json` is untouched, its six ids are unchanged, and all six remain in `legacy_unresolved` \u2014 which asserts only that they were admitted before explicit clinical-review provenance existed, never that anyone approved them. Replacement is a later, explicit promotion decision. THE 48m TARGET IS FOUR OR MORE WORDS and this set measures it: the audit found none of the legacy six required it, five of six were requests or fixed social formulas, and commenting, single-event recount, negation and systematic expansion were absent. ENTIRELY NEW, and the other function the audit found absent: COMMENTING WITHOUT A DIRECT QUESTION PROMPT. Distinct from every other card because success is a telling rather than an answer: success_criteria requires a 4+ word comment that is not a response to a caregiver question, and what_to_avoid forbids the two questions that would turn it back into labelling ('What do you see?', 'What is that?'). FOUNDER DECISION, 2026-10-28 on terminology: do NOT describe this as 'spontaneous commenting' or an 'unprompted' utterance. The caregiver sets it up deliberately \u2014 making something worth remarking on and modelling a comment before pausing \u2014 so calling it unprompted would misdescribe both the method and what the caregiver is being asked to judge. What is absent is the direct QUESTION, not the adult's involvement. The card's own nine fields are accepted as written and are unchanged, so this card's template id is unchanged. Review focus: whether 'a comment that is not an answer to a question' is a boundary a caregiver can apply in the moment.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:8dfb45f1c7463378a3aa69a65c874d48": {
+      "activity_family_ref": "sentence_building",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. THESE DO NOT REPLACE THE LIVE SIX. `pilot_runtime/data/reviewed_cards/sentence_building.json` is untouched, its six ids are unchanged, and all six remain in `legacy_unresolved` \u2014 which asserts only that they were admitted before explicit clinical-review provenance existed, never that anyone approved them. Replacement is a later, explicit promotion decision. THE 48m TARGET IS FOUR OR MORE WORDS and this set measures it: the audit found none of the legacy six required it, five of six were requests or fixed social formulas, and commenting, single-event recount, negation and systematic expansion were absent. ENTIRELY NEW. Mechanism: sentence-level NEGATION, a syntactic form absent from the legacy six altogether. success_criteria requires a real negation INSIDE a 4+ word sentence and says a single 'no' is clear communication but not this card's target. The elicitation is the caregiver being playfully wrong, never deprivation: what_to_avoid forbids holding back something the child wants or needs in order to provoke a protest, requires the pretence to end the moment the child corrects it, and rules out anything the child is already upset about. Review focus: confirm the playful-error setup cannot read as teasing.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:6eea397a747cfe0bdb497ddb2fde9b48": {
+      "activity_family_ref": "sentence_building",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. THESE DO NOT REPLACE THE LIVE SIX. `pilot_runtime/data/reviewed_cards/sentence_building.json` is untouched, its six ids are unchanged, and all six remain in `legacy_unresolved` \u2014 which asserts only that they were admitted before explicit clinical-review provenance existed, never that anyone approved them. Replacement is a later, explicit promotion decision. THE 48m TARGET IS FOUR OR MORE WORDS and this set measures it: the audit found none of the legacy six required it, five of six were requests or fixed social formulas, and commenting, single-event recount, negation and systematic expansion were absent. CONSOLIDATES IDEAS FROM SEVERAL LEGACY CARDS BUT SUPERSEDES NONE, and `supersedes` is null for a MODEL REASON, not an oversight: the field is a single string, so a one-to-many lineage is not representable, and naming one of the four request cards would be a false claim about the other three. The relationship recorded here in prose is the truthful one. It draws on 'I Want Bubbles' (atpl1:9b9eb883a67400556702486fc177e75b), 'Help Me Open' (atpl1:9b0facf380b755262eadbf9d76820e7a) and 'I Need a Break' (atpl1:797708a5514fd175e24bf0bac3f2a8ff) \u2014 one functional-request card replacing four, so requests no longer dominate the family. THE SAFETY CARVE-OUT IS THE POINT: success is a 4+ word sentence only in an ordinary NON-ESSENTIAL practice moment, and a short message about something the child genuinely needs is recorded as successful communication, honoured at once, and explicitly not a failed attempt. The legacy line 'Never ignore a clear request to stop in order to get a longer sentence.' is carried over VERBATIM. FOUNDER DECISION, 2026-10-28: the caregiver-facing framing was changed and the card re-keyed. It previously said to practise when the child wants 'something they do not actually need', which asks a caregiver to adjudicate whether a child's desire is a real need \u2014 not a judgement this activity should require of them, and one that could be got wrong in the direction that matters. The operative distinction is now stated as the situation rather than the child's motive: a LOW-STAKES PREFERRED ITEM, ACTIVITY OR TURN THAT CAN BE PROVIDED RIGHT AWAY, kept separate from essential, safety and self-advocacy messages. EVERY PROTECTION IS UNCHANGED: the item or turn is handed over whether or not the sentence got longer; stop, a break, pain, the toilet, food, water, comfort, safety and help are responded to immediately; one word, a gesture, a sign, a device or a look all remain valid communication; and the legacy line 'Never ignore a clear request to stop in order to get a longer sentence.' is still carried verbatim. Review focus: confirm the low-stakes / essential split is drawn in language a caregiver can apply in the moment.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:630edfcc5ab5550cd7e2ced74c88dc6f": {
+      "activity_family_ref": "narration_storytelling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: narration_storytelling had ZERO candidate and ZERO reviewed content, and it is the LAST planned 3-5y family. NO EXISTING CONTENT WAS REUSED, and the search was not cursory: 15 curated Parent-engine cards match narrative-sounding wording, and every one of them matched on 'first/then' SEQUENCING LANGUAGE IN A CAREGIVER INSTRUCTION while its success criterion measures naming, pointing, placing objects in order, completing steps, producing a sound or making a mark. Not one measures a child telling two events. The family is also absent from BUCKET_REUSE_APPROVED, so the generator would admit none of it anyway. THE TARGET IS EVENT STRUCTURE, NOT SENTENCE LENGTH: no card imposes a word count, and two events may arrive as two sentences or one compound sentence with imperfect grammar. Mechanism 1 of 7 \u2014 REAL RECENT EVENTS, no stimulus. Stimulus/support: the child's own experience, optionally an object or photo. Distinct from 'My Photo Story' (mechanism 5) in what carries the memory: here the events are retrieved from experience with the caregiver's model as the only scaffold, whereas there two photographs hold the sequence in front of the child. That is a real difference in retrieval demand, not a change of topic. Easier -> harder: events from minutes ago with an object and a starter -> no cue, no model, earlier in the day, optional third event. BOUNDARY, 48m vs 60m: the workbook's `daily_recall_narrative` is a 48m skill reading 'talks about at least one thing that happened during her day', and it sits in AMBIGUOUS_UNRESOLVED. This card requires TWO things, which is exactly what separates the two rungs \u2014 a one-event recount is sentence_building's 'Tell Me What Happened', and success_criteria says so in as many words. Review focus: confirm two real events is the right entry point for this rung.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:49c6fc358b7b7095daccc96cf9771e0b": {
+      "activity_family_ref": "narration_storytelling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: narration_storytelling had ZERO candidate and ZERO reviewed content, and it is the LAST planned 3-5y family. NO EXISTING CONTENT WAS REUSED, and the search was not cursory: 15 curated Parent-engine cards match narrative-sounding wording, and every one of them matched on 'first/then' SEQUENCING LANGUAGE IN A CAREGIVER INSTRUCTION while its success criterion measures naming, pointing, placing objects in order, completing steps, producing a sound or making a mark. Not one measures a child telling two events. The family is also absent from BUCKET_REUSE_APPROVED, so the generator would admit none of it anyway. THE TARGET IS EVENT STRUCTURE, NOT SENTENCE LENGTH: no card imposes a word count, and two events may arrive as two sentences or one compound sentence with imperfect grammar. Mechanism 2 of 7 \u2014 TWO PICTURES holding the sequence. Stimulus/support: a pre-made pair showing one character doing two connected things. Distinct from 'Fix My Mixed-Up Story' (mechanism 6) because nothing is wrong here: the child reads a correct sequence off the pictures, where mechanism 6 withholds the correct order and makes the child supply it from knowledge. Easier -> harder: a very familiar pair with a model -> an unseen pair, then the pair set aside, then a third picture. BOUNDARY vs RECEPTIVE SEQUENCING: success_criteria states that putting the pictures in the right order, pointing at them, or naming what is in them is NOT success on its own, and what_to_avoid forbids making 'which one comes first?' the point. Review focus: confirm the ordering/telling line is drawn clearly enough that a caregiver will not score a correct arrangement as a story.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:c504971ce148c5a537109e2c60ca2eeb": {
+      "activity_family_ref": "narration_storytelling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: narration_storytelling had ZERO candidate and ZERO reviewed content, and it is the LAST planned 3-5y family. NO EXISTING CONTENT WAS REUSED, and the search was not cursory: 15 curated Parent-engine cards match narrative-sounding wording, and every one of them matched on 'first/then' SEQUENCING LANGUAGE IN A CAREGIVER INSTRUCTION while its success criterion measures naming, pointing, placing objects in order, completing steps, producing a sound or making a mark. Not one measures a child telling two events. The family is also absent from BUCKET_REUSE_APPROVED, so the generator would admit none of it anyway. THE TARGET IS EVENT STRUCTURE, NOT SENTENCE LENGTH: no card imposes a word count, and two events may arrive as two sentences or one compound sentence with imperfect grammar. Mechanism 3 of 7 \u2014 CARRIER PHRASE, child supplies the second event. Stimulus/support: the caregiver's spoken first event and nothing else. The only card where the caregiver provides half the narrative by design, which is what makes it the lowest-demand entry to a two-event structure. Easier -> harder: a daily routine with two spoken endings to choose between -> no choices, then a third event, then the child starts and the caregiver finishes. BOUNDARY vs PREDICTION/REASONING: success_criteria requires the child's contribution to be an EVENT and the finished story to hold two, and says the event does not have to be the one the caregiver had in mind; what_to_avoid states that any sensible event is correct. A single guessed word is explicitly not enough. FOUNDER CORRECTION APPLIED (second founder/product pass, 2026-10-29, same uncommitted authoring session): FULL SUCCESS REQUIRES THE CHILD TO EXPRESS BOTH EVENTS IN WORDS. A story assembled from a caregiver-supplied event one plus a child-supplied event two is useful emerging performance and appropriate scaffolding, but the child has expressed only ONE event \u2014 which is the 48m sentence_building target \u2014 so crediting the 60m rung for it would score the higher rung on lower-rung evidence. The caregiver start, the two spoken choices and the modelled whole story all remain, relabelled in make_easier as scaffolding toward the target rather than as the criterion. Independent recall, perfect grammar, transition words, sequencing vocabulary and originality are still NOT required, and a model may come first. The pre-correction id is an intermediate from this same uncommitted session, so supersedes stays null and no approval transfers. Review focus now: whether the scaffolded split form should be recorded anywhere as partial credit, or simply remain invisible to the engine until the child tells both events. FOUNDER CORRECTION 2, same uncommitted session: make_harder REBASED ON THE CORRECTED TARGET. It previously climbed from the SCAFFOLD rather than from the criterion \u2014 'add the second event cold' and 'the child starts and the caregiver finishes' are both harder versions of a ONE-event contribution, so the ladder topped out one rung BELOW the success criterion it sits beside. It now starts at the real target (both events, no choices, no starter, no model) and builds beyond it: a third event or one extra detail, then the child starting and telling a whole two-event story on their own. Still NOT required: first/then vocabulary, perfect grammar, independent recall, creativity, or more than two events for core success. make_harder is authored content, so this re-keyed the card again; supersedes stays null because both prior ids are intermediates of this one uncommitted session and no approval exists to transfer.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:ebbe6b6bedd35ab939994f6a83c83c61": {
+      "activity_family_ref": "narration_storytelling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: narration_storytelling had ZERO candidate and ZERO reviewed content, and it is the LAST planned 3-5y family. NO EXISTING CONTENT WAS REUSED, and the search was not cursory: 15 curated Parent-engine cards match narrative-sounding wording, and every one of them matched on 'first/then' SEQUENCING LANGUAGE IN A CAREGIVER INSTRUCTION while its success criterion measures naming, pointing, placing objects in order, completing steps, producing a sound or making a mark. Not one measures a child telling two events. The family is also absent from BUCKET_REUSE_APPROVED, so the generator would admit none of it anyway. THE TARGET IS EVENT STRUCTURE, NOT SENTENCE LENGTH: no card imposes a word count, and two events may arrive as two sentences or one compound sentence with imperfect grammar. Mechanism 4 of 7 \u2014 ENACTED EVENTS, told afterwards. Stimulus/support: toys the caregiver and child move through two connected actions. Distinct from 'Make Up a Tiny Story' (mechanism 7) in direction: here the events HAPPEN first and are then narrated, so the child is recounting something witnessed seconds ago; there nothing happens at all and both events are invented in language. Easier -> harder: two familiar actions done slowly with a model -> longer wait, then the child choosing the actions, then a third. BOUNDARY vs PRETEND PLAY: what_to_avoid says not to push a child into pretend play and that the toys are a way to make two events happen rather than the point; success_criteria excludes re-doing the actions or moving the toys to show you. Review focus: confirm enacted-then-told is a useful intermediate between pictures and pure invention.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:3eb789efafdf10b89a544f5cc53d9698": {
+      "activity_family_ref": "narration_storytelling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: narration_storytelling had ZERO candidate and ZERO reviewed content, and it is the LAST planned 3-5y family. NO EXISTING CONTENT WAS REUSED, and the search was not cursory: 15 curated Parent-engine cards match narrative-sounding wording, and every one of them matched on 'first/then' SEQUENCING LANGUAGE IN A CAREGIVER INSTRUCTION while its success criterion measures naming, pointing, placing objects in order, completing steps, producing a sound or making a mark. Not one measures a child telling two events. The family is also absent from BUCKET_REUSE_APPROVED, so the generator would admit none of it anyway. THE TARGET IS EVENT STRUCTURE, NOT SENTENCE LENGTH: no card imposes a word count, and two events may arrive as two sentences or one compound sentence with imperfect grammar. Mechanism 5 of 7 \u2014 PERSONAL PHOTOS of one real occasion. Stimulus/support: two family photos the child was present for. Distinct from mechanism 1 as set out in that card's note \u2014 the photographs carry the sequence, which lowers memory demand sharply, and the material is a remembered occasion rather than the last few minutes. Easier -> harder: very recent, very familiar photos with a model -> older photos, photos put away, a detail inside an event, a third event. BOUNDARY vs OBJECT/PERSON NAMING: success_criteria states that naming the people or things in the photos is NOT success, and the instructions tell the caregiver to keep the conversation on what happened rather than who is in the picture. BOUNDARY vs MEMORY: what_to_avoid forbids correcting the child's memory of the day. Review focus: confirm two photos from one occasion is the right support level, and that the naming boundary is explicit enough.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:d5f25cfed3dc80cd30a91c190d6510a7": {
+      "activity_family_ref": "narration_storytelling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: narration_storytelling had ZERO candidate and ZERO reviewed content, and it is the LAST planned 3-5y family. NO EXISTING CONTENT WAS REUSED, and the search was not cursory: 15 curated Parent-engine cards match narrative-sounding wording, and every one of them matched on 'first/then' SEQUENCING LANGUAGE IN A CAREGIVER INSTRUCTION while its success criterion measures naming, pointing, placing objects in order, completing steps, producing a sound or making a mark. Not one measures a child telling two events. The family is also absent from BUCKET_REUSE_APPROVED, so the generator would admit none of it anyway. THE TARGET IS EVENT STRUCTURE, NOT SENTENCE LENGTH: no card imposes a word count, and two events may arrive as two sentences or one compound sentence with imperfect grammar. Mechanism 6 of 7 \u2014 VIOLATION OF EXPECTATION on the ORDER. Stimulus/support: the caregiver's own deliberately muddled two-event story about something ordinary. Distinct from mechanism 2 as set out in that card's note: the sequence is withheld rather than displayed, so the child supplies the relationship from knowledge instead of reading it off pictures. Easier -> harder: the most familiar routine with an obvious muddle and a model -> a subtler muddle, then the child muddling one for the caregiver. success_criteria excludes saying which came first, pointing, and saying 'no' \u2014 the two-event retell is the success. SAFETY: what_to_avoid rules out muddling a bedtime, medical, toileting or safety routine and anything the child finds important or worrying, states that the only thing being put right is the caregiver's own silly story, and says to stop if the child seems confused rather than amused. Review focus: confirm a deliberate-error frame is appropriate at 60m and that the excluded routines are the right list.",
+      "supersedes": null,
+      "adapted_from": null
+    },
+    "atpl1:937b24278bbda91eb728d3037bb35666": {
+      "activity_family_ref": "narration_storytelling",
+      "status": "generated_candidate",
+      "reviewer": null,
+      "decided_on": null,
+      "note": "FOUNDER/PRODUCT AUTHORED CANDIDATE, NOT CLINICAL REVIEW. Written for the founder/product review of the 3-5y pilot content gap; no clinician has seen it, and reviewer/decided_on are deliberately null. NEW FAMILY: narration_storytelling had ZERO candidate and ZERO reviewed content, and it is the LAST planned 3-5y family. NO EXISTING CONTENT WAS REUSED, and the search was not cursory: 15 curated Parent-engine cards match narrative-sounding wording, and every one of them matched on 'first/then' SEQUENCING LANGUAGE IN A CAREGIVER INSTRUCTION while its success criterion measures naming, pointing, placing objects in order, completing steps, producing a sound or making a mark. Not one measures a child telling two events. The family is also absent from BUCKET_REUSE_APPROVED, so the generator would admit none of it anyway. THE TARGET IS EVENT STRUCTURE, NOT SENTENCE LENGTH: no card imposes a word count, and two events may arrive as two sentences or one compound sentence with imperfect grammar. Mechanism 7 of 7 \u2014 INVENTED story from one character plus one object. Stimulus/support: a toy or picture pair, and nothing that has happened. The only mechanism with no real or enacted referent at all, which is why it is the hardest and why it is not redundant with mechanism 4 (see that card's note). Easier -> harder: caregiver supplies event one with two spoken endings -> the child invents both, then a third event, then a character from a known story. CREATIVITY IS EXPLICITLY NOT THE MEASURE: success_criteria says the story need not be original, clever, surprising or grammatically perfect, and what_to_avoid forbids asking for something more imaginative. Both events must be TOLD rather than acted out. Review focus: confirm invention belongs in this family at all, or whether the set should stop at enacted and remembered events for the pilot. FOUNDER CORRECTION APPLIED (second founder/product pass, 2026-10-29, same uncommitted authoring session): FULL SUCCESS REQUIRES THE CHILD TO EXPRESS BOTH EVENTS IN WORDS. A story assembled from a caregiver-supplied event one plus a child-supplied event two is useful emerging performance and appropriate scaffolding, but the child has expressed only ONE event \u2014 which is the 48m sentence_building target \u2014 so crediting the 60m rung for it would score the higher rung on lower-rung evidence. The caregiver start, the two spoken choices and the modelled whole story all remain, relabelled in make_easier as scaffolding toward the target rather than as the criterion. Independent recall, perfect grammar, transition words, sequencing vocabulary and originality are still NOT required, and a model may come first. The pre-correction id is an intermediate from this same uncommitted session, so supersedes stays null and no approval transfers.",
+      "supersedes": null,
+      "adapted_from": null
+    }
+  },
+  "legacy_unresolved": [
+    "atpl1:01cdd9f34e37a62bed4feda4300902a7",
+    "atpl1:041794bbb1acb1f86a27ca9460088c2d",
+    "atpl1:06a431b9e9a8e118a900b7f407fecc02",
+    "atpl1:1081de288d8fc18f41225d80bb291a63",
+    "atpl1:1226e454bd64d869206574bb6ad9851f",
+    "atpl1:166c4e5492dab00d41b9fb4d5162202b",
+    "atpl1:2c317105a4151f55be1d2122a16fc3fc",
+    "atpl1:3550b9ec30305b58d9cbbaa24c58e5b2",
+    "atpl1:5f44b9eba107589ca26c6610f2c6cb05",
+    "atpl1:797708a5514fd175e24bf0bac3f2a8ff",
+    "atpl1:9b0facf380b755262eadbf9d76820e7a",
+    "atpl1:9b9eb883a67400556702486fc177e75b",
+    "atpl1:9e165d6d242e3e887ddb32f6d7c48486",
+    "atpl1:bd6a98e7eef7d1a01c1e48baa8230317",
+    "atpl1:c694ec43189c20633adeea5502833f6b",
+    "atpl1:e22a325977fbaaeca903a6ea909d17d0",
+    "atpl1:f7a99d017c398560058379637732ac58",
+    "atpl1:f83b5f3cd8ef75cdba82700d6b389be7"
+  ]
+}

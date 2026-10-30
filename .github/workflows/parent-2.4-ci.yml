@@ -978,6 +978,146 @@ jobs:
             echo "0.6A-1 not present on this branch — nothing to run"
           fi
 
+      - name: Track 2 — clinical-review LEDGER GATE
+        # LOAD-BEARING, and it guards a property no other gate does.
+        #
+        # Every existing activity-bank gate checks that admitted content is
+        # well-formed, validator-clean and drift-free. NONE of them checks that
+        # a human clinician ever approved it: before this gate, a card became
+        # release-eligible by being present in a directory.
+        #
+        # So this asserts the two rules the founder set for Track 2:
+        #
+        #   1. every card in `pilot_runtime/data/reviewed_cards/` either has an
+        #      exact-template-id `clinician_approved` entry in
+        #      `clinical_review/review_ledger.json`, or is listed in that
+        #      ledger's `legacy_unresolved` register;
+        #   2. the register NEVER GROWS beyond the migration baseline pinned
+        #      below. It may shrink as legacy cards receive real review.
+        #
+        # `legacy_unresolved` means one thing only: *this template was admitted
+        # before explicit clinical-review provenance existed*. It never implies
+        # approval by Hannah or anyone else. Growth would mean a newly admitted
+        # card had been filed as "provenance unresolved" instead of being
+        # approved — a route around the ledger dressed as bookkeeping — which
+        # is exactly what rule 2 exists to make impossible.
+        #
+        # The baseline is pinned HERE as well as in the suite on purpose: a
+        # mutable file cannot witness its own history, so the comparison needs
+        # a value that lives outside the file being checked.
+        working-directory: .
+        env:
+          PYTHONPATH: .:genex-parent
+        run: |
+          if [ ! -f clinical_review/review_ledger.json ]; then
+            echo "Track 2 not present on this branch — nothing to run"
+            exit 0
+          fi
+          python - <<'PY'
+          from clinical_review.tools import ledger as L
+
+          # The 18 cards admitted under reviewed_cards/ before the ledger
+          # existed. Clinical-review provenance UNRESOLVED — not approved.
+          MIGRATION_BASELINE = (
+              "atpl1:01cdd9f34e37a62bed4feda4300902a7",
+              "atpl1:041794bbb1acb1f86a27ca9460088c2d",
+              "atpl1:06a431b9e9a8e118a900b7f407fecc02",
+              "atpl1:1081de288d8fc18f41225d80bb291a63",
+              "atpl1:1226e454bd64d869206574bb6ad9851f",
+              "atpl1:166c4e5492dab00d41b9fb4d5162202b",
+              "atpl1:2c317105a4151f55be1d2122a16fc3fc",
+              "atpl1:3550b9ec30305b58d9cbbaa24c58e5b2",
+              "atpl1:5f44b9eba107589ca26c6610f2c6cb05",
+              "atpl1:797708a5514fd175e24bf0bac3f2a8ff",
+              "atpl1:9b0facf380b755262eadbf9d76820e7a",
+              "atpl1:9b9eb883a67400556702486fc177e75b",
+              "atpl1:9e165d6d242e3e887ddb32f6d7c48486",
+              "atpl1:bd6a98e7eef7d1a01c1e48baa8230317",
+              "atpl1:c694ec43189c20633adeea5502833f6b",
+              "atpl1:e22a325977fbaaeca903a6ea909d17d0",
+              "atpl1:f7a99d017c398560058379637732ac58",
+              "atpl1:f83b5f3cd8ef75cdba82700d6b389be7",
+          )
+
+          ledger = L.read_ledger()
+
+          # -- rule 1 ---------------------------------------------------------
+          problems = L.check_reviewed_cards(ledger)
+          assert not problems, (
+              "admitted activity content has no clinical approval and is not a "
+              "registered legacy card:\n  " + "\n  ".join(problems))
+          print(f"every admitted card accounted for "
+                f"({len(ledger['legacy_unresolved'])} legacy, "
+                f"{len(L.approved_ids(ledger))} clinician-approved)")
+
+          # -- rule 2 ---------------------------------------------------------
+          L.assert_register_never_grew(ledger, MIGRATION_BASELINE)
+          print("legacy_unresolved has not grown beyond the migration baseline")
+
+          # -- the register describes reality, not a stale snapshot -----------
+          actual = set()
+          for path in sorted(L.REVIEWED_CARDS_DIR.glob("*.json")):
+              for card in L.read_cards(path):
+                  actual.add(L.compute_card_id(path.stem, card))
+          accounted = set(ledger["legacy_unresolved"]) | L.approved_ids(ledger)
+          assert actual <= accounted, sorted(actual - accounted)
+
+          # -- NON-VACUITY ----------------------------------------------------
+          #
+          # Each rule must still be able to fail. Without these the gate could
+          # be defanged by an edit that left it printing success forever.
+          controls = []
+
+          empty = {"ledger_version": L.LEDGER_VERSION, "entries": {},
+                   "legacy_unresolved": []}
+          if not L.check_reviewed_cards(empty):
+              controls.append(
+                  "rule 1 did NOT reject admitted content with an empty ledger")
+
+          grown = {"ledger_version": L.LEDGER_VERSION, "entries": {},
+                   "legacy_unresolved": list(MIGRATION_BASELINE)
+                   + ["atpl1:" + "b" * 32]}
+          try:
+              L.assert_register_never_grew(grown, MIGRATION_BASELINE)
+              controls.append("rule 2 did NOT reject a grown register")
+          except L.LedgerError:
+              pass
+
+          try:
+              L.assert_outside_guarded_trees(
+                  L.REPO_ROOT / "pilot_runtime" / "packet.html")
+              controls.append(
+                  "the packet guard did NOT reject a guarded output path")
+          except L.LedgerError:
+              pass
+
+          assert not controls, ("the ledger gate no longer rejects what it "
+                                "exists to reject:\n  " + "\n  ".join(controls))
+          print("non-vacuity: all three refusals still fire")
+
+          # -- decision 6, asserted as a fact about THIS commit ---------------
+          #
+          # Dropped deliberately, not conditionally, once a legacy card is
+          # genuinely reviewed: at that point it leaves the register and gains
+          # an approval, and this assertion must be updated in the same commit
+          # that records the review.
+          assert L.approved_ids(ledger) == frozenset(), (
+              "a clinician_approved entry exists; if a real review happened, "
+              "update this assertion in the same commit")
+          print("no content on this commit claims clinical approval")
+          PY
+
+      - name: Track 2 — clinical-review suite
+        working-directory: .
+        env:
+          PYTHONPATH: .:genex-parent
+        run: |
+          if [ -f pilot_runtime/tests/test_clinical_review_ledger.py ]; then
+            python -m pytest pilot_runtime/tests/test_clinical_review_ledger.py -q
+          else
+            echo "Track 2 not present on this branch — nothing to run"
+          fi
+
       - name: October pilot 0.6A-1E/1F — A2 v2 skill projection + denominators
         # CROSS-SYSTEM, and it had NO CI GATE before 0.6A-1F. It drives a REAL
         # Parent v2 baseline through the REAL frozen rung table, so neither side

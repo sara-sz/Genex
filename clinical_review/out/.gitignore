@@ -1,0 +1,6 @@
+# Review packets are generated, exported to the reviewing clinician, and never
+# committed. They carry verbatim canonical milestone text and concrete rung
+# references; the durable record of a review is the ledger, which carries
+# neither.
+*
+!.gitignore
