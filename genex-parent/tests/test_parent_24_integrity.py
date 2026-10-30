@@ -75,11 +75,32 @@ PILOT_BACKEND_PREFIX = "pilot_backend/"
 #: refused.
 PILOT_RUNTIME_PREFIX = "pilot_runtime/"
 
+#: The founder-approved CLINICAL REVIEW namespace: candidate activity content
+#: awaiting clinician review, the review ledger, and the tools that build a
+#: review packet and promote approved cards.
+#:
+#: It is top-level and NOT inside `pilot_runtime/` on purpose. Everything under
+#: `pilot_runtime/` is runtime: it ships in a serving image and the drift gates
+#: treat it as product. This namespace is the opposite — it holds content that
+#: is deliberately NOT yet servable, and the one-way gate between the two is
+#: promotion into `pilot_runtime/data/reviewed_cards/`. Keeping them in separate
+#: namespaces is what makes "nothing is promoted" a structural fact rather than
+#: a convention: no reviewed-cards file can appear by moving a file within a
+#: directory, and `clinical_review/out/` (generated packets) is gitignored and
+#: never reaches a runtime path.
+#:
+#: Same reasoning and same narrowness as the two extensions above: it names ONE
+#: directory, and `test_guard_still_rejects_unrelated_top_level_paths` proves
+#: every other top-level path — including the near-miss `clinical_review_extra/`
+#: — is still refused. This is a scope EXTENSION, not a relaxation.
+CLINICAL_REVIEW_PREFIX = "clinical_review/"
+
 PARENT_ALLOWED_PREFIXES = (
     "genex-parent/",
     ".github/workflows/parent-2.4-ci.yml",
     PILOT_BACKEND_PREFIX,
     PILOT_RUNTIME_PREFIX,
+    CLINICAL_REVIEW_PREFIX,
 )
 
 #: The immutable Gold Standard input snapshot (PARENT-0.2).
@@ -251,18 +272,24 @@ def test_parent_commits_touch_only_parent_paths() -> None:
 
 
 def test_guard_still_rejects_unrelated_top_level_paths() -> None:
-    """Negative control for the approved `pilot_backend/` extension.
+    """Negative control for every approved namespace extension.
 
     Adding a namespace to an allow-list is exactly the kind of change that can
     quietly turn a guard into a rubber stamp — a stray `""` or a `"/"` prefix
     would match everything and nothing would ever fail again. This asserts the
-    predicate directly: the one approved namespace passes, and paths that must
+    predicate directly: each approved namespace passes, and paths that must
     still be refused are still refused.
     """
     assert PILOT_BACKEND_PREFIX in PARENT_ALLOWED_PREFIXES
     assert "pilot_backend/domain/entities.py".startswith(PARENT_ALLOWED_PREFIXES)
     assert PILOT_RUNTIME_PREFIX in PARENT_ALLOWED_PREFIXES
     assert "pilot_runtime/auth/firebase_decoder.py".startswith(PARENT_ALLOWED_PREFIXES)
+    assert CLINICAL_REVIEW_PREFIX in PARENT_ALLOWED_PREFIXES
+    assert "clinical_review/review_ledger.json".startswith(PARENT_ALLOWED_PREFIXES)
+    assert "clinical_review/candidates/narration_storytelling.json".startswith(
+        PARENT_ALLOWED_PREFIXES)
+    assert "clinical_review/tools/promote_approved.py".startswith(
+        PARENT_ALLOWED_PREFIXES)
 
     must_still_fail = (
         "therapist_api/app/domain/models.py",
@@ -275,10 +302,24 @@ def test_guard_still_rejects_unrelated_top_level_paths() -> None:
         "pilot_backend_extra/thing.py",   # near-miss: not the approved namespace
         "pilot_runtime_extra/thing.py",   # near-miss for the 0.3 namespace
         "pilot/thing.py",                 # prefix of both, approved as neither
+        "clinical_review_extra/thing.py",  # near-miss for the review namespace
+        "clinical/thing.py",              # prefix of it, approved as neither
+        "clinical_reviews/thing.py",      # plural: a different directory
         "docs/plan.md",
     )
     leaked = [p for p in must_still_fail if p.startswith(PARENT_ALLOWED_PREFIXES)]
     assert not leaked, f"guard became permissive for: {leaked}"
+
+    # The allow-list is a closed set of FOUR named namespaces plus the one
+    # workflow file. A fifth arriving without a founder decision and without a
+    # negative control is the failure this pins.
+    assert len(PARENT_ALLOWED_PREFIXES) == 5, PARENT_ALLOWED_PREFIXES
+    assert len(set(PARENT_ALLOWED_PREFIXES)) == 5, "duplicate prefix"
+    # Every directory prefix must end in "/", or "clinical_review" alone would
+    # also admit "clinical_reviewX".
+    for prefix in PARENT_ALLOWED_PREFIXES:
+        if not prefix.endswith(".yml"):
+            assert prefix.endswith("/"), prefix
 
     # And no prefix may be empty or bare-root, which would match everything.
     for prefix in PARENT_ALLOWED_PREFIXES:
