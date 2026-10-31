@@ -255,19 +255,52 @@ def test_the_count_follows_capacity_and_nothing_else():
         assert outcome.activity_count == expected, (capacity, expected)
 
 
-def test_capacity_beyond_the_cycles_day_count_refuses_rather_than_doubling_up():
+def test_capacity_beyond_the_cycles_day_count_places_fewer_rather_than_doubling_up():
     """A REAL interaction, surfaced rather than papered over.
 
-    A first plan on SUNDAY Oct 11 2026 is a one-day starter week under the frozen
-    rule, so a declared capacity of 3 cannot be rendered one-per-day. The release
-    REFUSES and writes no snapshot, instead of silently placing three activities
-    on one day — which would be a density decision nobody approved.
+    A first plan on SUNDAY Oct 11 2026 is a one-day starter week under the
+    frozen rule, so a declared capacity of 3 cannot be rendered one-per-day.
+
+    ## THIS TEST'S EXPECTATION WAS DELIBERATELY CHANGED, by founder decision
+
+    It previously asserted that the release REFUSED outright
+    (`WeeklyPlanDocumentError`, no snapshot). That surfaced the interaction
+    instead of papering over it, which was right as a first move — but it left
+    the product unable to release a starter week at all near Sunday, and a
+    refusal turns the family's own legitimate declaration into an error. Worse,
+    `WeeklyPlanDocumentError` is not among the release route's handled
+    refusals, so in production the refusal surfaced as a 500 rather than as
+    anything a clinician could act on. That is precisely the hosted PRE-PHI
+    failure on Saturday 2026-10-31.
+
+    The rule is now a ceiling on PLACEMENT: Genex places
+    `min(family_declared_capacity, cycle.day_count)` activities. The thing the
+    old assertion protected is UNCHANGED and still asserted below — no date
+    ever carries two activities — and the hard refusal still exists one layer
+    down, in `assign_local_dates`, pinned by
+    `test_more_activities_than_days_refuses_rather_than_doubling_up`.
     """
     chain = Chain()
     chain.approve()
-    with pytest.raises(WeeklyPlanDocumentError):
-        chain.release(capacity=3, local_date="2026-10-11")
-    assert chain.docs("pilot_weekly_plan_snapshots") == []
+    outcome = chain.release(capacity=3, local_date="2026-10-11")
+
+    cycle = chain.docs("pilot_weekly_cycles")[0]
+    assert (cycle["starts_on"], cycle["ends_on"]) == ("2026-10-11",
+                                                      "2026-10-11")
+    # It releases, with ONE activity rather than three stacked on one day.
+    assert outcome.activity_count == 1
+    assert chain.docs("pilot_weekly_plan_snapshots") != []
+
+    # The declaration is not rewritten.
+    ledger = chain.docs("pilot_capacity_ledgers")[0]
+    assert ledger["family_declared_capacity"] == 3
+    assert ledger["allocated_by_planner"] == 1
+
+    # The original invariant, still held: no doubling up.
+    populated = [day for day in outcome.parent_week["days"]
+                 if day["activities"]]
+    assert len(populated) == 1
+    assert len(populated[0]["activities"]) == 1
 
 
 def test_scheduled_is_not_attempted_or_completed_or_improvement():
@@ -939,6 +972,134 @@ def test_more_activities_than_days_refuses_rather_than_doubling_up():
     assert assign_local_dates(("2026-10-01", "2026-10-02"), 2) == (
         "2026-10-01", "2026-10-02")
     assert assign_local_dates(("2026-10-01",), 0) == ()
+
+
+# ---------------------------------------------------------------------------
+# The placement ceiling: a short starter cycle has fewer SLOTS than a family
+# may have declared.
+#
+# These reproduce a real hosted failure. The PRE-PHI route-chain suite released
+# a starter week with `family_declared_capacity = 3` against the REAL clock. On
+# Friday 2026-10-30 the starter cycle ran Fri-Sun (three days) and passed; on
+# Saturday 2026-10-31 it ran Sat-Sun (TWO days), the allocator still placed
+# three activities, `assign_local_dates` refused to stack two onto one date,
+# and `WeeklyPlanDocumentError` — which the release route does not list among
+# its handled refusals — escaped as a 500.
+#
+# The rule is a ceiling on PLACEMENT, never a rewrite of the DECLARATION.
+# ---------------------------------------------------------------------------
+
+
+def _release_on(local_date, capacity=3):
+    """Release a two-goal week on one local date. Deterministic, no clock."""
+    chain = Chain(deficits=(BOOK, TWO_WORD))
+    chain.approve(0)
+    chain.approve(1)
+    outcome = chain.release(capacity=capacity, local_date=local_date)
+    cycle = chain.docs("pilot_weekly_cycles")[0]
+    ledger = chain.docs("pilot_capacity_ledgers")[0]
+    return chain, outcome, cycle, ledger
+
+
+def _day_count(cycle):
+    from datetime import date as _date
+    return (_date.fromisoformat(cycle["ends_on"])
+            - _date.fromisoformat(cycle["starts_on"])).days + 1
+
+
+def test_a_saturday_starter_week_releases_two_of_a_declared_three():
+    """THE REGRESSION. Saturday 2026-10-31: two days, declared capacity three.
+
+    Before the placement ceiling this raised `WeeklyPlanDocumentError` out of
+    `build_document` and the route returned 500. It must now release.
+    """
+    chain, outcome, cycle, ledger = _release_on("2026-10-31", capacity=3)
+
+    assert (cycle["starts_on"], cycle["ends_on"]) == ("2026-10-31",
+                                                      "2026-11-01")
+    assert _day_count(cycle) == 2
+    assert outcome.activity_count == 2
+    # It RELEASED — a snapshot exists and the cycle is released to the family.
+    assert chain.docs("pilot_weekly_plan_snapshots") != []
+    assert cycle["released_to_parent_at"] is not None
+
+    # THE LEDGER DOES NOT LIE. The family declared three; the planner placed
+    # two. Narrowing `declared` to the day count would rewrite the family's own
+    # statement, which is the thing this assertion exists to prevent.
+    assert ledger["family_declared_capacity"] == 3
+    assert ledger["allocated_by_planner"] == 2
+
+    # And no date carries two activities.
+    week = outcome.parent_week
+    populated = [day for day in week["days"] if day["activities"]]
+    assert len(populated) == 2
+    assert all(len(day["activities"]) == 1 for day in populated)
+    assert [day["local_date"] for day in populated] == ["2026-10-31",
+                                                        "2026-11-01"]
+
+
+def test_the_friday_control_still_places_the_full_declared_three():
+    """CONTROL. Friday 2026-10-30 gives three days, so nothing is capped.
+
+    Proves the ceiling binds only when the cycle is genuinely shorter than the
+    declaration, rather than reducing every week by one.
+    """
+    _chain, outcome, cycle, ledger = _release_on("2026-10-30", capacity=3)
+
+    assert (cycle["starts_on"], cycle["ends_on"]) == ("2026-10-30",
+                                                      "2026-11-01")
+    assert _day_count(cycle) == 3
+    assert outcome.activity_count == 3
+    assert ledger["family_declared_capacity"] == 3
+    assert ledger["allocated_by_planner"] == 3
+
+
+def test_a_sunday_starter_week_releases_exactly_one():
+    """The extreme: a one-day starter cycle still releases rather than 500s."""
+    _chain, outcome, cycle, ledger = _release_on("2026-11-01", capacity=3)
+
+    assert (cycle["starts_on"], cycle["ends_on"]) == ("2026-11-01",
+                                                      "2026-11-01")
+    assert _day_count(cycle) == 1
+    assert outcome.activity_count == 1
+    assert ledger["family_declared_capacity"] == 3
+    assert ledger["allocated_by_planner"] == 1
+
+
+def test_a_full_seven_day_cycle_is_unchanged_by_the_ceiling():
+    """A Monday anchor gives a full week, so the declaration is the only bound.
+
+    `min(declared, day_count)` must be a no-op whenever the cycle is at least
+    as long as the declaration — otherwise the ceiling would have changed
+    ordinary weeks, not just short ones.
+    """
+    _chain, outcome, cycle, ledger = _release_on("2026-11-02", capacity=3)
+
+    assert _day_count(cycle) == 7
+    assert outcome.activity_count == 3, "a full week is bounded by capacity"
+    assert ledger["family_declared_capacity"] == 3
+    assert ledger["allocated_by_planner"] == 3
+
+    week = outcome.parent_week
+    populated = [day for day in week["days"] if day["activities"]]
+    assert len(populated) == 3
+    assert all(len(day["activities"]) == 1 for day in populated)
+
+
+def test_no_local_date_is_ever_scheduled_twice_across_these_anchors():
+    """The one-activity-per-day rendering rule, held across every anchor.
+
+    The ceiling must not be implemented by doubling up on the last day, which
+    is the other way to make a short cycle "fit".
+    """
+    for anchor in ("2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02"):
+        _chain, outcome, cycle, _ledger = _release_on(anchor, capacity=3)
+        week = outcome.parent_week
+        dates = [day["local_date"] for day in week["days"]
+                 for _activity in day["activities"]]
+        assert len(dates) == len(set(dates)), (anchor, dates)
+        assert len(dates) <= _day_count(cycle), (anchor, dates)
+        assert len(dates) == outcome.activity_count, anchor
 
 
 def test_the_parent_view_refuses_a_foreign_document():

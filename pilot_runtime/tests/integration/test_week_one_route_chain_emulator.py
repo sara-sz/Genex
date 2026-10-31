@@ -252,13 +252,6 @@ def test_the_whole_chain_through_the_real_routes(stack):
     assert status == 200 and body["released"] is False and body["week"] is None
     trace.append("GET this-week before release -> 200 released=false week=null")
 
-    # 7. The managing provider releases with capacity 3.
-    status, body = _call(stack.app, stack.release, method="POST",
-                         bearer="Bearer token-provider", body=capacity_body)
-    assert status == 200, body
-    assert body["created"] is True
-    assert body["activity_count"] == CAPACITY
-    assert body["goal_ids"] == [goal_id]
     # The STARTER week under the frozen Genex rule. This route runs on the REAL
     # clock, so the invariant is asserted rather than fixed dates: the week
     # starts TODAY and ends on that week's Sunday, and never earlier than today.
@@ -266,6 +259,30 @@ def test_the_whole_chain_through_the_real_routes(stack):
 
     today = date.today()
     sunday = today + timedelta(days=(6 - today.weekday()) % 7)
+    starter_days = (sunday - today).days + 1
+
+    # HOW MANY ACTIVITIES THIS WEEK CAN HOLD. The family declares CAPACITY, but
+    # the rendering rule is one activity per day, so a starter week that begins
+    # late in the week has fewer SLOTS than the declaration. Run on a Saturday
+    # the starter cycle is Sat-Sun — two days — and three activities cannot be
+    # laid out without stacking two onto one date.
+    #
+    # Derived rather than hardcoded on purpose: asserting `== CAPACITY` made
+    # this proof depend on the day of the week the suite happened to run, and
+    # it duly passed on Friday 2026-10-30 and failed on Saturday 2026-10-31.
+    # The declaration is still CAPACITY and is still what the ledger records;
+    # this is only what can be PLACED. Exact-equality is kept, so a week that
+    # silently placed fewer still fails.
+    expected_activities = min(CAPACITY, starter_days)
+
+    # 7. The managing provider releases with capacity 3.
+    status, body = _call(stack.app, stack.release, method="POST",
+                         bearer="Bearer token-provider", body=capacity_body)
+    assert status == 200, body
+    assert body["created"] is True
+    assert body["activity_count"] == expected_activities, (
+        f"{starter_days}-day starter week, declared {CAPACITY}")
+    assert body["goal_ids"] == [goal_id]
     week = body["week"]["week"]
     assert week["starts_on"] == today.isoformat()
     assert week["ends_on"] == sunday.isoformat()
@@ -281,7 +298,10 @@ def test_the_whole_chain_through_the_real_routes(stack):
     days = [d for d in parent["week"]["days"] if d["activities"]]
     titles = [(d["local_date"], a["title"])
               for d in days for a in d["activities"]]
-    assert len(titles) == CAPACITY
+    assert len(titles) == expected_activities
+    # One per day, never two on one date — the rendering rule the placement
+    # ceiling exists to respect rather than to work around.
+    assert len({d for d, _t in titles}) == len(titles)
     # No activity is dated before the family entered the care loop.
     assert min(d for d, _t in titles) >= today.isoformat()
     assert max(d for d, _t in titles) <= sunday.isoformat()

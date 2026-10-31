@@ -430,9 +430,36 @@ class WeeklyService:
         self._reject_foreign_goals(allocations, cycle)
 
         defers = self._repos.defer_records.list_for_child(cycle.child_id)
+
+        # THE PLACEMENT CEILING, separate from the family's declared capacity.
+        #
+        # `family_declared_capacity` is what the FAMILY says it can carry this
+        # week. The number of activities Genex may actually place is also
+        # bounded by how many days the cycle HAS, because the rendering rule in
+        # `weekly_plan_document.assign_local_dates` is one activity per day and
+        # refuses to stack two onto one date — a density decision nobody
+        # approved.
+        #
+        # A short cycle therefore has fewer slots than a family may have
+        # declared. A starter week anchored on a Saturday runs Sat-Sun and has
+        # TWO days; a declared capacity of 3 would ask for a third placement
+        # with nowhere to put it, `assign_local_dates` would raise
+        # `WeeklyPlanDocumentError`, and because that is not one of the route's
+        # handled refusals the whole release surfaced as a 500. That is exactly
+        # the hosted PRE-PHI failure on Saturday 2026-10-31 (the same world
+        # released cleanly on Friday 2026-10-30, when the cycle had three days).
+        #
+        # Capping here rather than in the caller keeps ONE rule for every
+        # caller of this service, and keeps it at the only layer that holds
+        # both the cycle and the ledger. The declared value is NOT rewritten:
+        # it is still what `CapacityLedger.create` records below, so the ledger
+        # says "the family declared 3, the planner allocated 2" rather than
+        # pretending the family declared 2.
+        placement_capacity = min(family_declared_capacity, cycle.day_count)
+
         result = allocate(
             cycle_id, allocations, candidates,
-            capacity=family_declared_capacity,
+            capacity=placement_capacity,
             suppressed_identity_refs=suppressed_identities(
                 defers, cycle.sequence_in_month),
             is_partial_week=cycle.is_partial)
@@ -444,6 +471,9 @@ class WeeklyService:
         # persists nothing at all, and a losing writer leaves nothing behind.
         parts = (cycle_id,)
         generation = self._next_generation(ClaimKind.WEEKLY_ALLOCATION, parts)
+        # `family_declared_capacity`, NOT `placement_capacity`. The ledger is
+        # the audit record of what the family declared; narrowing it to the
+        # cycle's day count would silently rewrite a family's own statement.
         ledger = CapacityLedger.create(
             cycle_id, cycle.child_id, family_declared_capacity,
             allocated_by_planner=result.placed_count, now=self._stamp())
