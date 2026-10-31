@@ -4081,9 +4081,13 @@ jobs:
                                  separators=(",", ":"), ensure_ascii=False)
           recomputed = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
           assert recomputed == body["artifact_digest"], "digest mismatch"
+          # ROTATED at pilot integration, from 609fff91...95b437. The
+          # registered-unresolved slice moved provenance.taxonomy_sha256 and
+          # so the derived artifact_digest. The self-consistency assert above
+          # is the real check; this one pins WHICH artifact.
           assert body["artifact_digest"] == (
-              "609fff91ba98b9afbf09d6d1c64cee23c59650d0bd3e8e53841083b1ab"
-              "95b437"), body["artifact_digest"]
+              "9f306d542ba7af704776f79285755eb178babdc4b4294a8981ddf035a4"
+              "e24dfe"), body["artifact_digest"]
           assert body["population"] == {"declared_track_rungs": 21,
                                         "declared_track_mappable": 17,
                                         "declared_track_unresolved": 4}
@@ -4176,9 +4180,11 @@ jobs:
           assert type(runtime.rung_source) is StaticRungTableSource, \
               type(runtime.rung_source).__name__
           assert runtime.application._rung_source is runtime.rung_source
+          # ROTATED at pilot integration, from 609fff91...95b437 — same
+          # reason as the artifact-present step above.
           assert runtime.rung_source.artifact_digest == (
-              "609fff91ba98b9afbf09d6d1c64cee23c59650d0bd3e8e53841083b1ab"
-              "95b437")
+              "9f306d542ba7af704776f79285755eb178babdc4b4294a8981ddf035a4"
+              "e24dfe")
           print(json.dumps({
               "rung_source": type(runtime.rung_source).__name__,
               "is_none": False,

@@ -57,6 +57,9 @@ from pilot_backend.goals.service import GoalService
 from pilot_backend.integration.baseline_suggestion_generation_v2 import (
     BaselineSuggestionGenerationV2Service,
 )
+from pilot_backend.domain.suggestion_generation_v2 import (
+    UnregisteredUnmappableSkill,
+)
 from pilot_backend.integration.gold_standard_source import (
     InMemoryGoldStandardRungSource,
     RungTarget,
@@ -113,12 +116,39 @@ def _ref(milestone, months):
     return compute_rung_ref(DOMAIN, months, milestone)
 
 
-def _source():
+#: The 30m pronoun skill, defined ONCE and reused for both `unmappable` and
+#: `registered_unresolved`. `RungTarget` is a frozen dataclass so two equal
+#: copies would key the register correctly either way, but one object makes it
+#: visible to a reader that both arguments name the same skill.
+PRONOUNS_TARGET = RungTarget(domain_key=DOMAIN, source_rung_months=30,
+                             milestone_text=PRONOUNS)
+
+#: What the taxonomy's unresolved register says about it. Mirrors the
+#: `unresolved_family_register` row for `pronouns`: no existing family is
+#: right, because `expressive_vocabulary_growth` measures vocabulary QUANTITY
+#: rather than a grammatical class.
+PRONOUNS_STATUS = "deferred_post_pilot"
+PRONOUNS_FAMILY_KEYS = ("pronouns",)
+
+
+def _source(*, register_pronouns=True):
+    """The fictional Gold Standard: three mappable 30m rungs plus pronouns.
+
+    `register_pronouns` exists so the fail-closed path stays testable. The
+    source treats an unmappable target ABSENT from `registered_unresolved` as
+    an UNREGISTERED defect, which is the strict default on purpose — a fixture
+    wanting a pass-over has to say so. This fixture said nothing before the
+    registered-unresolved slice, so production correctly refused the whole run
+    with `UnregisteredUnmappableSkill`; declaring the register entry is the
+    fixture catching up to the taxonomy, not a relaxation of that rule.
+    """
+    registered = ({PRONOUNS_TARGET: (PRONOUNS_STATUS, PRONOUNS_FAMILY_KEYS)}
+                  if register_pronouns else {})
     return InMemoryGoldStandardRungSource(
         rungs=tuple([_rung(AT_24, 24)]
                     + [_rung(m, 30) for m in MAPPABLE_30]),
-        unmappable=(RungTarget(domain_key=DOMAIN, source_rung_months=30,
-                               milestone_text=PRONOUNS),))
+        unmappable=(PRONOUNS_TARGET,),
+        registered_unresolved=registered)
 
 
 @pytest.fixture()
@@ -182,6 +212,11 @@ def world(repos, unique_suffix):
         repos=repos, goals=goals, rung_source=bundle.source)
     bundle.expected_targets = {_ref(BOOK, 30), _ref(TWO_WORD, 30)}
     bundle.unsupported = _ref(PRONOUNS, 30)
+    #: The same deficit, as the registered gap the outcome must REPORT. Two
+    #: different claims about one skill: `unsupported` is "no servable target
+    #: came out of this ref", `registered_gap` is "known, deliberately
+    #: unsupported, and here is the family". Both are asserted.
+    bundle.registered_gap = (30, PRONOUNS_FAMILY_KEYS, PRONOUNS_STATUS)
     return bundle
 
 
@@ -199,6 +234,12 @@ def _suggestions_for(world):
 def _anchors_for(world):
     return [a for _id, a in world.repos.store.list_all(
         "pilot_suggestion_anchors") if a.get("child_id") == world.child_id]
+
+
+def _gaps(outcome):
+    """`(months, family_keys, resolution_status)` per reported deficit."""
+    return sorted((d.months, d.family_keys, d.resolution_status)
+                  for d in outcome.passed_over)
 
 
 def test_eight_concurrent_generations_produce_one_claim_per_target(world):
@@ -257,6 +298,13 @@ def test_eight_concurrent_generations_produce_one_claim_per_target(world):
         assert set(outcome.suggestion_ids) == stored_ids
         assert outcome.outcome == OUTCOME_GENERATED
         assert outcome.unsupported_target_refs == (world.unsupported,)
+        # The 30m band WON on its two mappable deficits, and the registered
+        # pronoun sibling is REPORTED rather than dropped. Asserted on every
+        # writer: a gap that survives contention only sometimes would be worse
+        # than one that never appeared, because it would read as reliable.
+        assert _gaps(outcome) == [world.registered_gap], _gaps(outcome)
+        assert outcome.has_registered_gaps is True
+        assert outcome.target_band_months == 30
     created_counts = {}
     for outcome in results:
         for target in outcome.generated:
@@ -278,6 +326,12 @@ def test_a_replay_against_the_real_store_writes_nothing_new(world):
     assert set(second.suggestion_ids) == set(first.suggestion_ids)
     assert all(target.created is False for target in second.generated)
     assert second.unsupported_target_refs == first.unsupported_target_refs
+    # The registered gap is a property of the EVIDENCE, not of whether this
+    # call happened to write anything, so a replay must still report it. If it
+    # appeared only on the first call, a clinician reopening the child would
+    # see the gap silently disappear.
+    assert _gaps(second) == _gaps(first) == [world.registered_gap]
+    assert second.has_registered_gaps is True
     assert len(_claims_for(world)) == 2
     assert len(_suggestions_for(world)) == 2
     assert len(_anchors_for(world)) == 2
@@ -295,6 +349,39 @@ def test_generation_creates_no_clinical_goal_against_the_real_store(world):
                 if r.get("child_id") == world.child_id]
         assert rows == [], collection
     assert {s["status"] for s in _suggestions_for(world)} == {"offered"}
+
+
+def test_an_unregistered_unmappable_deficit_still_fails_closed(world):
+    """NEGATIVE CONTROL for the fixture change above, against the real store.
+
+    The only difference from every other test here is that pronouns is absent
+    from `registered_unresolved`. That must still refuse the WHOLE run rather
+    than pass over a band on the strength of a deficit nobody has classified —
+    inferring mastery from an unclassified gap is exactly the silent-advance
+    this architecture exists to prevent.
+
+    Without this, declaring the register entry in `_source()` could be mistaken
+    for weakening `UnregisteredUnmappableSkill`, and nothing would catch it.
+    """
+    service = BaselineSuggestionGenerationV2Service(
+        repos=world.repos, goals=world.goals,
+        rung_source=_source(register_pronouns=False))
+
+    with pytest.raises(UnregisteredUnmappableSkill):
+        service.generate_for_child(world.principal, world.child_id)
+
+    # Fails CLOSED: the refusal is not a partial write. Nothing was persisted
+    # for the two mappable siblings either, so no caller can observe half a
+    # generation.
+    assert _claims_for(world) == []
+    assert _suggestions_for(world) == []
+    assert _anchors_for(world) == []
+
+    # ...and the registered fixture, on the same child and store, does work —
+    # so the refusal above is about the register entry and not about the world.
+    ok = world.service().generate_for_child(world.principal, world.child_id)
+    assert ok.outcome == OUTCOME_GENERATED
+    assert _gaps(ok) == [world.registered_gap]
 
 
 def test_a_concurrent_replay_after_a_first_generation_adds_nothing(world):

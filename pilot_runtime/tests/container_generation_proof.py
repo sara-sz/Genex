@@ -49,8 +49,20 @@ EXPECTED = {
     "subdomain": "expressive_language",
     "families": ["expressive_vocabulary_growth", "two_word_phrases"],
 }
+#: The digest the COMMITTED rung-table artifact declares for itself. The proof
+#: asserts the image's composed source carries exactly this, so the literal
+#: serving image is pinned to the committed artifact and nothing else.
+#:
+#: ROTATED at pilot integration, from
+#: 609fff91ba98b9afbf09d6d1c64cee23c59650d0bd3e8e53841083b1ab95b437.
+#: The registered-unresolved slice added an `unresolved_family_register` sheet
+#: to the taxonomy workbook, which moved `provenance.taxonomy_sha256` and so
+#: the derived `artifact_digest`. The artifact was NOT changed to match this
+#: constant — the constant was moved to match the artifact, which is the only
+#: safe direction: the committed artifact is the source of truth and this is a
+#: copy of one of its fields.
 ARTIFACT_DIGEST = \
-    "609fff91ba98b9afbf09d6d1c64cee23c59650d0bd3e8e53841083b1ab95b437"
+    "9f306d542ba7af704776f79285755eb178babdc4b4294a8981ddf035a4e24dfe"
 DOMAIN = "talking_and_communicating"
 FLOOR = 18
 
