@@ -487,3 +487,69 @@ def test_each_piped_proof_body_is_non_empty_and_asserts_something():
             f"the body piped at line {index + 1} asserts nothing")
         checked += 1
     assert checked >= 5, f"expected at least 5 piped proof bodies, found {checked}"
+
+
+# ---------------------------------------------------------------------------
+# Distribution-name canonicalization, found by making the proofs live.
+#
+# The dependency proof compared `d.metadata["Name"].lower()` against the names
+# used to REQUIRE each package. Those spellings are not guaranteed to match:
+# `firebase-admin` installs metadata reading `firebase_admin`, so lowercasing
+# alone reported a present package as absent and the step failed the first time
+# it actually ran. PEP 503 canonicalization collapses runs of `-`, `_` and `.`
+# to a single `-`, which is the equivalence the comparison needed.
+#
+# Mirrored here rather than imported: the hosted body runs INSIDE the image,
+# which carries no test helpers, so the function cannot be shared. The static
+# check below is what keeps the two from drifting apart.
+# ---------------------------------------------------------------------------
+
+
+def canonical_name(value: str) -> str:
+    """PEP 503 distribution-name canonicalization."""
+    import re
+
+    return re.sub(r"[-_.]+", "-", value).lower()
+
+
+def test_distribution_names_canonicalize_across_separator_spellings():
+    """The three spellings of one package must collapse to one key."""
+    keys = {canonical_name(name) for name in
+            ("firebase_admin", "firebase-admin", "firebase.admin")}
+    assert keys == {"firebase-admin"}, keys
+
+    # Case and repeated separators are covered by the same rule.
+    assert canonical_name("Firebase__Admin") == "firebase-admin"
+    assert canonical_name("GOOGLE.CLOUD_FIRESTORE") == "google-cloud-firestore"
+
+    # A genuinely different distribution must NOT collapse into it, or the
+    # forbidden-package half of the proof could be satisfied by a near-miss.
+    assert canonical_name("firebase-admin-extra") != "firebase-admin"
+    assert canonical_name("pandas-stubs") != "pandas"
+    assert canonical_name("numpy") != "pandas"
+
+
+def test_the_live_dependency_proof_canonicalizes_installed_names():
+    """STATIC check against the workflow, so the regression above cannot pass
+    while the hosted proof silently reverts to raw-name comparison.
+
+    The test and the in-image body are necessarily separate copies — the image
+    ships no test helpers — so the only thing tying them together is this
+    assertion on the workflow text.
+    """
+    text = WORKFLOW.read_text(encoding="utf-8")
+    step = text.split(
+        "Built image — workbooks, Parent and spreadsheet libs are ABSENT", 1)
+    assert len(step) == 2, "the dependency proof step was renamed or removed"
+    body = step[1].split("\n          PY", 1)[0]
+
+    # It defines the canonicalizer with the PEP 503 substitution...
+    assert "def canonical_name(" in body
+    assert 're.sub(r"[-_.]+", "-", value).lower()' in body
+    # ...applies it to the INSTALLED metadata names...
+    assert "canonical_name(d.metadata[\"Name\"])" in body
+    # ...and to BOTH expected lists, so neither side is compared raw.
+    assert body.count("map(canonical_name, (") == 2
+    # The superseded raw comparison must be gone.
+    assert 'd.metadata["Name"].lower()' not in body, (
+        "the proof reverted to raw-name comparison")

@@ -4147,15 +4147,34 @@ jobs:
           # 4. the installed distribution set is exactly the three pins plus
           #    their transitive dependencies — asserted as "no forbidden
           #    distribution", since transitive closure varies by wheel.
+          #
+          #    NAMES ARE CANONICALIZED ON BOTH SIDES. A distribution's metadata
+          #    name is not required to match the spelling used to require it:
+          #    `firebase-admin` installs metadata reading `firebase_admin`, so
+          #    a `.lower()`-only comparison reported it ABSENT and this proof
+          #    failed the first time it actually executed. PEP 503 treats runs
+          #    of `-`, `_` and `.` as equivalent, which is what this applies —
+          #    to the installed names AND to both expected lists, so no single
+          #    package is special-cased and any future dependency whose
+          #    metadata spelling differs is covered too.
           from importlib import metadata
-          installed = sorted(d.metadata["Name"].lower()
-                             for d in metadata.distributions()
-                             if d.metadata["Name"])
-          for forbidden in ("pandas", "openpyxl", "xlrd", "openai",
-                            "anthropic", "numpy"):
+          import re
+
+          def canonical_name(value):
+              return re.sub(r"[-_.]+", "-", value).lower()
+
+          installed = sorted(
+              canonical_name(d.metadata["Name"])
+              for d in metadata.distributions()
+              if d.metadata["Name"]
+          )
+          for forbidden in map(canonical_name, (
+                  "pandas", "openpyxl", "xlrd", "openai",
+                  "anthropic", "numpy")):
               assert forbidden not in installed, (forbidden, installed)
-          for required in ("firebase-admin", "google-cloud-firestore",
-                           "gunicorn"):
+          for required in map(canonical_name, (
+                  "firebase-admin", "google-cloud-firestore",
+                  "gunicorn")):
               assert required in installed, (required, installed)
           print(f"{len(installed)} distributions installed; the three pins "
                 "present, every forbidden one absent")
