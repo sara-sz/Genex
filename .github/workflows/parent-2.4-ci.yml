@@ -4069,7 +4069,7 @@ jobs:
 
       - name: Built image — the generated artifact is PRESENT
         run: |
-          docker run --rm --entrypoint python pilot-api:ci - <<'PY'
+          docker run --rm -i --entrypoint python pilot-api:ci - <<'PY'
           import hashlib, json, pathlib, sys
 
           path = pathlib.Path("/app/pilot_runtime/data/rung_table_talking_v1.json")
@@ -4105,7 +4105,7 @@ jobs:
 
       - name: Built image — workbooks, Parent and spreadsheet libs are ABSENT
         run: |
-          docker run --rm --entrypoint python pilot-api:ci - <<'PY'
+          docker run --rm -i --entrypoint python pilot-api:ci - <<'PY'
           import importlib.util, pathlib, sys
 
           app = pathlib.Path("/app")
@@ -4163,7 +4163,7 @@ jobs:
 
       - name: Built image — composition yields a non-null StaticRungTableSource
         run: |
-          docker run --rm --entrypoint python pilot-api:ci - <<'PY'
+          docker run --rm -i --entrypoint python pilot-api:ci - <<'PY'
           import json
 
           from pilot_runtime.composition import build_runtime
@@ -4253,7 +4253,7 @@ jobs:
         # No injected in-memory rung source. The only source of the ladder here
         # is the generated table inside the image.
         run: |
-          docker run --rm --entrypoint python pilot-api:ci - <<'PY'
+          docker run --rm -i --entrypoint python pilot-api:ci - <<'PY'
           import json
 
           from pilot_runtime.composition import build_rung_source
@@ -4338,7 +4338,7 @@ jobs:
         run: |
           docker run --rm --entrypoint sh pilot-api:ci -c \
             'gunicorn --version && python -c "import pilot_runtime.server as s; print(\"server module imports; application is resolved lazily via\", s.__getattr__.__name__)"'
-          docker run --rm --entrypoint python pilot-api:ci - <<'PY'
+          docker run --rm -i --entrypoint python pilot-api:ci - <<'PY'
           from pilot_runtime.server import StagingConfigError, _require
 
           base = {

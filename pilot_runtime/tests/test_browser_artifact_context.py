@@ -377,3 +377,113 @@ def test_the_staged_context_has_no_validator_and_no_curated_pools(staged):
         "}))\n"))
     result = json.loads(out.strip())
     assert result == {"activity_validator": False, "parent_taxonomy": False}
+
+
+# ---------------------------------------------------------------------------
+# The hosted in-image proof steps must actually EXECUTE.
+#
+# Five hosted steps piped their assertion body into the image's interpreter as
+# `docker run --rm --entrypoint python pilot-api:ci - <<'PY'`, with NO `-i`.
+# Docker does not attach stdin without it, so `python -` read EOF, executed
+# nothing and exited 0 — five proof steps that could not fail.
+#
+# The giveaway was structural rather than observed: one of them pinned a
+# rung-table digest that had already rotated and still passed, while the single
+# step that does pass `-i` failed on that exact stale digest.
+#
+# A proof step that cannot fail is worse than a missing one, because it reports
+# confidence it never earned. This guard is static text analysis of the
+# workflow, so it needs no container runtime and runs in the dependency-pure
+# job alongside the rest of this module.
+# ---------------------------------------------------------------------------
+
+WORKFLOW = REPO_ROOT / ".github/workflows/parent-2.4-ci.yml"
+
+#: The at-risk shape: the interpreter is handed `-` and the body arrives as a
+#: heredoc, so the script travels over STDIN. `python -c '...'` is NOT at risk —
+#: there the script is an argv and stdin is irrelevant.
+_RUN = "docker run"
+_PIPED = " - <<'"
+
+
+def _piped_script_invocations():
+    """`(line_number, text)` for each `docker run` taking its script on stdin."""
+    lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+    return [(number, line.strip())
+            for number, line in enumerate(lines, start=1)
+            if _RUN in line and _PIPED in line]
+
+
+def _attaches_stdin(command: str) -> bool:
+    """True when the flags attach stdin.
+
+    Accepts `-i` alone and inside a short-flag cluster (`-it`), plus the long
+    `--interactive`, so a legitimate alternative spelling is not reported as a
+    defect. Long flags are never treated as short clusters, or `--link` would
+    read as interactive.
+    """
+    tokens = command.split()
+    for token in tokens:
+        if token.startswith("--") or not token.startswith("-"):
+            continue
+        if "i" in token[1:]:
+            return True
+    return "--interactive" in tokens
+
+
+def test_every_piped_proof_invocation_attaches_stdin():
+    """Without `-i` the piped assertion body never runs and the step exits 0."""
+    invocations = _piped_script_invocations()
+    # The guard must not pass by finding nothing to inspect.
+    assert invocations, "no piped docker invocations found; this guard is vacuous"
+
+    detached = [(number, text) for number, text in invocations
+                if not _attaches_stdin(text)]
+    assert not detached, (
+        "these invocations pipe a script to `python -` without `-i`, so the "
+        "script never executes and the step passes vacuously:\n  "
+        + "\n  ".join(f"line {number}: {text}" for number, text in detached))
+
+
+def test_the_stdin_detector_rejects_the_shape_it_exists_to_catch():
+    """NEGATIVE CONTROL, so the guard above cannot rot into a tautology."""
+    assert not _attaches_stdin(
+        "docker run --rm --entrypoint python pilot-api:ci - <<'PY'")
+    assert _attaches_stdin(
+        "docker run --rm -i --entrypoint python pilot-api:ci - <<'PY'")
+    assert _attaches_stdin("docker run --rm -it --entrypoint python x -")
+    assert _attaches_stdin("docker run --rm --interactive --entrypoint python x -")
+    # A long flag containing "i" must NOT count as stdin attachment.
+    assert not _attaches_stdin("docker run --rm --network host x -")
+    assert not _attaches_stdin("docker run --rm --init x -")
+
+
+def test_each_piped_proof_body_is_non_empty_and_asserts_something():
+    """`-i` is worthless if the heredoc body carries no assertion.
+
+    Reads each heredoc from its opener to the matching terminator and requires
+    real statements plus at least one assertion or explicit exit — otherwise
+    attaching stdin would simply make an empty script succeed.
+    """
+    lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+    checked = 0
+    for index, line in enumerate(lines):
+        if _RUN not in line or _PIPED not in line:
+            continue
+        tag = line.split("<<'", 1)[1].split("'", 1)[0]
+        body = []
+        for following in lines[index + 1:]:
+            if following.strip() == tag:
+                break
+            body.append(following)
+        else:  # pragma: no cover - an unterminated heredoc is itself a defect
+            raise AssertionError(f"heredoc {tag!r} never terminates")
+
+        code = [row.strip() for row in body
+                if row.strip() and not row.strip().startswith("#")]
+        assert len(code) >= 3, (line, code)
+        assert any(row.startswith("assert") or "raise AssertionError" in row
+                   or "sys.exit" in row for row in code), (
+            f"the body piped at line {index + 1} asserts nothing")
+        checked += 1
+    assert checked >= 5, f"expected at least 5 piped proof bodies, found {checked}"
