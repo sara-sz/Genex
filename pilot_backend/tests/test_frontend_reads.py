@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 
 from pilot_backend.domain.goals import GoalKind, GoalRef
+from pilot_backend.domain.weekly_plan_document import parent_activity_ref
 
 # `world` depends on `e2e`, so both have to be imported — a fixture pulled in
 # by name does not drag its own dependencies with it.
@@ -122,9 +123,23 @@ def test_the_current_cycle_carries_the_snapshot_verbatim(world):
 
     # The document is the EXACT document the fixture captured — same keys,
     # same nesting, nothing renamed, nothing dropped, nothing added.
+    #
+    # P0-A changed WHAT the fixture captures, not this invariant. The capture
+    # now has the shape of a released Pilot week — each activity carrying its
+    # internal placement ref beside the opaque family-facing handle — because
+    # the observation route resolves that handle against this document.
+    # Rebuilt from the same source the fixture used rather than restated as a
+    # literal, so it keeps proving pass-through instead of freezing one run's
+    # refs.
+    alignments = world.weekly.list_alignments(world.principal("hannah"),
+                                              world.cycle_id)
     assert snapshot["source_document"] == {
-        "activities": [{"ref": "fictional-activity-1"},
-                       {"ref": "fictional-activity-2"}]}
+        "cycle_id": world.cycle_id,
+        "child_id": world.child,
+        "activities": [
+            {"activity_instance_ref": a.activity_instance_ref,
+             "activity_ref": parent_activity_ref(a.activity_instance_ref)}
+            for a in alignments]}
 
 
 def test_the_snapshot_declares_itself_non_canonical_in_the_payload(world):

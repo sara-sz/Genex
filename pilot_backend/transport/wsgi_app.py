@@ -62,6 +62,7 @@ from ..audit.events import AuditAction, AuditResult
 from ..authz.decisions import HTTP_FORBIDDEN, HTTP_OK, HTTP_UNAUTHORIZED
 from ..authz.policy import authenticate_and_authorize_child
 from ..domain.roles import ActorRole
+from ..domain.weekly_plan_document import parent_activity_ref
 from ..integration.errors import IntegrationError, SecondSessionUnresolved
 from ..observability.safe_logging import format_log, render
 
@@ -696,10 +697,18 @@ def _observation_payload(event) -> dict:
     `assistance`, `child_response` and `observation_text_ref` exist on the
     domain object and are deliberately NOT serialised: the pilot carries
     structured evidence only, and none of those three is structured.
+
+    P0-A: the activity is echoed as the OPAQUE `activity_ref`, never the
+    internal `activity_instance_ref`. This route is caregiver-facing on both
+    verbs, so returning the raw ref would have handed back the very identifier
+    the released week withholds — and the allocator derives that ref from the
+    reviewed template's content digest, so it carries the template id inside
+    it. Recomputed from the stored ref rather than looked up, because
+    `parent_activity_ref` is a pure function of it.
     """
     return {
         "event_id": event.event_id,
-        "activity_instance_ref": event.activity_instance_ref,
+        "activity_ref": parent_activity_ref(event.activity_instance_ref),
         "local_date": event.local_date,
         "attribution_month": event.attribution_month,
         "timezone_of_record": event.timezone_of_record,
@@ -1720,13 +1729,30 @@ class PilotWSGIApplication:
             # and `assistance`/`child_response` are deliberately absent: the
             # pilot carries structured evidence only, and an opaque text ref
             # would need an approved store that does not exist.
+            #
+            # P0-A: the activity is named by the OPAQUE `activity_ref` the
+            # released week actually showed the family, never by the internal
+            # `activity_instance_ref`. The raw ref is not allowlisted, so a
+            # client sending one is refused by the body reader before any
+            # service call — the privacy boundary stays one-directional rather
+            # than depending on the resolver to notice.
+            #
+            # `source_feedback_id` is the upstream submission id (Parent Beta
+            # mints `fb_...`). Optional for compatibility, and what makes a
+            # retry a replay instead of duplicate evidence.
+            # `supersedes_source_feedback_id` mirrors Parent Beta's append-only
+            # revision lineage: editing feedback there mints a NEW `fb_...` id
+            # naming the one it replaces. Carrying it means a revised reading
+            # does not read as a second independent signal.
             body = read_json_body(environ, allowed=[
-                "activity_instance_ref", "local_date", "attempt_outcome",
-                "difficulty", "enjoyment"],
-                required=["activity_instance_ref", "local_date",
-                          "attempt_outcome"])
+                "activity_ref", "local_date", "attempt_outcome",
+                "difficulty", "enjoyment", "source_feedback_id",
+                "supersedes_source_feedback_id"],
+                required=["activity_ref", "local_date", "attempt_outcome"])
+            instance_ref = weekly.resolve_parent_activity_ref(
+                principal, resource, opt_str(body, "activity_ref"))
             event = weekly.record_observation(
-                principal, resource, opt_str(body, "activity_instance_ref"),
+                principal, resource, instance_ref,
                 local_date=opt_str(body, "local_date"),
                 attempt_outcome=enum_member(AttemptOutcome, body,
                                             "attempt_outcome"),
@@ -1734,6 +1760,9 @@ class PilotWSGIApplication:
                             if opt_str(body, "difficulty") else None),
                 enjoyment=(enum_member(Enjoyment, body, "enjoyment")
                            if opt_str(body, "enjoyment") else None),
+                source_feedback_id=opt_str(body, "source_feedback_id"),
+                supersedes_source_feedback_id=opt_str(
+                    body, "supersedes_source_feedback_id"),
                 request_id=request_id)
             return {"observation": _observation_payload(event)}
 

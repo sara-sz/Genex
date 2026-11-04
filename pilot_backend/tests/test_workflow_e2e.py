@@ -40,6 +40,7 @@ from pilot_backend.domain.connections import CaregiverChildConnection
 from pilot_backend.domain.entities import Caregiver, Child, Practice
 from pilot_backend.domain.enums import CaregiverRelationship, ProviderDiscipline
 from pilot_backend.domain.goals import EditType, GoalKind, GoalRef
+from pilot_backend.domain.weekly_plan_document import parent_activity_ref
 from pilot_backend.goals.service import GoalService
 from pilot_backend.integration.parent_source import InMemoryParentSessionSource
 from pilot_backend.persistence import FakeDocumentStore, FirestoreRepositories
@@ -274,16 +275,6 @@ def _cycle(e2e, plan_id, goal_id) -> str:
 
     cycle = e2e.weekly.create_cycle(e2e.principal("hannah"), plan_id,
                                     sequence_in_month=_sequence_covering_today())
-    # The SNAPSHOT comes before the release: "a cycle cannot be released
-    # before its plan is snapshotted". The snapshot freezes what the
-    # parent-facing plan actually contained, so a later review is reading the
-    # week the family saw rather than whatever the generator would produce
-    # today. The document is a fictional stand-in for Parent's own plan.
-    e2e.weekly.capture_snapshot(
-        e2e.principal("hannah"), cycle.cycle_id, SourceSystem.PARENT,
-        "fictional-parent-plan-1",
-        {"activities": [{"ref": "fictional-activity-1"},
-                        {"ref": "fictional-activity-2"}]})
     # ALLOCATION before release, and before any observation.
     #
     # `record_observation` refuses an activity ref that is not aligned to the
@@ -302,6 +293,36 @@ def _cycle(e2e, plan_id, goal_id) -> str:
          CandidateActivity(activity_identity_ref="fictional-activity-2",
                            supports=(ref,))],
         family_declared_capacity=4)
+
+    # The SNAPSHOT comes before the release: "a cycle cannot be released
+    # before its plan is snapshotted". The snapshot freezes what the
+    # parent-facing plan actually contained, so a later review is reading the
+    # week the family saw rather than whatever the generator would produce
+    # today.
+    #
+    # P0-A MOVED IT AFTER ALLOCATION, and that ordering is now load-bearing.
+    # The document must carry the placements' refs, and `activity_instance_ref`
+    # only exists once the allocator has written the alignments. It is a
+    # fictional stand-in for a released week, but it now has the SHAPE of one:
+    # both the internal ref and the opaque family-facing handle, side by side,
+    # which is exactly what makes the handle resolvable back to its placement.
+    #
+    # The previous stand-in — `{"activities": [{"ref": "..."}]}` — was an
+    # opaque capture in Parent's own plan shape, carrying neither ref. The
+    # observation route accepted the internal ref directly then, so the
+    # snapshot's contents never mattered to it. Under the opaque-handle
+    # contract they do.
+    alignments = e2e.weekly.list_alignments(e2e.principal("hannah"),
+                                            cycle.cycle_id)
+    e2e.weekly.capture_snapshot(
+        e2e.principal("hannah"), cycle.cycle_id, SourceSystem.PARENT,
+        "fictional-parent-plan-1",
+        {"cycle_id": cycle.cycle_id,
+         "child_id": cycle.child_id,
+         "activities": [
+             {"activity_instance_ref": a.activity_instance_ref,
+              "activity_ref": parent_activity_ref(a.activity_instance_ref)}
+             for a in alignments]})
     released = e2e.weekly.release_cycle(e2e.principal("hannah"),
                                         cycle.cycle_id)
     return released.cycle_id
@@ -333,6 +354,12 @@ def world(e2e):
     e2e.activity_refs = [a.activity_instance_ref for a in
                          e2e.weekly.list_alignments(
                              e2e.principal("hannah"), cycle_id)]
+    # P0-A: what a FAMILY can name. The released week exposes only the opaque
+    # handle, so every caregiver-facing HTTP call below cites one of these and
+    # never an entry of `activity_refs` above. Derived with the product's own
+    # function rather than copied, so a change to the scheme reaches the tests.
+    e2e.parent_activity_refs = [parent_activity_ref(ref)
+                                for ref in e2e.activity_refs]
     return e2e
 
 
@@ -381,8 +408,9 @@ def test_the_whole_hannah_workflow_over_http(world):
     assert cycle[1]["cycle"]["cycle_id"] == w.cycle_id
 
     # --- 6. the family records structured evidence ----------------------
+    # Cites the OPAQUE handle the released week showed, not the internal ref.
     observed = post(w, f"/pilot/cycles/{w.cycle_id}/observations", "cg",
-                    {"activity_instance_ref": w.activity_refs[0],
+                    {"activity_ref": w.parent_activity_refs[0],
                      "local_date": TODAY, "attempt_outcome": "did_it",
                      "difficulty": "just_right", "enjoyment": "enjoyed"})
     assert observed[0] == 200, observed
@@ -454,7 +482,7 @@ def test_the_review_persists_the_reviewed_event_ids(world):
     """Lineage survives serialisation AND the round trip to the store."""
     w = world
     observed = post(w, f"/pilot/cycles/{w.cycle_id}/observations", "cg",
-                    {"activity_instance_ref": w.activity_refs[0],
+                    {"activity_ref": w.parent_activity_refs[0],
                      "local_date": TODAY, "attempt_outcome": "did_it"})
     event_id = observed[1]["observation"]["event_id"]
 
@@ -529,18 +557,24 @@ def test_the_observation_payload_is_exactly_the_structured_fields(world):
     """Pinned as an EXACT key set, so an added domain field cannot leak."""
     w = world
     observed = post(w, f"/pilot/cycles/{w.cycle_id}/observations", "cg",
-                    {"activity_instance_ref": w.activity_refs[0],
+                    {"activity_ref": w.parent_activity_refs[0],
                      "local_date": TODAY, "attempt_outcome": "did_it",
                      "difficulty": "too_hard", "enjoyment": "disliked"})
     payload = observed[1]["observation"]
     assert set(payload) == {
-        "event_id", "activity_instance_ref", "local_date",
+        "event_id", "activity_ref", "local_date",
         "attribution_month", "timezone_of_record", "attempt_outcome",
         "difficulty", "enjoyment"}
     # The three free-text domain fields exist and must NOT be serialised.
+    # P0-A adds `activity_instance_ref` to that list: the route is
+    # caregiver-facing, and the allocator's ref embeds the reviewed template's
+    # content digest, so echoing it back would undo what the released week
+    # withholds.
     for banned in ("child_response", "assistance", "observation_text_ref",
-                   "note", "comment", "recorded_by_caregiver_id"):
+                   "note", "comment", "recorded_by_caregiver_id",
+                   "activity_instance_ref"):
         assert banned not in payload, banned
+    assert payload["activity_ref"] == w.parent_activity_refs[0]
     assert payload["difficulty"] == "too_hard"
     assert payload["enjoyment"] == "disliked"
 
@@ -549,14 +583,15 @@ def test_the_observation_list_payload_has_the_same_shape(world):
     """A leak through the LIST route would be just as bad as through create."""
     w = world
     post(w, f"/pilot/cycles/{w.cycle_id}/observations", "cg",
-         {"activity_instance_ref": w.activity_refs[0],
+         {"activity_ref": w.parent_activity_refs[0],
           "local_date": TODAY, "attempt_outcome": "did_it"})
     listed = get(w, f"/pilot/cycles/{w.cycle_id}/observations", "hannah")
     for row in listed[1]["observations"]:
         assert "child_response" not in row
         assert "assistance" not in row
+        assert "activity_instance_ref" not in row
         assert set(row) == {
-            "event_id", "activity_instance_ref", "local_date",
+            "event_id", "activity_ref", "local_date",
             "attribution_month", "timezone_of_record", "attempt_outcome",
             "difficulty", "enjoyment"}
 
@@ -843,3 +878,489 @@ def test_coding_assistance_is_always_marked_candidate_only(world):
     for banned in ("payer", "insurance", "claim", "reimburse",
                    "medical_necessity", "member_id"):
         assert banned not in rendered, banned
+
+
+# ===========================================================================
+# P0-A — PARENT FEEDBACK -> CANONICAL ObservationEvent
+#
+# The Parent-facing identity contract. The released week exposes only the
+# opaque `activity_ref`, so feedback has to name an activity by that handle and
+# the server resolves it back to the placement. Before this slice the route
+# required the internal `activity_instance_ref` — a value the family is never
+# given, and one that EMBEDS the reviewed template's content digest.
+#
+# Persistence and identity only: no clinical inference, no mastery, no
+# adaptation. "Too easy" here is a recorded parent observation and nothing more.
+# ===========================================================================
+
+
+def _observe(w, body, token="cg"):
+    """POST feedback as the caregiver. `(status, body)` — headers unused here."""
+    status, payload = post(
+        w, f"/pilot/cycles/{w.cycle_id}/observations", token, body)[:2]
+    return status, payload
+
+
+def test_the_opaque_activity_ref_resolves_to_the_released_placement(world):
+    """The handle the family was shown identifies the right placement."""
+    w = world
+    handle = w.parent_activity_refs[0]
+    status, body = _observe(w, {"activity_ref": handle, "local_date": TODAY,
+                                "attempt_outcome": "did_it"})
+    assert status == 200, body
+
+    # It resolved to the placement that handle is a digest OF — checked on the
+    # STORED event, so this is the persisted linkage and not just the echo.
+    stored = w.weekly.list_observations(w.principal("hannah"), w.cycle_id)
+    event = [e for e in stored
+             if e.event_id == body["observation"]["event_id"]][0]
+    assert event.activity_instance_ref == w.activity_refs[0]
+    assert parent_activity_ref(event.activity_instance_ref) == handle
+    # ...and the response gives back only the handle.
+    assert body["observation"]["activity_ref"] == handle
+
+
+def test_the_raw_internal_instance_ref_is_refused_from_the_parent_route(world):
+    """The privacy boundary is one-directional.
+
+    The internal ref is not allowlisted, so a client sending one is refused by
+    the body reader before any service call — the refusal does not depend on
+    the resolver noticing. A client that somehow learned a real placement ref
+    still cannot use it here.
+    """
+    w = world
+    status, body = _observe(w, {"activity_instance_ref": w.activity_refs[0],
+                                "local_date": TODAY,
+                                "attempt_outcome": "did_it"})
+    assert status != 200, body
+    # The legitimate handle for that same placement DOES work, so the refusal
+    # is about the identifier and not about the activity or the caregiver.
+    ok, _ = _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                         "local_date": TODAY, "attempt_outcome": "did_it"})
+    assert ok == 200
+
+
+def test_sending_the_handle_under_the_old_field_name_is_also_refused(world):
+    """Belt and braces: the handle is only accepted as `activity_ref`."""
+    w = world
+    status, _ = _observe(w, {"activity_instance_ref":
+                             w.parent_activity_refs[0],
+                             "local_date": TODAY,
+                             "attempt_outcome": "did_it"})
+    assert status != 200
+
+
+def test_an_unknown_or_foreign_activity_ref_fails_closed(world):
+    """A well-formed handle that this released week does not contain.
+
+    Covers the cross-cycle and cross-child cases in one: resolution scans the
+    released document for THIS cycle, so a handle from any other week — or one
+    simply invented with the right scheme — has nowhere to match.
+    """
+    w = world
+    foreign = parent_activity_ref("some-other-cycle::some-activity::0")
+    assert foreign.startswith("pact1:")
+    status, _ = _observe(w, {"activity_ref": foreign, "local_date": TODAY,
+                             "attempt_outcome": "did_it"})
+    assert status != 200
+
+    # A syntactically valid but absent handle, and a value from the wrong
+    # namespace entirely, are both refused.
+    for bad in (parent_activity_ref("invented"), "pact1:" + "0" * 32,
+                "not-a-ref", ""):
+        refused, _ = _observe(w, {"activity_ref": bad, "local_date": TODAY,
+                                  "attempt_outcome": "did_it"})
+        assert refused != 200, bad
+
+
+def test_the_beta_feedback_vocabulary_maps_onto_the_canonical_enums(world):
+    """Beta's three triples land on the canonical enum members.
+
+    The mapping is asserted on the PERSISTED event, so a transport that
+    accepted a value and dropped it would fail here. `enjoyment` is the only
+    one whose wire words differ from the stored names
+    (`loved_it`/`it_was_okay`/`not_really` -> enjoyed/neutral/disliked), and
+    the Parent client is responsible for that translation; the Pilot route
+    speaks the canonical vocabulary.
+    """
+    w = world
+    cases = [
+        ("did_it", "too_easy", "enjoyed"),
+        ("didnt_want_to_try", "just_right", "neutral"),
+        ("wasnt_ready_yet", "too_hard", "disliked"),
+    ]
+    for index, (outcome, difficulty, enjoyment) in enumerate(cases):
+        status, body = _observe(w, {
+            "activity_ref": w.parent_activity_refs[0],
+            "local_date": TODAY, "attempt_outcome": outcome,
+            "difficulty": difficulty, "enjoyment": enjoyment,
+            "source_feedback_id": f"fb_vocab_{index}"})
+        assert status == 200, body
+        event_id = body["observation"]["event_id"]
+        stored = [e for e in w.weekly.list_observations(
+            w.principal("hannah"), w.cycle_id) if e.event_id == event_id][0]
+        assert stored.attempt_outcome.value == outcome
+        assert stored.difficulty.value == difficulty
+        assert stored.enjoyment.value == enjoyment
+        # No clinical field was inferred from any of it.
+        assert stored.assistance == ""
+        assert stored.child_response == ""
+        assert stored.observation_text_ref == ""
+
+
+def test_the_caregiver_identity_is_server_derived(world):
+    """`recorded_by_caregiver_id` comes from the token, never from the body.
+
+    It is also absent from the response, so the route neither accepts nor
+    reveals it.
+    """
+    w = world
+    status, body = _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                                "local_date": TODAY,
+                                "attempt_outcome": "did_it"})
+    assert status == 200, body
+    assert "recorded_by_caregiver_id" not in body["observation"]
+
+    stored = [e for e in w.weekly.list_observations(
+        w.principal("hannah"), w.cycle_id)
+        if e.event_id == body["observation"]["event_id"]][0]
+    expected = w.principal("cg").application_id
+    assert stored.recorded_by_caregiver_id == expected
+
+    # A body attempting to set it is refused rather than silently ignored.
+    refused, _ = _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                              "local_date": TODAY,
+                              "attempt_outcome": "did_it",
+                              "recorded_by_caregiver_id": "cg_someone_else"})
+    assert refused != 200
+
+
+def test_a_retried_submission_replays_instead_of_duplicating_evidence(world):
+    """IDEMPOTENCY on the upstream feedback id.
+
+    `source_feedback_id` was stored but enforced nowhere, so a retry produced
+    TWO events for one attempt. That is not cosmetic: the adaptation layer
+    counts consecutive signals, so a retried "too hard" could manufacture a
+    threshold the family never reported.
+    """
+    w = world
+    payload = {"activity_ref": w.parent_activity_refs[0],
+               "local_date": TODAY, "attempt_outcome": "did_it",
+               "difficulty": "too_hard", "source_feedback_id": "fb_retry_1"}
+
+    first_status, first = _observe(w, payload)
+    assert first_status == 200, first
+    second_status, second = _observe(w, payload)
+    assert second_status == 200, second
+
+    # Same event, not a second one — a replay, not an error the client has to
+    # interpret.
+    assert (second["observation"]["event_id"]
+            == first["observation"]["event_id"])
+    events = [e for e in w.weekly.list_observations(w.principal("hannah"),
+                                                    w.cycle_id)
+              if e.source_feedback_id == "fb_retry_1"]
+    assert len(events) == 1
+    assert events[0].source_feedback_id == "fb_retry_1"
+
+    # A DIFFERENT upstream id is genuinely new evidence.
+    other_status, other = _observe(w, dict(payload,
+                                           source_feedback_id="fb_retry_2"))
+    assert other_status == 200, other
+    assert (other["observation"]["event_id"]
+            != first["observation"]["event_id"])
+
+
+def test_without_a_source_feedback_id_each_submission_is_distinct(world):
+    """The explicit limit of the guarantee.
+
+    With no upstream id this layer cannot invent an identity the caller did
+    not give it, so two submissions are two events. Stated as a test so the
+    boundary is visible rather than discovered later: the Parent bridge must
+    pass the `fb_...` id to get replay protection.
+    """
+    w = world
+    payload = {"activity_ref": w.parent_activity_refs[0],
+               "local_date": TODAY, "attempt_outcome": "did_it"}
+    first = _observe(w, payload)[1]["observation"]["event_id"]
+    second = _observe(w, payload)[1]["observation"]["event_id"]
+    assert first != second
+
+
+def test_recording_feedback_does_not_mutate_the_released_snapshot(world):
+    """Evidence accumulates beside the week; it never edits it."""
+    w = world
+    before = get(w, f"/pilot/children/{w.child}/current-cycle")[1]
+    _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                 "local_date": TODAY, "attempt_outcome": "didnt_want_to_try",
+                 "difficulty": "too_hard", "enjoyment": "disliked"})
+    after = get(w, f"/pilot/children/{w.child}/current-cycle")[1]
+    assert after["plan_snapshot"] == before["plan_snapshot"]
+    assert after["cycle"] == before["cycle"]
+
+
+def test_the_feedback_path_touches_no_candidate_or_generated_content(world):
+    """P0-A is persistence and identity only.
+
+    Recording feedback must not reach the clinical-review candidate set, create
+    an adaptation, or alter a goal. Asserted over the whole store so a new
+    write anywhere would surface.
+    """
+    w = world
+    untouched = ("pilot_adaptation_records", "pilot_goal_versions",
+                 "pilot_clinical_goals", "pilot_weekly_plan_snapshots",
+                 "pilot_capacity_ledgers", "pilot_alignments")
+    before = {name: len(list(w.repos.store.list_all(name)))
+              for name in untouched}
+
+    status, body = _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                                "local_date": TODAY,
+                                "attempt_outcome": "did_it",
+                                "difficulty": "too_easy",
+                                "source_feedback_id": "fb_no_side_effects"})
+    assert status == 200, body
+
+    after = {name: len(list(w.repos.store.list_all(name)))
+             for name in untouched}
+    assert after == before, "feedback caused a write outside the evidence path"
+    # The only new row is the observation itself.
+    assert any(e.event_id == body["observation"]["event_id"]
+               for e in w.weekly.list_observations(w.principal("hannah"),
+                                                   w.cycle_id))
+
+
+# ---------------------------------------------------------------------------
+# P0-A gap 2 — exact replay vs CONFLICTING reuse of one upstream id
+# ---------------------------------------------------------------------------
+
+
+def test_reusing_one_feedback_id_for_a_different_observation_conflicts(world):
+    """One upstream id must mean ONE observation.
+
+    An exact repeat is a retry and replays. Reusing the id for a different
+    activity, date, outcome or rating is a caller defect, and replaying the old
+    event would answer 200 to a request the server did not honour — the client
+    would believe its new reading was stored.
+    """
+    w = world
+    base = {"activity_ref": w.parent_activity_refs[0], "local_date": TODAY,
+            "attempt_outcome": "did_it", "difficulty": "too_hard",
+            "enjoyment": "disliked", "source_feedback_id": "fb_conflict_1"}
+    first_status, first = _observe(w, base)
+    assert first_status == 200, first
+    original_id = first["observation"]["event_id"]
+
+    # Each of these differs from the stored observation in exactly one of the
+    # compared fields, and each must be refused rather than replayed.
+    conflicts = (
+        dict(base, attempt_outcome="wasnt_ready_yet"),
+        dict(base, difficulty="too_easy"),
+        dict(base, enjoyment="enjoyed"),
+        dict(base, activity_ref=w.parent_activity_refs[1]),
+    )
+    for variant in conflicts:
+        status, _ = _observe(w, variant)
+        assert status != 200, variant
+
+        # And the original is untouched — a refused conflict writes nothing.
+        stored = [e for e in w.weekly.list_observations(
+            w.principal("hannah"), w.cycle_id) if e.event_id == original_id]
+        assert len(stored) == 1
+        assert stored[0].attempt_outcome.value == "did_it"
+        assert stored[0].difficulty.value == "too_hard"
+        assert stored[0].enjoyment.value == "disliked"
+        assert stored[0].activity_instance_ref == w.activity_refs[0]
+
+    # Exactly one event still carries that id: no conflict created a second.
+    assert len([e for e in w.weekly.list_observations(w.principal("hannah"),
+                                                      w.cycle_id)
+                if e.source_feedback_id == "fb_conflict_1"]) == 1
+
+    # The genuine exact repeat still replays.
+    replay_status, replay = _observe(w, base)
+    assert replay_status == 200
+    assert replay["observation"]["event_id"] == original_id
+
+
+def test_a_retry_is_not_made_a_conflict_by_server_timestamps(world):
+    """Server-stamped values must be excluded from the identity comparison.
+
+    `occurred_at` and `created_at` are stamped per request, so comparing them
+    would make every legitimate retry a conflict — the opposite of the
+    guarantee. Two deliveries at different moments must still replay.
+    """
+    w = world
+    payload = {"activity_ref": w.parent_activity_refs[0],
+               "local_date": TODAY, "attempt_outcome": "did_it",
+               "source_feedback_id": "fb_clock_1"}
+    first = _observe(w, payload)[1]["observation"]["event_id"]
+    # The fixture's clock advances between calls, so the second delivery
+    # carries a different stamp.
+    second = _observe(w, payload)[1]["observation"]["event_id"]
+    assert first == second
+
+    from pilot_backend.domain.observation import OBSERVATION_IDENTITY_FIELDS
+
+    for stamped in ("occurred_at", "created_at", "attribution_month",
+                    "event_id", "timezone_of_record", "tz_source"):
+        assert stamped not in OBSERVATION_IDENTITY_FIELDS, stamped
+
+
+# ---------------------------------------------------------------------------
+# P0-A gap 3 — revision / supersession, and the CURRENT observation rule
+# ---------------------------------------------------------------------------
+
+
+def _current(w):
+    from pilot_backend.domain.observation import current_observations
+
+    return current_observations(
+        w.weekly.list_observations(w.principal("hannah"), w.cycle_id))
+
+
+def test_one_original_feedback_is_one_current_observation(world):
+    w = world
+    status, body = _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                                "local_date": TODAY,
+                                "attempt_outcome": "did_it",
+                                "difficulty": "too_hard",
+                                "source_feedback_id": "fb_rev_a1"})
+    assert status == 200, body
+    mine = [e for e in _current(w) if e.source_feedback_id == "fb_rev_a1"]
+    assert len(mine) == 1
+    assert mine[0].supersedes_source_feedback_id == ""
+
+
+def test_an_exact_retry_is_still_one_current_observation(world):
+    w = world
+    payload = {"activity_ref": w.parent_activity_refs[0],
+               "local_date": TODAY, "attempt_outcome": "did_it",
+               "difficulty": "too_hard", "source_feedback_id": "fb_rev_b1"}
+    _observe(w, payload)
+    _observe(w, payload)
+    assert len([e for e in _current(w)
+                if e.source_feedback_id == "fb_rev_b1"]) == 1
+
+
+def test_a_revision_keeps_both_rows_but_only_one_is_current(world):
+    """THE SIGNAL-COUNTING PROTECTION.
+
+    A parent reporting "too hard" and then editing it to "just right" must not
+    leave two independent readings behind. Both rows are retained — nothing is
+    overwritten — and exactly one is CURRENT.
+    """
+    w = world
+    original = _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                            "local_date": TODAY, "attempt_outcome": "did_it",
+                            "difficulty": "too_hard",
+                            "source_feedback_id": "fb_rev_c1"})
+    assert original[0] == 200, original
+
+    revised = _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                           "local_date": TODAY, "attempt_outcome": "did_it",
+                           "difficulty": "just_right",
+                           "source_feedback_id": "fb_rev_c2",
+                           "supersedes_source_feedback_id": "fb_rev_c1"})
+    assert revised[0] == 200, revised
+
+    everything = w.weekly.list_observations(w.principal("hannah"), w.cycle_id)
+    lineage = [e for e in everything
+               if e.source_feedback_id in ("fb_rev_c1", "fb_rev_c2")]
+    # APPEND-ONLY: two immutable historical rows.
+    assert len(lineage) == 2
+    original_row = [e for e in lineage
+                    if e.source_feedback_id == "fb_rev_c1"][0]
+    assert original_row.difficulty.value == "too_hard", "history was rewritten"
+
+    # ...and exactly ONE current reading, the revision.
+    current = [e for e in _current(w)
+               if e.source_feedback_id in ("fb_rev_c1", "fb_rev_c2")]
+    assert len(current) == 1
+    assert current[0].source_feedback_id == "fb_rev_c2"
+    assert current[0].difficulty.value == "just_right"
+    assert current[0].supersedes_source_feedback_id == "fb_rev_c1"
+
+    # The counting consequence, stated directly: one too-hard reading, not two.
+    too_hard = [e for e in _current(w)
+                if e.difficulty and e.difficulty.value == "too_hard"
+                and e.source_feedback_id in ("fb_rev_c1", "fb_rev_c2")]
+    assert too_hard == []
+
+
+def test_a_revision_cannot_supersede_another_activity_or_cycle(world):
+    """A revision may only replace feedback about the SAME activity.
+
+    Otherwise a revision about one activity could silently retire another
+    activity's reading — changing what the adaptation layer counts while every
+    row stayed intact and looked correct.
+    """
+    w = world
+    _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                 "local_date": TODAY, "attempt_outcome": "did_it",
+                 "difficulty": "too_hard", "source_feedback_id": "fb_rev_d1"})
+
+    # Same cycle, DIFFERENT activity -> refused.
+    status, _ = _observe(w, {"activity_ref": w.parent_activity_refs[1],
+                             "local_date": TODAY,
+                             "attempt_outcome": "did_it",
+                             "source_feedback_id": "fb_rev_d2",
+                             "supersedes_source_feedback_id": "fb_rev_d1"})
+    assert status != 200
+
+    # An upstream id that was never recorded for this child -> refused.
+    unknown, _ = _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                              "local_date": TODAY,
+                              "attempt_outcome": "did_it",
+                              "source_feedback_id": "fb_rev_d3",
+                              "supersedes_source_feedback_id": "fb_never"})
+    assert unknown != 200
+
+    # Self-supersession -> refused.
+    itself, _ = _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                             "local_date": TODAY,
+                             "attempt_outcome": "did_it",
+                             "source_feedback_id": "fb_rev_d4",
+                             "supersedes_source_feedback_id": "fb_rev_d4"})
+    assert itself != 200
+
+    # The original reading survived every refused attempt, and is still current.
+    current = [e for e in _current(w)
+               if e.source_feedback_id == "fb_rev_d1"]
+    assert len(current) == 1
+    assert current[0].difficulty.value == "too_hard"
+
+
+def test_the_supersession_field_survives_the_codec_round_trip(world):
+    """The lineage must survive encode/decode, not just live in memory."""
+    w = world
+    _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                 "local_date": TODAY, "attempt_outcome": "did_it",
+                 "source_feedback_id": "fb_codec_1"})
+    _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                 "local_date": TODAY, "attempt_outcome": "wasnt_ready_yet",
+                 "source_feedback_id": "fb_codec_2",
+                 "supersedes_source_feedback_id": "fb_codec_1"})
+
+    # Read back THROUGH the repository, so this is the decoded document.
+    reloaded = [e for e in w.weekly.list_observations(w.principal("hannah"),
+                                                      w.cycle_id)
+                if e.source_feedback_id == "fb_codec_2"][0]
+    assert reloaded.supersedes_source_feedback_id == "fb_codec_1"
+
+    # And it is in the stored document itself, not only on the object.
+    raw = [d for _i, d in w.repos.store.list_all("pilot_observation_events")
+           if d.get("source_feedback_id") == "fb_codec_2"][0]
+    assert raw["supersedes_source_feedback_id"] == "fb_codec_1"
+
+
+def test_the_supersession_field_is_not_exposed_to_the_parent_payload(world):
+    """Lineage is internal provenance; the response shape is unchanged."""
+    w = world
+    status, body = _observe(w, {"activity_ref": w.parent_activity_refs[0],
+                                "local_date": TODAY,
+                                "attempt_outcome": "did_it",
+                                "source_feedback_id": "fb_shape_1"})
+    assert status == 200, body
+    assert set(body["observation"]) == {
+        "event_id", "activity_ref", "local_date", "attribution_month",
+        "timezone_of_record", "attempt_outcome", "difficulty", "enjoyment"}

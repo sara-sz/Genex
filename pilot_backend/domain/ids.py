@@ -23,6 +23,7 @@ Nothing branches on it; `entity_type_of` exists for diagnostics only.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from typing import Optional
 
@@ -242,6 +243,30 @@ def new_capacity_ledger_id() -> str:
 
 def new_observation_event_id() -> str:
     return new_id(OBSERVATION_EVENT_PREFIX)
+
+
+def observation_event_id_for(child_id: str, source_feedback_id: str) -> str:
+    """A DETERMINISTIC observation id for one upstream feedback submission. P0-A.
+
+    Same shape as `new_observation_event_id` — `obsv_<32 hex>` — but derived
+    rather than random, so two deliveries of one Parent feedback submission
+    compute the same id and the create-only repository refuses the second.
+    That is what makes a client retry a safe replay instead of a duplicate
+    attempt in the evidence the adaptation layer counts.
+
+    Scoped by `child_id` as well as the upstream id, so two source systems
+    that happened to mint the same feedback id for different children cannot
+    collide onto one event.
+    """
+    child = (child_id or "").strip()
+    source = (source_feedback_id or "").strip()
+    if not child or not source:
+        raise ValueError(
+            "a derived observation id requires a child and a source feedback id")
+    digest = hashlib.sha256(
+        f"{OBSERVATION_EVENT_PREFIX}|{child}|{source}".encode("utf-8")
+    ).hexdigest()
+    return f"{OBSERVATION_EVENT_PREFIX}_{digest[:32]}"
 
 
 def new_customization_signal_id() -> str:

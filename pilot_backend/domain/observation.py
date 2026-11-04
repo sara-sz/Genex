@@ -47,7 +47,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Sequence, Tuple
 
 from .entities import SCHEMA_VERSION, utc_now
 from .enums import Visibility
@@ -140,6 +140,15 @@ class ObservationEvent:
     #: content and does not belong in a record this layer indexes and counts.
     observation_text_ref: str = ""
     source_feedback_id: str = ""
+    #: The upstream feedback this submission REVISES, when it revises one. P0-A.
+    #:
+    #: Parent Beta is append-only: editing feedback for one activity and date
+    #: mints a NEW `fb_...` id carrying `supersedes_feedback_id`, and keeps the
+    #: earlier record. This mirrors that lineage rather than inventing a second
+    #: model, and it is why nothing here is ever overwritten — a revised
+    #: "too hard" must not read as two independent "too hard" signals when the
+    #: adaptation layer starts counting consecutive ones.
+    supersedes_source_feedback_id: str = ""
     recorded_by_caregiver_id: str = ""
     created_at: datetime = field(default_factory=utc_now)
     schema_version: str = SCHEMA_VERSION
@@ -149,6 +158,14 @@ class ObservationEvent:
     def __post_init__(self) -> None:
         if not isinstance(self.attempt_outcome, AttemptOutcome):
             raise ObservationError("attempt_outcome must be an AttemptOutcome")
+        if (self.supersedes_source_feedback_id.strip()
+                and not self.source_feedback_id.strip()):
+            raise ObservationError(
+                "a revision requires its own source feedback id")
+        if (self.supersedes_source_feedback_id.strip()
+                == self.source_feedback_id.strip() != ""):
+            raise ObservationError(
+                "an observation cannot supersede its own source feedback")
         if self.attribution_month != attribution_month_for(self.local_date):
             raise ObservationError(
                 "attribution_month must be derived from local_date")
@@ -180,6 +197,7 @@ class ObservationEvent:
                enjoyment: Optional[Enjoyment] = None,
                assistance: str = "", child_response: str = "",
                observation_text_ref: str = "", source_feedback_id: str = "",
+               supersedes_source_feedback_id: str = "",
                recorded_by_caregiver_id: str = "",
                now: Optional[datetime] = None) -> "ObservationEvent":
         zone = validate_timezone(timezone_of_record)
@@ -200,9 +218,65 @@ class ObservationEvent:
             child_response=child_response,
             observation_text_ref=observation_text_ref,
             source_feedback_id=source_feedback_id,
+            supersedes_source_feedback_id=supersedes_source_feedback_id,
             recorded_by_caregiver_id=recorded_by_caregiver_id,
             created_at=now or utc_now(),
         )
+
+
+#: The fields that make two submissions the SAME observation. P0-A.
+#:
+#: Used to tell an exact replay from a conflicting reuse of one upstream
+#: feedback id. Server-generated values are deliberately absent: `occurred_at`
+#: and `created_at` are stamped per request, so comparing them would make every
+#: legitimate retry a conflict — which is the opposite of the guarantee.
+#: `attribution_month` is omitted because it is derived from `local_date`,
+#: which IS compared, and `tz_source`/`timezone_of_record` come from the plan
+#: rather than the submission.
+OBSERVATION_IDENTITY_FIELDS: Tuple[str, ...] = (
+    "child_id",
+    "owning_cycle_id",
+    "activity_instance_ref",
+    "local_date",
+    "attempt_outcome",
+    "difficulty",
+    "enjoyment",
+    "recorded_by_caregiver_id",
+)
+
+
+def same_observation(left: "ObservationEvent",
+                     right: "ObservationEvent") -> bool:
+    """True when two events record the same observation. P0-A."""
+    return all(getattr(left, name) == getattr(right, name)
+               for name in OBSERVATION_IDENTITY_FIELDS)
+
+
+def current_observations(events: Sequence["ObservationEvent"]
+                         ) -> Tuple["ObservationEvent", ...]:
+    """The events that have NOT been revised. P0-A.
+
+    Parent feedback is append-only in both systems, so a revised submission
+    leaves two immutable rows. "Current" is therefore derived rather than
+    stored: an event is current unless some other event names its
+    `source_feedback_id` as the one it supersedes.
+
+    Defined here, beside the records, and NOT yet consumed by the adaptation
+    layer — wiring it into threshold counting is a later slice. It exists now
+    so the counting rule has one definition to adopt rather than each caller
+    inventing its own, and so the revision tests can assert against the same
+    rule the engine will use.
+
+    Returns events in the order given; the caller decides ordering.
+    """
+    superseded = {
+        event.supersedes_source_feedback_id.strip()
+        for event in events
+        if event.supersedes_source_feedback_id.strip()
+    }
+    return tuple(event for event in events
+                 if event.source_feedback_id.strip() not in superseded
+                 or not event.source_feedback_id.strip())
 
 
 class CustomizationSignalType(str, Enum):

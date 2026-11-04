@@ -134,6 +134,65 @@ def parent_activity_ref(activity_instance_ref: str) -> str:
     return PARENT_ACTIVITY_REF_SCHEME + digest[:32]
 
 
+def resolve_parent_activity_ref(document: Mapping[str, Any],
+                                activity_ref: str, *,
+                                cycle_id: str = "",
+                                child_id: str = "") -> str:
+    """The opaque family handle -> the internal placement ref. P0-A.
+
+    The inverse of `parent_activity_ref`, and the reason the stored document
+    keeps both: a family can only name an activity by its opaque handle, so
+    feedback arriving from a Parent client has to be resolved here before any
+    service that works in `activity_instance_ref` can see it.
+
+    ## Why resolution is a LOOKUP and not a recomputation
+
+    `parent_activity_ref` is a one-way digest, so there is nothing to invert.
+    Resolution scans the released document the family was actually shown, which
+    is the property that makes it safe: the answer can only ever be a placement
+    that was released to THIS cycle. A caller cannot name a placement from
+    another week or another child even by guessing a valid-looking handle.
+
+    ## The raw internal ref is REFUSED, not resolved
+
+    A value lacking the `pact1:` scheme is rejected before any scan. That keeps
+    the privacy boundary one-directional: the Parent surface neither emits nor
+    accepts `activity_instance_ref`, and a client that somehow learned one
+    cannot use it here. Refusing structurally rather than by absence-of-match
+    also means the refusal does not depend on what happens to be in the
+    document.
+
+    `cycle_id` and `child_id`, when given, are checked against the document's
+    own values, so a snapshot loaded for the wrong cycle fails closed rather
+    than resolving a handle that happens to appear in it.
+    """
+    ref = (activity_ref or "").strip()
+    if not ref:
+        raise WeeklyPlanDocumentError("an activity ref is required")
+    if not ref.startswith(PARENT_ACTIVITY_REF_SCHEME):
+        # Includes the case of a raw `activity_instance_ref`, which the Parent
+        # surface must never accept.
+        raise WeeklyPlanDocumentError(
+            "an activity ref must be a parent-facing handle")
+
+    if cycle_id and str(document.get("cycle_id") or "") != cycle_id:
+        raise WeeklyPlanDocumentError(
+            "the released document belongs to another cycle")
+    if child_id and str(document.get("child_id") or "") != child_id:
+        raise WeeklyPlanDocumentError(
+            "the released document belongs to another child")
+
+    for row in document.get("activities") or ():
+        if str(row.get("activity_ref") or "") == ref:
+            instance_ref = str(row.get("activity_instance_ref") or "").strip()
+            if not instance_ref:
+                raise WeeklyPlanDocumentError(
+                    "the released activity carries no placement ref")
+            return instance_ref
+    raise WeeklyPlanDocumentError(
+        "no released activity in this cycle carries that ref")
+
+
 #: Identifiers a Parent-facing activity carries. TWO, and deliberately not three.
 #:
 #: `activity_template_id` is INTERNAL PROVENANCE and is excluded. It is a content
@@ -385,4 +444,5 @@ __all__ = [
     "assign_local_dates",
     "build_document",
     "parent_week_view",
+    "resolve_parent_activity_ref",
 ]

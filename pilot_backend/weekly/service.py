@@ -36,6 +36,8 @@ family already received. The NEXT cycle rebalances.
 
 from __future__ import annotations
 
+import json
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
@@ -51,6 +53,7 @@ from ..domain.alignment import (
 )
 from ..domain.goals import GoalRef
 from ..domain.identity_claims import ClaimKind, IdentityClaim, key_digest
+from ..domain.ids import observation_event_id_for
 from ..domain.intervention import (
     InterventionAction,
     InterventionScope,
@@ -66,6 +69,7 @@ from ..domain.observation import (
     ObservationEvent,
     ParentCustomizationSignal,
     TimezoneSource,
+    same_observation,
 )
 from ..domain.roles import ActorRole
 from ..domain.source_link import SourceSystem
@@ -76,6 +80,10 @@ from ..domain.weekly_cycle import (
     WeeklyPlanSnapshot,
     plan_cycle_bounds,
     starter_cycle_bounds,
+)
+from ..domain.weekly_plan_document import (
+    WeeklyPlanDocumentError,
+    resolve_parent_activity_ref,
 )
 from ..persistence.document_store import DocumentStoreError
 from ..repository.interface import DuplicateRecord, RecordNotFound
@@ -556,6 +564,7 @@ class WeeklyService:
                            assistance: str = "", child_response: str = "",
                            observation_text_ref: str = "",
                            source_feedback_id: str = "",
+                           supersedes_source_feedback_id: str = "",
                            request_id: str = "") -> ObservationEvent:
         """Record one attempt. No clinical inference anywhere in this path."""
         cycle = self._load_cycle(cycle_id)
@@ -566,6 +575,9 @@ class WeeklyService:
             raise WeeklyValidationError(
                 "local date is outside the cycle it is recorded against")
         self._require_instance_in_cycle(cycle, activity_instance_ref)
+        if supersedes_source_feedback_id.strip():
+            self._require_supersedable(cycle, activity_instance_ref,
+                                       supersedes_source_feedback_id)
 
         plan = self._load_plan(cycle.owning_focus_plan_id)
         event = ObservationEvent.record(
@@ -581,9 +593,53 @@ class WeeklyService:
             assistance=assistance, child_response=child_response,
             observation_text_ref=observation_text_ref,
             source_feedback_id=source_feedback_id,
+            supersedes_source_feedback_id=supersedes_source_feedback_id,
             recorded_by_caregiver_id=principal.application_id,
             now=self._stamp())
-        self._repos.observation_events.create(event)
+
+        # IDEMPOTENCY ON THE SOURCE FEEDBACK ID. P0-A.
+        #
+        # `source_feedback_id` was stored but enforced nowhere, so a Parent
+        # client that retried a request — a tapped button on a flaky
+        # connection — produced TWO observation events for one real attempt.
+        # That is not a cosmetic duplicate: the adaptation layer counts
+        # consecutive signals, so a retried "too hard" could manufacture a
+        # threshold the family never reported.
+        #
+        # When the caller supplies the upstream id, the event id is DERIVED
+        # from (child_id, source_feedback_id). The repository is create-only
+        # and refuses a duplicate id, so the second write cannot land; the
+        # existing event is returned instead, which makes a retry a safe
+        # replay rather than an error the client must interpret. Deriving the
+        # id rather than claiming separately keeps this in one write, with no
+        # transaction boundary to recover across.
+        #
+        # With no id supplied the behaviour is unchanged — a random event id —
+        # because this layer cannot invent an identity the caller did not
+        # give it. The Parent Beta path already mints `fb_...` ids, so the
+        # bridge has one to pass.
+        if source_feedback_id.strip():
+            event = replace(event, event_id=observation_event_id_for(
+                cycle.child_id, source_feedback_id))
+            try:
+                self._repos.observation_events.create(event)
+            except DuplicateRecord:
+                # EXACT REPLAY vs CONFLICTING REUSE. One upstream id must mean
+                # one observation. A delivery that repeats the same facts is a
+                # retry and replays; a delivery that reuses the id for a
+                # DIFFERENT activity, date, outcome or caregiver is a defect in
+                # the caller, and silently returning the old event would answer
+                # 200 to a request the server did not honour — the client would
+                # believe its new reading was stored.
+                existing = self._repos.observation_events.get_by_id(
+                    event.event_id)
+                if not same_observation(existing, event):
+                    raise WeeklyConflict(
+                        "this source feedback id already records a different "
+                        "observation") from None
+                return existing
+        else:
+            self._repos.observation_events.create(event)
 
         self._audit(AuditAction.OBSERVATION_RECORDED, AuditResult.SUCCESS,
                     RESOURCE_OBSERVATION, principal=principal,
@@ -593,6 +649,80 @@ class WeeklyService:
                     attempt_outcome=attempt_outcome.value,
                     attribution_month=event.attribution_month)
         return event
+
+    def _require_supersedable(self, cycle: WeeklyCycle,
+                              activity_instance_ref: str,
+                              supersedes_source_feedback_id: str) -> None:
+        """A revision may only replace feedback about the SAME activity. P0-A.
+
+        The superseded event is found by its DERIVED id, so the lookup is
+        scoped to this child by construction — `observation_event_id_for`
+        mixes the child id in, and an id derived for another child simply does
+        not exist here. Cycle and activity are then checked explicitly.
+
+        Without this, one family could retire another family's evidence, or a
+        revision about Tuesday's activity could silently drop Monday's reading
+        out of the current set. Both would change what the adaptation layer
+        counts while leaving every row intact and looking correct.
+        """
+        superseded_id = observation_event_id_for(
+            cycle.child_id, supersedes_source_feedback_id)
+        try:
+            superseded = self._repos.observation_events.get_by_id(superseded_id)
+        except RecordNotFound:
+            raise WeeklyValidationError(
+                "the superseded feedback is not recorded for this child"
+            ) from None
+        if superseded.owning_cycle_id != cycle.cycle_id:
+            raise WeeklyValidationError(
+                "the superseded feedback belongs to another cycle")
+        if superseded.activity_instance_ref != activity_instance_ref:
+            raise WeeklyValidationError(
+                "the superseded feedback is about another activity")
+
+    def resolve_parent_activity_ref(self, principal, cycle_id: str,
+                                    activity_ref: str) -> str:
+        """The opaque family handle -> the internal placement ref. P0-A.
+
+        The Parent surface emits `activity_ref` and nothing else, so feedback
+        arriving from a family names an activity by a handle this layer has to
+        translate before `record_observation` can see it. Resolution lives here
+        rather than in transport because it needs the repositories AND the same
+        authorization the write path uses — a resolver a caller could reach
+        without being authorized for the child would be an enumeration oracle
+        for other families' placements.
+
+        Resolves ONLY against this cycle's released snapshot, and FAILS CLOSED
+        when there is none: before release there is no family-visible week, so
+        there is nothing a family could legitimately be giving feedback on.
+        """
+        cycle = self._load_cycle(cycle_id)
+        self._authorize(principal, cycle.child_id)
+        self._require_caregiver(principal, "resolving an activity ref")
+
+        snapshots = self._repos.weekly_plan_snapshots.list_for_cycle(cycle_id)
+        if not snapshots:
+            raise WeeklyValidationError(
+                "this cycle has no released plan to resolve against")
+        # Release writes exactly one snapshot per cycle and the repository is
+        # create-only, so the newest capture is the released week. Sorted so a
+        # repeated call cannot depend on query order.
+        newest = sorted(snapshots, key=lambda s: s.captured_at)[-1]
+        try:
+            document = json.loads(newest.resolved_plan_document)
+        except ValueError:
+            raise WeeklyValidationError(
+                "the released plan document is unreadable") from None
+
+        try:
+            return resolve_parent_activity_ref(
+                document, activity_ref,
+                cycle_id=cycle.cycle_id, child_id=cycle.child_id)
+        except WeeklyPlanDocumentError as exc:
+            # One refusal shape for an unknown handle, a raw internal ref and a
+            # foreign cycle alike, so the response cannot be used to tell them
+            # apart.
+            raise WeeklyValidationError(str(exc)) from None
 
     def _require_instance_in_cycle(self, cycle: WeeklyCycle,
                                    activity_instance_ref: str) -> None:

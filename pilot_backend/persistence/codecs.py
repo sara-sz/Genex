@@ -881,6 +881,10 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "enjoyment": _EnumKind(Enjoyment, optional=True),
         "assistance": STR, "child_response": STR,
         "observation_text_ref": STR, "source_feedback_id": STR,
+        # P0-A. Parent Beta's append-only revision lineage, mirrored: a revised
+        # submission names the upstream feedback it replaces so "current"
+        # evidence is derivable without overwriting anything.
+        "supersedes_source_feedback_id": STR,
         "recorded_by_caregiver_id": STR,
         "created_at": DT, "schema_version": STR,
     },
