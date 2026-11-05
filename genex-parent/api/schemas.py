@@ -262,6 +262,104 @@ class FeedbackRequest(BaseModel):
     note: str = Field(default="", max_length=1000)
 
 
+# ── P0-A2: provider-connected feedback ─────────────────────────────────────
+#
+# TWO EXPLICIT SHAPES, NOT ONE CONDITIONAL ONE.
+#
+# `FeedbackRequest` above is unchanged and stays the standalone Parent
+# contract: a Parent-generated plan, a Parent activity UUID, a weekday.
+#
+# A provider-connected family practises activities from a PILOT released week,
+# which has a `cycle_id`, an `activity_ref` and a `local_date` — and no Parent
+# plan, activity UUID or weekday, because the two planning systems are
+# unrelated. Making the Parent fields conditionally-optional would have left
+# one model that is valid in two mutually exclusive ways, and a client could
+# then send half of each and be told nothing.
+#
+# So the shapes are disjoint and this one FORBIDS extra fields: a client that
+# sends `plan_id`, `activity_id` or `day` here is refused loudly rather than
+# having it silently ignored, because a caller passing Parent plan identity to
+# a Pilot activity has misunderstood something that matters.
+
+
+class PilotFeedbackRequest(BaseModel):
+    """One activity feedback record for an activity from a Pilot released week.
+
+    Everything that identifies the activity comes from
+    `GET /pilot/children/{child_id}/this-week`:
+
+        pilot_cycle_id      <- week.cycle_id
+        pilot_activity_ref  <- days[].activities[].activity_ref
+        activity_date       <- days[].local_date   (the PRACTICE date)
+
+    Both Pilot values are OPAQUE here. Parent neither resolves nor interprets
+    `pilot_activity_ref` — only the Pilot can, against the released snapshot it
+    authored — and the Pilot's internal `activity_instance_ref` is deliberately
+    absent and must never be added: the Parent surface never receives one, so
+    it has nothing to send.
+    """
+    model_config = {"extra": "forbid"}
+
+    pilot_cycle_id: str = Field(
+        ..., min_length=1, max_length=128,
+        description="Opaque Pilot weekly-cycle id from `this-week`.")
+    pilot_activity_ref: str = Field(
+        ..., min_length=1, max_length=128,
+        pattern=r"^pact1:[0-9a-f]{32}$",
+        description=("Opaque Pilot activity handle from `this-week`. NEVER an "
+                     "internal activity_instance_ref."))
+    activity_date: str = Field(
+        ..., pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description=("The released day's `local_date`. This is the PRACTICE "
+                     "date and the date the Pilot attributes the attempt to — "
+                     "never the date the parent happened to submit."))
+
+    enjoyment: EnjoymentLiteral
+    difficulty: DifficultyLiteral
+    completion: CompletionLiteral
+
+    # The Parent-side note and care-team fields are kept: a parent flagging
+    # something for their care team is a Parent concern and reaches the Parent
+    # care-team report exactly as before. The note never travels to the Pilot.
+    discuss_with_care_team: bool = False
+    care_team_member: Optional[CareTeamLiteral] = None
+    care_team_tags: Optional[List[CareTeamTagLiteral]] = None
+    note: str = Field(default="", max_length=1000)
+
+
+class PilotDeliveryConfirmRequest(BaseModel):
+    """The client reporting that the Pilot accepted one observation.
+
+    FORBIDS extra fields, for the same reason the baseline models do: every
+    clinically meaningful value on this path — the outcome, the difficulty, the
+    enjoyment, the practice date, the caregiver — is already fixed by the
+    feedback record this confirmation names. A client that sent one of those
+    names must be refused loudly rather than have it silently ignored, because
+    the alternative is a caller that believes it corrected a clinical value
+    through a delivery-bookkeeping endpoint.
+
+    The receipt is REQUIRED. It is not cryptographic proof that the Pilot
+    accepted anything — Parent cannot verify it — but it is evidence that the
+    client at least HAD a 200 response to read an `event_id` out of. Without
+    it, "delivered" would mean only that somebody called this endpoint, and an
+    accidental confirm would silently retire a row whose observation never
+    arrived. With it, delivery state is auditable against the Pilot.
+
+    The allowlist is that one opaque receipt. Caregiver identity is absent
+    and must never be added: the Pilot resolved the caregiver from its own
+    verified token, and a caregiver id arriving in a body is an identity claim
+    this service cannot check.
+    """
+    model_config = {"extra": "forbid"}
+
+    pilot_observation_event_id: str = Field(
+        ..., min_length=1, max_length=128,
+        description=("REQUIRED. The canonical `event_id` the Pilot returned "
+                     "for the accepted observation. Stored for correlation "
+                     "only; this service never interprets it."),
+    )
+
+
 class ReportRequest(BaseModel):
     report_type: ReportTypeLiteral
 

@@ -90,6 +90,8 @@ from api.schemas import (
     BaselineV2AnswerRequest,
     BaselineV2StartRequest,
     FeedbackRequest,
+    PilotDeliveryConfirmRequest,
+    PilotFeedbackRequest,
     InterviewCompleteResponse,
     MilestoneCheckinResponseRequest,
     NextQuestionResponse,
@@ -1357,6 +1359,10 @@ async def session_feedback(
         "care_team_tags":        body.care_team_tags,      # Beta 2.0 provider tags
         "note":                  body.note,
         "metadata_found":        metadata_found,
+        # P0-A2: this record's shape, declared rather than inferred. It is what
+        # stops a standalone record and a Pilot-linked one from ever being
+        # considered revisions of each other — see `find_prior_feedback`.
+        "feedback_mode":         progress_lib.FEEDBACK_MODE_STANDALONE,
     }
     if metadata_found and internal_act:
         for field in _INTERNAL_METADATA_FIELDS:
@@ -1387,23 +1393,35 @@ async def session_feedback(
 
         # Exact-retry dedupe (incl. non-did_it): identical fingerprint → replay, no writes.
         if fb_key in fb_index:
+            replayed_id = fb_index[fb_key]
+            prior_record = next(
+                (f for f in feedback if f.get("feedback_id") == replayed_id),
+                None) or {}
             return False, {
-                "ok": True, "feedback_id": fb_index[fb_key],
+                "ok": True, "feedback_id": replayed_id,
                 "completion_id": comp_index.get(comp_key), "attempt_id": attempt_index.get(att_key),
                 "star_awarded": False, "idempotent_replay": True,
                 "activities_done_today": _done_today(), "metadata_found": metadata_found,
                 "flagged_for_care_team": body.discuss_with_care_team,
+                # P0-A2: `supersedes_feedback_id` was always STORED and simply
+                # never returned. Additive, and the same on a replay as on the
+                # original — a client that lost the first response recovers the
+                # lineage by retrying.
+                "supersedes_feedback_id": prior_record.get(
+                    "supersedes_feedback_id"),
             }
 
         # Revision detection: a prior feedback for the SAME activity + local date but a
         # different fingerprint → append-only revision (earlier record is preserved).
-        prior = None
-        for f in reversed(feedback):
-            if f.get("activity_id") == body.activity_id and (
-                f.get("local_submission_date") == local_date or f.get("activity_date") == body.activity_date
-            ):
-                prior = f
-                break
+        #
+        # P0-A2: the rule is unchanged, but it now lives in ONE place that both
+        # request shapes call, so "the same practice" cannot come to mean two
+        # different things. The mode argument is what keeps a Pilot-linked
+        # record from being superseded by a standalone one.
+        prior = progress_lib.find_prior_feedback(
+            feedback, mode=progress_lib.FEEDBACK_MODE_STANDALONE,
+            activity_id=body.activity_id, local_date=local_date,
+            activity_date=body.activity_date)
         is_revision = prior is not None
 
         feedback_id = progress_lib.new_id("fb")
@@ -1483,6 +1501,8 @@ async def session_feedback(
             "attempt_id": attempt_id, "star_awarded": star_awarded, "idempotent_replay": False,
             "activities_done_today": _done_today(), "metadata_found": metadata_found,
             "flagged_for_care_team": body.discuss_with_care_team,
+            # P0-A2: additive. Always stored, now returned.
+            "supersedes_feedback_id": record["supersedes_feedback_id"],
         }
 
     try:
@@ -1493,6 +1513,466 @@ async def session_feedback(
         raise HTTPException(status_code=500, detail=f"Failed to save feedback: {exc}")
     if result is None:
         raise HTTPException(status_code=404, detail="Session not found")
+    return result
+
+
+# ── P0-A2: Pilot observation delivery ──────────────────────────────────────
+#
+# WHY THIS SERVICE DOES NOT MAKE THE PILOT CALL
+#
+# The Pilot resolves the caregiver from its OWN verified bearer token, and the
+# two Firebase directories are deliberately unfederated. Parent holds no
+# credential that the Pilot would accept as that caregiver, and the three ways
+# to manufacture one — federating the directories, backend impersonation, or
+# sending a caregiver id in a body — are each a worse trade than letting the
+# already-authenticated browser make its own call.
+#
+# So the browser posts the observation and reports back. These two endpoints
+# exist to make that handoff DURABLE: the feedback is recorded and queued in
+# one write, the queue survives a lost response or a closed tab, and the retry
+# is exact. Nothing here is a queue worker, and nothing here ever retries on
+# the client's behalf — Parent cannot, for the reason above.
+
+
+@app.post(
+    "/api/v1/session/{session_id}/pilot-feedback",
+    tags=["session"],
+)
+async def session_pilot_feedback(
+    session_id: str,
+    body: PilotFeedbackRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Record feedback on an activity from a PILOT released week.
+
+    A SEPARATE route from `/feedback`, not a mode of it. The activity came from
+    `GET /pilot/children/{child_id}/this-week` and has a cycle, an opaque
+    handle and a practice date — no Parent plan, activity UUID or weekday,
+    because the two planning systems are unrelated. A client must not have to
+    invent Parent plan identity to report that a child practised.
+
+    WHAT THIS ROUTE DELIBERATELY DOES NOT DO
+
+      no plan guard        - `/feedback` 409s when the session has no plan.
+                             This activity did not come from a Parent plan, so
+                             requiring one would be requiring the wrong thing.
+      no enrichment        - `plan_internal` has nothing to say about an
+                             activity it never planned. `metadata_found` is
+                             False and the snapshot, template, provenance and
+                             focus fields are ABSENT rather than empty-stringed
+                             into existence.
+      no milestone         - a milestone identity would have to be invented.
+      no star, attempt or
+      completion           - every one of those records requires plan identity
+                             and a milestone to mean anything. Awarding them
+                             from fabricated provenance would corrupt the
+                             Parent completion history and the progress
+                             denominators that read it. A provider-connected
+                             family's rewards are a product question this slice
+                             deliberately leaves open rather than answering
+                             with manufactured data.
+
+    WHAT IT SHARES WITH `/feedback`
+
+    The session CAS, the record list and index, the exact-retry fingerprint,
+    the ONE revision matcher, the event ledger, and the delivery ledger — i.e.
+    everything that is actually the feedback engine. Only the plan-resolution
+    and reward halves are absent, and those are absent because they have no
+    subject here.
+    """
+    doc = _require_session(auth.uid, session_id)
+
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
+    tz, tz_source = progress_lib.validate_timezone(doc.get("timezone"))
+    # The submission date. Recorded for audit and NEVER used to identify the
+    # practice: the Pilot attributes the attempt to the released day, so a
+    # parent recording Tuesday's practice on Wednesday must not move it.
+    local_date = progress_lib.local_date_for(now_dt, tz)
+
+    pilot_cycle_id = body.pilot_cycle_id.strip()
+    pilot_activity_ref = body.pilot_activity_ref.strip()
+    # The Parent-side activity identity, derived from the real Pilot-facing
+    # triple. Opaque, deterministic, and never a reinterpretation of the
+    # handle as a Parent UUID.
+    identity = progress_lib.pilot_feedback_identity(
+        pilot_cycle_id, pilot_activity_ref, body.activity_date)
+
+    # The exact-retry fingerprint, over the PRACTICE date rather than the
+    # submission date: identical feedback about one practice is one record even
+    # when the parent sends it again a day later.
+    fb_key = progress_lib.feedback_req_key(
+        session_id, identity, body.activity_date, body.completion,
+        body.enjoyment, body.difficulty, body.discuss_with_care_team,
+        body.care_team_member, body.care_team_tags, body.note,
+        pilot_cycle_id=pilot_cycle_id,
+        pilot_activity_ref=pilot_activity_ref,
+    )
+
+    base_record: Dict[str, Any] = {
+        "feedback_schema_version": 1,
+        "created_at":            now_iso,
+        "completed_at_utc":      now_iso,
+        "completion_tz":         tz,
+        "tz_source":             tz_source,
+        "local_submission_date": local_date,
+        "feedback_req_key":      fb_key,
+        "owner_uid":             auth.uid,
+        "feedback_mode":         progress_lib.FEEDBACK_MODE_PILOT,
+        # The Pilot-facing identity, stored explicitly so the revision rule
+        # compares the real triple and not a digest of it.
+        "pilot_cycle_id":        pilot_cycle_id,
+        "pilot_activity_ref":    pilot_activity_ref,
+        "pilot_feedback_identity": identity,
+        # Parent plan identity is absent, not blank: there is none, and a blank
+        # `plan_id` would read as a plan whose id was lost.
+        "activity_id":           identity,
+        "activity_date":         body.activity_date,
+        "enjoyment":             body.enjoyment,
+        "difficulty":            body.difficulty,
+        "completion":            body.completion,
+        "discuss_with_care_team": body.discuss_with_care_team,
+        "care_team_member":      body.care_team_member,
+        "care_team_tags":        body.care_team_tags,
+        "note":                  body.note,
+        "metadata_found":        False,
+    }
+
+    def _mutator(d: Dict[str, Any]):
+        feedback = d.setdefault("feedback", [])
+        fb_index = d.setdefault("feedback_index", {})
+        events = d.setdefault("events", [])
+        deliveries = d.setdefault("pilot_deliveries", [])
+        delivery_index = d.setdefault("pilot_delivery_index", {})
+
+        def _view(fid: str) -> Optional[Dict[str, Any]]:
+            row_id = delivery_index.get(fid)
+            row = next((r for r in deliveries
+                        if r.get("delivery_id") == row_id), None)
+            rec = next((f for f in feedback
+                        if f.get("feedback_id") == fid), None)
+            if row is None or rec is None:
+                return None
+            try:
+                return progress_lib.pilot_delivery_view(rec, row)
+            except progress_lib.PilotPayloadError:
+                return None
+
+        if fb_key in fb_index:
+            replayed_id = fb_index[fb_key]
+            prior_record = next(
+                (f for f in feedback if f.get("feedback_id") == replayed_id),
+                None) or {}
+            # The same lineage and the SAME delivery row. A client that lost
+            # the first response recovers the whole handoff by retrying, and in
+            # particular does not get a second row for one observation.
+            return False, {
+                "ok": True, "feedback_id": replayed_id,
+                "supersedes_feedback_id": prior_record.get(
+                    "supersedes_feedback_id"),
+                "idempotent_replay": True,
+                "flagged_for_care_team": body.discuss_with_care_team,
+                "pilot_delivery": _view(replayed_id),
+            }
+
+        # Revision identity is the SAME source context — same cycle, same
+        # handle, same practice date — and nothing else. A standalone Parent
+        # record can never be the prior here, and neither can the same handle
+        # from a different cycle.
+        prior = progress_lib.find_prior_feedback(
+            feedback, mode=progress_lib.FEEDBACK_MODE_PILOT,
+            pilot_cycle_id=pilot_cycle_id,
+            pilot_activity_ref=pilot_activity_ref,
+            activity_date=body.activity_date)
+        is_revision = prior is not None
+
+        feedback_id = progress_lib.new_id("fb")
+        record = dict(base_record)
+        record["feedback_id"] = feedback_id
+        record["supersedes_feedback_id"] = (
+            prior.get("feedback_id") if is_revision else None)
+        feedback.append(record)
+        fb_index[fb_key] = feedback_id
+
+        # The delivery row is minted in the SAME compare-and-swap as the
+        # record. A Pilot-linked record without its row is therefore
+        # impossible, which is exactly what lets the confirmation endpoint
+        # treat that combination as a corruption rather than repair it.
+        delivery = progress_lib.build_pilot_delivery(
+            feedback_id=feedback_id, created_at_utc=now_iso)
+        deliveries.append(delivery)
+        delivery_index[feedback_id] = delivery["delivery_id"]
+
+        # DISTINCT event types, not the `/feedback` ones: an auditor reading
+        # the ledger can tell which planning system a reading came from, and
+        # anything counting `feedback_recorded` keeps meaning what it meant.
+        events.append(progress_lib.build_event(
+            session_id=session_id, owner_uid=auth.uid,
+            event_type=("pilot_feedback_updated" if is_revision
+                        else "pilot_feedback_recorded"),
+            source_record_id=feedback_id, created_at_utc=now_iso,
+            local_event_date=body.activity_date, idempotency_key=fb_key,
+            actor_type="parent", provenance="parent_reported",
+            metadata={"revision": is_revision,
+                      "supersedes": record["supersedes_feedback_id"],
+                      "pilot_cycle_id": pilot_cycle_id},
+        ))
+        events.append(progress_lib.build_event(
+            session_id=session_id, owner_uid=auth.uid,
+            event_type="pilot_delivery_pending",
+            source_record_id=delivery["delivery_id"],
+            created_at_utc=now_iso, local_event_date=body.activity_date,
+            idempotency_key=fb_key, actor_type="system",
+            provenance="system_calculated",
+            # References, never clinical values and never the note.
+            metadata={"feedback_id": feedback_id,
+                      "pilot_cycle_id": pilot_cycle_id,
+                      "supersedes_feedback_id": record[
+                          "supersedes_feedback_id"]},
+        ))
+
+        return True, {
+            "ok": True, "feedback_id": feedback_id,
+            "supersedes_feedback_id": record["supersedes_feedback_id"],
+            "idempotent_replay": False,
+            "flagged_for_care_team": body.discuss_with_care_team,
+            "pilot_delivery": progress_lib.pilot_delivery_view(
+                record, delivery),
+        }
+
+    try:
+        _doc, _changed, result = store_mutate_session(
+            auth.uid, session_id, _mutator)
+    except SessionContentionError as exc:
+        raise HTTPException(status_code=503,
+                            detail=f"write_contention_retry: {exc}")
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500,
+                            detail=f"Failed to save feedback: {exc}")
+    if result is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return result
+
+
+def _pilot_delivery_view_for(doc: Dict[str, Any],
+                             feedback_id: str) -> Optional[Dict[str, Any]]:
+    """Join one feedback record to its delivery row. None if not deliverable."""
+    rec = next((f for f in (doc.get("feedback") or [])
+                if f.get("feedback_id") == feedback_id), None)
+    row_id = (doc.get("pilot_delivery_index") or {}).get(feedback_id)
+    # A record whose row is missing is NOT synthesised here either. The read
+    # surface reports what the ledger holds; the confirmation endpoint is where
+    # that combination is reported as the conflict it is.
+    row = next((r for r in (doc.get("pilot_deliveries") or [])
+                if r.get("delivery_id") == row_id), None)
+    if rec is None or row is None:
+        return None
+    try:
+        return progress_lib.pilot_delivery_view(rec, row)
+    except progress_lib.PilotPayloadError:
+        return None
+
+
+@app.get(
+    "/api/v1/session/{session_id}/pilot-feedback-deliveries",
+    tags=["session"],
+)
+async def session_pilot_deliveries(
+    session_id: str,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+    status: str = "pending",
+):
+    """Feedback recorded by this session that the Pilot has not been told about.
+
+    The client reads this on load and after a reconnect, and completes each row
+    by posting the observation to the Pilot and then confirming here. That is
+    the whole durability story: a tab closed between the two calls loses
+    nothing, because the row is still here on the next read.
+
+    WHAT THIS DELIBERATELY DOES NOT RETURN
+
+      the free-text note      - not structured evidence, never travels to the
+                                Pilot, and so has no business on a surface
+                                whose only purpose is feeding that call
+      Pilot internal identity - no `activity_instance_ref`; the opaque
+                                `pilot_activity_ref` is what the Pilot resolves
+      Parent internals        - no plan ids, module ids, provenance, care-team
+                                flags, stars, completions or snapshots
+
+    The returned `observation_body` is built by the one authoritative mapping
+    function, so the client posts exactly what Parent would have posted and the
+    mapping cannot be reimplemented differently in a browser.
+    """
+    doc = _require_session(auth.uid, session_id)
+    wanted = (status or "pending").strip().lower()
+    if wanted not in ("pending", "delivered", "all"):
+        raise HTTPException(status_code=422, detail="invalid_status_filter")
+
+    out: List[Dict[str, Any]] = []
+    for row in (doc.get("pilot_deliveries") or []):
+        if wanted != "all" and row.get("status") != wanted:
+            continue
+        view = _pilot_delivery_view_for(doc, row.get("feedback_id") or "")
+        if view is not None:
+            out.append(view)
+    return {"ok": True, "status": wanted, "count": len(out),
+             "deliveries": out}
+
+
+@app.post(
+    "/api/v1/session/{session_id}/pilot-feedback-deliveries/{feedback_id}/confirm",
+    tags=["session"],
+)
+async def session_pilot_delivery_confirm(
+    session_id: str,
+    feedback_id: str,
+    body: PilotDeliveryConfirmRequest,
+    auth: Annotated[AuthUser, Depends(require_auth)],
+):
+    """Mark one recorded feedback as delivered to the Pilot.
+
+    AUTHORIZATION is `_require_session`, exactly as for `/pilot-claim`: the
+    session comes from the path and is verified against the authenticated
+    caregiver in Parent's own directory, where the uid is meaningful. There is
+    no second notion of identity on this path and no caregiver id in the body.
+
+    IT CANNOT CHANGE CLINICAL DATA. The body allowlist is one optional opaque
+    receipt; `PilotDeliveryConfirmRequest` forbids extra fields, so an attempt
+    to correct an outcome or a date here is refused rather than ignored. A
+    correction is a new feedback submission, which is a revision, which gets
+    its own delivery row.
+
+    IT CANNOT ERASE HISTORY. Delivery rows are append-only and confirmation
+    only ever moves one row pending -> delivered. The row for a superseded
+    record stays exactly as it was: the Pilot was told about that observation,
+    and later superseding it does not make that untrue.
+
+    IT FAILS CLOSED ON A MISSING ROW. A Pilot-linked record and its delivery
+    row are written in the SAME session compare-and-swap, so a linked record
+    with no row cannot arise from any path this service has. Minting one and
+    marking it delivered would be repairing state we do not understand, and
+    would hide the only evidence that something wrote this document wrongly.
+    It is an invariant conflict and it is reported as one.
+
+    THE RECEIPT IS REQUIRED AND IMMUTABLE. The first one stands. A second
+    confirmation quoting the SAME receipt is a replay; one quoting a DIFFERENT
+    receipt is a conflict, because two receipts for one observation means
+    either a double POST to the Pilot or a client confirming something it did
+    not do — and in both cases the right move is to refuse and be noticed.
+
+    Guards:
+      404 session_not_found / 403            - from `_require_session`
+      404 feedback_not_found                 - not a record of THIS session
+      409 feedback_not_pilot_linked          - the record carries no Pilot context
+      409 pilot_delivery_row_missing         - invariant conflict, see above
+      409 pilot_delivery_receipt_conflict    - a different receipt was quoted
+      422 (Pydantic)                         - no receipt, or a forbidden field
+    """
+    _require_session(auth.uid, session_id)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    receipt = body.pilot_observation_event_id.strip()
+    if not receipt:
+        # `min_length=1` admits whitespace; a blank receipt is no receipt.
+        raise HTTPException(status_code=422,
+                            detail="pilot_observation_event_id_required")
+
+    def _mutator(d: Dict[str, Any]):
+        feedback = d.setdefault("feedback", [])
+        deliveries = d.setdefault("pilot_deliveries", [])
+        delivery_index = d.setdefault("pilot_delivery_index", {})
+        events = d.setdefault("events", [])
+
+        record = next((f for f in feedback
+                       if f.get("feedback_id") == feedback_id), None)
+        if record is None:
+            # Scoped to this session's own records by construction: `d` IS the
+            # session document. A valid feedback id from another session is
+            # therefore indistinguishable from one that never existed, which is
+            # the correct answer to give.
+            return False, {"error": "feedback_not_found"}
+        if not (record.get("pilot_cycle_id")
+                and record.get("pilot_activity_ref")):
+            return False, {"error": "feedback_not_pilot_linked"}
+
+        row_id = delivery_index.get(feedback_id)
+        row = next((r for r in deliveries
+                    if r.get("delivery_id") == row_id), None)
+        if row is None:
+            # FAIL CLOSED. Both records are written in one CAS, so this
+            # combination is not a state any path here produces. Nothing is
+            # written and nothing is repaired.
+            return False, {"error": "pilot_delivery_row_missing"}
+
+        if row.get("status") == progress_lib.PILOT_DELIVERY_DELIVERED:
+            stored_receipt = str(row.get("pilot_observation_event_id") or "")
+            if stored_receipt and stored_receipt != receipt:
+                # Two receipts for one observation. Refused, and the first one
+                # is left exactly as it was.
+                return False, {"error": "pilot_delivery_receipt_conflict",
+                               "stored": stored_receipt}
+            # Idempotent. The first delivery time and the first receipt stand:
+            # a later confirmation quoting the same receipt is the client being
+            # unsure, not new information, and overwriting a recorded fact
+            # would move it.
+            return False, {
+                "ok": True, "feedback_id": feedback_id,
+                "delivery_id": row.get("delivery_id"),
+                "status": row.get("status"),
+                "delivered_at_utc": row.get("delivered_at_utc"),
+                "pilot_observation_event_id": stored_receipt,
+                "idempotent_replay": True,
+            }
+
+        row["status"] = progress_lib.PILOT_DELIVERY_DELIVERED
+        row["delivered_at_utc"] = now_iso
+        row["pilot_observation_event_id"] = receipt
+
+        events.append(progress_lib.build_event(
+            session_id=session_id, owner_uid=auth.uid,
+            event_type="pilot_delivery_confirmed",
+            source_record_id=row["delivery_id"], created_at_utc=now_iso,
+            local_event_date=record.get("local_submission_date") or "",
+            idempotency_key=progress_lib.pilot_delivery_idem_key(
+                session_id, feedback_id),
+            actor_type="parent", provenance="app_recorded",
+            # References only. No clinical value, no note, no caregiver id.
+            metadata={"feedback_id": feedback_id,
+                      "pilot_cycle_id": record.get("pilot_cycle_id"),
+                      "pilot_observation_event_id": receipt},
+        ))
+        return True, {
+            "ok": True, "feedback_id": feedback_id,
+            "delivery_id": row["delivery_id"], "status": row["status"],
+            "delivered_at_utc": row["delivered_at_utc"],
+            "pilot_observation_event_id": row.get(
+                "pilot_observation_event_id"),
+            "idempotent_replay": False,
+        }
+
+    try:
+        _doc, _changed, result = store_mutate_session(
+            auth.uid, session_id, _mutator)
+    except SessionContentionError as exc:
+        raise HTTPException(status_code=503,
+                            detail=f"write_contention_retry: {exc}")
+    except SessionSaveError as exc:
+        raise HTTPException(status_code=500,
+                            detail=f"Failed to confirm delivery: {exc}")
+    if result is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if result.get("error") == "feedback_not_found":
+        raise HTTPException(status_code=404, detail="feedback_not_found")
+    if result.get("error") == "feedback_not_pilot_linked":
+        raise HTTPException(status_code=409, detail="feedback_not_pilot_linked")
+    if result.get("error") == "pilot_delivery_row_missing":
+        # 409, not 500: the request was well formed and the service is
+        # working. The STATE is wrong, and an operator needs to know that
+        # rather than read a generic fault.
+        raise HTTPException(status_code=409,
+                            detail="pilot_delivery_row_missing")
+    if result.get("error") == "pilot_delivery_receipt_conflict":
+        raise HTTPException(status_code=409,
+                            detail="pilot_delivery_receipt_conflict")
     return result
 
 

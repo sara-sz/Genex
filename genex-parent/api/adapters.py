@@ -668,9 +668,29 @@ def apply_completion_state(
     modules / feedback are never mutated.
     """
     # Latest did_it feedback per (activity_id, activity_date).
+    #
+    # P0-A2: PILOT-LINKED records are excluded here, by mode and not by
+    # key-matching luck.
+    #
+    # A provider-connected record names an activity from a Pilot released week,
+    # so its `activity_id` is Parent's own derived `pfbi_...` identity. No
+    # Parent card carries one, so no card could ever be stamped `completed` by
+    # it — but `completed_activities` is built from the FEEDBACK side of this
+    # function, deliberately so it survives a card being removed. Without this
+    # filter a `pfbi_...` entry would appear in a list the Parent UI reads as
+    # "Parent plan activities this family completed", and a Pilot practice
+    # would be presented as Parent-plan progress.
+    #
+    # The generic `feedback_summary.total`/`completed` counters are a different
+    # question and stay inclusive: those are engagement facts about feedback
+    # the family gave, not claims about Parent-plan completion.
+    from api import progress as _progress
+
     done: Dict[Tuple[Optional[str], Optional[str]], Dict[str, Any]] = {}
     for f in feedback_list or []:
         if f.get("completion") != "did_it":
+            continue
+        if _progress.feedback_mode_of(f) == _progress.FEEDBACK_MODE_PILOT:
             continue
         key = (f.get("activity_id"), f.get("activity_date"))
         prev = done.get(key)

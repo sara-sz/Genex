@@ -32,11 +32,23 @@ def backfill_doc(doc: Dict[str, Any], dry_run: bool = True) -> Tuple[Dict[str, i
     comp_index = dict(doc.get("completion_index") or {})
 
     stats = {"feedback_examined": 0, "complete": 0, "partial": 0, "unavailable": 0,
-             "stars_proposed": 0, "completions_proposed": 0, "skipped_existing": 0}
+             "stars_proposed": 0, "completions_proposed": 0, "skipped_existing": 0,
+             "pilot_linked_skipped": 0}
     new_attempts, new_completions, new_events = [], [], []
     date_confidence = "high" if tz_source == "session" else "low"
 
     for f in feedback:
+        if pg.feedback_mode_of(f) == pg.FEEDBACK_MODE_PILOT:
+            # P0-A2. A Pilot-linked record names an activity from a PILOT
+            # released week: it has no Parent plan, template or milestone, and
+            # the live route deliberately creates no attempt, completion or
+            # star from one. Backfilling them here would manufacture exactly
+            # the provenance that route refused to invent — with an empty
+            # snapshot — and would do it to the completion history and the
+            # progress denominators that read it.
+            stats["pilot_linked_skipped"] = stats.get(
+                "pilot_linked_skipped", 0) + 1
+            continue
         if f.get("completion") not in pg.ELIGIBLE_STAR_STATUSES:
             continue
         stats["feedback_examined"] += 1

@@ -130,15 +130,31 @@ def feedback_req_key(
     completion: str, enjoyment: str, difficulty: str,
     discuss_with_care_team: bool, care_team_member: Optional[str],
     care_team_tags: Optional[List[str]], note: Optional[str],
+    *, pilot_cycle_id: str = "", pilot_activity_ref: str = "",
 ) -> str:
     """Fingerprint of an exact feedback submission — dedupes identical retries,
-    including non-did_it feedback. A changed value → different key → a revision."""
+    including non-did_it feedback. A changed value → different key → a revision.
+
+    P0-A2: the Pilot context participates, but ONLY when it is present. The
+    extra parts are appended rather than always hashed, so a submission with no
+    Pilot context produces the byte-identical key it produced before this
+    field existed — a legacy retry in flight across a deploy still dedupes.
+
+    It has to participate at all because the same values resubmitted WITH a
+    Pilot link would otherwise match the unlinked fingerprint, be dismissed as
+    an exact retry, and leave the family's feedback with no delivery row and no
+    route to the Pilot. Treating it as a changed value makes it a revision,
+    which is what it is.
+    """
     tags = ",".join(sorted(care_team_tags or []))
-    return _sha256(
+    parts: List[Any] = [
         "fb1", session_id, activity_instance_id, local_submission_date,
         completion, enjoyment, difficulty, bool(discuss_with_care_team),
         care_team_member or "", tags, _norm_note(note),
-    )
+    ]
+    if pilot_cycle_id or pilot_activity_ref:
+        parts += [pilot_cycle_id or "", pilot_activity_ref or ""]
+    return _sha256(*parts)
 
 
 # ── Milestone identity (§8, clarification 3 — activity_family EXCLUDED) ────────
@@ -215,6 +231,271 @@ def build_event(
         "provenance": provenance,               # parent_reported | app_recorded | system_calculated | migrated
         "rule_version": rule_version,
         "metadata": metadata or {},
+    }
+
+
+# ── P0-A2: Pilot observation delivery ────────────────────────────────────────
+#
+# Parent cannot make the Pilot call itself: the Pilot resolves the caregiver
+# from ITS OWN verified token and the two Firebase directories deliberately do
+# not federate. So the external client performs the POST and tells Parent it
+# succeeded, and Parent's job is to make that handoff durable and the retry
+# safe.
+
+class PilotPayloadError(Exception):
+    """A Pilot observation payload could not be built. No child data."""
+
+
+PILOT_DELIVERY_SCHEMA_VERSION = 1
+
+#: The two delivery states. There is deliberately no `failed`: a transient
+#: Pilot failure leaves a row PENDING, because the only difference between
+#: "failed once" and "not yet attempted" is information the client already has
+#: and Parent cannot verify. A terminal failure state would also invite a
+#: cleanup that loses the family's feedback.
+PILOT_DELIVERY_PENDING = "pending"
+PILOT_DELIVERY_DELIVERED = "delivered"
+
+#: Parent's enjoyment vocabulary -> the Pilot's `Enjoyment` enum.
+#:
+#: The ONE place this translation exists. The two systems chose different words
+#: for the same three states, and a mapping restated at each call site is a
+#: mapping that eventually disagrees with itself.
+ENJOYMENT_TO_PILOT = {
+    "loved_it": "enjoyed",
+    "it_was_okay": "neutral",
+    "not_really": "disliked",
+}
+
+#: Completion and difficulty pass through UNCHANGED — the vocabularies already
+#: agree. Declared explicitly rather than left implicit so a future divergence
+#: has to be written down here.
+COMPLETION_TO_PILOT = {
+    "did_it": "did_it",
+    "didnt_want_to_try": "didnt_want_to_try",
+    "wasnt_ready_yet": "wasnt_ready_yet",
+}
+
+
+#: Which of the two disjoint request shapes produced a feedback record.
+#:
+#: Stored on every NEW record. Legacy records predate the field and are read as
+#: standalone, which is what they are — see `feedback_mode_of`.
+FEEDBACK_MODE_STANDALONE = "standalone"
+FEEDBACK_MODE_PILOT = "pilot_linked"
+
+
+def feedback_mode_of(record: Dict[str, Any]) -> str:
+    """The mode of a stored record. Absent means standalone, by definition.
+
+    Every record written before P0-A2 came from the standalone contract, so
+    treating a missing field as standalone is a statement of fact rather than a
+    default. It also means the cross-mode rules below hold for historical
+    records without a migration.
+    """
+    mode = str(record.get("feedback_mode") or "").strip()
+    return mode or FEEDBACK_MODE_STANDALONE
+
+
+def pilot_feedback_identity(pilot_cycle_id: str, pilot_activity_ref: str,
+                            activity_date: str) -> str:
+    """The Parent-side activity identity for a Pilot-linked record.
+
+    A provider-connected family practises an activity that has NO Parent plan,
+    activity UUID or weekday. Parent still needs something stable to identify
+    "this activity, on this day" by — for dedupe, for revision matching, and
+    for every existing reader that expects a record to name an activity.
+
+    So the identity is derived from the real Pilot-facing triple:
+
+        pilot_cycle_id + pilot_activity_ref + activity_date
+
+    Deterministic, so the same practice always produces the same identity, and
+    OPAQUE, so it cannot be mistaken for — or used as — a Parent activity
+    UUID. The `pact1:` handle is NOT reinterpreted as one, and the Pilot's
+    internal `activity_instance_ref` appears nowhere: Parent never receives it.
+
+    Including the DATE makes the same released activity practised on two
+    different days two different identities, which is what the Pilot's own
+    per-day attribution means. Including the CYCLE means the same handle-shaped
+    value from a different week can never collide with this one.
+    """
+    cycle = (pilot_cycle_id or "").strip()
+    ref = (pilot_activity_ref or "").strip()
+    date = (activity_date or "").strip()
+    if not (cycle and ref and date):
+        raise PilotPayloadError(
+            "a pilot feedback identity needs a cycle, a ref and a date")
+    return "pfbi_" + _sha256("pfbi1", cycle, ref, date)[:32]
+
+
+def find_prior_feedback(
+    feedback: List[Dict[str, Any]], *, mode: str,
+    activity_id: str = "", local_date: str = "", activity_date: str = "",
+    pilot_cycle_id: str = "", pilot_activity_ref: str = "",
+) -> Optional[Dict[str, Any]]:
+    """The record a new submission would REVISE, or None. The only matcher.
+
+    One function for both modes, because two implementations of "what counts as
+    the same practice" is how they end up disagreeing — and the disagreement
+    would surface as a clinical record superseding one it has nothing to do
+    with.
+
+    ## STANDALONE — unchanged from Beta 2.3
+
+    The same Parent activity UUID, and either the same local submission date or
+    the same scheduled activity date. Byte-for-byte the rule the feedback route
+    already applied, moved here rather than rewritten.
+
+    ## PILOT-LINKED — the same source context, nothing less
+
+    The same `pilot_cycle_id` AND the same `pilot_activity_ref` AND the same
+    `activity_date`. Not the display date, not the submission date, and not the
+    derived identity alone.
+
+    ## THE MODES NEVER MATCH EACH OTHER
+
+    The scan filters on mode FIRST. A standalone record cannot supersede a
+    Pilot-linked one because some date or display field coincides, and a
+    Pilot-linked record from cycle A cannot supersede the same opaque
+    handle-shaped value from cycle B. Those are not edge cases to be tested
+    around: they are two clinical records about different things, and the
+    structure refuses to confuse them.
+
+    Scans in reverse so the NEWEST matching record is the one superseded,
+    preserving the append-only chain rather than reaching past it.
+    """
+    for record in reversed(feedback or []):
+        if feedback_mode_of(record) != mode:
+            continue
+        if mode == FEEDBACK_MODE_PILOT:
+            if (record.get("pilot_cycle_id") == pilot_cycle_id
+                    and record.get("pilot_activity_ref") == pilot_activity_ref
+                    and record.get("activity_date") == activity_date):
+                return record
+            continue
+        if record.get("activity_id") == activity_id and (
+                record.get("local_submission_date") == local_date
+                or record.get("activity_date") == activity_date):
+            return record
+    return None
+
+
+def pilot_delivery_idem_key(session_id: str, feedback_id: str) -> str:
+    """Idempotency key for the delivery-confirmed event.
+
+    Keyed on the FEEDBACK record, not on the confirmation request: one feedback
+    record is delivered to the Pilot once, so a client confirming twice must
+    produce one event. Namespaced `pdlv1` beside `fb1`/`att1`/`cmp1`.
+    """
+    return _sha256("pdlv1", session_id, feedback_id)
+
+
+def build_pilot_delivery(
+    *, feedback_id: str, created_at_utc: str,
+    status: str = PILOT_DELIVERY_PENDING,
+) -> Dict[str, Any]:
+    """One delivery-ledger row. Deliberately almost empty.
+
+    It holds the delivery FACT and nothing clinical: status, timestamps and the
+    `feedback_id` that everything else is read through. The Pilot context, the
+    practice date and the feedback values all live on the feedback record
+    already, so copying them here would create a second copy to keep in step —
+    and the one that drifted would be the one the Pilot received.
+
+    The free-text note is not here and not reachable from here, which is the
+    point: the delivery surface has no way to leak it.
+    """
+    if not (feedback_id or "").strip():
+        raise PilotPayloadError("a delivery row requires a feedback id")
+    return {
+        "delivery_schema_version": PILOT_DELIVERY_SCHEMA_VERSION,
+        "delivery_id": new_id("pdlv"),
+        "feedback_id": feedback_id,
+        "status": status,
+        "created_at_utc": created_at_utc,
+        "delivered_at_utc": None,
+    }
+
+
+def pilot_observation_payload(feedback: Dict[str, Any]) -> Dict[str, Any]:
+    """The canonical Pilot observation body for one Parent feedback record.
+
+    THE AUTHORITATIVE MAPPING. Dependency-pure, so the external client's
+    contract has one testable implementation rather than only prose.
+
+    ## `local_date` IS THE PRACTICE DATE
+
+    `activity_date` — the date of the released activity — NOT
+    `local_submission_date`. A parent recording Tuesday's practice on
+    Wednesday evening must not move the evidence to Wednesday: the Pilot counts
+    this against a cycle day, and a wall-clock date would attribute an attempt
+    to a day the activity was not scheduled. Submission time is still recorded,
+    server-side, by the Pilot's own `occurred_at`.
+
+    ## WHAT IS DELIBERATELY ABSENT
+
+    No note — free text is not structured evidence and the Pilot carries none.
+    No caregiver identity — the Pilot resolves that from its own bearer token,
+    and its body reader rejects the field outright. No internal
+    `activity_instance_ref` — Parent never receives one.
+    """
+    feedback_id = str(feedback.get("feedback_id") or "").strip()
+    cycle_id = str(feedback.get("pilot_cycle_id") or "").strip()
+    activity_ref = str(feedback.get("pilot_activity_ref") or "").strip()
+    activity_date = str(feedback.get("activity_date") or "").strip()
+    if not feedback_id:
+        raise PilotPayloadError("the feedback record has no id")
+    if not cycle_id or not activity_ref:
+        raise PilotPayloadError("this feedback carries no Pilot context")
+    if not activity_date:
+        raise PilotPayloadError("the feedback record has no activity date")
+
+    completion = str(feedback.get("completion") or "")
+    if completion not in COMPLETION_TO_PILOT:
+        raise PilotPayloadError("unmapped completion value")
+    enjoyment = str(feedback.get("enjoyment") or "")
+    if enjoyment not in ENJOYMENT_TO_PILOT:
+        raise PilotPayloadError("unmapped enjoyment value")
+
+    body = {
+        "activity_ref": activity_ref,
+        "local_date": activity_date,
+        "attempt_outcome": COMPLETION_TO_PILOT[completion],
+        "difficulty": str(feedback.get("difficulty") or ""),
+        "enjoyment": ENJOYMENT_TO_PILOT[enjoyment],
+        "source_feedback_id": feedback_id,
+    }
+    supersedes = str(feedback.get("supersedes_feedback_id") or "").strip()
+    if supersedes:
+        # Only present on a revision. Sent as the Pilot's own field name so the
+        # immutable lineage is mirrored rather than re-derived.
+        body["supersedes_source_feedback_id"] = supersedes
+    return {"cycle_id": cycle_id, "body": body}
+
+
+def pilot_delivery_view(feedback: Dict[str, Any],
+                        delivery: Dict[str, Any]) -> Dict[str, Any]:
+    """What the client needs to retry one delivery, and nothing else.
+
+    Built BY NAME from the two records rather than by copying either, so a
+    field added to a feedback record — a new note field, a care-team flag —
+    cannot start appearing on the delivery surface by accident.
+    """
+    payload = pilot_observation_payload(feedback)
+    return {
+        "delivery_id": delivery.get("delivery_id"),
+        "feedback_id": payload["body"]["source_feedback_id"],
+        "supersedes_feedback_id": payload["body"].get(
+            "supersedes_source_feedback_id"),
+        "pilot_cycle_id": payload["cycle_id"],
+        "pilot_activity_ref": payload["body"]["activity_ref"],
+        "activity_date": payload["body"]["local_date"],
+        "attempt_outcome": payload["body"]["attempt_outcome"],
+        "difficulty": payload["body"]["difficulty"],
+        "enjoyment": payload["body"]["enjoyment"],
+        "status": delivery.get("status"),
+        "observation_body": payload["body"],
     }
 
 

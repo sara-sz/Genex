@@ -198,6 +198,16 @@ PLAN_ALLOCATIONS_ROUTE = "/pilot/monthly-plans/{focus_plan_id}/allocations"
 #: it would have meant activating an empty month.
 PLAN_ACTIVATE_ROUTE = "/pilot/monthly-plans/{focus_plan_id}/activate"
 CYCLE_OBSERVATIONS_ROUTE = "/pilot/cycles/{cycle_id}/observations"
+
+#: The body allowlist for recording one observation, as a module constant so
+#: the cross-system parity suite can compare the PARENT mapping against the
+#: allowlist this route actually enforces rather than against a copy of it.
+#: The handler reads it; nothing else may widen it.
+OBSERVATION_BODY_SPEC = (
+    ("activity_ref", "local_date", "attempt_outcome", "difficulty",
+     "enjoyment", "source_feedback_id", "supersedes_source_feedback_id"),
+    ("activity_ref", "local_date", "attempt_outcome"),
+)
 CYCLE_DEFERS_ROUTE = "/pilot/cycles/{cycle_id}/defers"
 PERIOD_REVIEWS_ROUTE = "/pilot/rtm-periods/{period_id}/reviews"
 PERIOD_TIME_ROUTE = "/pilot/rtm-periods/{period_id}/time-entries"
@@ -1744,11 +1754,9 @@ class PilotWSGIApplication:
             # revision lineage: editing feedback there mints a NEW `fb_...` id
             # naming the one it replaces. Carrying it means a revised reading
             # does not read as a second independent signal.
-            body = read_json_body(environ, allowed=[
-                "activity_ref", "local_date", "attempt_outcome",
-                "difficulty", "enjoyment", "source_feedback_id",
-                "supersedes_source_feedback_id"],
-                required=["activity_ref", "local_date", "attempt_outcome"])
+            allowed, required = OBSERVATION_BODY_SPEC
+            body = read_json_body(environ, allowed=list(allowed),
+                                  required=list(required))
             instance_ref = weekly.resolve_parent_activity_ref(
                 principal, resource, opt_str(body, "activity_ref"))
             event = weekly.record_observation(

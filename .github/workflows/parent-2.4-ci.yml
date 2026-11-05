@@ -2205,7 +2205,11 @@ jobs:
             tests/test_checkin_readiness.py \
             tests/test_parent_24_baseline_api.py \
             tests/test_parent_24_baseline_projection.py \
-            tests/test_parent_24_baseline_v2_api.py
+            tests/test_parent_24_baseline_v2_api.py \
+            tests/test_pilot_feedback_delivery.py \
+            tests/test_pilot_feedback_production_path.py \
+            tests/test_feedback_idempotency.py \
+            tests/test_backfill.py
 
       - name: Parent 2.4 functional baseline — product path (own pytest process)
         # 0.5F-A1. In THIS job rather than the dependency-pure taxonomy job
@@ -2335,6 +2339,72 @@ jobs:
         # untouched by 0.3C. Running one suite per process CONTAINS it; it is not
         # a fix, and the collision stays recorded as debt.
         run: python -m pytest tests/test_beta_access.py -q
+
+      - name: P0-A2 Parent→Pilot feedback handoff (own process)
+        # The repo-side half of the handoff: the optional Pilot context, the
+        # durable delivery ledger in the session document, the one
+        # authoritative mapping, and the confirmation endpoint's refusals.
+        #
+        # IN THIS JOB because it drives the real FastAPI app through
+        # TestClient against the local session fallback — fastapi, httpx and
+        # firebase-admin, exactly what this job already installs. No GCS, no
+        # Firestore, no Pilot, no network.
+        #
+        # Its own process for the reason every step here has one: these
+        # suites reassign firebase_admin.verify_id_token at import time with
+        # incompatible fake-token maps.
+        #
+        # A standalone script rather than a pytest module, matching the other
+        # Beta 2.3 session suites it sits beside.
+        run: |
+          if [ -f tests/test_pilot_feedback_delivery.py ]; then
+            PYTHONPATH=. python tests/test_pilot_feedback_delivery.py
+          else
+            echo "P0-A2 not present on this branch — nothing to run"
+          fi
+
+      - name: P0-A2 production-shaped Parent→Pilot chain (own process)
+        # THE CROSS-SYSTEM GATE. Drives the real Parent FastAPI app and the
+        # real Pilot WSGI app, in one process, over a real released Week 1 the
+        # Pilot's own release path produced — and proves the whole chain needs
+        # no Parent plan, activity UUID or weekday anywhere.
+        #
+        # PYTHONPATH reaches BOTH namespaces: `..` for `pilot_backend`, `.`
+        # for `api`. A suite that could only see one side would be a fake
+        # agreeing with itself.
+        env:
+          PYTHONPATH: ..:.
+        run: |
+          if [ -f tests/test_pilot_feedback_production_path.py ]; then
+            python -m pytest tests/test_pilot_feedback_production_path.py -q
+          else
+            echo "P0-A2 not present on this branch — nothing to run"
+          fi
+
+      - name: Beta 2.3 feedback idempotency regression (own process)
+        # NOT new work — it was ungated, and P0-A2 changed the feedback route
+        # and its dedupe fingerprint. The claim that an unlinked submission
+        # behaves byte-identically to before needs a gate that would notice
+        # if it stopped being true, and this suite is that gate: exact
+        # retries, append-only revisions, stars and completions.
+        run: |
+          if [ -f tests/test_feedback_idempotency.py ]; then
+            PYTHONPATH=. python tests/test_feedback_idempotency.py
+          else
+            echo "not present on this branch — nothing to run"
+          fi
+
+      - name: Beta 2.3 backfill regression (own process)
+        # P0-A2 taught this migration tool to SKIP Pilot-linked records: they
+        # have no Parent plan, template or milestone, so backfilling stars and
+        # completions from them would manufacture exactly the provenance the
+        # live route refuses to invent. Previously ungated.
+        run: |
+          if [ -f tests/test_backfill.py ]; then
+            PYTHONPATH=. python tests/test_backfill.py
+          else
+            echo "not present on this branch — nothing to run"
+          fi
 
       - name: Check-in readiness consumer (own pytest process)
         # Second, independent process — see the note above.

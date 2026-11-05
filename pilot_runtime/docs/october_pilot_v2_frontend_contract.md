@@ -866,3 +866,215 @@ completion and mastery booleans — never as an age equivalence.
 On the Pilot, `404` vs `405` vs `401` is the only way to tell a missing route
 from a wrong method from an unauthenticated call. Past the auth gate every
 refusal collapses to `403` by design.
+
+---
+
+## 12. Parent feedback → Pilot observation (P0-A2)
+
+A provider-connected family practises activities from a **Pilot released week**
+and records how it went on the **Parent** surface. The clinical loop needs that
+reading on the Pilot side, where the week, the goal and the RTM period live.
+
+This section is the complete client contract for that handoff. Everything it
+describes on the backend exists; **nothing in this repository performs the Pilot
+call.** The client must.
+
+### 12.1 Why the browser makes the Pilot call, and not Parent
+
+The Pilot resolves the caregiver from **its own** verified bearer token. Parent
+and Pilot are separate Firebase projects (§1) and deliberately unfederated, so
+Parent holds no credential the Pilot would accept as that caregiver. The three
+ways to manufacture one are each worse than this split:
+
+| Rejected | Why |
+|---|---|
+| Federate the two directories | one blast radius for both systems, to move one field |
+| Parent impersonates the caregiver server-side | a backend able to write clinical evidence as any family, forever |
+| Parent sends a caregiver id in the body | an identity *claim*; the Pilot cannot verify it and would have to trust it |
+
+The caregiver's browser already holds a Pilot token for the provider-connected
+account. It makes the call. Parent's job is to make the handoff **durable** and
+the retry **exact**.
+
+### 12.2 Two disjoint request shapes
+
+Parent has **two** feedback routes, and a client uses exactly one per activity.
+
+| | Standalone Parent | Provider-connected |
+|---|---|---|
+| route | `POST /api/v1/session/{sid}/feedback` | `POST /api/v1/session/{sid}/pilot-feedback` |
+| activity came from | a Parent-generated plan | a Pilot released week |
+| required identity | `plan_id`, `activity_id`, `day`, `activity_date` | `pilot_cycle_id`, `pilot_activity_ref`, `activity_date` |
+| needs a Parent plan | yes (409 without one) | **no** — not even a plan on the session |
+| extra fields | ignored | **refused (422)** |
+| stars / completions | yes, unchanged | **no** — see 12.6 |
+| Pilot delivery row | never | always |
+
+A provider-connected client **never** sends `plan_id`, `activity_id` or `day`,
+and must never invent them: the two planning systems are unrelated, and the
+`pilot-feedback` route refuses those fields outright rather than ignoring them.
+
+### 12.3 `local_date` is the practice date
+
+The Pilot attributes every attempt to a **cycle day**. The practice date is
+`this-week.days[].local_date`, which is what the client sends as
+`activity_date`.
+
+Parent also records `local_submission_date` — the wall-clock date the parent
+tapped submit. It is never sent and never used to identify the practice. A
+parent recording Tuesday's practice on Wednesday evening would otherwise
+attribute the attempt to a day the activity was not scheduled. Submission time
+is not lost: the Pilot stamps its own `occurred_at` server-side.
+
+### 12.4 The client sequence
+
+1. **Read the released week** from the Pilot:
+   `GET /pilot/children/{child_id}/this-week`.
+   This is the **only** source of activity identity for a provider-connected
+   family. Keep, per activity, `week.cycle_id`,
+   `days[].activities[].activity_ref` and that day's `local_date`. Do **not**
+   attempt to correlate Parent-generated plan UUIDs with Pilot activity refs —
+   there is no mapping, and inventing one would attach a reading to the wrong
+   activity.
+2. **Render** the week's activities to the caregiver.
+3. **Submit feedback to Parent** — no Parent plan identity anywhere:
+   `POST /api/v1/session/{session_id}/pilot-feedback`
+   ```json
+   {
+     "pilot_cycle_id": "<week.cycle_id>",
+     "pilot_activity_ref": "<days[].activities[].activity_ref>",
+     "activity_date": "<that day's local_date>",
+     "enjoyment": "loved_it",
+     "difficulty": "just_right",
+     "completion": "did_it",
+     "note": "optional, stays in Parent",
+     "discuss_with_care_team": false
+   }
+   ```
+4. **Read the response.** It carries the lineage and the queued delivery:
+   ```json
+   {
+     "ok": true, "feedback_id": "fb_...",
+     "supersedes_feedback_id": null,
+     "idempotent_replay": false,
+     "pilot_delivery": {
+       "delivery_id": "pdlv_...", "feedback_id": "fb_...",
+       "supersedes_feedback_id": null,
+       "pilot_cycle_id": "...", "pilot_activity_ref": "pact1:...",
+       "activity_date": "2026-10-13",
+       "attempt_outcome": "did_it", "difficulty": "just_right",
+       "enjoyment": "enjoyed", "status": "pending",
+       "observation_body": { "...": "post this verbatim" }
+     }
+   }
+   ```
+5. **Post `observation_body` verbatim** to the Pilot, with the caregiver's
+   **Pilot** token:
+   `POST /pilot/cycles/{pilot_delivery.pilot_cycle_id}/observations`
+   Do not rebuild the body. It is produced by the single authoritative mapping
+   (`api/progress.py::pilot_observation_payload`), gated against the Pilot's
+   own allowlist and enums, so a client that posts it cannot get the
+   vocabulary, the date or the lineage wrong. Do not add fields — the Pilot
+   refuses anything outside its allowlist, including a caregiver id.
+6. **Keep the Pilot's `event_id`.** A 200 returns
+   `{"observation": {"event_id": "obsv_...", …}}`. That value is the delivery
+   **receipt** and the next step requires it.
+7. **Confirm to Parent:**
+   `POST /api/v1/session/{session_id}/pilot-feedback-deliveries/{feedback_id}/confirm`
+   ```json
+   { "pilot_observation_event_id": "obsv_..." }
+   ```
+   The receipt is **required** and it is the only accepted field; anything else
+   is 422. This endpoint moves bookkeeping only — it can neither change a
+   clinical value nor erase history. It is not proof the Pilot accepted
+   anything, but it means a confirmation cannot be sent by a client that never
+   had a 200 to read an id out of.
+8. **On a Pilot failure, do nothing special.** The row stays `pending`. There
+   is no `failed` state: "failed once" and "not yet attempted" differ only in
+   information Parent cannot verify, and a terminal state would invite a
+   cleanup that discards a family's feedback.
+9. **On reconnect or app load, drain the queue:**
+   `GET /api/v1/session/{session_id}/pilot-feedback-deliveries` (default
+   `?status=pending`; also `delivered` and `all`). Each row has the same shape
+   as `pilot_delivery` above, including `observation_body`. Repeat steps 5–7.
+10. **A correction is a resubmission, not a confirm.** Submit step 3 again with
+    the changed values; Parent mints a new `feedback_id`, returns
+    `supersedes_feedback_id` naming the earlier one, and queues a second
+    delivery row whose `observation_body` carries
+    `supersedes_source_feedback_id`. Post and confirm it like any other. Both
+    histories are kept on both sides, and the Pilot's
+    `current_observations()` view shows one current reading rather than two
+    independent signals.
+
+### 12.5 Identity, dedupe and revision
+
+Parent identifies a provider-connected practice by the **Pilot triple** —
+`pilot_cycle_id` + `pilot_activity_ref` + `activity_date` — and stores a
+deterministic opaque key derived from it (`pfbi_…`). The `pact1:` handle is
+never reinterpreted as a Parent activity UUID, and the Pilot's internal
+`activity_instance_ref` appears nowhere on this path.
+
+Consequences a client can rely on:
+
+| Resubmission | Result |
+|---|---|
+| identical values, same triple | replay: same `feedback_id`, same single delivery row |
+| changed values, same triple | revision: new id, `supersedes_feedback_id` set, second row |
+| same handle and date, **different cycle** | a NEW record. Never a revision. |
+| same cycle and handle, **different date** | a NEW record. Never a revision. |
+| a standalone Parent record on the same dates | never superseded by, and never supersedes, a Pilot-linked one |
+
+| Action | Repeated | Result |
+|---|---|---|
+| `pilot-feedback` POST, identical | yes | replay, one delivery row |
+| Pilot observation POST | yes | replay — `source_feedback_id` is the Pilot's dedupe key |
+| confirm, **same** receipt | yes | `idempotent_replay: true`; first timestamp and receipt stand |
+| confirm, **different** receipt | — | **409 conflict**; the first receipt is not overwritten |
+
+### 12.6 What a provider-connected record deliberately does NOT get
+
+- **No star, attempt or completion record.** Each requires Parent plan
+  identity and a milestone; awarding them from fabricated provenance would
+  corrupt the Parent completion history and the progress denominators that
+  read it. Rewards for provider-connected practice are an open product
+  question, not something to answer with manufactured data.
+- **No plan metadata.** `metadata_found` is false and the snapshot, template,
+  provenance, focus and domain fields are absent rather than empty-stringed
+  into existence.
+- **No effect on Parent planning.** Pilot-linked feedback never enters Parent's
+  next-week adaptation, and the backfill migration tool skips it.
+
+The parent's note and care-team flag DO work as normal and reach the Parent
+care-team report. The note never travels to the Pilot.
+
+### 12.7 What these surfaces never expose
+
+- the parent's free-text `note` — it stays in Parent
+- the Pilot's internal `activity_instance_ref` — the opaque handle is the only
+  identifier the Parent surface ever holds
+- Parent internals unrelated to delivery — no plan or module ids, provenance,
+  care-team flags, stars, completions, snapshots or submission dates
+- the Parent-side derived identity (`pfbi_…`) — internal to Parent
+- caregiver identity in any request body, in either direction
+
+### 12.8 Status codes
+
+| Code | Route | Meaning |
+|---|---|---|
+| 422 | `pilot-feedback` | a missing Pilot field, a malformed `pact1:` ref, or a Parent plan field |
+| 404 | confirm | `feedback_not_found` — not a record of this session |
+| 409 | confirm | `feedback_not_pilot_linked` — the record is standalone |
+| 409 | confirm | `pilot_delivery_row_missing` — **invariant conflict**: a linked record and its row are written together, so this state is corruption and is never repaired silently |
+| 409 | confirm | `pilot_delivery_receipt_conflict` — a different receipt was quoted |
+| 422 | confirm | no receipt, or a forbidden field (clinical value, status, identity) |
+| 422 | pending read | `invalid_status_filter` |
+| 403 | Pilot observations | any authorization, body or resolution refusal (§11) |
+
+### 12.9 What is still NOT wired after this slice
+
+- The external Lovable client does not yet implement §12.4. Nothing in this
+  repository performs step 1, 5 or 7.
+- Pilot **adaptation** is untouched. `current_observations()` is defined and
+  proven, and is deliberately *not* wired into `plan_adaptation()`.
+- Week 2, automatic scheduling, activity selection, the monthly envelope and
+  the care-team exception inbox are out of scope and absent.
