@@ -1064,6 +1064,18 @@ class FirestoreWeeklyCycleRepository(_BaseRepo):
     def get_by_id(self, cycle_id: str) -> WeeklyCycle:
         return self._get(cycle_id)
 
+    def overwrite(self, cycle: WeeklyCycle) -> WeeklyCycle:
+        """Write a cycle WITHOUT reading it first. Transaction-safe. P0-B1.
+
+        A pure write, for the same reason as
+        `FirestoreProviderChildConnectionRepository.overwrite`: Firestore
+        requires every read in a transaction to precede every write, and
+        `update` goes through `_set`, which reads. The caller does its own
+        `get_by_id` inside the transaction BEFORE any write — that read is the
+        existence check and enrolls the document in conflict detection.
+        """
+        return self._overwrite(cycle.cycle_id, cycle)
+
     def update(self, cycle: WeeklyCycle) -> WeeklyCycle:
         """Whole-document write of an EXISTING cycle (release, adaptation)."""
         return self._set(cycle.cycle_id, cycle)

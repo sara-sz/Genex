@@ -66,8 +66,35 @@ Sequence 1 behaves exactly as before. For sequence ≥ 2 the route runs:
 Every boundary check runs before the first write. Refusals (all render as the
 route's constant 403): `NonAdaptiveWeekRefused` (the old plain
 `create_cycle` path for Week 2+ is closed), `AdaptiveWeekUnavailable` (no
-released Week N), `AdaptiveWeekIncomplete` (an unreleased Week N+1 draft
-exists — refused, never resumed), `ClinicalBoundaryRefused`.
+released Week N), `AdaptiveWeekStateMismatch` / `AdaptiveWeekCapacityMismatch`
+(persisted partial state differs from this request — see below),
+`ClinicalBoundaryRefused`.
+
+## Interrupted releases resume (P0-B1 hardening)
+
+Every write is deterministic given the boundary checks, so an interrupted
+attempt leaves a PREFIX of this sequence. Each step is atomic on its own:
+
+| Step | Atomic unit | On retry, if present |
+|---|---|---|
+| cycle | claim + cycle (one txn) | verified: child, plan, sequence, predecessor, start/end, partial flag/reason, generation reason |
+| allocation | claim + alignments + gaps + ledger (one txn) | recomputed with the same inputs and compared exactly; recorded capacity must equal the request's |
+| explanation | AdaptationRecord + decision + cycle link (one txn) | both recomputed and compared exactly (ids/timestamps aside); a matching explanation with a missing link is linked inside a transaction, only if the cycle is unlinked |
+| snapshot | `WEEKLY_SNAPSHOT` claim + snapshot (one txn) | must be byte-identical to the rebuilt document; one frozen by an identical concurrent request is accepted only if identical |
+| release | read-check-write (one txn) | a released Week N+1 is returned unchanged; a concurrent identical release is returned, never repeated |
+
+The snapshot claim and the transactional release are NEW in the hardening: a
+resumable draft lets two identical requests reach those steps together, which
+the old read-then-write guards could not survive (two snapshots; a double
+release overwriting `released_to_parent_at`). Week 1 gains the same protection
+and its successful behaviour is unchanged.
+
+A present step that matches is treated as done; the first missing step runs
+next. Anything that differs is refused, never repaired. A retry with a different
+capacity after allocation is refused (`AdaptiveWeekCapacityMismatch`); retry with
+the recorded capacity. New Week N feedback after an interrupted attempt is a
+refusal ONLY if it changes what this request would write — the comparison is of
+persisted state against the recomputation, nothing else.
 
 New create-only collection: `pilot_weekly_adaptation_decisions`, keyed by the
 cycle it explains (one decision per week). The decision cannot be constructed

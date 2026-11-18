@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import pathlib
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import pytest
@@ -56,7 +57,8 @@ from pilot_backend.integration.gold_standard_source import (
     RungTarget,
 )
 from pilot_backend.integration.week_one_release import (
-    AdaptiveWeekIncomplete,
+    AdaptiveWeekCapacityMismatch,
+    AdaptiveWeekStateMismatch,
     AdaptiveWeekUnavailable,
     ClinicalBoundaryRefused,
     NonAdaptiveWeekRefused,
@@ -716,27 +718,48 @@ def test_week_one_replay_is_unchanged(a):
 
 
 def test_the_non_adaptive_week_two_path_is_closed(a):
-    goals = a.service.releasable_goals(a.provider, CHILD)
-    plan = a.service._resolve_plan(a.provider, CHILD, goals,
-                                   timezone_of_record=TZ, cycle_month=MONTH,
-                                   request_id="")
     with pytest.raises(NonAdaptiveWeekRefused):
-        a.service._resolve_cycle(a.provider, plan, request_id="",
+        a.service._resolve_cycle(a.provider, _plan(a), request_id="",
                                  local_date=WEEK_TWO_DAY)
     assert len(a.docs("pilot_weekly_cycles")) == 1
 
 
-def test_an_unreleased_week_two_draft_is_refused_not_resumed(a):
+def _plan(a):
     goals = a.service.releasable_goals(a.provider, CHILD)
-    plan = a.service._resolve_plan(a.provider, CHILD, goals,
+    return a.service._resolve_plan(a.provider, CHILD, goals,
                                    timezone_of_record=TZ, cycle_month=MONTH,
                                    request_id="")
+
+
+def test_an_exactly_matching_unreleased_draft_is_resumed(a):
+    """P0-B1 hardening: a draft that is EXACTLY the cycle this request would
+    create is completed, not wedged. (Was: refused as AdaptiveWeekIncomplete.)"""
     a.clock.set(WEEK_TWO_DAY)
-    a.weekly.create_cycle(a.provider, plan.focus_plan_id, sequence_in_month=2,
-                          first_plan_date=WEEK_ONE_DAY,
-                          predecessor_cycle_id=a.week_one.cycle_id)
-    with pytest.raises(AdaptiveWeekIncomplete):
+    draft = a.weekly.create_cycle(
+        a.provider, _plan(a).focus_plan_id, sequence_in_month=2,
+        first_plan_date=WEEK_ONE_DAY,
+        predecessor_cycle_id=a.week_one.cycle_id)
+    week_two = a.release(WEEK_TWO_DAY)
+    assert week_two.cycle_id == draft.cycle_id
+    assert week_two.created is True and week_two.released_at is not None
+
+
+@pytest.mark.parametrize("kwargs", [
+    # No predecessor: not the cycle the adaptive path would create.
+    {"first_plan_date": WEEK_ONE_DAY},
+    # Month-anchored bounds instead of starter-anchored ones.
+    {"predecessor_cycle_id": "PREVIOUS"},
+])
+def test_a_mismatched_unreleased_draft_is_refused(a, kwargs):
+    kwargs = {k: (a.week_one.cycle_id if v == "PREVIOUS" else v)
+              for k, v in kwargs.items()}
+    a.clock.set(WEEK_TWO_DAY)
+    a.weekly.create_cycle(a.provider, _plan(a).focus_plan_id,
+                          sequence_in_month=2, **kwargs)
+    with pytest.raises(AdaptiveWeekStateMismatch):
         a.release(WEEK_TWO_DAY)
+    assert a.docs("pilot_weekly_adaptation_decisions") == []
+    assert len(a.docs("pilot_weekly_cycles")) == 2
 
 
 def test_week_three_without_a_released_week_two_is_refused(a):
@@ -748,7 +771,8 @@ def test_week_three_without_a_released_week_two_is_refused(a):
 def test_every_new_refusal_is_a_route_handled_release_error():
     """The release route renders `WeekOneReleaseError` as its constant 403."""
     for error in (NonAdaptiveWeekRefused, AdaptiveWeekUnavailable,
-                  AdaptiveWeekIncomplete, ClinicalBoundaryRefused):
+                  AdaptiveWeekStateMismatch, AdaptiveWeekCapacityMismatch,
+                  ClinicalBoundaryRefused):
         assert issubclass(error, WeekOneReleaseError)
 
 
@@ -767,3 +791,480 @@ def test_the_policy_module_reaches_no_network_or_model():
                   and node.level == 0):
                 found.add(node.module.split(".")[0])
         assert not found & banned, (module, found & banned)
+
+
+# ===========================================================================
+# 10. P0-B1 hardening — interrupted Week 2 resumes idempotently
+# ===========================================================================
+#
+# Each case injects ONE failure into an otherwise identical run, proves the
+# first call stops there, retries the IDENTICAL request, and proves the result
+# is exactly one of everything and identical to an uninterrupted run.
+
+
+class Injected(RuntimeError):
+    """A simulated transient failure. Not handled by any product code."""
+
+
+def _fail_once(target, name, *, before=False):
+    """Make `target.name` raise once, after (default) or before running."""
+    original = getattr(target, name)
+    armed = {"on": True}
+
+    def wrapper(*args, **kwargs):
+        if armed["on"] and before:
+            armed["on"] = False
+            raise Injected(name)
+        result = original(*args, **kwargs)
+        if armed["on"]:
+            armed["on"] = False
+            raise Injected(name)
+        return result
+
+    setattr(target, name, wrapper)
+
+
+def _fail_inside_adaptation_transaction(a):
+    """Fail INSIDE the record+decision+link transaction, after both creates.
+
+    Done through the service's own injectable transaction repo factory, so the
+    failure lands between real writes of a real transaction.
+    """
+    from pilot_backend.persistence.firestore_repos import FirestoreRepositories
+
+    armed = {"on": True}
+
+    def factory(store):
+        repos = FirestoreRepositories(store)
+        if armed["on"]:
+            def boom(_cycle):
+                armed["on"] = False
+                raise Injected("weekly_cycles.overwrite")
+            repos.weekly_cycles.overwrite = boom
+        return repos
+
+    a.weekly._repos_factory = factory
+
+
+INJECTIONS = {
+    "after_cycle_creation":
+        lambda a: _fail_once(a.weekly, "create_cycle"),
+    "after_allocation":
+        lambda a: _fail_once(a.weekly, "allocate_cycle"),
+    "inside_adaptation_transaction":
+        _fail_inside_adaptation_transaction,
+    "after_adaptation_and_link":
+        lambda a: _fail_once(a.weekly, "record_week_adaptation"),
+    "after_snapshot":
+        lambda a: _fail_once(a.weekly, "capture_snapshot"),
+    "before_release_persists":
+        lambda a: _fail_once(a.weekly, "release_cycle", before=True),
+    "after_release":
+        lambda a: _fail_once(a.weekly, "release_cycle"),
+}
+
+
+def _disengage(a):
+    a.observe(MY_TURN, "2026-11-17", outcome=AttemptOutcome.DIDNT_WANT_TO_TRY)
+    a.observe(MY_TURN, "2026-11-18", outcome=AttemptOutcome.DIDNT_WANT_TO_TRY)
+
+
+def _week_two_cycle(a):
+    cycles = [c for c in a.repos.weekly_cycles.list_for_child(CHILD)
+              if c.sequence_in_month == 2]
+    return cycles
+
+
+def _fingerprint(a, cycle_id):
+    """Everything about Week 2 that must not depend on interruption. Random
+    ids (cycle, goal, record) are excluded; template ids are content digests
+    and therefore comparable across worlds."""
+    cycle = a.repos.weekly_cycles.get_by_id(cycle_id)
+    (snapshot,) = a.repos.weekly_plan_snapshots.list_for_cycle(cycle_id)
+    (ledger,) = a.repos.capacity_ledgers.list_for_cycle(cycle_id)
+    decision = a.repos.adaptation_decisions.find_for_cycle(cycle_id)
+    (record,) = [r for r in a.repos.adaptation_records.list_for_child(CHILD)
+                 if r.to_cycle_id == cycle_id]
+    return {
+        "bounds": (cycle.starts_on, cycle.ends_on, cycle.is_partial,
+                   cycle.sequence_in_month, cycle.is_released),
+        "activities": [(row["local_date"], row["activity_template_id"],
+                        row["activity_family_ref"], row["content"])
+                       for row in snapshot.document()["activities"]],
+        "ledger": (ledger.family_declared_capacity, ledger.allocated_by_planner,
+                   ledger.clinician_added),
+        "decisions": [(d.activity_identity_ref, d.branch, d.reason, d.signal,
+                       len(d.trigger_event_ids))
+                      for d in decision.activity_decisions],
+        "selected": decision.selected_template_ids,
+        "excluded_themes": decision.excluded_themes,
+        "proof": [(p.goal_unchanged, p.goal_version_unchanged,
+                   p.anchor_unchanged, p.families_within_anchor,
+                   p.allowed_family_refs, p.selected_family_refs)
+                  for p in decision.goal_proofs],
+        "record": (record.rule_version, record.resulting_change,
+                   len(record.evidence_event_ids)),
+        "linked": cycle.adaptation_record_id == record.record_id
+        == decision.adaptation_record_id,
+    }
+
+
+def _assert_exactly_one_of_everything(a, cycle_id):
+    assert len(_week_two_cycle(a)) == 1
+    assert len(a.repos.capacity_ledgers.list_for_cycle(cycle_id)) == 1
+    assert len(a.repos.alignments.list_for_cycle(cycle_id)) == CAPACITY
+    assert len([r for r in a.repos.adaptation_records.list_for_child(CHILD)
+                if r.to_cycle_id == cycle_id]) == 1
+    assert len(a.docs("pilot_adaptation_records")) == 1
+    assert len(a.docs("pilot_weekly_adaptation_decisions")) == 1
+    assert len(a.repos.weekly_plan_snapshots.list_for_cycle(cycle_id)) == 1
+    releases = [e for e in a.docs("pilot_audit_events")
+                if e["action"] == "weekly_cycle_released"
+                and e["resource_id"] == cycle_id]
+    assert len(releases) == 1, "Week 2 was released more than once"
+
+
+@pytest.fixture(scope="module")
+def clean_fingerprint():
+    clean = Adaptive()
+    _disengage(clean)
+    outcome = clean.release(WEEK_TWO_DAY)
+    return _fingerprint(clean, outcome.cycle_id), outcome
+
+
+@pytest.mark.parametrize("point", sorted(INJECTIONS))
+def test_an_interrupted_week_two_resumes_to_the_clean_result(point,
+                                                             clean_fingerprint):
+    expected, clean_outcome = clean_fingerprint
+    a = Adaptive()
+    _disengage(a)
+    INJECTIONS[point](a)
+
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    # The family never sees a half-built week, whatever was persisted.
+    if point != "after_release":
+        assert a.service.this_week(a.caregiver, CHILD,
+                                   local_date="2026-11-24") is None
+
+    outcome = a.release(WEEK_TWO_DAY)   # the IDENTICAL request
+    assert outcome.released_at is not None
+    assert outcome.created is (point != "after_release")
+    _assert_exactly_one_of_everything(a, outcome.cycle_id)
+    assert _fingerprint(a, outcome.cycle_id) == expected
+    assert outcome.activity_count == clean_outcome.activity_count
+
+    # And it stays settled: a further identical call is a pure replay.
+    again = a.release(WEEK_TWO_DAY)
+    assert again.created is False
+    assert again.parent_week == a.service.this_week(
+        a.caregiver, CHILD, local_date="2026-11-24")
+    _assert_exactly_one_of_everything(a, outcome.cycle_id)
+
+
+def test_a_failure_inside_the_transaction_persists_no_explanation():
+    """Atomicity, not just resumability: record, decision and link are all or
+    nothing."""
+    a = Adaptive()
+    _disengage(a)
+    _fail_inside_adaptation_transaction(a)
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    (draft,) = _week_two_cycle(a)
+    assert a.docs("pilot_adaptation_records") == []
+    assert a.docs("pilot_weekly_adaptation_decisions") == []
+    assert draft.adaptation_record_id is None
+
+
+def test_an_explanation_whose_cycle_link_is_missing_is_linked_on_resume():
+    """Not producible by this version (the link is in the same transaction),
+    but possible from an earlier interrupted one. The stored, matching,
+    immutable decision is linked through the service's transaction-safe write
+    — never by the route, and only when the cycle is unlinked."""
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "record_week_adaptation")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    (draft,) = _week_two_cycle(a)
+    # FIXTURE: model the legacy partial state by removing the link.
+    a.repos.weekly_cycles.update(replace(draft, adaptation_record_id=None))
+
+    outcome = a.release(WEEK_TWO_DAY)
+    _assert_exactly_one_of_everything(a, outcome.cycle_id)
+    assert _fingerprint(a, outcome.cycle_id)["linked"] is True
+
+
+# ---- mismatched partial state refuses --------------------------------------
+
+
+def test_a_different_capacity_cannot_rewrite_an_in_progress_week():
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "allocate_cycle")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY, capacity=3)
+
+    with pytest.raises(AdaptiveWeekCapacityMismatch):
+        a.release(WEEK_TWO_DAY, capacity=2)
+    (draft,) = _week_two_cycle(a)
+    (ledger,) = a.repos.capacity_ledgers.list_for_cycle(draft.cycle_id)
+    assert ledger.family_declared_capacity == 3
+    assert a.docs("pilot_weekly_adaptation_decisions") == []
+
+    outcome = a.release(WEEK_TWO_DAY, capacity=3)   # the recorded capacity
+    _assert_exactly_one_of_everything(a, outcome.cycle_id)
+
+
+def test_changed_evidence_after_allocation_refuses_rather_than_resumes():
+    """New Week 1 feedback changes WHICH cards this request would choose — a
+    repeated `too_hard` carries More Bubbles — so the recomputed selection no
+    longer matches the persisted allocation, and the draft is not resumed."""
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "allocate_cycle")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    a.observe("More Bubbles", "2026-11-19", difficulty=Difficulty.TOO_HARD)
+    a.observe("More Bubbles", "2026-11-20", difficulty=Difficulty.TOO_HARD)
+    with pytest.raises(AdaptiveWeekStateMismatch):
+        a.release(WEEK_TWO_DAY)
+    assert a.docs("pilot_weekly_adaptation_decisions") == []
+    (draft,) = _week_two_cycle(a)
+    assert not draft.is_released
+
+
+def test_evidence_that_leaves_the_allocation_identical_still_resumes():
+    """Resume compares PERSISTED state only. Here the new feedback breaks the
+    repeat, but the recomputed selection is the same three cards, so the
+    persisted allocation still matches exactly; no decision existed yet, so
+    the decision written now cites the CURRENT evidence. Consistent, so
+    resumed — not a loophole: nothing persisted differs from what this
+    request would write."""
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "allocate_cycle")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    a.observe(MY_TURN, "2026-11-19", outcome=AttemptOutcome.DID_IT,
+              enjoyment=Enjoyment.ENJOYED)
+    outcome = a.release(WEEK_TWO_DAY)
+    _assert_exactly_one_of_everything(a, outcome.cycle_id)
+    decision = a.decision(outcome)
+    assert AdaptationBranch.CHANGE_THEME not in decision.branches
+    assert len(decision.current_event_ids) == 3
+
+
+def test_changed_evidence_after_the_decision_refuses_rather_than_resumes():
+    """Selection unchanged, but the decision would cite different evidence."""
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "record_week_adaptation")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    a.observe("More Bubbles", "2026-11-20", outcome=AttemptOutcome.DID_IT)
+    with pytest.raises(AdaptiveWeekStateMismatch):
+        a.release(WEEK_TWO_DAY)
+    (draft,) = _week_two_cycle(a)
+    assert not draft.is_released
+
+
+def test_a_cycle_linked_to_a_different_record_refuses():
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "record_week_adaptation")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    (draft,) = _week_two_cycle(a)
+    a.repos.weekly_cycles.update(replace(draft,
+                                         adaptation_record_id="adpt_other"))
+    with pytest.raises(AdaptiveWeekStateMismatch):
+        a.release(WEEK_TWO_DAY)
+
+
+def test_a_different_snapshot_refuses_rather_than_releases():
+    from pilot_backend.domain.source_link import SourceSystem
+
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "record_week_adaptation")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    (draft,) = _week_two_cycle(a)
+    a.weekly.capture_snapshot(a.provider, draft.cycle_id,
+                              SourceSystem.THERAPIST, draft.cycle_id,
+                              {"document_schema": "not-the-expected-week"})
+    with pytest.raises(AdaptiveWeekStateMismatch):
+        a.release(WEEK_TWO_DAY)
+    assert not a.repos.weekly_cycles.get_by_id(draft.cycle_id).is_released
+
+
+def test_a_foreign_allocation_on_the_draft_refuses():
+    """A draft allocated with content this request would not choose."""
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "create_cycle")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    (draft,) = _week_two_cycle(a)
+    week_one = {t.activity_template_id: t
+                for t in a.bank.templates_for_families(FAMILIES_24)
+                if t.activity_template_id in set(a.placed_ids(a.week_one))}
+    a.weekly.allocate_cycle(
+        a.provider, draft.cycle_id,
+        a.service._candidates_for(a.service.releasable_goals(a.provider, CHILD),
+                                  week_one),
+        family_declared_capacity=CAPACITY)
+    with pytest.raises(AdaptiveWeekStateMismatch):
+        a.release(WEEK_TWO_DAY)
+    assert a.docs("pilot_weekly_adaptation_decisions") == []
+
+
+def test_the_service_itself_refuses_a_different_capacity():
+    """`allocation_state` pins the capacity rule on its own, independently of
+    the orchestrator's earlier check — each guard is tested in isolation."""
+    from pilot_backend.weekly.errors import InProgressCapacityMismatch
+
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "allocate_cycle")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    (draft,) = _week_two_cycle(a)
+    pool = {t.activity_template_id: t
+            for t in a.bank.templates_for_families(FAMILIES_24)}
+    goals = a.service.releasable_goals(a.provider, CHILD)
+    candidates = a.service._candidates_for(goals, pool)
+    with pytest.raises(InProgressCapacityMismatch):
+        a.weekly.allocation_state(a.provider, draft.cycle_id, candidates,
+                                  family_declared_capacity=2)
+
+
+def test_a_tampered_adaptation_record_refuses():
+    """The stored record is compared on its own, not only via the decision."""
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "record_week_adaptation")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    ((doc_id, doc),) = a.repos.store.list_all("pilot_adaptation_records")
+    a.repos.store.set("pilot_adaptation_records", doc_id,
+                      dict(doc, resulting_change="tampered"))   # FIXTURE
+    with pytest.raises(AdaptiveWeekStateMismatch):
+        a.release(WEEK_TWO_DAY)
+
+
+def test_a_tampered_adaptation_decision_refuses():
+    """The stored decision is compared on its own, not only via the record."""
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "record_week_adaptation")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    ((doc_id, doc),) = a.repos.store.list_all(
+        "pilot_weekly_adaptation_decisions")
+    a.repos.store.set("pilot_weekly_adaptation_decisions", doc_id,
+                      dict(doc, excluded_themes=["tampered"]))   # FIXTURE
+    with pytest.raises(AdaptiveWeekStateMismatch):
+        a.release(WEEK_TWO_DAY)
+
+
+# ---- two identical requests racing on one resumed draft ---------------------
+
+
+def _concurrent_first(target, name, *, mutate=None):
+    """Let an identical 'concurrent writer' complete `name` immediately before
+    this request's own call — the interleaving a resumable draft allows."""
+    original = getattr(target, name)
+    armed = {"on": True}
+
+    def wrapper(*args, **kwargs):
+        if armed["on"]:
+            armed["on"] = False
+            if mutate is None:
+                original(*args, **kwargs)
+            else:
+                mutate(original, args, kwargs)
+        return original(*args, **kwargs)
+
+    setattr(target, name, wrapper)
+
+
+def test_a_snapshot_frozen_by_an_identical_racer_is_accepted(clean_fingerprint):
+    expected, _clean = clean_fingerprint
+    a = Adaptive()
+    _disengage(a)
+    _concurrent_first(a.weekly, "capture_snapshot")
+    outcome = a.release(WEEK_TWO_DAY)
+    _assert_exactly_one_of_everything(a, outcome.cycle_id)
+    assert _fingerprint(a, outcome.cycle_id) == expected
+
+
+def test_a_week_released_by_an_identical_racer_is_returned_not_rereleased(
+        clean_fingerprint):
+    expected, _clean = clean_fingerprint
+    a = Adaptive()
+    _disengage(a)
+    _concurrent_first(a.weekly, "release_cycle")
+    outcome = a.release(WEEK_TWO_DAY)
+    assert outcome.created is False
+    _assert_exactly_one_of_everything(a, outcome.cycle_id)
+    assert _fingerprint(a, outcome.cycle_id) == expected
+
+
+def test_a_racer_that_froze_a_different_snapshot_refuses():
+    a = Adaptive()
+    _disengage(a)
+
+    def different(original, args, kwargs):
+        principal, cycle_id, source, plan_id, _document = args
+        original(principal, cycle_id, source, plan_id,
+                 {"document_schema": "a-different-week"})
+
+    _concurrent_first(a.weekly, "capture_snapshot", mutate=different)
+    with pytest.raises(AdaptiveWeekStateMismatch):
+        a.release(WEEK_TWO_DAY)
+    (draft,) = _week_two_cycle(a)
+    assert not a.repos.weekly_cycles.get_by_id(draft.cycle_id).is_released
+
+
+def test_the_snapshot_and_release_steps_are_unique_by_claim(a):
+    """The service itself refuses a second snapshot and a second release."""
+    from pilot_backend.domain.source_link import SourceSystem
+    from pilot_backend.weekly.errors import ReleasedPlanImmutable, WeeklyConflict
+
+    with pytest.raises(WeeklyConflict):
+        a.weekly.capture_snapshot(a.provider, a.week_one.cycle_id,
+                                  SourceSystem.THERAPIST, a.week_one.cycle_id,
+                                  {"document_schema": "x"})
+    with pytest.raises(ReleasedPlanImmutable):
+        a.weekly.release_cycle(a.provider, a.week_one.cycle_id)
+    claims = [d for d in a.docs("pilot_identity_claims")
+              if d["kind"] == "weekly_snapshot"]
+    assert len(claims) == 1
+
+
+def test_a_writer_holding_a_stale_unreleased_read_cannot_release_twice():
+    """The in-transaction check, isolated from the outer pre-check: a second
+    writer that read the cycle BEFORE the first one committed its release."""
+    from pilot_backend.weekly.errors import ReleasedPlanImmutable
+
+    a = Adaptive()
+    _disengage(a)
+    _fail_once(a.weekly, "capture_snapshot")
+    with pytest.raises(Injected):
+        a.release(WEEK_TWO_DAY)
+    (draft,) = _week_two_cycle(a)
+    stale = a.repos.weekly_cycles.get_by_id(draft.cycle_id)
+    assert not stale.is_released
+    a.weekly.release_cycle(a.provider, draft.cycle_id)       # writer one
+
+    real_load = a.weekly._load_cycle
+    a.weekly._load_cycle = lambda cycle_id: stale            # writer two's view
+    with pytest.raises(ReleasedPlanImmutable):
+        a.weekly.release_cycle(a.provider, draft.cycle_id)
+    a.weekly._load_cycle = real_load
+    releases = [e for e in a.docs("pilot_audit_events")
+                if e["action"] == "weekly_cycle_released"
+                and e["resource_id"] == draft.cycle_id]
+    assert len(releases) == 1

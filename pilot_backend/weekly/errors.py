@@ -44,3 +44,20 @@ class ReleasedPlanImmutable(WeeklyConflict):
 
     Proposal-and-acceptance wiring is 0.5.
     """
+
+
+class InProgressStateMismatch(WeeklyConflict):
+    """P0-B1 resume. Persisted partial state is not what THIS request would
+    have written, so it is not resumed.
+
+    Raised when an earlier attempt left an allocation, an adaptation record or
+    decision, a cycle link or a snapshot that differs from the deterministic
+    recomputation. Fail closed: resuming state we did not produce could release
+    a week nobody approved, and repairing it would hide how it arose.
+    """
+
+
+class InProgressCapacityMismatch(InProgressStateMismatch):
+    """A retry named a different family-declared capacity after the first
+    allocation was persisted. The recorded capacity is the in-progress week's
+    truth; a later request may not silently rewrite it."""

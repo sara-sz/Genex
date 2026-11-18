@@ -86,6 +86,12 @@ from ..domain.weekly_plan_document import (
     build_document,
     parent_week_view,
 )
+from ..weekly.errors import (
+    InProgressCapacityMismatch,
+    InProgressStateMismatch,
+    ReleasedPlanImmutable,
+    WeeklyConflict,
+)
 from ..weekly.repeated_signal_policy import (
     RepeatedSignalPolicyError,
     decide as decide_adaptation,
@@ -96,6 +102,12 @@ from .adaptive_week import (
     select_week_templates,
     verify_reviewed_and_bounded,
 )
+
+def _canonical(document) -> str:
+    """A type-stable form for comparing a stored snapshot to a rebuilt one."""
+    import json  # noqa: WPS433
+    return json.dumps(document, sort_keys=True, default=str)
+
 
 #: Week 1 of a month. Retained as the FIRST cycle's sequence number, which is
 #: what `plan_cycle_bounds` numbers from — not as the sequence this route
@@ -161,13 +173,22 @@ class AdaptiveWeekUnavailable(WeekOneReleaseError):
     """
 
 
-class AdaptiveWeekIncomplete(WeekOneReleaseError):
-    """An UNRELEASED Week N+1 already exists. Refused, never resumed blindly.
+class AdaptiveWeekStateMismatch(WeekOneReleaseError):
+    """An unreleased Week N+1 exists but is NOT what this request would write.
 
-    A draft here means an earlier attempt stopped part-way. Its allocation
-    claim cannot be re-taken, and finishing it without knowing what was
-    written could release a week whose explanation was never recorded.
+    P0-B1 hardening. A draft left by an interrupted attempt is RESUMED when
+    every persisted piece of it — the cycle's identity and bounds, its
+    allocation, its adaptation record and decision, its snapshot — matches the
+    deterministic recomputation exactly. Anything else is refused: resuming
+    state this request did not produce could release a week nobody approved,
+    and repairing it would hide how it arose.
     """
+
+
+class AdaptiveWeekCapacityMismatch(AdaptiveWeekStateMismatch):
+    """A retry named a different family-declared capacity after the first
+    allocation of this week was persisted. The recorded capacity stands for
+    the in-progress week; a retry may not silently rewrite it."""
 
 
 class ClinicalBoundaryRefused(WeekOneReleaseError):
@@ -487,9 +508,6 @@ class WeekOneReleaseService:
         verified identical, and the decision record cannot be constructed if
         they are not.
         """
-        if existing is not None:
-            raise AdaptiveWeekIncomplete(
-                "an unreleased draft of this week already exists")
         previous = next((c for c in cycles
                          if c.sequence_in_month == sequence - 1), None)
         if previous is None or not previous.is_released:
@@ -544,7 +562,7 @@ class WeekOneReleaseService:
         except RepeatedSignalPolicyError as exc:
             raise ClinicalBoundaryRefused(str(exc)) from exc
 
-        starts_on, ends_on, _partial, _reason = starter_cycle_bounds(
+        starts_on, ends_on, is_partial, partial_reason = starter_cycle_bounds(
             first_plan_date, sequence)
         day_count = (date.fromisoformat(ends_on)
                      - date.fromisoformat(starts_on)).days + 1
@@ -585,16 +603,48 @@ class WeekOneReleaseService:
         except AdaptationDecisionError as exc:
             raise ClinicalBoundaryRefused(str(exc)) from exc
 
-        # ---- writes, in the existing services' own order -------------------
-        cycle = self._weekly.create_cycle(
-            principal, plan.focus_plan_id, sequence_in_month=sequence,
-            first_plan_date=first_plan_date,
-            predecessor_cycle_id=previous.cycle_id,
-            generation_reason=GenerationReason.SEQUENTIAL,
-            request_id=request_id)
+        # ---- writes: each step is skipped if it already EXACTLY exists -----
+        #
+        # P0-B1 hardening. Every write below is deterministic given the checks
+        # above, so an interrupted attempt leaves a prefix of this sequence.
+        # A retry verifies that prefix step by step and continues from the
+        # first missing step; any persisted state that differs is refused.
+        if existing is None:
+            cycle = self._weekly.create_cycle(
+                principal, plan.focus_plan_id, sequence_in_month=sequence,
+                first_plan_date=first_plan_date,
+                predecessor_cycle_id=previous.cycle_id,
+                generation_reason=GenerationReason.SEQUENTIAL,
+                request_id=request_id)
+        else:
+            cycle = existing
+            self._verify_draft(cycle, plan, sequence=sequence,
+                               predecessor_cycle_id=previous.cycle_id,
+                               starts_on=starts_on, ends_on=ends_on,
+                               is_partial=is_partial,
+                               partial_reason=partial_reason)
+            # The recorded-capacity rule is enforced in ONE place,
+            # `WeeklyService.allocation_state`, below.
+
         chosen = {ref: by_id[ref] for ref in selection.selected_template_ids}
-        placements = self._allocate(principal, cycle, goals, chosen,
-                                    capacity=capacity, request_id=request_id)
+        candidates = self._candidates_for(goals, chosen)
+        try:
+            resumed = self._weekly.allocation_state(
+                principal, cycle.cycle_id, candidates,
+                family_declared_capacity=capacity)
+        except InProgressCapacityMismatch as exc:
+            raise AdaptiveWeekCapacityMismatch(str(exc)) from exc
+        except InProgressStateMismatch as exc:
+            raise AdaptiveWeekStateMismatch(str(exc)) from exc
+        if resumed is None:
+            placements = self._allocate(principal, cycle, goals, chosen,
+                                        capacity=capacity,
+                                        request_id=request_id)
+        else:
+            placements = resumed.placements
+            if not placements:
+                raise AdaptiveWeekStateMismatch(
+                    "an in-progress week has an empty allocation")
         placed = sorted({p.activity_identity_ref for p in placements})
         if not set(placed) <= set(selection.selected_template_ids):
             raise ClinicalBoundaryRefused(  # pragma: no cover - allocator bound
@@ -609,16 +659,111 @@ class WeekOneReleaseService:
                 excluded_themes=selection.excluded_themes,
                 goal_proofs=_proofs(placed),
                 request_id=request_id)
+        except InProgressStateMismatch as exc:
+            raise AdaptiveWeekStateMismatch(str(exc)) from exc
         except AdaptationDecisionError as exc:
-            # The cycle is created and allocated but UNRELEASED, so the family
-            # sees nothing, and a retry is refused as AdaptiveWeekIncomplete
-            # rather than resumed. Rendered as the route's constant refusal,
-            # never a 500.
+            # Rendered as the route's constant refusal, never a 500. The week
+            # stays unreleased, so the family sees nothing.
             raise ClinicalBoundaryRefused(str(exc)) from exc
         cycle = self._weekly.get_cycle(principal, cycle.cycle_id)
-        return self._snapshot_and_release(
+        return self._resume_snapshot_and_release(
             principal, plan, cycle, goals, placements, chosen,
             request_id=request_id)
+
+    @staticmethod
+    def _verify_draft(cycle, plan, *, sequence: int, predecessor_cycle_id: str,
+                      starts_on: str, ends_on: str, is_partial: bool,
+                      partial_reason) -> None:
+        """An existing unreleased Week N+1 must be EXACTLY the cycle this
+        request would have created. Anything else is not resumed."""
+        expected = {
+            "child": (cycle.child_id, plan.child_id),
+            "focus plan": (cycle.owning_focus_plan_id, plan.focus_plan_id),
+            "sequence": (cycle.sequence_in_month, sequence),
+            "predecessor": (cycle.predecessor_cycle_id, predecessor_cycle_id),
+            "start date": (cycle.starts_on, starts_on),
+            "end date": (cycle.ends_on, ends_on),
+            "partial flag": (cycle.is_partial, is_partial),
+            "partial reason": (cycle.partial_reason, partial_reason),
+            "generation reason": (cycle.generation_reason,
+                                  GenerationReason.SEQUENTIAL),
+        }
+        for name, (have, want) in expected.items():
+            if have != want:
+                raise AdaptiveWeekStateMismatch(
+                    f"the in-progress week differs from the expected one: {name}")
+        if cycle.is_released:  # pragma: no cover - released is replayed earlier
+            raise AdaptiveWeekStateMismatch("the week is already released")
+
+    def _resume_snapshot_and_release(self, principal, plan, cycle, goals,
+                                     placements, templates_by_id, *,
+                                     request_id: str) -> "WeekOneOutcome":
+        """Snapshot (or verify the existing one), then release. P0-B1.
+
+        A snapshot left by an interrupted attempt is reused ONLY if it is
+        byte-for-byte the document this request builds; any other snapshot
+        refuses, because a released week must show exactly what was decided.
+        """
+        goal_text = {row.goal_id: row.text for row in goals}
+        goal_versions = {row.goal_id: row.version_id for row in goals}
+        document = build_document(
+            cycle=cycle, placements=placements,
+            templates_by_id=templates_by_id,
+            goal_text_by_id=goal_text,
+            goal_version_by_id=goal_versions)
+
+        existing = self._repos.weekly_plan_snapshots.list_for_cycle(
+            cycle.cycle_id)
+        if len(existing) > 1:
+            raise AdaptiveWeekStateMismatch(
+                "the in-progress week has more than one snapshot")
+        if existing:
+            snapshot = existing[0]
+            same = (snapshot.source_system == SNAPSHOT_SOURCE_SYSTEM
+                    and snapshot.source_plan_id == cycle.cycle_id
+                    and _canonical(snapshot.document()) == _canonical(document))
+            if not same:
+                raise AdaptiveWeekStateMismatch(
+                    "the in-progress week's snapshot differs from the "
+                    "expected document")
+        else:
+            try:
+                snapshot = self._weekly.capture_snapshot(
+                    principal, cycle.cycle_id, SNAPSHOT_SOURCE_SYSTEM,
+                    cycle.cycle_id, document, request_id=request_id)
+            except WeeklyConflict:
+                # An identical concurrent request froze it first. Accepted
+                # only if it is exactly the document this request built.
+                raced = self._repos.weekly_plan_snapshots.list_for_cycle(
+                    cycle.cycle_id)
+                if not (len(raced) == 1 and _canonical(raced[0].document())
+                        == _canonical(document)):
+                    raise AdaptiveWeekStateMismatch(
+                        "a concurrent snapshot differs from the expected "
+                        "document") from None
+                snapshot = raced[0]
+        try:
+            released = self._weekly.release_cycle(
+                principal, cycle.cycle_id, request_id=request_id)
+        except ReleasedPlanImmutable:
+            # An identical concurrent request released this same, verified
+            # week first. Return it unchanged rather than release it twice.
+            return self._existing_outcome(
+                principal, plan,
+                self._weekly.get_cycle(principal, cycle.cycle_id), goals)
+
+        return WeekOneOutcome(
+            child_id=cycle.child_id,
+            focus_plan_id=plan.focus_plan_id,
+            cycle_id=cycle.cycle_id,
+            goal_ids=tuple(row.goal_id for row in goals),
+            activity_count=len(placements),
+            created=True,
+            released_at=released.released_to_parent_at,
+            snapshot_id=snapshot.snapshot_id,
+            parent_week=parent_week_view(
+                snapshot.document(),
+                released_at=released.released_to_parent_at))
 
     def _candidate_templates(self, goals) -> Dict[str, Any]:
         """Reviewed templates for every family the goals' anchors bind.
@@ -645,13 +790,7 @@ class WeekOneReleaseService:
         so the selection is a function of the authored content and of capacity,
         never of dict iteration order.
         """
-        candidates: List[Any] = []
-        for row in goals:
-            bound = {binding.family_ref
-                     for binding in row.anchor.rung.family_bindings}
-            templates = [template for template in templates_by_id.values()
-                         if template.activity_family_ref in bound]
-            candidates.extend(candidates_for_goal(templates, row.ref))
+        candidates = self._candidates_for(goals, templates_by_id)
         if not candidates:
             raise GoalNotReleasable(
                 "no reviewed activity content serves this child's goals")
@@ -666,6 +805,18 @@ class WeekOneReleaseService:
             raise GoalNotReleasable(
                 "the allocator placed no activity for this cycle")
         return result.placements
+
+    @staticmethod
+    def _candidates_for(goals, templates_by_id) -> List[Any]:
+        """One candidate per reviewed template per goal it serves."""
+        candidates: List[Any] = []
+        for row in goals:
+            bound = {binding.family_ref
+                     for binding in row.anchor.rung.family_bindings}
+            templates = [template for template in templates_by_id.values()
+                         if template.activity_family_ref in bound]
+            candidates.extend(candidates_for_goal(templates, row.ref))
+        return candidates
 
     def _snapshot_and_release(self, principal, plan, cycle, goals, placements,
                               templates_by_id, *, request_id: str):
@@ -773,7 +924,8 @@ class WeekOneReleaseService:
 
 
 __all__ = [
-    "AdaptiveWeekIncomplete",
+    "AdaptiveWeekCapacityMismatch",
+    "AdaptiveWeekStateMismatch",
     "AdaptiveWeekUnavailable",
     "CapacityRequired",
     "ClinicalBoundaryRefused",

@@ -104,6 +104,8 @@ from .allocator import (
     suppressed_identities,
 )
 from .errors import (
+    InProgressCapacityMismatch,
+    InProgressStateMismatch,
     ReleasedPlanImmutable,
     WeeklyAuthorizationError,
     WeeklyConflict,
@@ -375,7 +377,27 @@ class WeeklyService:
         snapshot = WeeklyPlanSnapshot.capture(
             cycle_id, source_system, source_plan_id, document,
             source_generated_at=source_generated_at, now=self._stamp())
-        self._repos.weekly_plan_snapshots.create(snapshot)
+        # P0-B1 hardening: claim + snapshot in ONE transaction. The read above
+        # is now only the clear refusal in the ordinary case; the claim is the
+        # uniqueness enforcement, because a resumable Week N+1 lets two
+        # identical requests reach this step together.
+        parts = (cycle_id,)
+        generation = self._next_generation(ClaimKind.WEEKLY_SNAPSHOT, parts)
+
+        def _acquire(store) -> None:
+            tx = self._repos_factory(store)
+            tx.identity_claims.claim(self._claim(
+                ClaimKind.WEEKLY_SNAPSHOT, parts, holder_ref=cycle_id,
+                child_id=cycle.child_id, actor_id=principal.application_id,
+                generation=generation))
+            tx.weekly_plan_snapshots.create(snapshot)
+
+        try:
+            self._repos.store.run_in_transaction(_acquire)
+        except (DuplicateRecord, DocumentStoreError):
+            raise WeeklyConflict(
+                "another writer holds the snapshot claim for this cycle"
+            ) from None
         self._audit(AuditAction.WEEKLY_PLAN_SNAPSHOT_CAPTURED,
                     AuditResult.SUCCESS, RESOURCE_SNAPSHOT, principal=principal,
                     child_id=cycle.child_id, resource_id=snapshot.snapshot_id,
@@ -398,9 +420,25 @@ class WeeklyService:
         if not self._repos.weekly_plan_snapshots.list_for_cycle(cycle_id):
             raise WeeklyConflict(
                 "a cycle cannot be released before its plan is snapshotted")
+        if cycle.is_released:
+            raise ReleasedPlanImmutable("this cycle has already been released")
 
-        released = cycle.release(now=self._stamp())
-        self._repos.weekly_cycles.update(released)
+        # P0-B1 hardening: read-check-write INSIDE a transaction, so two
+        # identical requests resuming one draft cannot both release it (which
+        # would overwrite `released_to_parent_at` and audit two releases).
+        stamp = self._stamp()
+
+        def _release(store):
+            tx = self._repos_factory(store)
+            current = tx.weekly_cycles.get_by_id(cycle_id)   # read first
+            if current.is_released:
+                raise ReleasedPlanImmutable(
+                    "this cycle has already been released")
+            done = current.release(now=stamp)
+            tx.weekly_cycles.overwrite(done)
+            return done
+
+        released = self._repos.store.run_in_transaction(_release)
         self._audit(AuditAction.WEEKLY_CYCLE_RELEASED, AuditResult.SUCCESS,
                     RESOURCE_CYCLE, principal=principal, child_id=cycle.child_id,
                     resource_id=cycle_id, request_id=request_id,
@@ -431,7 +469,20 @@ class WeeklyService:
         if self._repos.alignments.list_for_cycle(cycle_id):
             raise WeeklyConflict("this cycle has already been allocated")
 
-        plan = self._load_plan(cycle.owning_focus_plan_id)
+        allocations, result = self._compute_allocation(
+            cycle, candidates, family_declared_capacity)
+        self._write_allocation(principal, cycle, allocations, result,
+                               family_declared_capacity=family_declared_capacity,
+                               request_id=request_id)
+        return result
+
+    def _compute_allocation(self, cycle: WeeklyCycle,
+                            candidates: Sequence[CandidateActivity],
+                            family_declared_capacity: int):
+        """The PURE half of allocation: inputs read, allocator run, nothing
+        written. Shared by `allocate_cycle` and `allocation_state` so the
+        resume check recomputes with exactly the inputs the write used."""
+        self._load_plan(cycle.owning_focus_plan_id)
         allocations = effective_allocations(
             self._repos.goal_allocations.list_for_plan(
                 cycle.owning_focus_plan_id, include_inactive=True),
@@ -467,12 +518,18 @@ class WeeklyService:
         placement_capacity = min(family_declared_capacity, cycle.day_count)
 
         result = allocate(
-            cycle_id, allocations, candidates,
+            cycle.cycle_id, allocations, candidates,
             capacity=placement_capacity,
             suppressed_identity_refs=suppressed_identities(
                 defers, cycle.sequence_in_month),
             is_partial_week=cycle.is_partial)
+        return allocations, result
 
+    def _write_allocation(self, principal, cycle: WeeklyCycle, allocations,
+                          result: AllocationResult, *,
+                          family_declared_capacity: int,
+                          request_id: str) -> None:
+        cycle_id = cycle.cycle_id
         # Claim, alignments, gaps and ledger commit in ONE transaction.
         #
         # Every write here is a `create`, so unlike 0.4C activation there is
@@ -514,7 +571,55 @@ class WeeklyService:
                     coverage_gap_count=len(result.gaps),
                     declared_capacity=family_declared_capacity,
                     rule_version=ALLOCATION_RULE_VERSION)
-        return result
+
+    def allocation_state(self, principal, cycle_id: str,
+                         candidates: Sequence[CandidateActivity], *,
+                         family_declared_capacity: int
+                         ) -> Optional[AllocationResult]:
+        """P0-B1 resume. None if the cycle is unallocated; the expected result
+        if its persisted allocation is EXACTLY what `allocate_cycle` would
+        write now; otherwise a refusal. Read-only.
+
+        Allocation commits claim, alignments, gaps and ledger in one
+        transaction, so "partly allocated" cannot arise from this service —
+        any half state is itself a mismatch. A retry naming a different
+        declared capacity is refused explicitly: the recorded capacity is the
+        in-progress week's truth and a later request may not rewrite it.
+        """
+        cycle = self._load_cycle(cycle_id)
+        self._authorize(principal, cycle.child_id)
+        self._require_planner(principal, cycle.child_id)
+        alignments = self._repos.alignments.list_for_cycle(cycle_id)
+        ledgers = self._repos.capacity_ledgers.list_for_cycle(cycle_id)
+        gaps = self._repos.coverage_gaps.list_for_cycle(cycle_id)
+        if not alignments and not ledgers and not gaps:
+            return None
+        if len(ledgers) != 1:
+            raise InProgressStateMismatch(
+                "an in-progress cycle has an unexpected capacity ledger")
+        ledger = ledgers[0]
+        if ledger.family_declared_capacity != family_declared_capacity:
+            raise InProgressCapacityMismatch(
+                "this week's allocation was recorded with a different "
+                "family-declared capacity")
+        _allocations, expected = self._compute_allocation(
+            cycle, candidates, family_declared_capacity)
+        want_alignments = sorted(
+            (p.activity_instance_ref, p.activity_identity_ref,
+             goal_ref.as_key(), role.value, p.alignment_source.value)
+            for p in expected.placements for goal_ref, role in p.aligned_goals)
+        have_alignments = sorted(
+            (a.activity_instance_ref, a.activity_identity_ref,
+             a.goal_ref.as_key(), a.role.value, a.alignment_source.value)
+            for a in alignments)
+        want_gaps = sorted((g.goal_ref.as_key(), g.reason.value)
+                           for g in expected.gaps)
+        have_gaps = sorted((g.goal_ref.as_key(), g.reason.value) for g in gaps)
+        if (have_alignments != want_alignments or have_gaps != want_gaps
+                or ledger.allocated_by_planner != expected.placed_count):
+            raise InProgressStateMismatch(
+                "this week's persisted allocation differs from the expected one")
+        return expected
 
     def _reject_foreign_goals(self, allocations, cycle: WeeklyCycle) -> None:
         """Every allocation must belong to this child AND this focus plan."""
@@ -1014,18 +1119,36 @@ class WeeklyService:
                                excluded_themes: Sequence[str],
                                goal_proofs: Sequence[Any],
                                request_id: str = ""):
-        """Write the `AdaptationRecord` AND the P0-B1 decision, then link.
+        """Write, or VERIFY and resume, the AdaptationRecord + P0-B1 decision.
 
         Called by the adaptive release composition AFTER the new cycle has been
         allocated and BEFORE it is snapshotted, so a released week always has
-        its explanation. Both records are created in ONE transaction: a decision
-        without its AdaptationRecord, or the reverse, is the half-landed state
-        that a reviewer could not reconcile. Both are create-only; the decision
-        id is derived from the cycle, so a second explanation collides.
+        its explanation.
+
+        ## One transaction, including the cycle link (P0-B1 hardening)
+
+        The AdaptationRecord, the WeeklyAdaptationDecision AND the cycle's
+        `adaptation_record_id` link commit together. The cycle is read inside
+        the transaction BEFORE any write (Firestore requires reads first), then
+        written with the transaction-safe `overwrite`. So "decision without its
+        record", "record without its decision" and "explanation without its
+        cycle link" cannot be produced by this method.
+
+        ## Idempotent resume
+
+        If a decision for this cycle already exists, nothing new is created.
+        The record and decision are RECOMPUTED from the same inputs and must
+        match the stored ones exactly (ids and timestamps aside); a stored
+        state that differs is refused, never overwritten. A stored explanation
+        whose cycle link is missing — not producible by this version, but
+        possible from an earlier interrupted one — is linked through the same
+        transaction-safe write, and only if the cycle is unlinked.
 
         The authorization is the planning rule, unchanged: only this child's
         managing clinician (or, with none, a caregiver) may plan the week.
         """
+        from dataclasses import replace as _replace  # noqa: WPS433
+
         from ..domain.adaptation_decision import (  # noqa: WPS433
             WeeklyAdaptationDecision,
         )
@@ -1094,10 +1217,68 @@ class WeeklyService:
             excluded_themes=excluded_themes,
             goal_proofs=goal_proofs, now=self._stamp())
 
+        # ---- resume: an explanation for this cycle already exists ----------
+        stored = self._repos.adaptation_decisions.find_for_cycle(cycle.cycle_id)
+        records_for_cycle = [
+            r for r in self._repos.adaptation_records.list_for_child(
+                cycle.child_id) if r.to_cycle_id == cycle.cycle_id]
+        if stored is not None:
+            try:
+                stored_record = self._repos.adaptation_records.get_by_id(
+                    stored.adaptation_record_id)
+            except RecordNotFound:
+                raise InProgressStateMismatch(
+                    "a stored decision names a missing adaptation record"
+                ) from None
+            if [r.record_id for r in records_for_cycle] != \
+                    [stored_record.record_id]:
+                raise InProgressStateMismatch(
+                    "this cycle has more than one adaptation record")
+            expected_record = _replace(record, record_id=stored_record.record_id,
+                                       created_at=stored_record.created_at)
+            expected_decision = _replace(
+                decision, adaptation_record_id=stored.adaptation_record_id,
+                created_at=stored.created_at)
+            if expected_record != stored_record:
+                raise InProgressStateMismatch(
+                    "the stored adaptation record differs from the expected one")
+            if expected_decision != stored:
+                raise InProgressStateMismatch(
+                    "the stored adaptation decision differs from the expected one")
+            if cycle.adaptation_record_id == stored_record.record_id:
+                return stored_record, stored
+
+            def _link(store):
+                # The ONE place the link rule is enforced: inside the
+                # transaction, so a concurrent writer cannot slip between the
+                # check and the write. A cycle already linked to anything else
+                # is refused, never re-pointed.
+                tx = self._repos_factory(store)
+                current = tx.weekly_cycles.get_by_id(cycle.cycle_id)
+                if current.is_released or current.adaptation_record_id:
+                    raise InProgressStateMismatch(
+                        "the cycle links a different adaptation record")
+                tx.weekly_cycles.overwrite(current.with_adaptation(
+                    stored_record.record_id, now=self._stamp()))
+
+            self._repos.store.run_in_transaction(_link)
+            return stored_record, stored
+
+        if records_for_cycle or cycle.adaptation_record_id is not None:
+            raise InProgressStateMismatch(
+                "this cycle has adaptation state but no decision")
+
+        # ---- first write: record + decision + cycle link, atomically -------
         def _write(store):
             tx = self._repos_factory(store)
+            current = tx.weekly_cycles.get_by_id(cycle.cycle_id)  # read first
+            if current.is_released or current.adaptation_record_id:
+                raise InProgressStateMismatch(
+                    "the cycle changed before its explanation was written")
             tx.adaptation_records.create(record)
             tx.adaptation_decisions.create(decision)
+            tx.weekly_cycles.overwrite(
+                current.with_adaptation(record.record_id, now=self._stamp()))
             return decision
 
         try:
@@ -1105,8 +1286,6 @@ class WeeklyService:
         except (DocumentStoreError, DuplicateRecord):
             raise WeeklyConflict(
                 "this cycle already has an adaptation decision") from None
-        self._repos.weekly_cycles.update(
-            cycle.with_adaptation(record.record_id, now=self._stamp()))
 
         self._audit(AuditAction.ADAPTATION_RECORDED, AuditResult.SUCCESS,
                     RESOURCE_ADAPTATION, principal=principal,

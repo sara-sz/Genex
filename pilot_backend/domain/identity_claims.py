@@ -110,6 +110,15 @@ class ClaimKind(str, Enum):
     #: recover across.
     WEEKLY_CYCLE = "weekly_cycle"
     WEEKLY_ALLOCATION = "weekly_allocation"
+    #: P0-B1 hardening. One frozen snapshot per cycle.
+    #:
+    #: `capture_snapshot` used to guard this with a read-then-create, which was
+    #: enough while only the single winner of the cycle/allocation claims could
+    #: ever reach it. A resumable Week N+1 lets a SECOND identical request
+    #: continue the same draft, so two writers can now reach the snapshot
+    #: together; the claim and the snapshot commit in one transaction so
+    #: exactly one is frozen.
+    WEEKLY_SNAPSHOT = "weekly_snapshot"
     #: 0.5B. One LIVE provider-child connection per (provider_id, child_id).
     #:
     #: "Live" means PENDING, ACTIVE or PAUSED — the three states from which a

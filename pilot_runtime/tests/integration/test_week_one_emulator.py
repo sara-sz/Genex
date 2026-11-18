@@ -347,3 +347,100 @@ def test_a_concurrent_replay_with_a_different_capacity_cannot_rewrite_it(world):
     ledgers = _rows(world, "pilot_capacity_ledgers", child_id=world.child_id)
     assert len(ledgers) == 1
     assert ledgers[0]["family_declared_capacity"] == CAPACITY
+
+
+# ===========================================================================
+# P0-B1 hardening — adaptive Week 2 on a real server
+# ===========================================================================
+#
+# The explanation (AdaptationRecord + WeeklyAdaptationDecision + the cycle's
+# link) is ONE transaction that READS the cycle before three writes. A dict
+# store cannot prove Firestore accepts that shape; only a real server can.
+
+WEEK_TWO_DATE = "2026-10-14"   # the clock is pinned to Wed Oct 7 (Week 1)
+
+
+def _week_two_rows(world):
+    cycles = [c for c in _rows(world, "pilot_weekly_cycles",
+                               child_id=world.child_id)
+              if int(c["sequence_in_month"]) == 2]
+    return cycles
+
+
+def _release(world, local_date=None):
+    return world.service().release_week_one(
+        world.principal, world.child_id, family_declared_capacity=CAPACITY,
+        timezone_of_record=TZ, cycle_month=CYCLE_MONTH, local_date=local_date)
+
+
+def _assert_one_explained_week_two(world):
+    (cycle,) = _week_two_rows(world)
+    records = _rows(world, "pilot_adaptation_records",
+                    to_cycle_id=cycle["cycle_id"])
+    decisions = _rows(world, "pilot_weekly_adaptation_decisions",
+                      to_cycle_id=cycle["cycle_id"])
+    snapshots = _rows(world, "pilot_weekly_plan_snapshots",
+                      cycle_id=cycle["cycle_id"])
+    ledgers = _rows(world, "pilot_capacity_ledgers",
+                    cycle_id=cycle["cycle_id"])
+    assert (len(records), len(decisions), len(snapshots), len(ledgers)) == \
+        (1, 1, 1, 1)
+    assert cycle["adaptation_record_id"] == records[0]["record_id"] == \
+        decisions[0]["adaptation_record_id"]
+    assert cycle["released_to_parent_at"]
+    return cycle
+
+
+def test_adaptive_week_two_commits_its_explanation_on_a_real_server(world):
+    _release(world)
+    outcome = _release(world, WEEK_TWO_DATE)
+    assert outcome.created is True
+    cycle = _assert_one_explained_week_two(world)
+    assert cycle["cycle_id"] == outcome.cycle_id
+
+
+def test_an_interrupted_week_two_resumes_on_a_real_server(world):
+    _release(world)
+    original = world.weekly.record_week_adaptation
+    armed = {"on": True}
+
+    def interrupted(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if armed["on"]:
+            armed["on"] = False
+            raise RuntimeError("injected after the explanation committed")
+        return result
+
+    world.weekly.record_week_adaptation = interrupted
+    with pytest.raises(RuntimeError):
+        _release(world, WEEK_TWO_DATE)
+    (draft,) = _week_two_rows(world)
+    assert not draft.get("released_to_parent_at")
+
+    outcome = _release(world, WEEK_TWO_DATE)
+    assert outcome.created is True
+    _assert_one_explained_week_two(world)
+    assert _release(world, WEEK_TWO_DATE).created is False
+
+
+def test_eight_concurrent_week_two_releases_produce_one_explained_week(world):
+    _release(world)
+    barrier = threading.Barrier(WRITERS)
+    failures = []
+
+    def release(_index):
+        barrier.wait(timeout=30)
+        try:
+            return _release(world, WEEK_TWO_DATE)
+        except Exception as exc:        # recorded, never swallowed
+            failures.append(type(exc).__name__)
+            return None
+
+    with ThreadPoolExecutor(max_workers=WRITERS) as pool:
+        results = list(pool.map(release, range(WRITERS)))
+    assert len(results) == WRITERS, results
+    # Losers may be refused mid-flight; a retry must converge either way.
+    final = _release(world, WEEK_TWO_DATE)
+    winners = [r for r in results if r is not None] + [final]
+    assert len({r.cycle_id for r in winners}) == 1
+    _assert_one_explained_week_two(world)
