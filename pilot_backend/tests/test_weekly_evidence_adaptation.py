@@ -989,11 +989,36 @@ def test_a_clinician_add_records_overage_rather_than_removing_content(s):
 # adaptation
 # ===========================================================================
 
-def test_support_signals_lead_to_more_support():
+# ---------------------------------------------------------------------------
+# SUPERSEDED BY FOUNDER DECISION (P0-B1, rule version 2026.11-p0b)
+#
+# The four tests below previously PINNED the 2026.10 direction table:
+#
+#   test_support_signals_lead_to_more_support        one wasnt_ready -> EASIER
+#   test_every_support_case_leans_easier             wasnt_ready | didnt_want |
+#                                                    too_hard -> EASIER
+#   test_progression_requires_too_easy_and_did_it    too_easy+did_it -> HARDER
+#   test_support_wins_over_progression_...           mixed -> EASIER
+#
+# That table contradicts the approved P0-B policy: a single `wasnt_ready_yet`
+# must not adapt anything; disengagement must not be read as inability; and
+# `too_easy` must never imply progression or mastery. The same inputs are kept,
+# and the assertions now prove each old behaviour is NO LONGER PERMITTED:
+# caregiver evidence sets no difficulty direction at all. Coverage is not
+# reduced — each old case is still exercised, against its new expectation.
+# ---------------------------------------------------------------------------
+
+def test_one_wasnt_ready_no_longer_leans_easier():
+    """Was `test_support_signals_lead_to_more_support`. P0-B1 supersession."""
     alignments = [_alignment("wcyc_1", "inst-B", GOAL_B, identity="activity-B")]
     events = [_event("wcyc_1", "inst-B", AttemptOutcome.WASNT_READY_YET)]
     plan = plan_adaptation(alignments, events=events, next_cycle_sequence=2)
-    assert plan.direction_for("activity-B") is AdaptationDirection.EASIER_OR_MORE_SUPPORT
+    assert plan.direction_for("activity-B") is AdaptationDirection.MAINTAIN
+    assert AdaptationDirection.EASIER_OR_MORE_SUPPORT not in \
+        plan.directions.values()
+    # The signal is still CLASSIFIED — provenance survives; only the
+    # autonomous difficulty decision is gone.
+    assert SignalKind.CHILD_WASNT_READY in {s.kind for s in plan.signals}
 
 
 @pytest.mark.parametrize("outcome,difficulty", [
@@ -1001,21 +1026,88 @@ def test_support_signals_lead_to_more_support():
     (AttemptOutcome.DIDNT_WANT_TO_TRY, None),
     (AttemptOutcome.DID_IT, Difficulty.TOO_HARD),
 ])
-def test_every_support_case_leans_easier(outcome, difficulty):
+def test_no_caregiver_signal_leans_easier_any_more(outcome, difficulty):
+    """Was `test_every_support_case_leans_easier`. P0-B1 supersession.
+
+    `didnt_want_to_try` in particular must NOT be read as "too hard": the
+    approved policy says disengagement is not inability.
+    """
     alignments = [_alignment("wcyc_1", "inst-A", GOAL_A, identity="activity-A")]
     events = [_event("wcyc_1", "inst-A", outcome, difficulty=difficulty)]
     plan = plan_adaptation(alignments, events=events, next_cycle_sequence=2)
-    assert plan.direction_for("activity-A") is AdaptationDirection.EASIER_OR_MORE_SUPPORT
+    assert plan.direction_for("activity-A") is AdaptationDirection.MAINTAIN
 
 
-def test_progression_requires_too_easy_and_did_it():
+def test_too_easy_no_longer_progresses_anything():
+    """Was `test_progression_requires_too_easy_and_did_it`. P0-B1 supersession.
+
+    `too_easy` is not mastery. Even with `did_it` beside it, no activity is
+    marked harder-or-progressed by the engine.
+    """
     alignments = [_alignment("wcyc_1", "inst-A", GOAL_A, identity="activity-A")]
-    progressed = plan_adaptation(
+    plan = plan_adaptation(
         alignments,
         events=[_event("wcyc_1", "inst-A", AttemptOutcome.DID_IT,
                        difficulty=Difficulty.TOO_EASY)],
         next_cycle_sequence=2)
-    assert progressed.direction_for("activity-A") is AdaptationDirection.HARDER_OR_PROGRESSED
+    assert plan.direction_for("activity-A") is AdaptationDirection.MAINTAIN
+    assert AdaptationDirection.HARDER_OR_PROGRESSED not in \
+        plan.directions.values()
+
+
+def test_the_rule_version_records_the_supersession():
+    from pilot_backend.weekly.adaptation import SUPERSEDED_RULE_VERSION
+
+    assert ADAPTATION_RULE_VERSION == "weekly-adaptation-rules-2026.11-p0b"
+    assert SUPERSEDED_RULE_VERSION == "weekly-adaptation-rules-2026.10"
+    assert ADAPTATION_RULE_VERSION != SUPERSEDED_RULE_VERSION
+    plan = plan_adaptation([], next_cycle_sequence=2)
+    assert plan.rule_version == ADAPTATION_RULE_VERSION
+
+
+@pytest.mark.parametrize("signal_type", [
+    CustomizationSignalType.MADE_EASIER, CustomizationSignalType.MADE_HARDER,
+    CustomizationSignalType.SWAPPED, CustomizationSignalType.REMOVED_FROM_WEEK,
+])
+def test_family_plan_edits_set_no_autonomous_difficulty_direction(signal_type):
+    """P0-B1: the 2026.10 rule that turned plan edits into easier/harder is
+    retired with the rest of that table. The edit is still a signal."""
+    alignments = [_alignment("wcyc_1", "inst-A", GOAL_A, identity="activity-A")]
+    signal = ParentCustomizationSignal.create(
+        "wcyc_1", "chld_1", "inst-A", signal_type, actor_id="cgvr_1")
+    plan = plan_adaptation(alignments, customization_signals=[signal],
+                           next_cycle_sequence=2)
+    assert plan.direction_for("activity-A") is AdaptationDirection.MAINTAIN
+    assert plan.signals, "the plan edit is still recorded as provenance"
+
+
+def test_a_clinician_adapt_still_sets_its_direction():
+    """NOT superseded: a FUTURE_CYCLE clinician decision is clinical, not an
+    autonomous Genex change, so it keeps its direction."""
+    alignments = [_alignment("wcyc_1", "inst-A", GOAL_A, identity="activity-A")]
+    intervention = TherapistIntervention.create(
+        "chld_1", "wcyc_1", "prov_1", action=InterventionAction.ADAPT,
+        applies_to=InterventionScope.FUTURE_CYCLE, clinical_rationale="r",
+        target_ref="inst-A")
+    plan = plan_adaptation(alignments, interventions=[intervention],
+                           next_cycle_sequence=2)
+    assert plan.direction_for("activity-A") is \
+        AdaptationDirection.EASIER_OR_MORE_SUPPORT
+
+
+def test_a_superseded_observation_is_not_evidence():
+    """P0-B1: `current_observations()` is applied before anything else."""
+    alignments = [_alignment("wcyc_1", "inst-A", GOAL_A, identity="activity-A")]
+    original = replace(_event("wcyc_1", "inst-A", AttemptOutcome.DID_IT),
+                       event_id="obsv_old", source_feedback_id="fb_old")
+    correction = replace(_event("wcyc_1", "inst-A",
+                                AttemptOutcome.DIDNT_WANT_TO_TRY),
+                         event_id="obsv_new", source_feedback_id="fb_new",
+                         supersedes_source_feedback_id="fb_old")
+    plan = plan_adaptation(alignments, events=[original, correction],
+                           next_cycle_sequence=2)
+    refs = {s.source_ref for s in plan.signals}
+    assert "obsv_new" in refs and "obsv_old" not in refs
 
 
 def test_a_bare_did_it_does_not_progress_anything():
@@ -1052,15 +1144,19 @@ def test_just_right_invents_no_signal():
         {SignalKind.CHILD_COMPLETED}
 
 
-def test_support_wins_over_progression_for_the_same_activity():
-    """Conservative: one hard attempt outweighs one easy one."""
+def test_mixed_easy_and_not_ready_no_longer_leans_either_way():
+    """Was `test_support_wins_over_progression_for_the_same_activity`.
+
+    P0-B1 supersession: neither the easy attempt nor the not-ready one sets an
+    autonomous difficulty direction, so there is nothing for one to "win".
+    """
     alignments = [_alignment("wcyc_1", "inst-A", GOAL_A, identity="activity-A"),
                   _alignment("wcyc_1", "inst-A2", GOAL_A, identity="activity-A")]
     events = [_event("wcyc_1", "inst-A", AttemptOutcome.DID_IT,
                      difficulty=Difficulty.TOO_EASY),
               _event("wcyc_1", "inst-A2", AttemptOutcome.WASNT_READY_YET)]
     plan = plan_adaptation(alignments, events=events, next_cycle_sequence=2)
-    assert plan.direction_for("activity-A") is AdaptationDirection.EASIER_OR_MORE_SUPPORT
+    assert plan.direction_for("activity-A") is AdaptationDirection.MAINTAIN
 
 
 def test_adaptation_is_deterministic():

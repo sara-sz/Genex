@@ -10,16 +10,28 @@ id of the row it came from. A conclusion can always be traced back to a
 record, and a clinician decision can never be read as something the child did
 because the two use different `SignalKind` namespaces.
 
-## The direction table
+## The direction table — SUPERSEDED by P0-B1 (rule version 2026.11-p0b)
+
+The 2026.10 table read ONE caregiver observation as a difficulty direction:
 
     too_hard | wasnt_ready_yet | didnt_want_to_try  -> EASIER_OR_MORE_SUPPORT
     too_easy AND did_it                             -> HARDER_OR_PROGRESSED
-    anything else                                   -> MAINTAIN
 
-`MAINTAIN` is the default and the conservative answer. Progression requires
-positive evidence and is never a fallback. A bare `did_it` does NOT progress
-anything: completion is not mastery, and the only thing that moves an activity
-harder is an explicit `too_easy` alongside it.
+Founder decision (P0-B1) retired it, because it contradicts the approved policy
+three ways: a single `wasnt_ready_yet` must not adapt anything; disengagement
+(`didnt_want_to_try`) must not be read as inability; and `too_easy` must never
+imply progression. Caregiver evidence and family plan edits therefore set NO
+difficulty direction here any more — every observed identity is `MAINTAIN` on
+the difficulty axis. What a family's feedback CAN change is decided by
+`repeated_signal_policy` (theme / reviewed variation only) and enforced by the
+release composition. `normalize()` is unchanged: classification is provenance,
+not a decision.
+
+Only CURRENT observations are read: `current_observations()` is applied before
+anything else, so a superseded submission is never evidence.
+
+A clinician's FUTURE_CYCLE intervention still sets its direction below. That is
+a clinical decision by the managing clinician, not an autonomous Genex change.
 
 Unmappable feedback stays unmapped. Nothing invents a domain-level signal from
 input the table does not cover.
@@ -65,10 +77,16 @@ from ..domain.observation import (
     Difficulty,
     ObservationEvent,
     ParentCustomizationSignal,
+    current_observations,
 )
+from ..domain.adaptation_decision import P0B_RULE_VERSION
 
-#: Bumped whenever normalization or the direction table changes.
-ADAPTATION_RULE_VERSION = "weekly-adaptation-rules-2026.10"
+#: Bumped whenever normalization or the direction table changes. P0-B1 retired
+#: the 2026.10 easier/harder table; see the module docstring.
+ADAPTATION_RULE_VERSION = P0B_RULE_VERSION
+
+#: The retired version, named so a regression test can assert it is gone.
+SUPERSEDED_RULE_VERSION = "weekly-adaptation-rules-2026.10"
 
 #: Caregiver outcome -> signal. `DID_IT` alone is deliberately NOT a
 #: progression signal; it needs `too_easy` beside it.
@@ -224,25 +242,20 @@ def normalize(alignments: Sequence[ActivityGoalAlignment],
 def _event_directions(alignments: Sequence[ActivityGoalAlignment],
                       events: Sequence[ObservationEvent]
                       ) -> Dict[str, AdaptationDirection]:
-    """Apply the direction table, per activity identity."""
+    """Caregiver evidence sets NO difficulty direction. P0-B1.
+
+    Every observed identity is MAINTAIN on the difficulty axis, whatever the
+    outcome or difficulty said. The 2026.10 table that read one `too_hard`,
+    `wasnt_ready_yet` or `didnt_want_to_try` as "easier", and `too_easy` as
+    "harder/progressed", is retired by founder decision; see the module
+    docstring. Theme and reviewed-variation decisions are made by
+    `repeated_signal_policy`, never here.
+    """
     index = _identity_index(alignments)
     directions: Dict[str, AdaptationDirection] = {}
     for event in events:
         identity = index.get(event.activity_instance_ref)
-        if not identity:
-            continue
-        if (event.attempt_outcome in (AttemptOutcome.WASNT_READY_YET,
-                                      AttemptOutcome.DIDNT_WANT_TO_TRY)
-                or event.difficulty is Difficulty.TOO_HARD):
-            # Support always wins over progression for the same activity: if
-            # one attempt was hard and another easy, the conservative read is
-            # the supportive one.
-            directions[identity] = AdaptationDirection.EASIER_OR_MORE_SUPPORT
-        elif (event.difficulty is Difficulty.TOO_EASY
-              and event.attempt_outcome is AttemptOutcome.DID_IT):
-            directions.setdefault(identity,
-                                  AdaptationDirection.HARDER_OR_PROGRESSED)
-        else:
+        if identity:
             directions.setdefault(identity, AdaptationDirection.MAINTAIN)
     return directions
 
@@ -260,26 +273,22 @@ def plan_adaptation(alignments: Sequence[ActivityGoalAlignment],
         raise AdaptationEngineError(
             "adaptation targets cycle 2 onward; cycle 1 has no predecessor")
 
+    # Superseded observations are never evidence. P0-B1.
+    events = current_observations(tuple(events))
     signals = normalize(alignments, events, customization_signals,
                         defer_records, interventions, coverage_gaps)
     directions = _event_directions(alignments, events)
     index = _identity_index(alignments)
 
-    # Family plan edits lean supportive, conservatively, without claiming the
-    # child did anything.
+    # Family plan edits set NO autonomous difficulty direction either (P0-B1).
+    # They remain normalized signals — provenance a clinician can read — but
+    # the 2026.10 rule that turned MADE_EASIER / SWAPPED / REMOVED_FROM_WEEK
+    # into "easier" and MADE_HARDER into "harder" is retired with the rest of
+    # that table.
     for signal in customization_signals:
         identity = index.get(signal.activity_instance_ref)
-        if not identity:
-            continue
-        if signal.signal_type is CustomizationSignalType.MADE_HARDER:
-            directions.setdefault(identity,
-                                  AdaptationDirection.HARDER_OR_PROGRESSED)
-        elif signal.signal_type in (CustomizationSignalType.MADE_EASIER,
-                                    CustomizationSignalType.SWAPPED,
-                                    CustomizationSignalType.REMOVED_FROM_WEEK):
-            directions[identity] = AdaptationDirection.EASIER_OR_MORE_SUPPORT
-        # PARENT_DECLINED_CHANGE and ADDED_BY_PARENT set no direction: a
-        # decision about a proposal is not a difficulty report.
+        if identity:
+            directions.setdefault(identity, AdaptationDirection.MAINTAIN)
 
     # Clinician direction is applied LAST and overrides, because it is a
     # clinical decision rather than an inference from evidence.

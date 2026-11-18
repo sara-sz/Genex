@@ -54,6 +54,7 @@ from pilot_backend.domain.weekly_cycle import WeeklyCycleError
 from pilot_backend.integration.week_one_release import (
     CapacityRequired,
     GoalNotReleasable,
+    NonAdaptiveWeekRefused,
     WeekOneReleaseService,
 )
 from pilot_backend.planning.service import MonthlyPlanService
@@ -920,8 +921,20 @@ def test_a_replay_does_not_shift_the_already_created_starter_cycle():
 def test_the_following_cycle_begins_the_next_monday():
     """Week 2 is created Monday-anchored, and the starter is left alone.
 
-    Driven through the orchestrator's own cycle resolution with the clock moved
-    into week 2, so this is the real path rather than a bounds calculation.
+    ## THIS TEST'S EXPECTATION WAS DELIBERATELY CHANGED, by founder decision (P0-B1)
+
+    It previously drove `_resolve_cycle` directly with the clock in week 2 and
+    asserted that it CREATED a draft week-2 cycle. That creation was the
+    non-adaptive path: plain `create_cycle` followed by the content-digest
+    allocator, which ignores the family's feedback and — having no memory of
+    earlier weeks — very likely repeats week 1. P0-B1 closes it, so
+    `_resolve_cycle` now REFUSES to create week 2 (asserted below), and week 2
+    is created only by the adaptive path through `release_week_one`.
+
+    What the old test protected is UNCHANGED and still asserted: week 2 is
+    Monday-to-Sunday, is not partial, is a different cycle, and the released
+    starter week keeps its bounds and is still what the family sees on a
+    starter-week date.
     """
     chain = Chain()
     chain.approve()
@@ -931,23 +944,27 @@ def test_the_following_cycle_begins_the_next_monday():
     plan = chain.service._resolve_plan(
         chain.principal, CHILD, goals, timezone_of_record=TZ,
         cycle_month=CYCLE_MONTH, request_id="")
-    week_two = chain.service._resolve_cycle(
-        chain.principal, plan, request_id="", local_date="2026-10-14")
+    with pytest.raises(NonAdaptiveWeekRefused):
+        chain.service._resolve_cycle(
+            chain.principal, plan, request_id="", local_date="2026-10-14")
+    assert len(chain.docs("pilot_weekly_cycles")) == 1, \
+        "the refused non-adaptive path created a cycle"
 
+    second = chain.release(local_date="2026-10-14")
+    week_two = chain.weekly.get_cycle(chain.principal, second.cycle_id)
     assert week_two.sequence_in_month == 2
     assert (week_two.starts_on, week_two.ends_on) == ("2026-10-12",
                                                       "2026-10-18")
     assert week_two.is_partial is False
     assert week_two.partial_reason is None
     assert week_two.cycle_id != first.cycle_id
+    assert week_two.predecessor_cycle_id == first.cycle_id
 
     # The released starter week is untouched, and still what the family saw.
     starter = chain.weekly.get_cycle(chain.principal, first.cycle_id)
     assert (starter.starts_on, starter.ends_on) == ("2026-10-07",
                                                     "2026-10-11")
     assert starter.is_released is True
-    # Week 2 is a DRAFT, so the family still sees only the released starter.
-    assert week_two.is_released is False
     assert chain.service.this_week(
         chain.principal, CHILD,
         local_date="2026-10-09") == first.parent_week

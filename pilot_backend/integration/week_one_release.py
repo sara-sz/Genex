@@ -67,11 +67,16 @@ second allocation, `capture_snapshot` refuses a second snapshot, and
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..domain.adaptation_decision import (
+    AdaptationDecisionError,
+    GoalInvariantProof,
+)
 from ..domain.goals import GoalKind, GoalRef, GoalStatus
 from ..domain.weekly_cycle import (
+    GenerationReason,
     WeeklyCycleError,
     starter_cycle_bounds,
     starter_sequence_for,
@@ -81,7 +86,16 @@ from ..domain.weekly_plan_document import (
     build_document,
     parent_week_view,
 )
+from ..weekly.repeated_signal_policy import (
+    RepeatedSignalPolicyError,
+    decide as decide_adaptation,
+)
 from .activity_bank import candidates_for_goal, require_all_families_served
+from .adaptive_week import (
+    AdaptiveSelectionError,
+    select_week_templates,
+    verify_reviewed_and_bounded,
+)
 
 #: Week 1 of a month. Retained as the FIRST cycle's sequence number, which is
 #: what `plan_cycle_bounds` numbers from — not as the sequence this route
@@ -125,6 +139,43 @@ class GoalNotReleasable(WeekOneReleaseError):
     Not active, no current version, no canonical anchor, or an anchor whose
     activity families are not reconciled. Fail closed: a week built on one of
     these would give a family activities for a target the system cannot defend.
+    """
+
+
+class NonAdaptiveWeekRefused(WeekOneReleaseError):
+    """P0-B1. Week 2 onward may be created ONLY through the adaptive path.
+
+    The pre-P0-B composition created any current cycle with plain
+    `create_cycle` and the content-digest allocator, which would release a
+    Week N+1 that ignored the family's feedback and — because the allocator
+    has no memory of earlier weeks — very likely repeated Week N exactly. That
+    path is closed for sequence >= 2; reaching it is a refusal.
+    """
+
+
+class AdaptiveWeekUnavailable(WeekOneReleaseError):
+    """Week N+1 has no released Week N to adapt from.
+
+    Fail closed rather than plan from nothing: a gap in the sequence (a missed
+    week) is a decision for a clinician, not something to paper over.
+    """
+
+
+class AdaptiveWeekIncomplete(WeekOneReleaseError):
+    """An UNRELEASED Week N+1 already exists. Refused, never resumed blindly.
+
+    A draft here means an earlier attempt stopped part-way. Its allocation
+    claim cannot be re-taken, and finishing it without knowing what was
+    written could release a week whose explanation was never recorded.
+    """
+
+
+class ClinicalBoundaryRefused(WeekOneReleaseError):
+    """Week N+1 would move the goal, its version, its anchor or its families.
+
+    P0-B1 may change WHICH reviewed activity is offered and nothing else. Any
+    difference in the approved clinical boundary between Week N and now is
+    refused before a single write.
     """
 
 
@@ -242,6 +293,32 @@ class WeekOneReleaseService:
                                   timezone_of_record=timezone_of_record,
                                   cycle_month=cycle_month,
                                   request_id=request_id)
+
+        # P0-B1. Which week is "current" is decided FIRST, before anything is
+        # created, so Week 2 onward can never fall through to the
+        # non-adaptive creation path below.
+        today = local_date or self._today()
+        cycles = list(self._weekly.list_cycles(principal, plan.focus_plan_id))
+        first_plan_date = self.first_plan_date_for(cycles)
+        if first_plan_date is not None:
+            try:
+                sequence = starter_sequence_for(first_plan_date, today)
+            except WeeklyCycleError as exc:
+                raise CurrentCycleUnresolved(
+                    "today does not fall inside any cycle of this plan"
+                ) from exc
+            if sequence > WEEK_ONE:
+                existing = next((c for c in cycles
+                                 if c.sequence_in_month == sequence), None)
+                if existing is not None and existing.is_released:
+                    return self._existing_outcome(principal, plan, existing,
+                                                  goals)
+                return self._release_adaptive(
+                    principal, plan, cycles, goals,
+                    first_plan_date=first_plan_date, sequence=sequence,
+                    existing=existing, capacity=capacity,
+                    request_id=request_id)
+
         cycle = self._resolve_cycle(principal, plan, request_id=request_id,
                                     local_date=local_date)
 
@@ -388,12 +465,159 @@ class WeekOneReleaseService:
         for cycle in cycles:
             if cycle.sequence_in_month == sequence:
                 return cycle
-        predecessor = next(
-            (c.cycle_id for c in cycles
-             if c.sequence_in_month == sequence - 1), None)
-        return self._weekly.create_cycle(
+        # P0-B1. The pre-P0-B code created Week 2+ right here with plain
+        # `create_cycle`, i.e. with no adaptation at all. That path is CLOSED:
+        # `release_week_one` routes sequence >= 2 to `_release_adaptive` before
+        # reaching this method, so arriving here for a later week means a
+        # caller bypassed that routing.
+        raise NonAdaptiveWeekRefused(
+            "week 2 onward may be created only through the adaptive path")
+
+    # -- P0-B1: adaptive Week N+1 ------------------------------------------
+
+    def _release_adaptive(self, principal, plan, cycles, goals, *,
+                          first_plan_date: str, sequence: int, existing,
+                          capacity: int, request_id: str) -> "WeekOneOutcome":
+        """current observations -> P0-B1 policy -> reviewed selection ->
+        allocation -> adaptation record + decision -> snapshot -> release.
+
+        Every clinical-boundary check runs BEFORE the first write. The only
+        thing this may change relative to Week N is WHICH reviewed activities
+        are scheduled; the goal, its version, its anchor and its families are
+        verified identical, and the decision record cannot be constructed if
+        they are not.
+        """
+        if existing is not None:
+            raise AdaptiveWeekIncomplete(
+                "an unreleased draft of this week already exists")
+        previous = next((c for c in cycles
+                         if c.sequence_in_month == sequence - 1), None)
+        if previous is None or not previous.is_released:
+            raise AdaptiveWeekUnavailable(
+                "the previous week was never released, so there is nothing "
+                "to adapt from")
+        snapshots = self._repos.weekly_plan_snapshots.list_for_cycle(
+            previous.cycle_id)
+        if not snapshots:
+            raise AdaptiveWeekUnavailable(
+                "the previous week has no frozen snapshot")
+        previous_doc = snapshots[0].document()
+
+        # ---- the clinical boundary, BEFORE any write ----------------------
+        before_versions = {str(g["goal_id"]): str(g.get("goal_version_id", ""))
+                           for g in previous_doc.get("goals") or ()}
+        now_by_id = {row.goal_id: row for row in goals}
+        if set(before_versions) != set(now_by_id):
+            raise ClinicalBoundaryRefused(
+                "the approved goals differ from the previous week's")
+        previous_activities = list(previous_doc.get("activities") or ())
+        previous_template_ids = sorted({str(a["activity_template_id"])
+                                        for a in previous_activities})
+
+        allowed_by_goal: Dict[str, Tuple[str, ...]] = {}
+        families: List[str] = []
+        for row in goals:
+            allowed = tuple(sorted({b.family_ref
+                                    for b in row.anchor.rung.family_bindings}))
+            allowed_by_goal[row.goal_id] = allowed
+            families.extend(allowed)
+            stored = self._repos.clinical_goal_anchors.find(row.goal_id)
+            if stored is None:
+                raise ClinicalBoundaryRefused("a goal has lost its anchor")
+            last_week_families = {str(a.get("activity_family_ref", ""))
+                                  for a in previous_activities
+                                  if str(a.get("goal_id")) == row.goal_id}
+            if not last_week_families <= set(allowed):
+                raise ClinicalBoundaryRefused(
+                    "last week already left the anchor's families")
+            row_stored_rung = stored.rung.rung_ref
+            if row_stored_rung != row.anchor.rung.rung_ref:
+                raise ClinicalBoundaryRefused("a goal's anchor rung differs")
+
+        require_all_families_served(self._bank, families)
+        pool = tuple(self._bank.templates_for_families(sorted(set(families))))
+
+        try:
+            policy = decide_adaptation(
+                self._weekly.list_alignments(principal, previous.cycle_id),
+                self._weekly.list_observations(principal, previous.cycle_id))
+        except RepeatedSignalPolicyError as exc:
+            raise ClinicalBoundaryRefused(str(exc)) from exc
+
+        starts_on, ends_on, _partial, _reason = starter_cycle_bounds(
+            first_plan_date, sequence)
+        day_count = (date.fromisoformat(ends_on)
+                     - date.fromisoformat(starts_on)).days + 1
+        slots = min(capacity, day_count)
+        try:
+            selection = select_week_templates(
+                decisions=policy.decisions,
+                previous_template_ids=previous_template_ids,
+                pool=pool, slots=slots)
+            verify_reviewed_and_bounded(selection.selected_template_ids, pool,
+                                        families)
+        except AdaptiveSelectionError as exc:
+            raise ClinicalBoundaryRefused(str(exc)) from exc
+
+        by_id = {t.activity_template_id: t for t in pool}
+
+        def _proofs(placed_ids) -> Tuple[GoalInvariantProof, ...]:
+            proofs = []
+            for row in goals:
+                allowed = allowed_by_goal[row.goal_id]
+                selected_families = sorted({
+                    by_id[ref].activity_family_ref for ref in placed_ids
+                    if by_id[ref].activity_family_ref in allowed})
+                stored = self._repos.clinical_goal_anchors.find(row.goal_id)
+                proofs.append(GoalInvariantProof(
+                    goal_id=row.goal_id,
+                    goal_version_before=before_versions[row.goal_id],
+                    goal_version_after=row.version_id,
+                    anchor_rung_ref_before=stored.rung.rung_ref,
+                    anchor_rung_ref_after=row.anchor.rung.rung_ref,
+                    allowed_family_refs=allowed,
+                    selected_family_refs=tuple(selected_families)))
+            return tuple(proofs)
+
+        try:
+            # Proven against the SELECTION first: nothing is written yet.
+            _proofs(selection.selected_template_ids)
+        except AdaptationDecisionError as exc:
+            raise ClinicalBoundaryRefused(str(exc)) from exc
+
+        # ---- writes, in the existing services' own order -------------------
+        cycle = self._weekly.create_cycle(
             principal, plan.focus_plan_id, sequence_in_month=sequence,
-            first_plan_date=anchor, predecessor_cycle_id=predecessor,
+            first_plan_date=first_plan_date,
+            predecessor_cycle_id=previous.cycle_id,
+            generation_reason=GenerationReason.SEQUENTIAL,
+            request_id=request_id)
+        chosen = {ref: by_id[ref] for ref in selection.selected_template_ids}
+        placements = self._allocate(principal, cycle, goals, chosen,
+                                    capacity=capacity, request_id=request_id)
+        placed = sorted({p.activity_identity_ref for p in placements})
+        if not set(placed) <= set(selection.selected_template_ids):
+            raise ClinicalBoundaryRefused(  # pragma: no cover - allocator bound
+                "the allocator placed an activity outside the selection")
+        try:
+            self._weekly.record_week_adaptation(
+                principal, previous.cycle_id, cycle.cycle_id,
+                policy_outcome=policy,
+                selected_template_ids=placed,
+                repeated_template_ids=sorted(set(placed)
+                                             & set(previous_template_ids)),
+                excluded_themes=selection.excluded_themes,
+                goal_proofs=_proofs(placed),
+                request_id=request_id)
+        except AdaptationDecisionError as exc:
+            # The cycle is created and allocated but UNRELEASED, so the family
+            # sees nothing, and a retry is refused as AdaptiveWeekIncomplete
+            # rather than resumed. Rendered as the route's constant refusal,
+            # never a 500.
+            raise ClinicalBoundaryRefused(str(exc)) from exc
+        cycle = self._weekly.get_cycle(principal, cycle.cycle_id)
+        return self._snapshot_and_release(
+            principal, plan, cycle, goals, placements, chosen,
             request_id=request_id)
 
     def _candidate_templates(self, goals) -> Dict[str, Any]:
@@ -549,7 +773,11 @@ class WeekOneReleaseService:
 
 
 __all__ = [
+    "AdaptiveWeekIncomplete",
+    "AdaptiveWeekUnavailable",
     "CapacityRequired",
+    "ClinicalBoundaryRefused",
+    "NonAdaptiveWeekRefused",
     "CurrentCycleUnresolved",
     "ReleasableGoal",
     "GoalNotReleasable",

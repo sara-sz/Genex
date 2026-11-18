@@ -115,6 +115,11 @@ COLLECTIONS: Mapping[str, str] = {
     "defer_record": "pilot_defer_records",
     "therapist_intervention": "pilot_therapist_interventions",
     "adaptation_record": "pilot_adaptation_records",
+    # P0-B1. The per-activity decision and the goal/version/anchor proof for
+    # one Week N+1. A SIDECAR, not new AdaptationRecord fields: the codec
+    # refuses any key-set mismatch, so widening that record would make every
+    # stored row undecodable. Create-only, keyed by the cycle it explains.
+    "weekly_adaptation_decision": "pilot_weekly_adaptation_decisions",
     # 0.4F RTM evidence. An episode and a period are separate collections
     # because they have separate lifetimes: a month ending must not be able
     # to reach an episode row at all.

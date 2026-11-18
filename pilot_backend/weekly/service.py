@@ -39,7 +39,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Any, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from ..audit.events import AuditAction, AuditResult
 from ..authz.decisions import AccessDecision
@@ -69,6 +69,7 @@ from ..domain.observation import (
     ObservationEvent,
     ParentCustomizationSignal,
     TimezoneSource,
+    current_observations,
     same_observation,
 )
 from ..domain.roles import ActorRole
@@ -966,7 +967,10 @@ class WeeklyService:
             previous.child_id, previous.owning_focus_plan_id,
             from_cycle_id, cycle.cycle_id,
             normalized_signals=adaptation.signals,
-            evidence_event_ids=tuple(sorted(e.event_id for e in events)),
+            # P0-B1: only CURRENT observations are evidence; a superseded
+            # submission is excluded here exactly as it is from the engine.
+            evidence_event_ids=tuple(sorted(
+                e.event_id for e in current_observations(tuple(events)))),
             customization_signal_ids=tuple(sorted(s.signal_id for s in signals)),
             defer_record_ids=tuple(sorted(
                 d.defer_id for d in defers
@@ -998,6 +1002,122 @@ class WeeklyService:
                     signal_count=len(adaptation.signals),
                     rule_version=ADAPTATION_RULE_VERSION)
         return cycle, result, record
+
+    # =====================================================================
+    # P0-B1: record why an adaptive Week N+1 contains what it does
+    # =====================================================================
+
+    def record_week_adaptation(self, principal, from_cycle_id: str,
+                               to_cycle_id: str, *, policy_outcome,
+                               selected_template_ids: Sequence[str],
+                               repeated_template_ids: Sequence[str],
+                               excluded_themes: Sequence[str],
+                               goal_proofs: Sequence[Any],
+                               request_id: str = ""):
+        """Write the `AdaptationRecord` AND the P0-B1 decision, then link.
+
+        Called by the adaptive release composition AFTER the new cycle has been
+        allocated and BEFORE it is snapshotted, so a released week always has
+        its explanation. Both records are created in ONE transaction: a decision
+        without its AdaptationRecord, or the reverse, is the half-landed state
+        that a reviewer could not reconcile. Both are create-only; the decision
+        id is derived from the cycle, so a second explanation collides.
+
+        The authorization is the planning rule, unchanged: only this child's
+        managing clinician (or, with none, a caregiver) may plan the week.
+        """
+        from ..domain.adaptation_decision import (  # noqa: WPS433
+            WeeklyAdaptationDecision,
+        )
+
+        previous = self._load_cycle(from_cycle_id)
+        cycle = self._load_cycle(to_cycle_id)
+        self._authorize(principal, cycle.child_id)
+        self._require_planner(principal, cycle.child_id)
+        if previous.child_id != cycle.child_id:
+            raise WeeklyValidationError("the two cycles belong to different children")
+        if cycle.predecessor_cycle_id != previous.cycle_id:
+            raise WeeklyValidationError(
+                "an adaptation must explain a cycle from its own predecessor")
+        if cycle.is_released:
+            raise ReleasedPlanImmutable(
+                "a released cycle's explanation cannot be written afterwards")
+
+        alignments = self._repos.alignments.list_for_cycle(from_cycle_id)
+        events = self._repos.observation_events.list_for_cycle(from_cycle_id)
+        signals = self._repos.customization_signals.list_for_cycle(from_cycle_id)
+        defers = self._repos.defer_records.list_for_child(previous.child_id)
+        gaps = self._repos.coverage_gaps.list_for_cycle(from_cycle_id)
+        future = [i for i in self._repos.interventions.list_for_cycle(from_cycle_id)
+                  if i.applies_to is InterventionScope.FUTURE_CYCLE]
+        adaptation = plan_adaptation(
+            alignments, events=events, customization_signals=signals,
+            defer_records=defers, interventions=future, coverage_gaps=gaps,
+            next_cycle_sequence=cycle.sequence_in_month)
+
+        tally: Dict[str, int] = {}
+        for decision in policy_outcome.decisions:
+            tally[decision.branch.value] = tally.get(decision.branch.value, 0) + 1
+        p0b = "; ".join(f"{k}={v}" for k, v in sorted(tally.items()))
+        record = AdaptationRecord.create(
+            cycle.child_id, cycle.owning_focus_plan_id,
+            from_cycle_id, cycle.cycle_id,
+            normalized_signals=adaptation.signals,
+            evidence_event_ids=tuple(policy_outcome.current_event_ids),
+            customization_signal_ids=tuple(sorted(s.signal_id for s in signals)),
+            defer_record_ids=tuple(sorted(
+                d.defer_id for d in defers
+                if d.suppresses(cycle.sequence_in_month)
+                and not d.was_overridden)),
+            rule_version=ADAPTATION_RULE_VERSION,
+            origin=adaptation.origin,
+            intervention_id=(future[0].intervention_id if future and
+                             adaptation.origin is not AdaptationOrigin.AUTOMATIC
+                             else None),
+            goal_alignment_before=tuple(sorted(
+                a.alignment_id for a in alignments)),
+            goal_alignment_after=tuple(sorted(
+                a.alignment_id for a in
+                self._repos.alignments.list_for_cycle(cycle.cycle_id))),
+            coverage_gaps=tuple(sorted(g.gap_id for g in gaps)),
+            resulting_change=f"{describe_change(adaptation)}; p0b: {p0b or 'none'}",
+            now=self._stamp())
+        decision = WeeklyAdaptationDecision.create(
+            child_id=cycle.child_id, focus_plan_id=cycle.owning_focus_plan_id,
+            from_cycle_id=from_cycle_id, to_cycle_id=cycle.cycle_id,
+            adaptation_record_id=record.record_id,
+            activity_decisions=policy_outcome.decisions,
+            current_event_ids=policy_outcome.current_event_ids,
+            superseded_event_ids=policy_outcome.superseded_event_ids,
+            selected_template_ids=selected_template_ids,
+            repeated_template_ids=repeated_template_ids,
+            excluded_themes=excluded_themes,
+            goal_proofs=goal_proofs, now=self._stamp())
+
+        def _write(store):
+            tx = self._repos_factory(store)
+            tx.adaptation_records.create(record)
+            tx.adaptation_decisions.create(decision)
+            return decision
+
+        try:
+            self._repos.store.run_in_transaction(_write)
+        except (DocumentStoreError, DuplicateRecord):
+            raise WeeklyConflict(
+                "this cycle already has an adaptation decision") from None
+        self._repos.weekly_cycles.update(
+            cycle.with_adaptation(record.record_id, now=self._stamp()))
+
+        self._audit(AuditAction.ADAPTATION_RECORDED, AuditResult.SUCCESS,
+                    RESOURCE_ADAPTATION, principal=principal,
+                    child_id=cycle.child_id, resource_id=record.record_id,
+                    request_id=request_id,
+                    adaptation_record_id=record.record_id,
+                    cycle_id=cycle.cycle_id,
+                    adaptation_origin=adaptation.origin.value,
+                    signal_count=len(adaptation.signals),
+                    rule_version=ADAPTATION_RULE_VERSION)
+        return record, decision
 
     # =====================================================================
     # Reads

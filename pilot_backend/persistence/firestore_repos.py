@@ -38,6 +38,7 @@ from typing import Any, List, Optional, Sequence, Type
 
 from ..audit.events import AuditEvent
 from ..domain.adaptation import AdaptationRecord
+from ..domain.adaptation_decision import WeeklyAdaptationDecision
 from ..domain.parent_clinician_profile_v21 import ClinicianProfileV21
 from ..domain.alignment import (
     ActivityGoalAlignment,
@@ -113,6 +114,10 @@ def _own_id(record: Any) -> str:
     module docstring.
     """
     for attr in ("connection_id",
+                 # P0-B1. A WeeklyAdaptationDecision OWNS decision_id and
+                 # CARRIES adaptation_record_id and two cycle ids, so its own
+                 # id must be found before any of those foreign keys.
+                 "decision_id",
                  # 0.4B/C own-ids go BEFORE child_id and focus_plan_id for the
                  # reason in the module docstring: every suggestion, goal,
                  # allocation and snapshot for one child shares its child_id,
@@ -1262,6 +1267,40 @@ class FirestoreAdaptationRecordRepository(_BaseRepo):
         return self._query("child_id", child_id)
 
 
+class FirestoreWeeklyAdaptationDecisionRepository(_BaseRepo):
+    """P0-B1. Why Week N+1 contains what it does. CREATE-ONLY and READ-ONLY.
+
+    No update and no delete: a decision explains a released week, and a
+    released week is immutable, so its explanation must be too. The document
+    id is DERIVED from the cycle it explains, so a second decision for the same
+    week collides in the store instead of landing beside the first.
+    """
+
+    record_type, model = ("weekly_adaptation_decision",
+                          WeeklyAdaptationDecision)
+
+    def create(self, decision: WeeklyAdaptationDecision
+               ) -> WeeklyAdaptationDecision:
+        return self._create(decision.decision_id, decision)
+
+    def get_by_id(self, decision_id: str) -> WeeklyAdaptationDecision:
+        return self._get(decision_id)
+
+    def find_for_cycle(self, to_cycle_id: str
+                       ) -> Optional[WeeklyAdaptationDecision]:
+        """The decision that explains this cycle, or None."""
+        from ..domain.adaptation_decision import (  # noqa: WPS433
+            weekly_adaptation_decision_id,
+        )
+        try:
+            return self._get(weekly_adaptation_decision_id(to_cycle_id))
+        except RecordNotFound:
+            return None
+
+    def list_for_child(self, child_id: str) -> List[WeeklyAdaptationDecision]:
+        return self._query("child_id", child_id)
+
+
 class _PeriodScopedRepo(_BaseRepo):
     """Records belonging to exactly one monitoring period."""
 
@@ -1529,6 +1568,8 @@ class FirestoreRepositories:
         self.defer_records = FirestoreDeferRecordRepository(store)
         self.interventions = FirestoreTherapistInterventionRepository(store)
         self.adaptation_records = FirestoreAdaptationRecordRepository(store)
+        self.adaptation_decisions = \
+            FirestoreWeeklyAdaptationDecisionRepository(store)
         self.rtm_episodes = FirestoreRTMEpisodeRepository(store)
         self.rtm_periods = FirestoreRTMPeriodRepository(store)
         self.rtm_technologies = FirestoreRTMTechnologyRepository(store)

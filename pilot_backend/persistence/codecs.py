@@ -46,6 +46,13 @@ from ..domain.adaptation import (
     SignalKind,
     SignalSource,
 )
+from ..domain.adaptation_decision import (
+    ActivityAdaptationDecision,
+    AdaptationBranch,
+    DecisionReason,
+    GoalInvariantProof,
+    WeeklyAdaptationDecision,
+)
 from ..domain.alignment import (
     ActivityGoalAlignment,
     AlignmentRole,
@@ -931,6 +938,41 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "goal_alignment_after": STR_TUPLE,
         "coverage_gaps": STR_TUPLE,
         "not_a_failure": BOOL, "resulting_change": STR,
+        "created_at": DT, "schema_version": STR,
+    },
+    # ---- P0-B1 weekly adaptation decision (sidecar) ---------------------
+    #
+    # A SEPARATE record rather than new `AdaptationRecord` fields: the codec
+    # refuses any key-set mismatch, so widening that record would make every
+    # stored row undecodable. The invariant booleans are persisted so the proof
+    # is legible in the document; the domain refuses to construct a False one.
+    ActivityAdaptationDecision: {
+        "activity_identity_ref": STR,
+        "branch": _EnumKind(AdaptationBranch),
+        "reason": _EnumKind(DecisionReason),
+        "signal": STR,
+        "trigger_event_ids": STR_TUPLE,
+        "considered_event_ids": STR_TUPLE,
+    },
+    GoalInvariantProof: {
+        "goal_id": STR,
+        "goal_version_before": STR, "goal_version_after": STR,
+        "anchor_rung_ref_before": STR, "anchor_rung_ref_after": STR,
+        "allowed_family_refs": STR_TUPLE, "selected_family_refs": STR_TUPLE,
+        "goal_unchanged": BOOL, "goal_version_unchanged": BOOL,
+        "anchor_unchanged": BOOL, "families_within_anchor": BOOL,
+    },
+    WeeklyAdaptationDecision: {
+        "decision_id": STR, "child_id": STR, "focus_plan_id": STR,
+        "from_cycle_id": STR, "to_cycle_id": STR,
+        "adaptation_record_id": STR, "rule_version": STR,
+        "activity_decisions": _NestedTuple(ActivityAdaptationDecision),
+        "current_event_ids": STR_TUPLE,
+        "superseded_event_ids": STR_TUPLE,
+        "selected_template_ids": STR_TUPLE,
+        "repeated_template_ids": STR_TUPLE,
+        "excluded_themes": STR_TUPLE,
+        "goal_proofs": _NestedTuple(GoalInvariantProof),
         "created_at": DT, "schema_version": STR,
     },
     RTMEpisode: {
