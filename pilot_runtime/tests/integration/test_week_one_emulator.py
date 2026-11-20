@@ -452,19 +452,22 @@ def test_eight_concurrent_week_two_releases_produce_one_explained_week(world):
 
 
 def _explicit_plan(world, month):
-    """A plan created + activated by the managing clinician, as the
-    monthly-plan routes do. Its clinical period starts at activation (NOW)."""
-    from pilot_backend.domain.goals import GoalKind, GoalRef
-    from pilot_backend.planning.service import MonthlyPlanService
+    """A second ACTIVE plan for the child, written directly (forced).
 
-    plans = MonthlyPlanService(repos=world.repos, recorder=None,
-                               now=lambda: NOW)
-    plan = plans.create_plan(world.principal, world.child_id, month, TZ)
-    plans.allocate_goal(world.principal, plan.focus_plan_id,
-                        GoalRef(GoalKind.CLINICAL,
-                                world.goal.clinical_goal_id),
-                        priority_rank=1)
-    return plans.activate_plan(world.principal, plan.focus_plan_id)
+    P0-C renewal made `activate_plan` refuse while another plan still governs
+    — which Week 1's plan does here — so two simultaneously active plans can
+    no longer arise through the service. This test is about the WEEKLY
+    layer's last line of defence (per-day claims) when two active plans DO
+    exist (a legacy or forged state), so it builds that state directly, with
+    the activation instant the clinical period needs."""
+    from pilot_backend.domain.monthly_plan import MonthlyFocusPlan
+    from pilot_backend.domain.planning_policy import POLICY_2026_10
+
+    plan = MonthlyFocusPlan.create(
+        world.child_id, month, TZ, policy_version=POLICY_2026_10.policy_version)
+    active = plan.activate(claim_id="forced-by-test", now=NOW)
+    world.repos.focus_plans.create(active)
+    return active
 
 
 def test_concurrent_cross_plan_overlapping_weeks_commit_exactly_one(world):
