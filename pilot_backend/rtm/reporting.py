@@ -46,14 +46,19 @@ def _goals_section(evidence: RTMEvidenceSummary,
     month was activated, not as it reads today. The snapshot id is carried;
     the text is not copied in.
     """
+    # RTM billing-evidence v2: a month may draw on several clinical plans, and
+    # the same goal can be snapshotted by each. Every entry is keyed by its
+    # OWN plan, so plan A's wording/priority is never read as plan B's.
     return SectionContent(
         section=ReportSection.MONTHLY_GOALS,
         record_refs=tuple(sorted(s.snapshot_id for s in snapshots)),
         counts=tuple(sorted(
-            (f"rank_{s.priority_rank}_emphasis", s.emphasis_weight)
+            (f"{s.focus_plan_id}:rank_{s.priority_rank}_emphasis",
+             s.emphasis_weight)
             for s in snapshots)),
         labels=tuple(sorted(
-            (s.goal_id, s.approved_by_role.value) for s in snapshots)),
+            (f"{s.focus_plan_id}:{s.goal_id}", s.approved_by_role.value)
+            for s in snapshots)),
     )
 
 

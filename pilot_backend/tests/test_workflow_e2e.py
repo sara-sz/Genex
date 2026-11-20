@@ -334,7 +334,7 @@ def _rtm_period(e2e, goal, plan_id) -> tuple:
         e2e.principal("hannah"), e2e.child,
         [GoalRef(GoalKind.CLINICAL, goal["goal_id"])])
     period = e2e.rtm.open_period(e2e.principal("hannah"), episode.episode_id,
-                                 plan_id)
+                                 plan_id, cycle_month=MONTH)
     return episode, period
 
 

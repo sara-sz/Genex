@@ -1056,6 +1056,7 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "real_time_interactive_communication_present": BOOL,
         "documentation_missing_flags": STR_TUPLE,
         "technology_regulatory_status": _EnumKind(RegulatoryStatus),
+        "contributing_focus_plan_ids": STR_TUPLE,
         "schema_version": STR,
     },
     CodingAssistanceSummary: {
@@ -1091,6 +1092,7 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "supersedes_report_id": OPT_STR, "superseded_by_report_id": OPT_STR,
         "amendment_reason": STR, "amended_by_actor_id": OPT_STR,
         "evidence_summary_id": STR, "coding_summary_id": STR,
+        "contributing_focus_plan_ids": STR_TUPLE,
         "created_at": DT, "updated_at": DT, "schema_version": STR,
     },
     Revision: {
@@ -1102,6 +1104,28 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "schema_version": STR,
     },
 }
+
+
+#: RTM billing-evidence v2. These records changed MEANING (and, for two, their
+#: field set) when evidence stopped being scoped to one clinical plan. Each is
+#: pinned to exactly one schema version in BOTH directions: a v1 row is refused
+#: with a named error instead of being decoded under v2 semantics, and nothing
+#: can be written under another version. Exact-field decoding is unchanged.
+def _pinned_schema_versions() -> Dict[type, str]:
+    from ..domain.month_end import MONTH_END_REPORT_SCHEMA_VERSION
+    from ..domain.rtm import RTM_PERIOD_SCHEMA_VERSION
+    from ..domain.rtm_summary import RTM_EVIDENCE_SUMMARY_SCHEMA_VERSION
+    return {RTMMonitoringPeriod: RTM_PERIOD_SCHEMA_VERSION,
+            RTMEvidenceSummary: RTM_EVIDENCE_SUMMARY_SCHEMA_VERSION,
+            MonthEndReport: MONTH_END_REPORT_SCHEMA_VERSION}
+
+
+def _require_pinned_version(cls: type, version: Any) -> None:
+    pinned = _pinned_schema_versions().get(cls)
+    if pinned is not None and version != pinned:
+        raise CodecError(
+            f"{cls.__name__}: unsupported schema_version {version!r}; "
+            f"this build reads and writes only {pinned!r}")
 
 
 def _spec_for(cls: type) -> Dict[str, Kind]:
@@ -1118,6 +1142,8 @@ def encode(record: Any) -> Dict[str, Any]:
     field present on the model is always written.
     """
     spec = _spec_for(type(record))
+    _require_pinned_version(type(record),
+                            getattr(record, "schema_version", None))
     document: Dict[str, Any] = {}
     for f in dataclass_fields(record):
         kind = spec.get(f.name)
@@ -1130,6 +1156,9 @@ def encode(record: Any) -> Dict[str, Any]:
 def decode(cls: type, document: Mapping[str, Any]) -> Any:
     """Deserialize a document, refusing any key-set mismatch."""
     spec = _spec_for(cls)
+    # Version FIRST, so a v1 row is named as such rather than reported as a
+    # field mismatch.
+    _require_pinned_version(cls, document.get("schema_version"))
     expected = {f.name for f in dataclass_fields(cls)}
     present = set(document)
 
