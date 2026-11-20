@@ -37,6 +37,10 @@ from .entities import SCHEMA_VERSION, utc_now
 from .enums import Visibility
 from .ids import new_month_end_report_id
 
+#: RTM billing-evidence v2: adds `contributing_focus_plan_ids`; a report may
+#: hold evidence from several clinical plans. v1 reports are never decoded as v2.
+MONTH_END_REPORT_SCHEMA_VERSION = "october-pilot-month-end-report-v2"
+
 
 class ReportError(ValueError):
     """Invalid report construction or transition. PHI-safe."""
@@ -123,7 +127,10 @@ class MonthEndReport:
     coding_summary_id: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
-    schema_version: str = SCHEMA_VERSION
+    #: Every clinical plan represented in this month's evidence — sorted,
+    #: unique. `focus_plan_id` is the period's opening provenance only.
+    contributing_focus_plan_ids: Tuple[str, ...] = ()
+    schema_version: str = MONTH_END_REPORT_SCHEMA_VERSION
 
     VISIBILITY = Visibility.THERAPIST_ONLY
 
@@ -159,6 +166,7 @@ class MonthEndReport:
     def create(period_id: str, child_id: str, focus_plan_id: str,
                cycle_month: str, *, sections: Tuple[SectionContent, ...] = (),
                evidence_summary_id: str = "", coding_summary_id: str = "",
+               contributing_focus_plan_ids: Tuple[str, ...] = (),
                version: int = 1,
                supersedes_report_id: Optional[str] = None,
                amendment_reason: str = "",
@@ -177,6 +185,8 @@ class MonthEndReport:
             amendment_reason=amendment_reason,
             evidence_summary_id=evidence_summary_id,
             coding_summary_id=coding_summary_id,
+            contributing_focus_plan_ids=tuple(
+                sorted(set(contributing_focus_plan_ids))),
             created_at=stamp, updated_at=stamp,
         )
 
@@ -221,6 +231,7 @@ class MonthEndReport:
             sections=sections if sections is not None else self.sections,
             evidence_summary_id=evidence_summary_id or self.evidence_summary_id,
             coding_summary_id=coding_summary_id or self.coding_summary_id,
+            contributing_focus_plan_ids=self.contributing_focus_plan_ids,
             version=self.version + 1,
             supersedes_report_id=self.report_id,
             amendment_reason=reason,

@@ -40,7 +40,7 @@ from __future__ import annotations
 from typing import Mapping, Optional, Sequence, Tuple
 
 from ..coding.rules import CodingInputs, evaluate
-from ..domain.observation import AttemptOutcome
+from ..domain.observation import AttemptOutcome, current_observations
 from ..domain.rtm import RegulatoryStatus, RTMMonitoringPeriod, RTMTechnology
 from ..domain.rtm_documentation import documented_minutes
 from ..domain.rtm_summary import (
@@ -78,12 +78,23 @@ def derive_evidence_summary(period: RTMMonitoringPeriod, *,
                             interactions: Sequence = (),
                             technology: Optional[RTMTechnology] = None,
                             clinical_goal_refs: Tuple[Tuple[str, str], ...] = (),
+                            contributing_focus_plan_ids: Tuple[str, ...] = (),
                             now=None) -> RTMEvidenceSummary:
-    """Build the factual monthly summary. Deterministic and regenerable."""
+    """Build the factual monthly summary. Deterministic and regenerable.
+
+    RTM billing-evidence v2: only CURRENT observations count. The service
+    already passes current events, and this pure function applies
+    `current_observations()` again so no caller can make a superseded row and
+    its correction both count. Evidence may span several clinical plans;
+    `contributing_focus_plan_ids` records which (provenance, never scope).
+    """
     month = period.cycle_month
 
-    # Filter by the event's OWN local-month attribution.
-    in_month = [e for e in events if e.attribution_month == month]
+    # Current observations only, then the event's OWN local-month attribution.
+    # One row per event id, so no path can count the same observation twice.
+    by_id = {e.event_id: e for e in current_observations(tuple(events))
+             if e.attribution_month == month}
+    in_month = [by_id[k] for k in sorted(by_id)]
     coverage = summarize(alignments, in_month, attribution_month=month)
 
     outcome_counts = {o: 0 for o in AttemptOutcome}
@@ -134,7 +145,8 @@ def derive_evidence_summary(period: RTMMonitoringPeriod, *,
         rule_version=EVIDENCE_RULE_VERSION,
         focus_plan_ref=period.focus_plan_id,
         clinical_goal_refs=clinical_goal_refs,
-        cycle_refs=tuple(sorted(c.cycle_id for c in cycles)),
+        cycle_refs=tuple(sorted({c.cycle_id for c in cycles})),
+        contributing_focus_plan_ids=tuple(sorted(set(contributing_focus_plan_ids))),
         total_distinct_observation_events=coverage.total_attempts,
         distinct_observed_local_dates=len(observed_dates),
         did_it_count=outcome_counts[AttemptOutcome.DID_IT],

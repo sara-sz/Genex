@@ -52,6 +52,13 @@ from .goals import GoalKind, GoalRef, require_clinical_goal_ref
 from .ids import new_rtm_episode_id, new_rtm_period_id, new_rtm_technology_id
 from .monthly_plan import validate_cycle_month, validate_timezone
 
+#: RTM billing-evidence v2. A period's `cycle_month` is the explicitly
+#: REQUESTED billing calendar month and `focus_plan_id` is OPENING PROVENANCE
+#: only (and the source of `timezone_of_record`) — never the evidence scope.
+#: v1 rows meant something else (month inferred from a plan's label, evidence
+#: scoped to that plan), so the codec refuses to decode them as v2.
+RTM_PERIOD_SCHEMA_VERSION = "october-pilot-rtm-period-v2"
+
 
 class RTMError(ValueError):
     """Invalid RTM construction or transition. PHI-safe."""
@@ -186,7 +193,14 @@ class RTMEpisode:
 
 @dataclass(frozen=True)
 class RTMMonitoringPeriod:
-    """One calendar month of an episode. Finalizing it does not close it."""
+    """One BILLING calendar month of an episode. Finalizing it does not close
+    it.
+
+    Identity is (episode_id, cycle_month). Evidence for the month is gathered
+    across EVERY clinical plan whose cycles produced current observations
+    attributed to it; `focus_plan_id` records which plan the period was opened
+    against (provenance, and the timezone of record) and scopes nothing.
+    """
 
     period_id: str
     episode_id: str
@@ -205,7 +219,7 @@ class RTMMonitoringPeriod:
     uniqueness_claim_id: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
-    schema_version: str = SCHEMA_VERSION
+    schema_version: str = RTM_PERIOD_SCHEMA_VERSION
 
     VISIBILITY = Visibility.THERAPIST_ONLY
 

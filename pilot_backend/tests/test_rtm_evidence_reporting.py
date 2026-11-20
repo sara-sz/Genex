@@ -242,7 +242,8 @@ def _rtm_open(s, ctx):
     s.rtm.declare_technology(s.provider_alpha, episode.episode_id,
                              "Genex RTM pilot")
     period = s.rtm.open_period(s.provider_alpha, episode.episode_id,
-                               ctx["plan"].focus_plan_id)
+                               ctx["plan"].focus_plan_id,
+                               cycle_month=ctx["plan"].cycle_month)
     return episode, period
 
 
@@ -627,7 +628,8 @@ def test_an_open_episode_does_not_silently_transfer(s):
         lambda: s.rtm.finalize_period(gamma, period.period_id),
         lambda: s.rtm.generate_evidence_summary(gamma, period.period_id),
         lambda: s.rtm.open_period(gamma, episode.episode_id,
-                                  ctx["plan"].focus_plan_id),
+                                  ctx["plan"].focus_plan_id,
+                                  cycle_month=ctx["plan"].cycle_month),
     ):
         with pytest.raises(EpisodeTransferRefused):
             call()
@@ -668,7 +670,8 @@ def test_a_period_cannot_reference_another_childs_focus_plan(s):
                                      s.topo.child_beta.child_id, CYCLE, ZONE)
     with pytest.raises(RTMValidationError):
         s.rtm.open_period(s.provider_alpha, episode.episode_id,
-                          other_plan.focus_plan_id)
+                          other_plan.focus_plan_id,
+                          cycle_month=other_plan.cycle_month)
 
 
 def test_one_period_per_episode_month(s):
@@ -676,7 +679,8 @@ def test_one_period_per_episode_month(s):
     episode, _ = _rtm_open(s, ctx)
     with pytest.raises(RTMConflict):
         s.rtm.open_period(s.provider_alpha, episode.episode_id,
-                          ctx["plan"].focus_plan_id)
+                          ctx["plan"].focus_plan_id,
+                          cycle_month=ctx["plan"].cycle_month)
 
 
 def test_a_period_requires_a_valid_timezone():
@@ -1374,7 +1378,8 @@ def test_full_october_end_to_end(s):
                                           episode.episode_id, "Genex RTM pilot")
     assert technology.regulatory_status is RegulatoryStatus.UNDER_REVIEW
     period = s.rtm.open_period(s.provider_alpha, episode.episode_id,
-                               plan.focus_plan_id)
+                               plan.focus_plan_id,
+                               cycle_month=plan.cycle_month)
     assert period.focus_plan_id == plan.focus_plan_id
 
     review = s.rtm.record_review(

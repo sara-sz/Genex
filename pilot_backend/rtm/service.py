@@ -52,6 +52,8 @@ from ..coding.rules import (
 from ..domain.goals import GoalRef, require_clinical_goal_ref
 from ..domain.identity_claims import ClaimKind, IdentityClaim, key_digest
 from ..domain.month_end import MonthEndReport, ReportSection, SectionContent
+from ..domain.monthly_plan import validate_cycle_month
+from ..domain.observation import current_observations
 from ..domain.roles import ActorRole
 from ..domain.rtm import (
     EpisodeStatus,
@@ -291,11 +293,19 @@ class RTMService:
     # =====================================================================
 
     def open_period(self, principal, episode_id: str, focus_plan_id: str, *,
+                    cycle_month: str,
                     request_id: str = "") -> RTMMonitoringPeriod:
-        """Open the month. Wins a claim on (episode, cycle_month).
+        """Open one BILLING calendar month. Wins a claim on (episode, month).
 
-        The focus plan supplies the cycle month AND the timezone of record, so
-        the period cannot disagree with the plan it monitors.
+        RTM billing-evidence v2. `cycle_month` is the requested billing month,
+        EXPLICIT — never inferred from a clinical plan's month label, so a
+        month can be opened when no plan carries its label, when a plan
+        crosses into it, or when two rolling plans contribute to it.
+
+        `focus_plan_id` is OPENING PROVENANCE and the source of the period's
+        `timezone_of_record` (the only timezone authority the model has; see
+        the slice report). It does NOT scope evidence: `_gather` reads every
+        current observation attributed to the month, whichever plan owned it.
         """
         episode = self._load_episode(episode_id)
         self._require_episode_owner(principal, episode,
@@ -311,14 +321,18 @@ class RTMService:
             raise RTMValidationError(
                 "focus plan belongs to a different child")
 
+        try:
+            month = validate_cycle_month(cycle_month)
+        except ValueError:
+            raise RTMValidationError("not a valid billing month") from None
         draft = RTMMonitoringPeriod.create(
-            episode_id, episode.child_id, focus_plan_id, plan.cycle_month,
+            episode_id, episode.child_id, focus_plan_id, month,
             plan.timezone_of_record, now=self._stamp())
 
         # Write-time uniqueness, the 0.4A mechanism. Generation read OUTSIDE
         # the transaction: a stale value cannot create a second winner, only
         # a collision, and a collision is the refusal we want.
-        parts = (episode_id, plan.cycle_month)
+        parts = (episode_id, month)
         generation = self._repos.identity_claims.next_generation(
             ClaimKind.RTM_MONITORING_PERIOD, key_digest(*parts))
 
@@ -341,7 +355,7 @@ class RTMService:
                         RESOURCE_PERIOD, principal=principal,
                         child_id=episode.child_id, resource_id=None,
                         request_id=request_id, episode_id=episode_id,
-                        cycle_month=plan.cycle_month)
+                        cycle_month=month)
             raise RTMConflict(
                 "a monitoring period already exists for this episode-month"
             ) from None
@@ -350,7 +364,7 @@ class RTMService:
                     RESOURCE_PERIOD, principal=principal,
                     child_id=episode.child_id, resource_id=period.period_id,
                     request_id=request_id, episode_id=episode_id,
-                    period_id=period.period_id, cycle_month=plan.cycle_month,
+                    period_id=period.period_id, cycle_month=month,
                     focus_plan_id=focus_plan_id,
                     claim_id=period.uniqueness_claim_id,
                     claim_kind=ClaimKind.RTM_MONITORING_PERIOD.value)
@@ -406,33 +420,21 @@ class RTMService:
 
     def _require_events_in_period(self, period: RTMMonitoringPeriod,
                                   event_ids: Sequence[str]) -> None:
-        """Every referenced event must be this child's, in this month.
+        """Every referenced event must be CURRENT evidence of this period.
 
-        Fails closed on a cross-child or cross-month reference. Without this,
-        a clinician could attach another child's evidence to a review by
-        guessing an id.
+        RTM billing-evidence v2: the child's, attributed to the period's
+        billing month by its own local date, and not superseded by a later
+        correction — from ANY clinical plan. Fails closed on a cross-child,
+        cross-month or superseded reference, and on an id that does not exist,
+        so a guessed id cannot attach another child's evidence to a review.
         """
         if not event_ids:
             return
-        wanted = set(event_ids)
-        found = {}
-        for cycle in self._repos.weekly_cycles.list_for_plan(
-                period.focus_plan_id):
-            for event in self._repos.observation_events.list_for_cycle(
-                    cycle.cycle_id):
-                if event.event_id in wanted:
-                    found[event.event_id] = event
-        missing = wanted - set(found)
-        if missing:
+        current = {e.event_id for e in self._current_month_events(period)}
+        if not set(event_ids) <= current:
             raise RTMValidationError(
-                "referenced observation events do not belong to this period")
-        for event in found.values():
-            if event.child_id != period.child_id:
-                raise RTMValidationError(
-                    "referenced event belongs to a different child")
-            if event.attribution_month != period.cycle_month:
-                raise RTMValidationError(
-                    "referenced event is attributed to a different month")
+                "referenced observation events are not current evidence of "
+                "this period")
 
     def record_clinical_action(self, principal, review_id: str, *,
                                action_type: ClinicalActionType,
@@ -581,19 +583,44 @@ class RTMService:
     # Derived summaries
     # =====================================================================
 
+    def _current_month_events(self, period: RTMMonitoringPeriod):
+        """The billing month's CURRENT observations, from every plan.
+
+        `current_observations()` runs over ALL of the child's observations
+        BEFORE the month filter, so a superseded row is excluded even if its
+        correction were attributed to another month. Then each surviving
+        event's OWN local-date attribution decides the month — never its cycle,
+        never its plan. One row per event id, so nothing is counted twice.
+        """
+        current = current_observations(tuple(
+            self._repos.observation_events.list_for_child(period.child_id)))
+        by_id = {e.event_id: e for e in current
+                 if e.attribution_month == period.cycle_month}
+        return sorted(by_id.values(), key=lambda e: (e.local_date, e.event_id))
+
     def _gather(self, period: RTMMonitoringPeriod):
-        cycles = self._repos.weekly_cycles.list_for_plan(period.focus_plan_id)
-        alignments, events = [], []
+        """Everything the month's evidence, coding and report are built from.
+
+        RTM billing-evidence v2. Observations are the month's CURRENT events
+        across all clinical plans; the contributing cycles and plans are
+        DERIVED from them (provenance), never taken from `period.focus_plan_id`.
+        Reviews, actions, time and interactions stay period-scoped and are
+        filtered by their own local dates by the callers, as before.
+        """
+        events = self._current_month_events(period)
+        cycle_ids = sorted({e.owning_cycle_id for e in events})
+        cycles = [self._repos.weekly_cycles.get_by_id(c) for c in cycle_ids]
+        alignments = []
         for cycle in cycles:
             alignments.extend(self._repos.alignments.list_for_cycle(cycle.cycle_id))
-            events.extend(
-                self._repos.observation_events.list_for_cycle(cycle.cycle_id))
         technologies = self._repos.rtm_technologies.list_for_episode(
             period.episode_id)
         return {
             "cycles": cycles,
             "alignments": alignments,
             "events": events,
+            "contributing_focus_plan_ids": tuple(sorted(
+                {c.owning_focus_plan_id for c in cycles})),
             "reviews": self._repos.therapist_reviews.list_for_period(
                 period.period_id),
             "actions": self._repos.clinical_actions.list_for_period(
@@ -755,10 +782,16 @@ class RTMService:
                     pass
             gaps.extend(self._repos.coverage_gaps.list_for_cycle(cycle.cycle_id))
 
+        contributing = gathered["contributing_focus_plan_ids"]
+        goal_snapshots = []
+        for plan_id in contributing:
+            # Each contributing plan's OWN activation-time wording, kept per
+            # plan — never collapsed onto the plan that opened the period.
+            goal_snapshots.extend(
+                self._repos.goal_snapshots.list_for_plan(plan_id))
         sections = build_sections(
             evidence, coding,
-            goal_snapshots=self._repos.goal_snapshots.list_for_plan(
-                period.focus_plan_id),
+            goal_snapshots=goal_snapshots,
             events=month_events,
             adaptations=adaptations,
             coverage_gaps=gaps,
@@ -771,6 +804,7 @@ class RTMService:
 
         report = MonthEndReport.create(
             period_id, period.child_id, period.focus_plan_id, month,
+            contributing_focus_plan_ids=contributing,
             sections=sections, evidence_summary_id=evidence.summary_id,
             coding_summary_id=coding.coding_summary_id, now=self._stamp())
         self._repos.month_end_reports.create(report)

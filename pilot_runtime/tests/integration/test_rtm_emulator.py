@@ -206,7 +206,8 @@ def _race(target, count: int = 8):
 def test_every_rtm_record_round_trips_in_real_firestore(rt):
     plan, cycle, result, goals, episode = _prepare(rt)
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                plan.focus_plan_id)
+                                plan.focus_plan_id,
+                                cycle_month=plan.cycle_month)
 
     rt.rtm.record_time(rt.provider_alpha, period.period_id,
                        local_date="2026-10-05", minutes=25,
@@ -251,7 +252,8 @@ def test_every_rtm_record_round_trips_in_real_firestore(rt):
 def test_nested_section_content_survives_the_real_client(rt):
     plan, cycle, result, goals, episode = _prepare(rt)
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                plan.focus_plan_id)
+                                plan.focus_plan_id,
+                                cycle_month=plan.cycle_month)
     rt.rtm.finalize_period(rt.provider_alpha, period.period_id)
     rt.rtm.generate_evidence_summary(rt.provider_alpha, period.period_id)
     rt.rtm.generate_coding_assistance(rt.provider_alpha, period.period_id)
@@ -276,7 +278,8 @@ def test_concurrent_period_opens_yield_exactly_one(rt):
 
     def attempt(index: int):
         return rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                  plan.focus_plan_id)
+                                  plan.focus_plan_id,
+                                  cycle_month=plan.cycle_month)
 
     results, errors = _race(attempt)
     assert len(results) == 1, f"expected one winner, got {len(results)}"
@@ -302,7 +305,8 @@ def test_a_crash_inside_the_period_transaction_persists_nothing(rt):
     try:
         with pytest.raises(RuntimeError):
             rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                               plan.focus_plan_id)
+                               plan.focus_plan_id,
+                               cycle_month=plan.cycle_month)
     finally:
         rt.repos.rtm_periods.__class__.create = real_create
 
@@ -312,7 +316,8 @@ def test_a_crash_inside_the_period_transaction_persists_nothing(rt):
 
     # The key was not consumed: a clean retry succeeds.
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                plan.focus_plan_id)
+                                plan.focus_plan_id,
+                                cycle_month=plan.cycle_month)
     assert period.period_id
 
 
@@ -323,7 +328,8 @@ def test_a_crash_inside_the_period_transaction_persists_nothing(rt):
 def test_finalizing_a_month_leaves_the_episode_open_in_firestore(rt):
     plan, cycle, result, goals, episode = _prepare(rt)
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                plan.focus_plan_id)
+                                plan.focus_plan_id,
+                                cycle_month=plan.cycle_month)
     rt.rtm.finalize_period(rt.provider_alpha, period.period_id)
 
     stored = rt.repos.rtm_episodes.get_by_id(episode.episode_id)
@@ -334,7 +340,8 @@ def test_finalizing_a_month_leaves_the_episode_open_in_firestore(rt):
 def test_a_correction_keeps_both_rows_in_firestore(rt):
     plan, cycle, result, goals, episode = _prepare(rt)
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                plan.focus_plan_id)
+                                plan.focus_plan_id,
+                                cycle_month=plan.cycle_month)
     first = rt.rtm.record_time(rt.provider_alpha, period.period_id,
                                local_date="2026-10-05", minutes=30,
                                activity_description="d")
@@ -354,7 +361,8 @@ def test_a_correction_keeps_both_rows_in_firestore(rt):
 def test_an_amended_report_keeps_its_predecessor_in_firestore(rt):
     plan, cycle, result, goals, episode = _prepare(rt)
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                plan.focus_plan_id)
+                                plan.focus_plan_id,
+                                cycle_month=plan.cycle_month)
     rt.rtm.finalize_period(rt.provider_alpha, period.period_id)
     rt.rtm.generate_evidence_summary(rt.provider_alpha, period.period_id)
     rt.rtm.generate_coding_assistance(rt.provider_alpha, period.period_id)
@@ -384,7 +392,8 @@ def test_a_rejected_amendment_has_zero_durable_side_effects_in_firestore(rt):
 
     plan, cycle, result, goals, episode = _prepare(rt)
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                plan.focus_plan_id)
+                                plan.focus_plan_id,
+                                cycle_month=plan.cycle_month)
     rt.rtm.finalize_period(rt.provider_alpha, period.period_id)
     rt.rtm.generate_evidence_summary(rt.provider_alpha, period.period_id)
     rt.rtm.generate_coding_assistance(rt.provider_alpha, period.period_id)
@@ -429,7 +438,8 @@ def test_a_rejected_amendment_has_zero_durable_side_effects_in_firestore(rt):
 def test_a_coding_decision_persists_without_rewriting_candidates(rt):
     plan, cycle, result, goals, episode = _prepare(rt)
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                plan.focus_plan_id)
+                                plan.focus_plan_id,
+                                cycle_month=plan.cycle_month)
     rt.rtm.record_time(rt.provider_alpha, period.period_id,
                        local_date="2026-10-05", minutes=42,
                        activity_description="d")
@@ -460,7 +470,8 @@ def test_a_coding_decision_persists_without_rewriting_candidates(rt):
 def test_audit_events_persist_and_leak_no_clinical_text(rt):
     plan, cycle, result, goals, episode = _prepare(rt)
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                plan.focus_plan_id)
+                                plan.focus_plan_id,
+                                cycle_month=plan.cycle_month)
     rt.rtm.record_time(rt.provider_alpha, period.period_id,
                        local_date="2026-10-05", minutes=20,
                        activity_description=ALL_SENTINELS[1])
@@ -479,7 +490,8 @@ def test_audit_events_persist_and_leak_no_clinical_text(rt):
 def test_rtm_collections_are_pilot_prefixed(rt):
     plan, cycle, result, goals, episode = _prepare(rt)
     period = rt.rtm.open_period(rt.provider_alpha, episode.episode_id,
-                                plan.focus_plan_id)
+                                plan.focus_plan_id,
+                                cycle_month=plan.cycle_month)
     rt.rtm.finalize_period(rt.provider_alpha, period.period_id)
     rt.rtm.generate_evidence_summary(rt.provider_alpha, period.period_id)
     rt.rtm.generate_coding_assistance(rt.provider_alpha, period.period_id)

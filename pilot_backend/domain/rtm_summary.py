@@ -52,8 +52,15 @@ from .enums import Visibility
 from .ids import new_coding_assistance_id, new_rtm_evidence_summary_id
 from .rtm import RegulatoryStatus
 
+#: RTM billing-evidence v2: adds `contributing_focus_plan_ids` and gathers
+#: CURRENT observations across every contributing plan. v1 summaries were
+#: scoped to one plan and counted superseded observations; never decoded as v2.
+RTM_EVIDENCE_SUMMARY_SCHEMA_VERSION = "october-pilot-rtm-evidence-v2"
+
 #: Bumped when the derivation changes. Stored on every summary.
-EVIDENCE_RULE_VERSION = "rtm-evidence-derivation-2026-v1"
+#: v2 (RTM billing-evidence): CURRENT observations only, gathered across every
+#: contributing clinical plan for the billing month.
+EVIDENCE_RULE_VERSION = "rtm-evidence-derivation-2026-v2"
 
 
 class SummaryError(ValueError):
@@ -121,7 +128,11 @@ class RTMEvidenceSummary:
     real_time_interactive_communication_present: bool = False
     documentation_missing_flags: Tuple[str, ...] = ()
     technology_regulatory_status: RegulatoryStatus = RegulatoryStatus.UNDER_REVIEW
-    schema_version: str = SCHEMA_VERSION
+    #: Every clinical plan whose cycles produced a CURRENT observation counted
+    #: here — sorted, unique. Provenance only; `focus_plan_ref` is the plan the
+    #: period was opened against.
+    contributing_focus_plan_ids: Tuple[str, ...] = ()
+    schema_version: str = RTM_EVIDENCE_SUMMARY_SCHEMA_VERSION
 
     VISIBILITY = Visibility.THERAPIST_ONLY
 
