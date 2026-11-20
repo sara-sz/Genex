@@ -51,6 +51,7 @@ from ..domain.alignment import (
     CapacityLedger,
     CoverageGap,
 )
+from ..domain.clinical_period import clinical_period_for
 from ..domain.goals import GoalRef
 from ..domain.identity_claims import ClaimKind, IdentityClaim, key_digest
 from ..domain.ids import observation_event_id_for
@@ -106,6 +107,8 @@ from .allocator import (
 from .errors import (
     InProgressCapacityMismatch,
     InProgressStateMismatch,
+    OutsideClinicalPeriod,
+    OverlappingCycle,
     ReleasedPlanImmutable,
     WeeklyAuthorizationError,
     WeeklyConflict,
@@ -293,6 +296,25 @@ class WeeklyService:
         else:
             starts_on, ends_on, is_partial, partial_reason = plan_cycle_bounds(
                 plan.cycle_month, sequence_in_month)
+        if first_plan_date:
+            # P0-C. The starter-anchored path is the clinical product path: a
+            # week may belong to a plan only if EVERY one of its local dates
+            # lies inside the clinician-approved period. The month-anchored
+            # legacy path above is not a clinical-governance path and is
+            # unchanged.
+            period = clinical_period_for(plan)
+            if period is None or not period.contains_span(starts_on, ends_on):
+                raise OutsideClinicalPeriod(
+                    "this week falls outside the plan's clinical period")
+
+        # P0-C. ADVISORY child-wide overlap read, for cycles written before the
+        # per-day claims existed. The claims below are AUTHORITATIVE for every
+        # cycle created from now on.
+        if any(c.starts_on <= ends_on and starts_on <= c.ends_on
+               for c in self._repos.weekly_cycles.list_for_child(
+                   plan.child_id)):
+            raise OverlappingCycle("this week overlaps another week")
+
         reason = generation_reason or (
             GenerationReason.FIRST_CYCLE_OF_MONTH if sequence_in_month == 1
             else GenerationReason.SEQUENTIAL)
@@ -311,6 +333,14 @@ class WeeklyService:
         # generation is consumed and a retry proceeds normally.
         parts = (focus_plan_id, str(sequence_in_month))
         generation = self._next_generation(ClaimKind.WEEKLY_CYCLE, parts)
+        # P0-C. One claim per covered local date, keyed by CHILD — not plan —
+        # so a writer under a different plan targets the same documents. Never
+        # released, so the generation is always 0 in practice; it is still
+        # read so a future release mechanism cannot desynchronise contenders.
+        day_parts = [(plan.child_id, local_date)
+                     for local_date in cycle.local_dates()]
+        day_generations = [self._next_generation(ClaimKind.CHILD_CARE_DAY, p)
+                           for p in day_parts]
 
         def _acquire(store) -> None:
             tx = self._repos_factory(store)
@@ -318,6 +348,12 @@ class WeeklyService:
                 ClaimKind.WEEKLY_CYCLE, parts, holder_ref=cycle.cycle_id,
                 child_id=plan.child_id, actor_id=principal.application_id,
                 generation=generation))
+            for day, day_generation in zip(day_parts, day_generations):
+                tx.identity_claims.claim(self._claim(
+                    ClaimKind.CHILD_CARE_DAY, day, holder_ref=cycle.cycle_id,
+                    child_id=plan.child_id,
+                    actor_id=principal.application_id,
+                    generation=day_generation))
             tx.weekly_cycles.create(cycle)
 
         try:
@@ -328,6 +364,14 @@ class WeeklyService:
                         child_id=plan.child_id, resource_id=None,
                         request_id=request_id, focus_plan_id=focus_plan_id,
                         cycle_sequence=sequence_in_month)
+            # Name the cross-plan case when it is what happened: a concurrent
+            # writer under ANOTHER plan now holds one of these dates.
+            if any(c.owning_focus_plan_id != focus_plan_id
+                   and c.starts_on <= ends_on and starts_on <= c.ends_on
+                   for c in self._repos.weekly_cycles.list_for_child(
+                       plan.child_id)):
+                raise OverlappingCycle(
+                    "a concurrent writer took a date of this week") from None
             raise WeeklyConflict(
                 "another writer holds the claim for this cycle") from None
 

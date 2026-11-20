@@ -74,7 +74,9 @@ from ..domain.adaptation_decision import (
     AdaptationDecisionError,
     GoalInvariantProof,
 )
+from ..domain.clinical_period import local_date_in
 from ..domain.goals import GoalKind, GoalRef, GoalStatus
+from ..domain.monthly_plan import validate_cycle_month
 from ..domain.weekly_cycle import (
     GenerationReason,
     WeeklyCycleError,
@@ -101,6 +103,12 @@ from .adaptive_week import (
     AdaptiveSelectionError,
     select_week_templates,
     verify_reviewed_and_bounded,
+)
+from .governing_plan import (
+    Governance,
+    GovernanceOutcome,
+    GoverningPlanAmbiguous,
+    resolve_governance,
 )
 
 def _canonical(document) -> str:
@@ -133,6 +141,22 @@ class CurrentCycleUnresolved(WeekOneReleaseError):
     one. Refused rather than defaulted to cycle 1: releasing a week that has
     already ended would put a "this week" in front of a family that is in the
     past.
+    """
+
+
+class ClinicalRenewalRequired(WeekOneReleaseError):
+    """P0-C. No clinician-approved plan's clinical period holds this week.
+
+    The child has had a plan, but every plan's period has ended (or cannot
+    hold the whole week). Nothing is created, auto-renewed or copied forward:
+    continuing requires a clinician to review and activate a plan.
+    """
+
+
+class GoverningPlanConflict(WeekOneReleaseError):
+    """P0-C. A caller-supplied month disagrees with the governing plan, or the
+    governing week could not be resolved unambiguously. Fail closed: an
+    explicit month may agree with clinical governance but never override it.
     """
 
 
@@ -310,38 +334,58 @@ class WeekOneReleaseService:
                 "this child has no active, anchored, activity-mappable "
                 "clinician-approved goal")
 
-        plan = self._resolve_plan(principal, child_id, goals,
-                                  timezone_of_record=timezone_of_record,
-                                  cycle_month=cycle_month,
-                                  request_id=request_id)
+        # P0-C. WHICH plan governs today's week is decided FIRST, from the
+        # clinician-approved clinical periods and the existing cycles — never
+        # from the calendar month — and before anything is created.
+        governance = self.governance(principal, child_id,
+                                     local_date=local_date)
+        if governance.outcome is GovernanceOutcome.RENEWAL_REQUIRED:
+            raise ClinicalRenewalRequired(
+                "no clinician-approved plan covers this week; clinician "
+                "review or renewal is required")
 
-        # P0-B1. Which week is "current" is decided FIRST, before anything is
-        # created, so Week 2 onward can never fall through to the
-        # non-adaptive creation path below.
-        today = local_date or self._today()
-        cycles = list(self._weekly.list_cycles(principal, plan.focus_plan_id))
-        first_plan_date = self.first_plan_date_for(cycles)
-        if first_plan_date is not None:
-            try:
-                sequence = starter_sequence_for(first_plan_date, today)
-            except WeeklyCycleError as exc:
-                raise CurrentCycleUnresolved(
-                    "today does not fall inside any cycle of this plan"
-                ) from exc
-            if sequence > WEEK_ONE:
-                existing = next((c for c in cycles
-                                 if c.sequence_in_month == sequence), None)
-                if existing is not None and existing.is_released:
-                    return self._existing_outcome(principal, plan, existing,
+        if governance.outcome is GovernanceOutcome.BOOTSTRAP:
+            # The child's FIRST plan, exactly as before: created, allocated and
+            # activated by this release, with Week 1 starting today.
+            today = local_date or local_date_in(timezone_of_record,
+                                                self._now())
+            plan = self._resolve_plan(principal, child_id, goals,
+                                      timezone_of_record=timezone_of_record,
+                                      cycle_month=cycle_month or today[:7],
+                                      request_id=request_id)
+            cycle = self._resolve_cycle(principal, plan,
+                                        request_id=request_id,
+                                        local_date=today)
+        else:
+            plan = governance.plan
+            if (cycle_month is not None
+                    and validate_cycle_month(cycle_month) != plan.cycle_month):
+                # An explicit month can only AGREE with clinical governance.
+                # It can never select another plan, and so can never force a
+                # starter week inside a week another plan already governs.
+                raise GoverningPlanConflict(
+                    "the requested month is not the governing plan's")
+            if plan.is_active:
+                self._ensure_allocated(principal, plan, goals,
+                                       request_id=request_id)
+            cycle = governance.cycle
+            if governance.sequence > WEEK_ONE:
+                # P0-B1: Week 2 onward never falls through to the non-adaptive
+                # creation path below.
+                if cycle is not None and cycle.is_released:
+                    return self._existing_outcome(principal, plan, cycle,
                                                   goals)
                 return self._release_adaptive(
-                    principal, plan, cycles, goals,
-                    first_plan_date=first_plan_date, sequence=sequence,
-                    existing=existing, capacity=capacity,
+                    principal, plan, list(governance.plan_cycles), goals,
+                    first_plan_date=governance.first_plan_date,
+                    sequence=governance.sequence, existing=cycle,
+                    capacity=capacity, request_id=request_id)
+            if cycle is None:
+                cycle = self._weekly.create_cycle(
+                    principal, plan.focus_plan_id,
+                    sequence_in_month=WEEK_ONE,
+                    first_plan_date=governance.local_date,
                     request_id=request_id)
-
-        cycle = self._resolve_cycle(principal, plan, request_id=request_id,
-                                    local_date=local_date)
 
         if cycle.is_released:
             # REPLAY. The existing released week is returned unchanged, and the
@@ -388,7 +432,11 @@ class WeekOneReleaseService:
         # child-MONTH: a plan active for September is not the plan this week
         # belongs to, and asking without a month would make the answer depend on
         # whatever the service happened to pick.
-        month = cycle_month or self._current_cycle_month()
+        # P0-C: the month LABEL of a new plan is the local month in its own
+        # zone of record, not the server's UTC month. It indexes the plan; it
+        # does not govern anything.
+        month = cycle_month or local_date_in(timezone_of_record,
+                                             self._now())[:7]
         existing = self._plans.active_plan(principal, child_id, month)
         if existing is not None:
             self._ensure_allocated(principal, existing, goals,
@@ -465,7 +513,8 @@ class WeekOneReleaseService:
         to Sunday. An ALREADY-CREATED starter cycle is returned unchanged, so a
         replay can never shift it.
         """
-        today = local_date or self._today()
+        today = local_date or local_date_in(plan.timezone_of_record,
+                                           self._now())
         cycles = list(self._weekly.list_cycles(principal, plan.focus_plan_id))
         anchor = self.first_plan_date_for(cycles)
 
@@ -875,56 +924,62 @@ class WeekOneReleaseService:
 
     # -- the Parent read ---------------------------------------------------
 
+    def governance(self, principal, child_id: str, *,
+                   local_date: Optional[str] = None) -> Governance:
+        """P0-C. Which clinician-approved plan governs today's week.
+
+        The ONE resolution shared by the caregiver `this_week` read, the
+        provider `current-cycle` read and the provider release, so the three
+        can never disagree about which week is current. Authorized reads only:
+        `list_plans` and `list_cycles` both gate on child access.
+        """
+        plans = list(self._plans.list_plans(principal, child_id))
+        cycles_by_plan = {
+            plan.focus_plan_id: tuple(self._weekly.list_cycles(
+                principal, plan.focus_plan_id))
+            for plan in plans}
+        try:
+            return resolve_governance(plans=plans,
+                                      cycles_by_plan=cycles_by_plan,
+                                      now=self._now(), local_date=local_date)
+        except GoverningPlanAmbiguous as exc:
+            raise GoverningPlanConflict(str(exc)) from exc
+
+    # -- the Parent read ---------------------------------------------------
+
     def this_week(self, principal, child_id: str, *,
                   local_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """The released Week 1 for a child, or None. Authorized read.
+        """The released week covering the family's local date, or None.
 
         Returns None — not a draft — when nothing has been released. A draft
         cycle exists as soon as a provider starts the operation, and showing it
         would put a partially allocated week in front of a family.
 
+        P0-C: the week is the cycle covering today in its OWNING plan's zone of
+        record, whatever calendar month today is in — so a week that crosses a
+        month boundary is shown on every one of its days.
+
         Derived from the SNAPSHOT, so a later goal revision cannot change what a
         released week says.
         """
-        plan = self._plans.active_plan(principal, child_id,
-                                       self._current_cycle_month())
-        if plan is None:
+        governance = self.governance(principal, child_id,
+                                     local_date=local_date)
+        cycle = governance.cycle
+        if (governance.outcome is not GovernanceOutcome.COVERED
+                or not cycle.is_released):
             return None
-        # The cycle the family is actually in, by the same STARTER-ANCHORED rule
-        # the release used — so a released week that has ended is not still
-        # shown as "this week", and the anchor cannot disagree between the two.
-        cycles = list(self._weekly.list_cycles(principal, plan.focus_plan_id))
-        anchor = self.first_plan_date_for(cycles)
-        if anchor is None:
+        snapshots = self._repos.weekly_plan_snapshots.list_for_cycle(
+            cycle.cycle_id)
+        if not snapshots:  # pragma: no cover - release requires one
             return None
-        try:
-            sequence = starter_sequence_for(anchor,
-                                            local_date or self._today())
-        except WeeklyCycleError:
-            return None
-        for cycle in cycles:
-            if cycle.sequence_in_month != sequence or not cycle.is_released:
-                continue
-            snapshots = self._repos.weekly_plan_snapshots.list_for_cycle(
-                cycle.cycle_id)
-            if not snapshots:  # pragma: no cover - release requires one
-                return None
-            return parent_week_view(snapshots[0].document(),
-                                    released_at=cycle.released_to_parent_at)
-        return None
-
-    def _today(self) -> str:
-        """Today's local date, ISO. Injectable so a test can pin the calendar."""
-        return self._now().date().isoformat()
-
-    def _current_cycle_month(self) -> str:
-        """The calendar month to plan, when the caller does not name one."""
-        stamp = self._now()
-        return f"{stamp.year:04d}-{stamp.month:02d}"
+        return parent_week_view(snapshots[0].document(),
+                                released_at=cycle.released_to_parent_at)
 
 
 __all__ = [
     "AdaptiveWeekCapacityMismatch",
+    "ClinicalRenewalRequired",
+    "GoverningPlanConflict",
     "AdaptiveWeekStateMismatch",
     "AdaptiveWeekUnavailable",
     "CapacityRequired",

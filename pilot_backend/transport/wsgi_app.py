@@ -1644,17 +1644,32 @@ class PilotWSGIApplication:
             return {"plan": _plan_payload(plan)}
 
         if route == CHILD_CURRENT_CYCLE_ROUTE:
-            plan = plans.active_plan(principal, resource,
-                                     _requested_month(environ))
+            if _query_value(environ, "cycle_month"):
+                # An EXPLICIT month is a month-addressed inspection, unchanged:
+                # that month's active plan and its latest cycle. Read-only, so
+                # it cannot override governance.
+                plan = plans.active_plan(principal, resource,
+                                         _requested_month(environ))
+                cycles = (weekly.list_cycles(principal, plan.focus_plan_id)
+                          if plan is not None else [])
+                current = cycles[-1] if cycles else None
+            else:
+                # P0-C. "Current" is the SAME governing week the family's
+                # `this-week` and the release resolve — the cycle covering
+                # today in its owning plan's zone, whatever the calendar month.
+                governance = self._week_one_service(
+                    goals, plans, weekly).governance(principal, resource)
+                plan, current = governance.plan, governance.cycle
+                if current is not None and not current.covers(
+                        governance.local_date):
+                    current = None  # a non-covering draft is not "current"
             if plan is None:
                 return {"plan": None, "cycle": None, "alignments": [],
                         "coverage_gaps": [], "plan_snapshot": None}
-            cycles = weekly.list_cycles(principal, plan.focus_plan_id)
-            if not cycles:
+            if current is None:
                 return {"plan": _plan_payload(plan), "cycle": None,
                         "alignments": [], "coverage_gaps": [],
                         "plan_snapshot": None}
-            current = cycles[-1]
             # `list_cycles` authorized the child, so the snapshot row read
             # below belongs to a cycle the caller is already proven to hold.
             # Read through the repository because the frozen weekly service

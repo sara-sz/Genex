@@ -133,7 +133,11 @@ class Chain:
     """The whole product path for one fictional child, assembled once."""
 
     def __init__(self, *, deficits=(BOOK,), unserved_for_book=False,
-                 bank=None):
+                 bank=None, now=None):
+        # P0-C: an optional fixed clock. A plan's clinical period is anchored
+        # on its ACTIVATION instant, so a test that pins Week 1 to a local date
+        # must activate on that date too — as the release route always does.
+        clock = (lambda: now) if now is not None else (lambda: NOW)
         states = dict(mixed(**{m: "not_demonstrated" for m in deficits}))
         states[PRONOUNS] = "unknown"
         self.world = World(
@@ -144,14 +148,14 @@ class Chain:
         self.principal = self.world.principal()
         self.plans = MonthlyPlanService(repos=self.repos,
                                         recorder=self.world.recorder,
-                                        now=lambda: NOW)
+                                        now=clock)
         self.weekly = WeeklyService(repos=self.repos,
                                    recorder=self.world.recorder,
-                                   now=lambda: NOW)
+                                   now=clock)
         self.bank = bank if bank is not None else StaticActivityBank()
         self.service = WeekOneReleaseService(
             repos=self.repos, goals=self.goals, plans=self.plans,
-            weekly=self.weekly, activity_bank=self.bank, now=lambda: NOW)
+            weekly=self.weekly, activity_bank=self.bank, now=clock)
         self.suggestions = self.world.generate()
 
     def withdraw_release_content(self):
@@ -1009,7 +1013,9 @@ def test_more_activities_than_days_refuses_rather_than_doubling_up():
 
 def _release_on(local_date, capacity=3):
     """Release a two-goal week on one local date. Deterministic, no clock."""
-    chain = Chain(deficits=(BOOK, TWO_WORD))
+    y, m, d = (int(p) for p in local_date.split("-"))
+    chain = Chain(deficits=(BOOK, TWO_WORD),
+                  now=datetime(y, m, d, 12, 0, tzinfo=timezone.utc))
     chain.approve(0)
     chain.approve(1)
     outcome = chain.release(capacity=capacity, local_date=local_date)

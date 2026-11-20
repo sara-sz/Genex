@@ -116,6 +116,10 @@ Week 3 is released, and no release may be called for this child on or after
 2026-12-01 until it is.** Week 2 (2026-11-23 – 2026-11-29) is entirely inside
 November and is not affected.
 
+**Addressed by P0-C** (`p0c_clinical_plan_governance.md`): governance follows
+the clinician's activation and a 28-day clinical period, not the calendar
+month. The prohibition above stands until P0-C is deployed.
+
 ## Deferred from P0-B1
 
 Card-level easier/harder ordering; autonomous dosage changes; free-text

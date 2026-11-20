@@ -61,3 +61,15 @@ class InProgressCapacityMismatch(InProgressStateMismatch):
     """A retry named a different family-declared capacity after the first
     allocation was persisted. The recorded capacity is the in-progress week's
     truth; a later request may not silently rewrite it."""
+
+
+class OverlappingCycle(WeeklyConflict):
+    """P0-C. The new cycle would share a local date with another cycle of the
+    same child — under ANY plan. Two weeks covering one day would give a
+    family two plans for that day and make "this week" ambiguous."""
+
+
+class OutsideClinicalPeriod(WeeklyValidationError):
+    """P0-C. A starter-anchored cycle does not fit inside its plan's clinical
+    period (clinician activation + 28 local days). Renewal is a clinician
+    decision; this layer refuses rather than extending an approval."""

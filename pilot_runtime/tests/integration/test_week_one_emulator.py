@@ -444,3 +444,73 @@ def test_eight_concurrent_week_two_releases_produce_one_explained_week(world):
     winners = [r for r in results if r is not None] + [final]
     assert len({r.cycle_id for r in winners}) == 1
     _assert_one_explained_week_two(world)
+
+
+# ---------------------------------------------------------------------------
+# P0-C. No two cycles of one child may share a local date — ACROSS plans.
+# ---------------------------------------------------------------------------
+
+
+def _explicit_plan(world, month):
+    """A plan created + activated by the managing clinician, as the
+    monthly-plan routes do. Its clinical period starts at activation (NOW)."""
+    from pilot_backend.domain.goals import GoalKind, GoalRef
+    from pilot_backend.planning.service import MonthlyPlanService
+
+    plans = MonthlyPlanService(repos=world.repos, recorder=None,
+                               now=lambda: NOW)
+    plan = plans.create_plan(world.principal, world.child_id, month, TZ)
+    plans.allocate_goal(world.principal, plan.focus_plan_id,
+                        GoalRef(GoalKind.CLINICAL,
+                                world.goal.clinical_goal_id),
+                        priority_rank=1)
+    return plans.activate_plan(world.principal, plan.focus_plan_id)
+
+
+def test_concurrent_cross_plan_overlapping_weeks_commit_exactly_one(world):
+    """Eight writers under TWO different plans race for overlapping weeks.
+
+    The (plan, sequence) claim cannot separate writers of different plans, and
+    the advisory overlap read cannot either once every writer has read before
+    any commits. Only the per-(child, local date) claims, committed in the same
+    transaction as the cycle, can. Exactly one cycle may survive.
+    """
+    from pilot_backend.weekly.errors import WeeklyConflict
+
+    _release(world)                                  # Week 1: Oct 7 .. Oct 11
+    first = _explicit_plan(world, "2026-11")
+    second = _explicit_plan(world, "2026-12")
+    # Mon Oct 19 .. Sun Oct 25 and Wed Oct 21 .. Sun Oct 25: overlapping, and
+    # both inside every plan's clinical period (activated Oct 7 -> Nov 3).
+    attempts = [(first.focus_plan_id, "2026-10-19"),
+                (second.focus_plan_id, "2026-10-21")] * (WRITERS // 2)
+    barrier = threading.Barrier(WRITERS)
+    refused = []
+
+    def create(attempt):
+        plan_id, first_plan_date = attempt
+        barrier.wait(timeout=30)
+        try:
+            return world.weekly.create_cycle(
+                world.principal, plan_id, sequence_in_month=1,
+                first_plan_date=first_plan_date)
+        except WeeklyConflict as exc:   # recorded, never swallowed
+            refused.append(type(exc).__name__)
+            return None
+
+    with ThreadPoolExecutor(max_workers=WRITERS) as pool:
+        results = list(pool.map(create, attempts))
+    assert len(results) == WRITERS, results
+    winners = [r for r in results if r is not None]
+    assert len(winners) == 1, (winners, refused)
+    assert len(refused) == WRITERS - 1
+
+    stored = [c for c in _rows(world, "pilot_weekly_cycles",
+                               child_id=world.child_id)
+              if c["owning_focus_plan_id"] in (first.focus_plan_id,
+                                               second.focus_plan_id)]
+    assert [c["cycle_id"] for c in stored] == [winners[0].cycle_id]
+    day_claims = [c for c in _rows(world, "pilot_identity_claims",
+                                   kind="child_care_day")
+                  if c["holder_ref"] == winners[0].cycle_id]
+    assert len(day_claims) == len(winners[0].local_dates())

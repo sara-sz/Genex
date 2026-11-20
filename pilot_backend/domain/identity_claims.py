@@ -119,6 +119,15 @@ class ClaimKind(str, Enum):
     #: together; the claim and the snapshot commit in one transaction so
     #: exactly one is frozen.
     WEEKLY_SNAPSHOT = "weekly_snapshot"
+    #: P0-C. One weekly cycle per (child_id, local_date), ACROSS plans.
+    #:
+    #: The `WEEKLY_CYCLE` claim is keyed by (plan, sequence), so it cannot see
+    #: a cycle of ANOTHER plan covering the same days — which is exactly how a
+    #: December starter week came to overlap November's Week 3. Every cycle
+    #: claims each of its local dates in the transaction that creates it, so
+    #: two writers under different plans collide on the first shared date and
+    #: exactly one commits. Never released: a created cycle is never deleted.
+    CHILD_CARE_DAY = "child_care_day"
     #: 0.5B. One LIVE provider-child connection per (provider_id, child_id).
     #:
     #: "Live" means PENDING, ACTIVE or PAUSED — the three states from which a
