@@ -4,14 +4,17 @@ The `pilot_backend` suite runs the same service code over `FakeDocumentStore`,
 which is a plain dict and is NOT thread-safe. Two claims therefore cannot be
 made there and are made here instead:
 
-**The child-month claim actually wins races.** Eight threads activating the
-same child-month against a real server, exactly one survivor.
+**The clinical-governance claim actually wins races.** Eight threads activating
+draft plans for one child against a real server, exactly one survivor — and,
+after the incumbent is closed, eight successors racing for the HAND-OFF (release
+of the holder's generation + claim of the next), exactly one survivor. P0-C
+renewal replaced the old (child, calendar-month) claim with this child-level
+one, so rolling plans may be activated in sequence within one month.
 
-**Activation is crash-consistent where it can be.** The port refuses `set`
-inside a transaction, so activation is a transaction (claim + snapshots)
-followed by one state write. Fault injection proves the transaction is
-all-or-nothing and that a crash at the boundary is forward-recoverable by the
-rightful holder rather than stranding the key.
+**Activation is one transaction.** Claim, release marker, snapshots, the
+incumbent's retirement and the plan's own ACTIVE state commit together (0.5B
+transaction-safe `overwrite`). Fault injection proves a crash at the last write
+leaves nothing behind and a retry starts clean.
 """
 
 from __future__ import annotations
@@ -237,6 +240,15 @@ def test_the_suggestion_engine_is_deterministic_against_the_real_store(gp):
 # contention — only provable here
 # ===========================================================================
 
+def _governance(gp, record_kind="claim"):
+    """CLINICAL_GOVERNANCE rows for this child. Kind-specific, because other
+    claim kinds (the managing clinician) are keyed by the child id too."""
+    return [d for _i, d in gp.repos.store.list_all("pilot_identity_claims")
+            if d.get("kind") == ClaimKind.CLINICAL_GOVERNANCE.value
+            and d.get("record_kind") == record_kind
+            and d.get("key_digest") == key_digest(gp.child)]
+
+
 def test_concurrent_activations_of_one_child_month_yield_exactly_one(gp):
     """Eight threads, eight draft plans, one October. One survivor."""
     gp.identity.assign_managing_clinician(
@@ -265,8 +277,7 @@ def test_concurrent_activations_of_one_child_month_yield_exactly_one(gp):
     active = [p for p in gp.repos.focus_plans.list_for_cycle(gp.child, CYCLE)
               if p.is_active]
     assert len(active) == 1
-    assert gp.repos.identity_claims.count_claims_for_key(
-        key_digest(gp.child, CYCLE)) == 1
+    assert len(_governance(gp)) == 1
 
 
 def test_a_losing_activation_writes_no_snapshot(gp):
@@ -308,8 +319,7 @@ def test_a_crash_inside_the_activation_transaction_persists_nothing(gp):
         gp.repos.goal_snapshots.__class__.create = real_create
 
     assert gp.repos.goal_snapshots.list_for_plan(plan.focus_plan_id) == []
-    assert gp.repos.identity_claims.count_claims_for_key(
-        key_digest(gp.child, CYCLE)) == 0
+    assert _governance(gp) == []
     assert gp.repos.focus_plans.get_by_id(plan.focus_plan_id).state \
         is MonthlyPlanState.DRAFT
 
@@ -318,27 +328,70 @@ def test_a_crash_inside_the_activation_transaction_persists_nothing(gp):
         gp.provider_alpha, plan.focus_plan_id).state is MonthlyPlanState.ACTIVE
 
 
-def test_a_crash_after_the_transaction_is_forward_recoverable(gp):
-    """Claim and snapshots committed; the state write did not.
-
-    The rightful holder retries, recognises its own claim, skips the
-    transaction — so no duplicate snapshots — and completes. The key is never
-    stranded and no cleanup job exists to hide the problem.
-    """
+def test_a_crash_at_the_state_write_persists_nothing(gp):
+    """P0-C renewal. Was: `test_a_crash_after_the_transaction_is_forward_
+    recoverable`. The ACTIVE state write is now INSIDE the transaction, so a
+    crash there rolls back the claim and the snapshots on a real server."""
+    from pilot_backend.persistence.firestore_repos import (
+        FirestoreMonthlyFocusPlanRepository,
+    )
     plan, _ = _prepare(gp)
-    real_update = gp.repos.focus_plans.update
-    gp.repos.focus_plans.update = lambda *_a, **_k: (_ for _ in ()).throw(
-        RuntimeError("process died before the state write"))
+    real_overwrite = FirestoreMonthlyFocusPlanRepository.overwrite
+
+    def died(self, record):
+        raise RuntimeError("process died at the state write")
+
+    FirestoreMonthlyFocusPlanRepository.overwrite = died
     try:
         with pytest.raises(RuntimeError):
             gp.plans.activate_plan(gp.provider_alpha, plan.focus_plan_id)
     finally:
-        gp.repos.focus_plans.update = real_update
+        FirestoreMonthlyFocusPlanRepository.overwrite = real_overwrite
 
-    assert len(gp.repos.goal_snapshots.list_for_plan(plan.focus_plan_id)) == 2
+    assert gp.repos.goal_snapshots.list_for_plan(plan.focus_plan_id) == []
+    assert _governance(gp) == []
+    assert gp.repos.focus_plans.get_by_id(plan.focus_plan_id).state \
+        is MonthlyPlanState.DRAFT
     recovered = gp.plans.activate_plan(gp.provider_alpha, plan.focus_plan_id)
     assert recovered.state is MonthlyPlanState.ACTIVE
     assert len(gp.repos.goal_snapshots.list_for_plan(plan.focus_plan_id)) == 2
+
+
+def test_concurrent_successor_handoffs_yield_exactly_one_governing_plan(gp):
+    """Incumbent closed by its clinician; eight drafts (same month label) race
+    for the hand-off. The guard sees no other active plan, so ONLY the
+    release-marker / next-claim collision can stop seven of them."""
+    incumbent, _ = _prepare(gp)
+    gp.plans.activate_plan(gp.provider_alpha, incumbent.focus_plan_id)
+    gp.plans.close_plan(gp.provider_alpha, incumbent.focus_plan_id)
+    goal = _anchored_goal(gp, "Successor focus.", "race setup")
+    drafts = []
+    for _ in range(8):
+        plan = gp.plans.create_plan(gp.provider_alpha, gp.child, CYCLE, ZONE)
+        gp.plans.allocate_goal(gp.provider_alpha, plan.focus_plan_id, goal.ref,
+                               priority_rank=1)
+        drafts.append(plan)
+
+    def attempt(index: int):
+        return gp.plans.activate_plan(gp.provider_alpha,
+                                      drafts[index].focus_plan_id)
+
+    results, errors = _race(attempt)
+    assert len(results) == 1, f"expected one winner, got {len(results)}"
+    assert len(errors) == 7
+    assert all(isinstance(e, GoalConflict) for e in errors), \
+        {type(e).__name__ for e in errors}
+    winner = results[0].focus_plan_id
+    active = [p for p in gp.repos.focus_plans.list_for_child(gp.child)
+              if p.is_active]
+    assert [p.focus_plan_id for p in active] == [winner]
+    assert sorted(c["holder_ref"] for c in _governance(gp)) == sorted(
+        [incumbent.focus_plan_id, winner])
+    assert len(_governance(gp, "release")) == 1
+    for draft in drafts:
+        if draft.focus_plan_id != winner:
+            assert gp.repos.goal_snapshots.list_for_plan(
+                draft.focus_plan_id) == []
 
 
 # ===========================================================================

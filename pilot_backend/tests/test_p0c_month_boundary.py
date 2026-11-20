@@ -59,6 +59,7 @@ from pilot_backend.weekly.errors import (
     WeeklyValidationError,
 )
 from pilot_backend.weekly.service import WeeklyService
+from pilot_backend.goals.errors import GoalConflict, SuccessorActivationPremature
 from pilot_runtime.integration.static_activity_bank import StaticActivityBank
 
 from .test_integration_identity import call
@@ -138,16 +139,43 @@ class Boundary:
     def plan_rows(self):
         return self.repos.focus_plans.list_for_child(CHILD)
 
-    def early_plan(self, month="2026-12", when="2026-11-24"):
-        """A later plan created + activated EXPLICITLY (the monthly-plan
-        routes), i.e. by a clinician, ahead of time."""
+    def draft_plan(self, month="2026-12", when="2026-11-24"):
+        """A successor PREPARED as a draft (create + allocate), as the
+        monthly-plan routes do. A draft has no clinical period."""
         self.at(when)
         plan = self.plans.create_plan(self.provider, CHILD, month, self.tz)
         self.plans.allocate_goal(
             self.provider, plan.focus_plan_id,
             GoalRef(GoalKind.CLINICAL, self.goal.clinical_goal_id),
             priority_rank=1)
+        return plan
+
+    def activate(self, plan, when):
+        self.at(when)
         return self.plans.activate_plan(self.provider, plan.focus_plan_id)
+
+    def renewal_plan(self, month="2026-12", when="2026-12-14"):
+        """Draft + explicit clinician activation on the same day."""
+        return self.activate(self.draft_plan(month, when), when)
+
+    def forced_active_plan(self, month="2026-12", when="2026-11-30"):
+        """An ACTIVE plan written straight to the repository, bypassing the
+        activation guard — the state a pre-renewal-guard deployment or a forged
+        row could leave. Used ONLY to prove the weekly-layer overlap defences
+        hold even when two plans are active."""
+        from pilot_backend.domain.monthly_plan import MonthlyFocusPlan
+        self.at(when)
+        plan = MonthlyFocusPlan.create(CHILD, month, self.tz,
+                                       policy_version="planning-policy-2026.10")
+        active = plan.activate(claim_id="forced-by-test", now=self.clock())
+        self.repos.focus_plans.create(active)
+        return active
+
+    def governance_claims(self):
+        from pilot_backend.domain.identity_claims import key_digest
+        return [d for _i, d in self.repos.store.list_all("pilot_identity_claims")
+                if d.get("kind") == ClaimKind.CLINICAL_GOVERNANCE.value
+                and d.get("key_digest") == key_digest(CHILD)]
 
     def observe(self, outcome, when, title=None, *,
                 attempt=AttemptOutcome.DID_IT):
@@ -327,7 +355,7 @@ def test_9_explicit_renewal_then_governs_a_fresh_week(b3):
     b3.release("2026-12-07")
     with pytest.raises(ClinicalRenewalRequired):
         b3.release("2026-12-14")
-    renewed = b3.early_plan(month="2026-12", when="2026-12-14")
+    renewed = b3.renewal_plan(month="2026-12", when="2026-12-14")
     first = b3.release("2026-12-14")
     cycle = b3.cycle(first)
     assert cycle.owning_focus_plan_id == renewed.focus_plan_id
@@ -340,28 +368,63 @@ def test_9_explicit_renewal_then_governs_a_fresh_week(b3):
 # ===========================================================================
 
 
-def test_11_an_early_future_plan_cannot_steal_a_valid_plan(b):
+def test_11_an_early_successor_is_refused_and_cannot_steal(b):
+    """Prepared as a draft Nov 24; activation refused at every point where the
+    November plan still holds today's or the upcoming week — with zero writes —
+    so the incumbent is never displaced and Weeks 3-4 stay under it."""
     b.release("2026-11-23")
-    december = b.early_plan()                      # activated Nov 24
-    three = b.release("2026-11-30")
-    assert b.cycle(three).owning_focus_plan_id == b.week_one.focus_plan_id
-    assert b.this_week("2026-12-01")["week"]["cycle_id"] == three.cycle_id
-    assert b.release("2026-12-02").cycle_id == three.cycle_id
-    four = b.release("2026-12-07")
-    assert b.cycle(four).owning_focus_plan_id == b.week_one.focus_plan_id
-    assert not b.repos.weekly_cycles.list_for_plan(december.focus_plan_id)
+    december = b.draft_plan()
+    assert b.this_week("2026-11-24")["week"]["starts_on"] == "2026-11-23", \
+        "a draft changes nothing about governance"
+    for day in ("2026-11-24", "2026-11-30", "2026-12-07", "2026-12-13"):
+        # On Nov 30 and Dec 7 the attempt comes BEFORE that week is released:
+        # no cycle covers today, but the incumbent can still HOLD the week.
+        before = (b.repos.store.list_all("pilot_monthly_focus_plans"),
+                  b.repos.store.list_all("pilot_monthly_goal_snapshots"),
+                  b.repos.store.list_all("pilot_identity_claims"))
+        with pytest.raises(SuccessorActivationPremature):
+            b.activate(december, day)
+        after = (b.repos.store.list_all("pilot_monthly_focus_plans"),
+                 b.repos.store.list_all("pilot_monthly_goal_snapshots"),
+                 b.repos.store.list_all("pilot_identity_claims"))
+        assert after == before, f"{day}: a refused activation wrote something"
+        if day in ("2026-11-30", "2026-12-07"):
+            b.release(day)
+    incumbent = b.repos.focus_plans.get_by_id(b.week_one.focus_plan_id)
+    assert incumbent.is_active
+    assert {c.owning_focus_plan_id for c in b.cycles()} == {
+        b.week_one.focus_plan_id}
+    assert len(b.cycles()) == 4
 
 
-def test_11_the_explicit_later_plan_governs_only_what_the_first_cannot(b):
+def test_11_renewal_at_the_renewal_point_gets_a_fresh_period(b):
+    """Dec 14: Week 5 cannot fit November's period, so the prepared successor
+    may be activated. Its OWN 28 days begin; the expired incumbent is retired
+    (not silently — only because it can no longer govern) and stays readable."""
     b.release("2026-11-23")
-    december = b.early_plan()                      # period 11-24 .. 12-21
+    december = b.draft_plan()
     for day in ("2026-11-30", "2026-12-07"):
         b.release(day)
-    five = b.release("2026-12-14")                 # Nov plan cannot hold it
-    assert b.cycle(five).owning_focus_plan_id == december.focus_plan_id
-    assert (b.cycle(five).starts_on, b.cycle(five).ends_on) == (
-        "2026-12-14", "2026-12-20")
-    assert len({(c.starts_on) for c in b.cycles()}) == len(b.cycles())
+    successor = b.activate(december, "2026-12-14")
+    assert clinical_period_for(successor) == ClinicalPeriod("2026-12-14",
+                                                            "2027-01-10")
+    old = b.repos.focus_plans.get_by_id(b.week_one.focus_plan_id)
+    assert old.state.value == "closed" and old.activated_at is not None
+    assert len(b.repos.weekly_cycles.list_for_plan(old.focus_plan_id)) == 4
+    first = b.release("2026-12-14")
+    cycle = b.cycle(first)
+    assert cycle.owning_focus_plan_id == successor.focus_plan_id
+    assert (cycle.sequence_in_month, cycle.starts_on, cycle.ends_on) == (
+        1, "2026-12-14", "2026-12-20")
+    assert b.this_week("2026-12-13")["week"]["starts_on"] == "2026-12-07", \
+        "the retired plan's last week is still the family's week on Dec 13"
+    assert b.this_week("2026-12-15")["week"]["cycle_id"] == first.cycle_id
+    held = [c for c in b.governance_claims() if c["record_kind"] == "claim"]
+    released = [c for c in b.governance_claims()
+                if c["record_kind"] == "release"]
+    assert [c["holder_ref"] for c in sorted(held, key=lambda c: c["generation"])] \
+        == [b.week_one.focus_plan_id, successor.focus_plan_id]
+    assert len(released) == 1 and released[0]["generation"] == 0
 
 
 def test_12_an_explicit_month_cannot_force_another_plan_or_week(b3):
@@ -387,7 +450,7 @@ def test_12_an_explicit_month_cannot_bypass_renewal(b3):
 
 
 def test_13_a_cross_plan_starter_inside_week_three_is_refused(b3):
-    december = b3.early_plan(when="2026-11-30")
+    december = b3.forced_active_plan(when="2026-11-30")
     b3.at("2026-12-01")
     with pytest.raises(OverlappingCycle):
         b3.weekly.create_cycle(b3.provider, december.focus_plan_id,
@@ -414,8 +477,8 @@ def _two_plan_race(b, *, break_advisory):
     """Two writers, two plans, overlapping weeks, FORCED to interleave: both
     finish the advisory read before either commits. Only the per-day claims
     can then stop the second."""
-    december = b.early_plan(when="2026-11-30")
-    january = b.early_plan(month="2027-01", when="2026-11-30")
+    december = b.forced_active_plan(when="2026-11-30")
+    january = b.forced_active_plan(month="2027-01", when="2026-11-30")
     b.at("2026-12-01")
     barrier = threading.Barrier(2, timeout=10)
     real = b.repos.weekly_cycles.list_for_child
@@ -708,7 +771,7 @@ def test_13_a_pre_p0c_cycle_without_day_claims_still_blocks_overlap(b):
                                 sequence_in_month=7, starts_on="2026-11-23",
                                 ends_on="2026-11-29")
     b.repos.weekly_cycles.create(legacy)          # as a pre-P0-C row: no claims
-    december = b.early_plan(when="2026-11-23")
+    december = b.forced_active_plan(when="2026-11-23")
     b.at("2026-11-23")
     with pytest.raises(OverlappingCycle):
         b.weekly.create_cycle(b.provider, december.focus_plan_id,
@@ -732,19 +795,15 @@ def test_the_live_staging_shape_gets_the_expected_period():
         b.release("2026-12-14")
 
 
-def test_the_period_starts_at_activation_not_at_draft_creation():
-    """A plan drafted on Nov 20 and activated by the clinician on Nov 24 is
-    valid from Nov 24: approval, not drafting, starts the clinical clock."""
-    b = Boundary()
-    b.at("2026-11-20")
-    draft = b.plans.create_plan(b.provider, CHILD, "2026-12", TZ)
-    b.plans.allocate_goal(b.provider, draft.focus_plan_id,
-                          GoalRef(GoalKind.CLINICAL, b.goal.clinical_goal_id),
-                          priority_rank=1)
-    b.at("2026-11-24")
-    active = b.plans.activate_plan(b.provider, draft.focus_plan_id)
-    assert clinical_period_for(active) == ClinicalPeriod("2026-11-24",
-                                                         "2026-12-21")
+def test_the_period_starts_at_activation_not_at_draft_creation(b3):
+    """A successor drafted Dec 1 and activated at the renewal point Dec 14 is
+    valid from Dec 14: approval, not drafting, starts the clinical clock."""
+    b3.release("2026-12-07")
+    draft = b3.draft_plan(when="2026-12-01")
+    assert clinical_period_for(draft) is None
+    active = b3.activate(draft, "2026-12-14")
+    assert clinical_period_for(active) == ClinicalPeriod("2026-12-14",
+                                                         "2027-01-10")
 
 
 def test_http_current_cycle_follows_governance_not_the_server_month(
@@ -759,3 +818,169 @@ def test_http_current_cycle_follows_governance_not_the_server_month(
     assert body["cycle"]["cycle_id"] == week_two.cycle_id
     status, week = _get(world, f"/pilot/children/{CHILD}/this-week", "cg")
     assert week["week"]["week"]["cycle_id"] == week_two.cycle_id
+
+
+# ===========================================================================
+# P0-C renewal — rolling clinician-approved plans, two in one calendar month
+# ===========================================================================
+
+
+@pytest.fixture
+def dec():
+    """Plan A activated Tue Dec 1: period Dec 1 .. Dec 28; Weeks 1-4 to Dec 27."""
+    world = Boundary(first_day="2026-12-01")
+    for day in ("2026-12-07", "2026-12-14", "2026-12-21"):
+        world.release(day)
+    return world
+
+
+def test_same_month_renewal_needs_no_fake_label(dec):
+    plan_a = dec.plan_of(dec.week_one)
+    assert clinical_period_for(plan_a) == ClinicalPeriod("2026-12-01",
+                                                         "2026-12-28")
+    with pytest.raises(ClinicalRenewalRequired):
+        dec.release("2026-12-28")                 # Dec 28 .. Jan 3 cannot fit
+    plan_b = dec.draft_plan(month="2026-12", when="2026-12-20")   # honest label
+    with pytest.raises(SuccessorActivationPremature):
+        dec.activate(plan_b, "2026-12-27")        # A's Week 4 still covers today
+    plan_b = dec.activate(plan_b, "2026-12-28")
+    assert plan_b.cycle_month == plan_a.cycle_month == "2026-12"
+    assert plan_b.focus_plan_id != plan_a.focus_plan_id
+    assert plan_b.activated_at != plan_a.activated_at, "a distinct approval"
+    assert clinical_period_for(plan_b) == ClinicalPeriod("2026-12-28",
+                                                         "2027-01-24")
+    week = dec.release("2026-12-28")
+    cycle = dec.cycle(week)
+    assert cycle.owning_focus_plan_id == plan_b.focus_plan_id
+    assert (cycle.sequence_in_month, cycle.starts_on, cycle.ends_on) == (
+        1, "2026-12-28", "2027-01-03")
+    # Two December plans, one unambiguous current week on each side.
+    assert dec.this_week("2026-12-27")["week"]["starts_on"] == "2026-12-21"
+    assert dec.this_week("2026-12-29")["week"]["cycle_id"] == week.cycle_id
+    assert dec.current_cycle("2026-12-29").cycle_id == week.cycle_id
+    assert dec.release("2026-12-30").cycle_id == week.cycle_id
+    assert sorted(p.state.value for p in dec.plan_rows()) == ["active", "closed"]
+
+
+def test_a_draft_successor_never_governs_and_nothing_auto_activates(dec):
+    dec.draft_plan(when="2026-12-20")
+    with pytest.raises(ClinicalRenewalRequired):
+        dec.release("2026-12-28")
+    assert sorted(p.state.value for p in dec.plan_rows()) == ["active", "draft"]
+
+
+def test_an_explicitly_closed_incumbent_no_longer_blocks(b3):
+    """Service-level close (no HTTP route): the clinician ends the plan, then
+    activates a successor mid-period. The closed plan's released week remains
+    the family's week until it ends; the successor governs after."""
+    successor = b3.draft_plan(when="2026-12-02")
+    b3.at("2026-12-03")
+    b3.plans.close_plan(b3.provider, b3.week_one.focus_plan_id)
+    active = b3.activate(successor, "2026-12-03")
+    assert clinical_period_for(active).starts_on == "2026-12-03"
+    assert b3.this_week("2026-12-04")["week"]["cycle_id"] == \
+        b3.week_three.cycle_id
+    nxt = b3.release("2026-12-07")
+    assert b3.cycle(nxt).owning_focus_plan_id == active.focus_plan_id
+    assert (b3.cycle(nxt).starts_on, b3.cycle(nxt).ends_on) == (
+        "2026-12-07", "2026-12-13")
+
+
+@pytest.mark.parametrize("incumbent", ["expired", "closed"])
+def test_two_concurrent_successor_activations_exactly_one_governs(incumbent):
+    """Both writers read the holder AND pass the guard before either commits
+    (forced interleaving). With a CLOSED incumbent the guard sees no other
+    active plan at all, so only the governance claim can stop the second."""
+    b = Boundary()
+    for day in ("2026-11-23", "2026-11-30", "2026-12-07"):
+        b.release(day)
+    first = b.draft_plan(when="2026-12-01")
+    second = b.draft_plan(month="2026-12", when="2026-12-02")
+    if incumbent == "closed":
+        b.at("2026-12-13")
+        b.plans.close_plan(b.provider, b.week_one.focus_plan_id)
+    b.at("2026-12-14")
+    barrier = threading.Barrier(2, timeout=10)
+    real = b.plans._an_incumbent_still_governs
+
+    def interleaved(others, now):
+        verdict = real(others, now)
+        barrier.wait()
+        return verdict
+
+    b.plans._an_incumbent_still_governs = interleaved
+    results = {}
+
+    def activate(plan):
+        try:
+            results[plan.focus_plan_id] = b.plans.activate_plan(
+                b.provider, plan.focus_plan_id)
+        except GoalConflict as exc:
+            results[plan.focus_plan_id] = exc
+
+    threads = [threading.Thread(target=activate, args=(p,))
+               for p in (first, second)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    won = [r for r in results.values() if not isinstance(r, Exception)]
+    lost = [k for k, r in results.items() if isinstance(r, Exception)]
+    assert len(won) == 1 and len(lost) == 1, results
+    active = [p for p in b.plan_rows() if p.is_active]
+    assert [p.focus_plan_id for p in active] == [won[0].focus_plan_id]
+    loser = b.repos.focus_plans.get_by_id(lost[0])
+    assert loser.state.value == "draft"
+    assert b.repos.goal_snapshots.list_for_plan(lost[0]) == []
+    holders = [c["holder_ref"] for c in b.governance_claims()
+               if c["record_kind"] == "claim"]
+    assert holders.count(won[0].focus_plan_id) == 1
+    assert lost[0] not in holders
+
+
+def test_http_month_reads_never_pick_one_of_two_active_plans(dec, monkeypatch):
+    """After a same-month renewal the month read returns the ONE active plan.
+    If two were ever active for one label (a forged/legacy state), the month
+    read refuses with the route's constant 403 rather than pick one."""
+    plan_b = dec.renewal_plan(month="2026-12", when="2026-12-28")
+    app_world = _serve(dec, monkeypatch)
+    status, body = _get(app_world, f"/pilot/children/{CHILD}/monthly-plan",
+                        "pr", query="cycle_month=2026-12")
+    assert status == 200 and body["plan"]["focus_plan_id"] == plan_b.focus_plan_id
+    dec.forced_active_plan(month="2026-12", when="2026-12-28")
+    for path in ("monthly-plan", "current-cycle"):
+        status, body = _get(app_world, f"/pilot/children/{CHILD}/{path}", "pr",
+                            query="cycle_month=2026-12")
+        assert status == 403, (path, body)
+
+
+def test_http_activation_route_refuses_an_early_successor(b3, monkeypatch):
+    world = _serve(b3, monkeypatch)
+    draft = b3.draft_plan(when="2026-12-01")
+    b3.at("2026-12-02")
+    # The planning service built by the route stamps with the real clock, so
+    # pin the period-relevant instant through the same seam the service uses.
+    from pilot_backend.planning import service as planning_module
+    monkeypatch.setattr(planning_module.MonthlyPlanService, "_stamp",
+                        lambda self: b3.clock())
+    status, body, _ = call(world.app,
+                           f"/pilot/monthly-plans/{draft.focus_plan_id}/activate",
+                           method="POST", bearer="Bearer pr", body=b"{}")
+    assert status == 403
+    assert b3.repos.focus_plans.get_by_id(draft.focus_plan_id).state.value \
+        == "draft"
+
+
+def test_an_ambiguous_governance_state_blocks_activation(b):
+    """Two ACTIVE plans whose cycles both cover today (a forged/legacy state):
+    the guard cannot tell which governs, so it fails CLOSED and refuses."""
+    from pilot_backend.domain.weekly_cycle import WeeklyCycle
+    forged = b.forced_active_plan(month="2026-11", when="2026-11-18")
+    b.repos.weekly_cycles.create(WeeklyCycle.create(
+        forged.focus_plan_id, CHILD, sequence_in_month=1,
+        starts_on="2026-11-18", ends_on="2026-11-22"))
+    successor = b.draft_plan(when="2026-11-19")
+    with pytest.raises(SuccessorActivationPremature):
+        b.activate(successor, "2026-11-20")
+    assert b.repos.focus_plans.get_by_id(successor.focus_plan_id).state.value \
+        == "draft"

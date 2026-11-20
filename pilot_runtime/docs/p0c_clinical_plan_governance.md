@@ -73,9 +73,47 @@ Parent feedback, observation and correction semantics, and RTM attribution
 (observation local date → `attribution_month`; a Week 3 observation on 12-02 is
 December for billing while the week stays under the November-activated plan).
 
-## Renewal is a clinician action (not built here)
+## Rolling plans and renewal (P0-C renewal)
 
-A renewal today = the managing clinician creates and activates a new plan
-through the existing monthly-plan routes. Known limit: those routes still allow
-only one ACTIVE plan per child **calendar month**, so renewing inside the same
-calendar month as the expiring plan requires closing it first.
+Plans are rolling clinician-approved periods, **not** one per calendar month.
+`cycle_month` is a label/index/reporting field; two plans may carry the same
+label and be activated in the same month.
+
+Lifecycle, using only the existing states `draft → active → closed`:
+
+1. The incumbent is ACTIVE and governing.
+2. A successor may be **prepared as a DRAFT** at any time (no month lock; a
+   draft has no clinical period and governs nothing).
+3. **Activation is refused** (`SuccessorActivationPremature`, a `GoalConflict`;
+   route: constant 403) while any other ACTIVE plan can still hold the child's
+   current or upcoming week — the same resolution the reads and release use.
+   A refusal writes nothing.
+4. At the renewal point (the incumbent can no longer fit the next whole week),
+   the clinician activates the successor explicitly. In **one transaction**:
+   release the `CLINICAL_GOVERNANCE` holder's generation and claim the next,
+   write the goal snapshots, **retire** (close) the expired incumbent, and set
+   the successor ACTIVE. A still-governing incumbent is never closed this way.
+5. The successor's own 28-day period starts at its own `activated_at`; it
+   governs its own Week 1. Nothing is copied, activated or renewed automatically.
+
+**Activation authority:** `ClaimKind.CLINICAL_GOVERNANCE`, keyed by `child_id`
+alone, replaces the `(child_id, cycle_month)` claim. Two concurrent successors
+both target the same release marker and next claim; exactly one commits (forced
+interleaving in `pilot_backend`; eight real writers on the emulator).
+
+**Explicit close** stays service-only. The pilot workflow needs no close route:
+the successor's activation retires an expired incumbent. Ending a still-valid
+plan early is a clinician exception workflow, out of scope.
+
+**Month-addressed reads** (`monthly-plan?cycle_month=`,
+`current-cycle?cycle_month=`) return the one ACTIVE plan with that label; if a
+forged/legacy state ever had two, they refuse (constant 403) rather than pick.
+
+### Known coupling NOT changed: RTM periods
+
+`RtmService.open_period` claims `(episode, plan.cycle_month)` and binds the
+period to ONE `focus_plan_id`; `_gather` reads only that plan's cycles before
+filtering by `attribution_month`. With rolling plans (and already with a
+cross-month week), a calendar month's billing evidence can span two plans, so a
+period bound to one plan would miss the other's observations. Attribution
+itself (observation local date) is unchanged. Founder decision required.

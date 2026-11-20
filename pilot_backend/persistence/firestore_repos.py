@@ -993,6 +993,17 @@ class FirestoreMonthlyFocusPlanRepository(_BaseRepo):
     def update(self, plan: MonthlyFocusPlan) -> MonthlyFocusPlan:
         return self._set(plan.focus_plan_id, plan)
 
+    def overwrite(self, plan: MonthlyFocusPlan) -> MonthlyFocusPlan:
+        """Write a plan WITHOUT reading it first. Transaction-safe. P0-C.
+
+        Lets activation set the successor ACTIVE and retire the expired
+        incumbent in the SAME transaction as the governance claim and the goal
+        snapshots. The caller reads every plan it overwrites inside that
+        transaction first, which is the existence check and enrolls the
+        document in conflict detection — the 0.5B `overwrite` contract.
+        """
+        return self._overwrite(plan.focus_plan_id, plan)
+
     def list_for_child(self, child_id: str) -> List[MonthlyFocusPlan]:
         return self._query("child_id", child_id)
 

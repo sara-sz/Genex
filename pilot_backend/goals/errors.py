@@ -19,6 +19,16 @@ class GoalConflict(Exception):
     PHI_SAFE_MESSAGE = True
 
 
+class SuccessorActivationPremature(GoalConflict):
+    """P0-C renewal. Another active clinician-approved plan can still hold the
+    child's current or upcoming week, so a successor may not be activated yet.
+
+    Activation STARTS a plan's 28-day clinical period; activating early would
+    burn it while the incumbent still governs. Prepare the successor as a
+    draft and activate it once the incumbent can no longer hold the week.
+    """
+
+
 class GoalAuthorizationError(Exception):
     """Authenticated, but not permitted this goal or planning operation."""
 

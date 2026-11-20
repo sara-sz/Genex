@@ -14,36 +14,29 @@ clinician holds the assignment, direction has a single owner and a caregiver
 cannot set a competing one. `_require_plan_author` is the single place that
 decides this.
 
-## Activation wins a claim, exactly as 0.4A does
+## Activation is ONE governance hand-off (P0-C renewal)
 
-`ClaimKind.MONTHLY_FOCUS_PLAN` on (child_id, cycle_month). Two clinicians
-activating October in the same second must not both succeed, or the child has
-two months of direction and nothing in the record says which one the weekly
-plans followed.
+Plans are rolling clinician-approved periods, NOT one-per-calendar-month.
+`cycle_month` is a label for indexing and reporting only. Activation:
 
-## Why activation is not one transaction, and why that is still safe
+1. reads the child's `CLINICAL_GOVERNANCE` claim holder (key: child_id);
+2. REFUSES (`SuccessorActivationPremature`) while any other ACTIVE plan can
+   still hold the child's current or upcoming week — activation starts the
+   plan's 28-day clinical period, so activating early would burn it;
+3. in ONE transaction: releases the previous holder's generation and claims
+   the next (or claims the first), writes every goal snapshot, RETIRES (closes)
+   each other active plan — which step 2 proved can no longer govern — and sets
+   this plan ACTIVE.
 
-The `DocumentStore` port REFUSES `set` inside a transaction — a deliberate
-0.4A constraint, because a transactional `set` that could create a document
-would silently weaken the port's existence guarantee. Activation needs a
-read-modify-write of an existing plan, so it cannot all live in one
-transaction, and the 0.4A note is explicit that a slice hitting this must
-RESTRUCTURE rather than relax the port.
+Two successors activating together target the same release marker and the same
+next claim, so exactly one commits. Step 1 runs BEFORE step 2: a rival that
+commits in between either collides on the release in the transaction, or is
+seen as a governing incumbent by the guard.
 
-So it is restructured into two steps with a forward-recoverable boundary:
-
-    1. transaction: create the uniqueness claim AND every goal snapshot
-    2. outside:     set the plan ACTIVE, stamping the claim id
-
-Step 1 is all-or-nothing. A crash between 1 and 2 leaves a claim whose
-`holder_ref` is THIS plan's id and a DRAFT plan. A retry recognises that it
-already holds its own claim, skips step 1 entirely — so no duplicate snapshots
-— and completes step 2. The key is never stranded, and no cleanup job exists
-to hide the problem.
-
-A DIFFERENT plan retrying collides on the claim and is refused, which is the
-outcome we want. Recovery is idempotent for the rightful holder and a hard
-refusal for everyone else.
+The whole-document plan writes use the 0.5B transaction-safe `overwrite`, each
+after an in-transaction read of the same document, so activation no longer has
+a recoverable gap between the claim and the state write: it lands entirely or
+not at all. A still-governing incumbent is never closed by this path.
 
 ## Snapshots are taken at activation, not read later
 
@@ -77,7 +70,12 @@ from ..domain.monthly_plan import (
 )
 from ..domain.planning_policy import CURRENT_PLANNING_POLICY, PlanningPolicyVersion
 from ..domain.roles import ActorRole
-from ..goals.errors import GoalAuthorizationError, GoalConflict, GoalValidationError
+from ..goals.errors import (
+    GoalAuthorizationError,
+    GoalConflict,
+    GoalValidationError,
+    SuccessorActivationPremature,
+)
 from ..persistence.document_store import DocumentStoreError
 from ..repository.interface import DuplicateRecord, RecordNotFound
 
@@ -171,9 +169,10 @@ class MonthlyPlanService:
         self._authorize(principal, child_id)
         self._require_plan_author(principal, child_id)
         month = validate_cycle_month(cycle_month)
-
-        if self._repos.focus_plans.active_for_cycle(child_id, month) is not None:
-            raise GoalConflict("this child already has an active plan for the month")
+        # P0-C renewal: NO one-plan-per-month check. A successor is prepared as
+        # a DRAFT while the incumbent still governs, possibly under the same
+        # month label; a draft has no clinical period and governs nothing.
+        # Activation is where uniqueness of governance is enforced.
 
         plan = MonthlyFocusPlan.create(
             child_id, month, timezone_of_record,
@@ -200,12 +199,12 @@ class MonthlyPlanService:
 
     def activate_plan(self, principal, focus_plan_id: str, *,
                       request_id: str = "") -> MonthlyFocusPlan:
-        """Win the child-month claim, snapshot the allocations, go ACTIVE.
+        """Take clinical governance, snapshot the allocations, go ACTIVE.
 
-        Refuses a plan with no active allocation: an active month that is
-        about nothing is a state the weekly layer cannot act on, and letting
-        it exist would push the failure into a layer that has less context to
-        report it.
+        Refuses a plan with no active allocation: an active plan that is about
+        nothing is a state the weekly layer cannot act on. Refuses while another
+        active plan can still hold the child's current or upcoming week. See
+        the module docstring for the single-transaction hand-off.
         """
         plan = self._load_plan(focus_plan_id)
         self._authorize(principal, plan.child_id)
@@ -218,62 +217,121 @@ class MonthlyPlanService:
             raise GoalValidationError(
                 "a plan cannot be activated with no allocated goal")
 
-        # Read outside the transaction — see identity/service.py for the
-        # measured reason (read locks turned an 8-way race into 194 seconds).
-        parts = (plan.child_id, plan.cycle_month)
+        now = self._stamp()
+        kind = ClaimKind.CLINICAL_GOVERNANCE
+        parts = (plan.child_id,)
         digest = key_digest(*parts)
-        generation = self._repos.identity_claims.next_generation(
-            ClaimKind.MONTHLY_FOCUS_PLAN, digest)
-        claim_id = claim_document_id(ClaimKind.MONTHLY_FOCUS_PLAN, digest, generation)
 
-        if not self._already_holds(claim_id, focus_plan_id):
-            snapshots = self._build_snapshots(plan, allocations)
+        # 1. The current holder, read BEFORE the guard. Outside the transaction
+        #    — see identity/service.py for the measured reason.
+        generation = self._repos.identity_claims.next_generation(kind, digest)
+        try:
+            holder = self._repos.identity_claims.get_by_id(
+                claim_document_id(kind, digest, generation))
+        except RecordNotFound:
+            holder = None
 
-            def _acquire(store) -> None:
-                tx = self._repos_factory(store)
-                tx.identity_claims.claim(IdentityClaim.build(
-                    ClaimKind.MONTHLY_FOCUS_PLAN, parts, generation,
-                    holder_ref=focus_plan_id, child_id=plan.child_id,
-                    actor_id=principal.application_id, now=self._stamp()))
-                for snapshot in snapshots:
-                    tx.goal_snapshots.create(snapshot)
+        # 2. The incumbent guard.
+        others = [p for p in self._repos.focus_plans.list_for_child(plan.child_id)
+                  if p.focus_plan_id != focus_plan_id and p.is_active]
+        if self._an_incumbent_still_governs(others, now):
+            self._audit(AuditAction.MONTHLY_PLAN_ACTIVATED, AuditResult.FAILURE,
+                        RESOURCE_FOCUS_PLAN, principal=principal,
+                        child_id=plan.child_id, resource_id=focus_plan_id,
+                        request_id=request_id, focus_plan_id=focus_plan_id,
+                        cycle_month=plan.cycle_month,
+                        plan_state=plan.state.value)
+            raise SuccessorActivationPremature(
+                "another clinician-approved plan still governs this child's "
+                "current or upcoming week")
 
-            try:
-                self._repos.store.run_in_transaction(_acquire)
-            except (DuplicateRecord, DocumentStoreError):
-                self._audit(AuditAction.MONTHLY_PLAN_ACTIVATED, AuditResult.FAILURE,
-                            RESOURCE_FOCUS_PLAN, principal=principal,
-                            child_id=plan.child_id, resource_id=focus_plan_id,
-                            request_id=request_id, focus_plan_id=focus_plan_id,
-                            cycle_month=plan.cycle_month)
-                raise GoalConflict(
-                    "another writer holds the plan claim for this child-month"
-                ) from None
+        # 3. One transaction: hand-off, snapshots, retirements, activation.
+        claim_generation = generation + 1 if holder is not None else generation
+        claim_id = claim_document_id(kind, digest, claim_generation)
+        snapshots = self._build_snapshots(plan, allocations)
+        activated = plan.activate(claim_id=claim_id, now=now)
+        retired = [other.close(now=now) for other in others]
 
-        activated = plan.activate(claim_id=claim_id, now=self._stamp())
-        self._repos.focus_plans.update(activated)
+        def _handoff(store) -> None:
+            tx = self._repos_factory(store)
+            # Reads first — Firestore forbids a read after a write.
+            if tx.focus_plans.get_by_id(focus_plan_id).state \
+                    is not MonthlyPlanState.DRAFT:
+                raise GoalConflict("only a draft plan can be activated")
+            for other in others:
+                if not tx.focus_plans.get_by_id(other.focus_plan_id).is_active:
+                    raise GoalConflict("the incumbent changed during activation")
+            if holder is not None:
+                tx.identity_claims.release(IdentityClaim.build_release(
+                    kind, digest, generation, holder_ref=holder.holder_ref,
+                    child_id=plan.child_id,
+                    actor_id=principal.application_id, now=now))
+            tx.identity_claims.claim(IdentityClaim.build(
+                kind, parts, claim_generation, holder_ref=focus_plan_id,
+                child_id=plan.child_id, actor_id=principal.application_id,
+                now=now))
+            for snapshot in snapshots:
+                tx.goal_snapshots.create(snapshot)
+            for closed in retired:
+                tx.focus_plans.overwrite(closed)
+            tx.focus_plans.overwrite(activated)
 
+        try:
+            self._repos.store.run_in_transaction(_handoff)
+        except (DuplicateRecord, DocumentStoreError):
+            self._audit(AuditAction.MONTHLY_PLAN_ACTIVATED, AuditResult.FAILURE,
+                        RESOURCE_FOCUS_PLAN, principal=principal,
+                        child_id=plan.child_id, resource_id=focus_plan_id,
+                        request_id=request_id, focus_plan_id=focus_plan_id,
+                        cycle_month=plan.cycle_month)
+            raise GoalConflict(
+                "another activation took clinical governance for this child"
+            ) from None
+
+        for closed in retired:
+            self._audit(AuditAction.MONTHLY_PLAN_CLOSED, AuditResult.SUCCESS,
+                        RESOURCE_FOCUS_PLAN, principal=principal,
+                        child_id=plan.child_id, resource_id=closed.focus_plan_id,
+                        request_id=request_id,
+                        focus_plan_id=closed.focus_plan_id,
+                        cycle_month=closed.cycle_month,
+                        plan_state=closed.state.value)
+            # Linked to the successor's activation event by `request_id`.
         self._audit(AuditAction.MONTHLY_PLAN_ACTIVATED, AuditResult.SUCCESS,
                     RESOURCE_FOCUS_PLAN, principal=principal,
                     child_id=plan.child_id, resource_id=focus_plan_id,
                     request_id=request_id, focus_plan_id=focus_plan_id,
                     cycle_month=plan.cycle_month, claim_id=claim_id,
-                    claim_kind=ClaimKind.MONTHLY_FOCUS_PLAN.value,
+                    claim_kind=kind.value,
                     plan_state=activated.state.value)
         return activated
 
-    def _already_holds(self, claim_id: str, focus_plan_id: str) -> bool:
-        """Whether THIS plan already won this claim — the recovery path.
+    def _an_incumbent_still_governs(self, others, now) -> bool:
+        """Whether any other ACTIVE plan can still hold today's week.
 
-        True only when the claim exists AND names this plan as its holder. A
-        claim held by another plan returns False, so the caller proceeds into
-        the transaction and collides there, which is the refusal we want.
+        The SAME resolution the release and the reads use, over the other
+        active plans only: a covering cycle of one of them, or a next week one
+        of them can still hold whole, means it still governs. An ambiguous
+        state fails closed (treated as governing).
         """
-        try:
-            existing = self._repos.identity_claims.get_by_id(claim_id)
-        except RecordNotFound:
+        if not others:
             return False
-        return existing.holder_ref == focus_plan_id
+        from ..integration.governing_plan import (  # noqa: WPS433
+            GovernanceOutcome,
+            GoverningPlanAmbiguous,
+            resolve_governance,
+        )
+        cycles_by_plan = {
+            other.focus_plan_id: tuple(
+                self._repos.weekly_cycles.list_for_plan(other.focus_plan_id))
+            for other in others}
+        try:
+            governance = resolve_governance(
+                plans=others, cycles_by_plan=cycles_by_plan, now=now)
+        except GoverningPlanAmbiguous:
+            return True
+        return governance.outcome in (GovernanceOutcome.COVERED,
+                                      GovernanceOutcome.NEXT_WEEK)
 
     def _build_snapshots(self, plan: MonthlyFocusPlan,
                          allocations) -> List[MonthlyGoalSnapshot]:

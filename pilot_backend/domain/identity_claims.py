@@ -128,6 +128,17 @@ class ClaimKind(str, Enum):
     #: two writers under different plans collide on the first shared date and
     #: exactly one commits. Never released: a created cycle is never deleted.
     CHILD_CARE_DAY = "child_care_day"
+    #: P0-C renewal. Which plan holds CLINICAL GOVERNANCE for a child. Keyed by
+    #: (child_id) alone — NOT by calendar month — so rolling clinician-approved
+    #: plans may be activated in sequence, two in one month included.
+    #:
+    #: Activation takes generation g when nobody holds the key, or RELEASES the
+    #: current holder's generation g and takes g + 1 in the same transaction.
+    #: Two successors activating together both target the same release marker
+    #: (and the same next claim), so exactly one commits. Supersedes
+    #: `MONTHLY_FOCUS_PLAN` as the activation authority; that kind is kept so
+    #: existing claim documents stay decodable.
+    CLINICAL_GOVERNANCE = "clinical_governance"
     #: 0.5B. One LIVE provider-child connection per (provider_id, child_id).
     #:
     #: "Live" means PENDING, ACTIVE or PAUSED — the three states from which a

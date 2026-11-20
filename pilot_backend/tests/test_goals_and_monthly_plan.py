@@ -79,6 +79,7 @@ from pilot_backend.goals.errors import (
     GoalAuthorizationError,
     GoalConflict,
     GoalValidationError,
+    SuccessorActivationPremature,
 )
 from pilot_backend.goals.service import GoalService
 from pilot_backend.goals.suggestion_engine import (
@@ -1193,32 +1194,52 @@ def _activated(s):
     return s.plans.activate_plan(s.provider_alpha, plan.focus_plan_id), goals
 
 
-def test_activation_wins_a_child_month_claim(s):
+def _governance_claims(s):
+    """CLINICAL_GOVERNANCE acquisitions for this child. Kind-specific: other
+    claim kinds (e.g. the managing clinician) are keyed by the child id too."""
+    return [d for _i, d in s.repos.store.list_all("pilot_identity_claims")
+            if d.get("kind") == ClaimKind.CLINICAL_GOVERNANCE.value
+            and d.get("record_kind") == "claim"
+            and d.get("key_digest") == key_digest(s.child)]
+
+
+def test_activation_takes_the_child_level_governance_claim(s):
+    """P0-C renewal. Was: `test_activation_wins_a_child_month_claim`.
+
+    Governance is keyed by CHILD alone; `cycle_month` is only a label, so the
+    claim can no longer lock a calendar month against a legitimate renewal.
+    """
     activated, _ = _activated(s)
-    digest = key_digest(s.child, CYCLE)
     claim = s.repos.identity_claims.get_by_id(activated.activation_claim_id)
-    assert claim.kind is ClaimKind.MONTHLY_FOCUS_PLAN
-    assert claim.key_digest == digest
+    assert claim.kind is ClaimKind.CLINICAL_GOVERNANCE
+    assert claim.key_digest == key_digest(s.child)
     assert claim.holder_ref == activated.focus_plan_id
     assert activated.state is MonthlyPlanState.ACTIVE
+    assert s.repos.identity_claims.count_claims_for_key(
+        key_digest(s.child, CYCLE)) == 0, "no month claim is taken any more"
 
 
-def test_a_second_plan_for_the_same_child_month_is_refused(s):
+def test_a_successor_draft_coexists_but_cannot_activate_early(s):
+    """P0-C renewal. Was: `test_a_second_plan_for_the_same_child_month_is_refused`.
+
+    A successor may be PREPARED (drafted, allocated) under the same month label
+    while the incumbent governs. Activating it would start its clinical period
+    early, so that is refused and writes nothing.
+    """
     activated, _ = _activated(s)
-    # The advisory check catches the ordinary case...
-    with pytest.raises(GoalConflict):
-        s.plans.create_plan(s.provider_alpha, s.child, CYCLE, ZONE)
-    # ...and the claim catches a plan drafted before the first activated.
-    second = MonthlyFocusPlan.create(s.child, CYCLE, ZONE,
-                                     policy_version=POLICY_2026_10.policy_version)
-    s.repos.focus_plans.create(second)
+    second = s.plans.create_plan(s.provider_alpha, s.child, CYCLE, ZONE)
     goal = _anchored_clinical_goal(s, "Another focus.", "r")
     s.plans.allocate_goal(s.provider_alpha, second.focus_plan_id, goal.ref,
                           priority_rank=1)
-    with pytest.raises(GoalConflict):
+    with pytest.raises(SuccessorActivationPremature):
         s.plans.activate_plan(s.provider_alpha, second.focus_plan_id)
+    assert issubclass(SuccessorActivationPremature, GoalConflict)
     assert s.repos.focus_plans.get_by_id(second.focus_plan_id).state \
         is MonthlyPlanState.DRAFT
+    assert s.repos.focus_plans.get_by_id(activated.focus_plan_id).state \
+        is MonthlyPlanState.ACTIVE
+    assert s.repos.goal_snapshots.list_for_plan(second.focus_plan_id) == []
+    assert len(_governance_claims(s)) == 1
 
 
 def test_a_plan_with_no_allocated_goal_cannot_be_activated(s):
@@ -1245,33 +1266,37 @@ def test_activation_snapshots_the_wording_as_it_then_read(s):
         "Completely rewritten in November."
 
 
-def test_a_crash_between_claim_and_activation_is_forward_recoverable(s):
-    """Step 1 committed, step 2 did not. A retry completes, it does not strand.
+def test_activation_is_one_transaction(s, monkeypatch):
+    """P0-C renewal. Was:
+    `test_a_crash_between_claim_and_activation_is_forward_recoverable`.
 
-    The port refuses `set` inside a transaction, so activation cannot be one
-    atomic write. The boundary is made safe by making recovery idempotent for
-    the rightful holder rather than by a cleanup job.
+    The state write now uses the 0.5B transaction-safe `overwrite`, so there is
+    no gap left to recover across: a crash at the LAST write of activation
+    rolls back the claim and the snapshots with it, and a retry starts clean.
     """
+    from pilot_backend.persistence.firestore_repos import (
+        FirestoreMonthlyFocusPlanRepository,
+    )
     plan, goals = _plan_with_goal(s)
     s.plans.allocate_goal(s.provider_alpha, plan.focus_plan_id, goals[0].ref,
                           priority_rank=1)
 
-    real_update = s.repos.focus_plans.update
-    s.repos.focus_plans.update = lambda *_a, **_k: (_ for _ in ()).throw(
-        RuntimeError("process died before the state write"))
+    def died(self, record):
+        raise RuntimeError("process died at the state write")
+
+    monkeypatch.setattr(FirestoreMonthlyFocusPlanRepository, "overwrite", died)
     with pytest.raises(RuntimeError):
         s.plans.activate_plan(s.provider_alpha, plan.focus_plan_id)
-    s.repos.focus_plans.update = real_update
+    monkeypatch.undo()
 
     assert s.repos.focus_plans.get_by_id(plan.focus_plan_id).state \
         is MonthlyPlanState.DRAFT
-    snapshots_after_crash = s.repos.goal_snapshots.list_for_plan(plan.focus_plan_id)
-    assert len(snapshots_after_crash) == 1
-
+    assert s.repos.goal_snapshots.list_for_plan(plan.focus_plan_id) == []
+    assert _governance_claims(s) == [], \
+        "the claim rolled back with everything else"
     recovered = s.plans.activate_plan(s.provider_alpha, plan.focus_plan_id)
     assert recovered.state is MonthlyPlanState.ACTIVE
-    assert len(s.repos.goal_snapshots.list_for_plan(plan.focus_plan_id)) == 1, \
-        "recovery duplicated the snapshots"
+    assert len(s.repos.goal_snapshots.list_for_plan(plan.focus_plan_id)) == 1
 
 
 def test_a_failed_activation_persists_no_snapshot(s):
@@ -1302,23 +1327,27 @@ def test_a_closed_plan_cannot_be_changed(s):
                                       activated.focus_plan_id)) == 2
 
 
-def test_closing_does_not_release_the_month(s):
-    """October cannot be reopened and rewritten after it ended."""
+def test_closing_does_not_release_governance(s):
+    """Closing keeps its claim; the NEXT activation hands governance on by
+    writing a release marker in its own transaction. Was:
+    `test_closing_does_not_release_the_month`."""
     activated, _ = _activated(s)
     s.plans.close_plan(s.provider_alpha, activated.focus_plan_id)
-    digest = key_digest(s.child, CYCLE)
     assert s.repos.identity_claims.next_generation(
-        ClaimKind.MONTHLY_FOCUS_PLAN, digest) == 0
+        ClaimKind.CLINICAL_GOVERNANCE, key_digest(s.child)) == 0
 
 
-def test_a_different_month_is_a_different_claim(s):
+def test_a_different_month_label_does_not_bypass_governance(s):
+    """P0-C renewal. Was: `test_a_different_month_is_a_different_claim`, which
+    let October and November be ACTIVE together. Two governing plans at once
+    is exactly what the rolling model forbids; the label changes nothing."""
     _activated(s)
     november = s.plans.create_plan(s.provider_alpha, s.child, "2026-11", ZONE)
     goal = _anchored_clinical_goal(s, "November focus.", "r")
     s.plans.allocate_goal(s.provider_alpha, november.focus_plan_id, goal.ref,
                           priority_rank=1)
-    assert s.plans.activate_plan(
-        s.provider_alpha, november.focus_plan_id).state is MonthlyPlanState.ACTIVE
+    with pytest.raises(SuccessorActivationPremature):
+        s.plans.activate_plan(s.provider_alpha, november.focus_plan_id)
 
 
 def test_active_plan_lookup_fails_closed_on_two_active_plans(s):
