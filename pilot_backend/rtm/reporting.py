@@ -74,6 +74,9 @@ def _engagement_section(evidence: RTMEvidenceSummary) -> SectionContent:
             ("didnt_want_to_try", evidence.didnt_want_to_try_count),
             ("distinct_observed_local_dates",
              evidence.distinct_observed_local_dates),
+            # What was SCHEDULED, beside what was received — never derived
+            # from the observations above.
+            ("scheduled_opportunities", evidence.total_scheduled_opportunities),
         ),
     )
 

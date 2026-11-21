@@ -29,6 +29,17 @@ class SuccessorActivationPremature(GoalConflict):
     """
 
 
+class ClinicalTimezoneMismatch(GoalConflict):
+    """RTM billing-evidence v2. Every clinician-approved (activated) plan of a
+    child must share one `timezone_of_record`.
+
+    RTM periods take their timezone from a plan; that is only sound because no
+    two approved plans of the child can disagree. A plan in another zone is
+    refused at activation rather than converted, picked between, or discovered
+    at month-end reporting time.
+    """
+
+
 class GoalAuthorizationError(Exception):
     """Authenticated, but not permitted this goal or planning operation."""
 

@@ -52,14 +52,17 @@ from .enums import Visibility
 from .ids import new_coding_assistance_id, new_rtm_evidence_summary_id
 from .rtm import RegulatoryStatus
 
-#: RTM billing-evidence v2: adds `contributing_focus_plan_ids` and gathers
-#: CURRENT observations across every contributing plan. v1 summaries were
-#: scoped to one plan and counted superseded observations; never decoded as v2.
+#: RTM billing-evidence v2: adds `contributing_focus_plan_ids` and
+#: `total_scheduled_opportunities`; gathers CURRENT observations and DATED
+#: scheduled opportunities across every contributing plan. v1 summaries were
+#: scoped to one plan, counted superseded observations and took "scheduled"
+#: from the plan's alignments in any month; never decoded as v2.
 RTM_EVIDENCE_SUMMARY_SCHEMA_VERSION = "october-pilot-rtm-evidence-v2"
 
 #: Bumped when the derivation changes. Stored on every summary.
 #: v2 (RTM billing-evidence): CURRENT observations only, gathered across every
-#: contributing clinical plan for the billing month.
+#: contributing clinical plan for the billing month; scheduled opportunities
+#: are released activities whose scheduled local date is in the month.
 EVIDENCE_RULE_VERSION = "rtm-evidence-derivation-2026-v2"
 
 
@@ -92,6 +95,8 @@ class GoalEvidenceLine:
     goal_id: str
     attributed_attempts: int
     attributed_completions: int
+    #: Released activities aligned to this goal and DATED in the month,
+    #: observed or not. Overlaps across goals like the attempt counts.
     scheduled_opportunities: int
     status_recommendation: GoalStatusRecommendation = \
         GoalStatusRecommendation.INSUFFICIENT_EVIDENCE
@@ -111,6 +116,10 @@ class RTMEvidenceSummary:
     cycle_refs: Tuple[str, ...] = ()
     #: Distinct ObservationEvent ids. The ONLY correct attempt total.
     total_distinct_observation_events: int = 0
+    #: Distinct released activity instances scheduled on a local date in the
+    #: month, across every plan, whether or not feedback was ever submitted.
+    #: What was SCHEDULED — never inferred from what was observed.
+    total_scheduled_opportunities: int = 0
     #: A FACT about the record: distinct local dates with an observation.
     #: NOT qualifying days, NOT billable days, NOT eligible days.
     distinct_observed_local_dates: int = 0
@@ -128,9 +137,11 @@ class RTMEvidenceSummary:
     real_time_interactive_communication_present: bool = False
     documentation_missing_flags: Tuple[str, ...] = ()
     technology_regulatory_status: RegulatoryStatus = RegulatoryStatus.UNDER_REVIEW
-    #: Every clinical plan whose cycles produced a CURRENT observation counted
-    #: here — sorted, unique. Provenance only; `focus_plan_ref` is the plan the
-    #: period was opened against.
+    #: Every clinical plan that materially contributes to this month's record:
+    #: its cycles produced a CURRENT observation counted here OR a scheduled
+    #: opportunity dated in the month (the cycles in `cycle_refs`, whose gaps
+    #: and adaptations the report also carries). Sorted, unique. Provenance
+    #: only; `focus_plan_ref` is the plan the period was opened against.
     contributing_focus_plan_ids: Tuple[str, ...] = ()
     schema_version: str = RTM_EVIDENCE_SUMMARY_SCHEMA_VERSION
 

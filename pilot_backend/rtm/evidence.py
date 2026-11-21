@@ -79,6 +79,7 @@ def derive_evidence_summary(period: RTMMonitoringPeriod, *,
                             technology: Optional[RTMTechnology] = None,
                             clinical_goal_refs: Tuple[Tuple[str, str], ...] = (),
                             contributing_focus_plan_ids: Tuple[str, ...] = (),
+                            scheduled_instances: Sequence[Tuple[str, str]] = (),
                             now=None) -> RTMEvidenceSummary:
     """Build the factual monthly summary. Deterministic and regenerable.
 
@@ -87,6 +88,13 @@ def derive_evidence_summary(period: RTMMonitoringPeriod, *,
     `current_observations()` again so no caller can make a superseded row and
     its correction both count. Evidence may span several clinical plans;
     `contributing_focus_plan_ids` records which (provenance, never scope).
+
+    SCHEDULED opportunities are a separate stream: `scheduled_instances` are
+    the `(cycle_id, activity_instance_ref)` pairs released with a scheduled
+    local date in the month, independent of any observation. They are counted
+    as DISTINCT instances (total) and, per goal, through the alignments — so a
+    two-goal activity is one opportunity in the total and one for each goal.
+    Neither observations nor supersession can move these counts.
     """
     month = period.cycle_month
 
@@ -96,6 +104,16 @@ def derive_evidence_summary(period: RTMMonitoringPeriod, *,
              if e.attribution_month == month}
     in_month = [by_id[k] for k in sorted(by_id)]
     coverage = summarize(alignments, in_month, attribution_month=month)
+
+    scheduled = set(scheduled_instances)
+    scheduled_per_goal = {}
+    seen_alignments = set()
+    for a in alignments:
+        key = (a.cycle_id, a.activity_instance_ref)
+        if key in scheduled and (key, a.goal_ref.as_key()) not in seen_alignments:
+            seen_alignments.add((key, a.goal_ref.as_key()))
+            scheduled_per_goal[a.goal_ref.as_key()] = \
+                scheduled_per_goal.get(a.goal_ref.as_key(), 0) + 1
 
     outcome_counts = {o: 0 for o in AttemptOutcome}
     observed_dates = set()
@@ -115,7 +133,8 @@ def derive_evidence_summary(period: RTMMonitoringPeriod, *,
             goal_id=line.goal_ref.goal_id,
             attributed_attempts=line.attempted,
             attributed_completions=line.completed,
-            scheduled_opportunities=line.scheduled,
+            scheduled_opportunities=scheduled_per_goal.get(
+                line.goal_ref.as_key(), 0),
             status_recommendation=_status_for(
                 line.attempted, line.completed, not_ready, didnt_want),
         ))
@@ -148,6 +167,7 @@ def derive_evidence_summary(period: RTMMonitoringPeriod, *,
         cycle_refs=tuple(sorted({c.cycle_id for c in cycles})),
         contributing_focus_plan_ids=tuple(sorted(set(contributing_focus_plan_ids))),
         total_distinct_observation_events=coverage.total_attempts,
+        total_scheduled_opportunities=len(scheduled),
         distinct_observed_local_dates=len(observed_dates),
         did_it_count=outcome_counts[AttemptOutcome.DID_IT],
         wasnt_ready_yet_count=outcome_counts[AttemptOutcome.WASNT_READY_YET],

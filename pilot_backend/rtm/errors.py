@@ -31,6 +31,16 @@ class RTMValidationError(Exception):
     PHI_SAFE_MESSAGE = True
 
 
+class RTMTimezoneInconsistent(RTMConflict):
+    """RTM billing-evidence v2. A plan relevant to the period (the opening plan,
+    another approved plan of the child, or a plan contributing evidence or
+    scheduled opportunities) has a different `timezone_of_record`.
+
+    Fails closed: no zone is chosen between, none is converted, and no period
+    or report mixes two timezone authorities.
+    """
+
+
 class FinalizedRecordImmutable(RTMConflict):
     """An attempt to change a finalized period or report in place.
 

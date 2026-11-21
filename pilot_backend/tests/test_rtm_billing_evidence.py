@@ -34,6 +34,7 @@ from pilot_backend.rtm.errors import RTMValidationError
 from pilot_backend.rtm.service import RTMService
 
 from .test_p0c_month_boundary import Boundary, CHILD
+from .test_rtm_evidence_reporting import s  # noqa: F401 — the legacy-world fixture
 
 
 class Billing:
@@ -351,3 +352,276 @@ def test_the_pure_derivation_itself_counts_current_rows_once(a):
     assert s.total_distinct_observation_events == 3
     assert (s.did_it_count, s.didnt_want_to_try_count) == (2, 1)
     assert s.distinct_observed_local_dates == 3
+
+
+# ===========================================================================
+# Scheduled opportunities — what was SCHEDULED, independent of what was
+# received. Released activities count toward the month of their own scheduled
+# local date, across every plan, observed or not.
+# ===========================================================================
+
+
+def _scheduled_dates(w, period):
+    """Ground truth from the released weeks the family was shown."""
+    out = []
+    for cycle in w.b.cycles():
+        if not cycle.is_released:
+            continue
+        snap = w.b.repos.weekly_plan_snapshots.list_for_cycle(cycle.cycle_id)[0]
+        import json
+        for row in json.loads(snap.resolved_plan_document)["activities"]:
+            if row["local_date"][:7] == period.cycle_month:
+                out.append(row["local_date"])
+    return sorted(out)
+
+
+def test_scheduled_activities_count_with_no_observation_at_all():
+    """1. Nothing was ever submitted, and every scheduled activity counts."""
+    w = Billing()
+    for monday in ("2026-11-23", "2026-11-30", "2026-12-07"):
+        w.b.release(monday)
+    nov, dec = w.open("2026-11"), w.open("2026-12")
+    s_nov, s_dec = w.summary(nov), w.summary(dec)
+    # Week 1: 11-17..19; Week 2: 11-23..25; Week 3: 11-30 | 12-01, 12-02;
+    # Week 4: 12-07..09. One activity per day, capacity 3.
+    assert _scheduled_dates(w, nov) == ["2026-11-17", "2026-11-18",
+                                        "2026-11-19", "2026-11-23",
+                                        "2026-11-24", "2026-11-25",
+                                        "2026-11-30"]
+    assert s_nov.total_scheduled_opportunities == 7
+    assert s_dec.total_scheduled_opportunities == 5, "12-01, 12-02 + Week 4"
+    assert s_nov.total_distinct_observation_events == 0
+    assert s_nov.distinct_observed_local_dates == 0
+    (line,) = s_nov.per_goal_evidence
+    assert line.scheduled_opportunities == 7
+    assert line.attributed_attempts == 0
+    assert s_nov.contributing_focus_plan_ids == (w.plan_a,), \
+        "a plan contributing ONLY scheduled opportunities is still provenance"
+
+
+def test_four_scheduled_and_two_observed_stay_separate_facts():
+    """2 + 5. Fri 11-27 start: a three-day starter week (11-27..29) plus Week
+    2's Monday 11-30 put exactly four activities in November. Two current
+    observations; a correction must move neither count."""
+    w = Billing(first_day="2026-11-27")
+    week_two = w.b.release("2026-11-30")
+    first = w.observe(w.b.week_one, "2026-11-27")
+    w.observe(week_two, "2026-11-30")
+    nov = w.open("2026-11", when="2026-11-30")
+    before = w.summary(nov)
+    w.observe(w.b.week_one, "2026-11-27", outcome=AttemptOutcome.WASNT_READY_YET,
+              supersedes=first.source_feedback_id)
+    after = w.summary(nov)
+    for s in (before, after):
+        assert s.total_scheduled_opportunities == 4
+        assert s.per_goal_evidence[0].scheduled_opportunities == 4
+        assert s.total_distinct_observation_events == 2
+        assert s.distinct_observed_local_dates == 2
+    assert (before.did_it_count, after.did_it_count) == (2, 1)
+    assert after.wasnt_ready_yet_count == 1
+    assert _scheduled_dates(w, nov) == ["2026-11-27", "2026-11-28",
+                                        "2026-11-29", "2026-11-30"]
+
+
+def test_scheduled_opportunities_span_both_plans_in_one_month(b):
+    """3. December draws scheduled activities from Plan A AND Plan B."""
+    dec = b.open("2026-12", when="2026-12-20")
+    s = b.summary(dec)
+    # Plan A: 12-01, 12-02 (Week 3) + 12-07..09 (Week 4) = 5
+    # Plan B: 12-14..16 (Week 5) + 12-21..23 (Week 6)    = 6
+    assert s.total_scheduled_opportunities == 11
+    assert len(_scheduled_dates(b, dec)) == 11
+    by_plan = {}
+    for cycle_id in s.cycle_refs:
+        plan = b.b.repos.weekly_cycles.get_by_id(cycle_id).owning_focus_plan_id
+        by_plan[plan] = by_plan.get(plan, 0) + 1
+    assert set(by_plan) == {b.plan_a, b.plan_b}
+
+
+def test_a_plan_with_scheduled_activities_but_no_observation_is_kept(a):
+    """4. Plan B releases two December weeks and nobody gives feedback: its
+    opportunities count and it is named as a contributing plan."""
+    plan_b = a.b.renewal_plan(month="2026-12", when="2026-12-14")
+    a.b.release("2026-12-14")
+    a.b.release("2026-12-21")
+    dec = a.open("2026-12", when="2026-12-22")
+    s = a.summary(dec)
+    assert s.total_scheduled_opportunities == 11
+    assert s.total_distinct_observation_events == 2, "only Plan A's 12-02, 12-09"
+    assert s.contributing_focus_plan_ids == tuple(sorted(
+        [a.plan_a, plan_b.focus_plan_id]))
+    a.b.at("2027-01-02")
+    a.rtm.generate_coding_assistance(a.b.provider, dec.period_id)
+    report = a.rtm.generate_report(a.b.provider, dec.period_id)
+    assert report.contributing_focus_plan_ids == s.contributing_focus_plan_ids
+    engagement = dict(report.sections[1].counts)
+    assert engagement["scheduled_opportunities"] == 11
+    assert engagement["distinct_attempts"] == 2
+
+
+def test_an_unreleased_week_schedules_nothing():
+    """Only weeks given to the family are opportunities."""
+    w = Billing()
+    nov = w.open("2026-11")
+    assert w.summary(nov).total_scheduled_opportunities == 3
+    cycle = w.b.weekly.create_cycle(w.b.provider, w.plan_a, sequence_in_month=2)
+    assert not cycle.is_released
+    assert w.summary(nov).total_scheduled_opportunities == 3
+
+
+def test_the_pure_derivation_counts_distinct_scheduled_instances(a):
+    """Duplicated scheduled pairs count once; observations cannot add any."""
+    from pilot_backend.rtm.evidence import derive_evidence_summary
+    nov = a.open("2026-11")
+    week = a.b.cycle(a.weeks[1])
+    alignments = a.b.repos.alignments.list_for_cycle(week.cycle_id)
+    pairs = [(week.cycle_id, al.activity_instance_ref) for al in alignments]
+    s = derive_evidence_summary(nov, alignments=alignments * 2,
+                                events=[a.original, a.correction, *a.nov],
+                                cycles=[week], scheduled_instances=pairs * 2,
+                                now=a.b.clock())
+    assert s.total_scheduled_opportunities == len(set(pairs)) == 3
+    assert s.per_goal_evidence[0].scheduled_opportunities == 3
+    none = derive_evidence_summary(nov, alignments=alignments,
+                                   events=[a.original, a.correction, *a.nov],
+                                   cycles=[week], now=a.b.clock())
+    assert none.total_scheduled_opportunities == 0, \
+        "scheduled is never inferred from alignments or observations"
+
+
+# ===========================================================================
+# Timezone authority — one timezone of record per child across every
+# clinician-approved plan; fail closed, never pick, never convert.
+# ===========================================================================
+
+OTHER_TZ = "America/Los_Angeles"
+
+
+def _counts_shape(s):
+    """Counts without ids (two worlds mint different ids)."""
+    return (s.total_scheduled_opportunities, s.total_distinct_observation_events,
+            s.distinct_observed_local_dates, s.did_it_count,
+            tuple((line.scheduled_opportunities, line.attributed_attempts)
+                  for line in s.per_goal_evidence),
+            len(s.contributing_focus_plan_ids), len(s.cycle_refs))
+
+
+def _world_b():
+    """Scenario B, built fresh: Plan A Weeks 1-4, Plan B from 12-14."""
+    w = Billing()
+    bb = w.b
+    w.weeks = {1: bb.week_one, 2: bb.release("2026-11-23"),
+               3: bb.release("2026-11-30"), 4: bb.release("2026-12-07")}
+    w.observe(w.weeks[3], "2026-12-02")
+    w.observe(w.weeks[4], "2026-12-09")
+    w.plan_b = bb.renewal_plan(month="2026-12", when="2026-12-14").focus_plan_id
+    w.weeks[5] = bb.release("2026-12-14")
+    w.weeks[6] = bb.release("2026-12-21")
+    w.observe(w.weeks[5], "2026-12-15")
+    w.observe(w.weeks[6], "2026-12-22")
+    return w
+
+
+def test_two_same_timezone_plans_open_identically():
+    """6. Same zone: the period's timezone and every count are identical
+    whichever plan opens it (two identical worlds, one opened per plan)."""
+    via_a_world, via_b_world = _world_b(), _world_b()
+    dec_a = via_a_world.open("2026-12", plan_id=via_a_world.plan_a,
+                             when="2026-12-20")
+    dec_b = via_b_world.open("2026-12", plan_id=via_b_world.plan_b,
+                             when="2026-12-20")
+    assert dec_a.timezone_of_record == dec_b.timezone_of_record \
+        == "America/New_York"
+    via_a, via_b = via_a_world.summary(dec_a), via_b_world.summary(dec_b)
+    assert _counts_shape(via_a) == _counts_shape(via_b)
+    assert via_a.total_scheduled_opportunities == 11
+    assert via_a.total_distinct_observation_events == 4
+
+
+def test_a_successor_in_another_timezone_is_refused_at_activation(a):
+    """7a. The invariant is enforced where a plan joins the child's clinical
+    record — activation — and the refusal writes nothing."""
+    from pilot_backend.goals.errors import ClinicalTimezoneMismatch
+    claims_before = a.b.governance_claims()
+    a.b.tz = OTHER_TZ
+    draft = a.b.draft_plan(month="2026-12", when="2026-12-14")
+    with pytest.raises(ClinicalTimezoneMismatch):
+        a.b.activate(draft, "2026-12-14")
+    row = a.b.repos.focus_plans.get_by_id(draft.focus_plan_id)
+    assert row.state.value == "draft" and row.activated_at is None
+    assert a.b.repos.focus_plans.get_by_id(a.plan_a).is_active
+    assert a.b.governance_claims() == claims_before
+    assert not a.b.repos.goal_snapshots.list_for_plan(draft.focus_plan_id)
+
+
+def test_a_stale_draft_in_another_zone_does_not_block_a_successor(a):
+    """Only clinician-APPROVED plans fix the zone: an abandoned draft in
+    another zone neither blocks a same-zone successor nor joins the record."""
+    a.b.tz = OTHER_TZ
+    a.b.draft_plan(month="2026-12", when="2026-12-03")
+    a.b.tz = "America/New_York"
+    successor = a.b.renewal_plan(month="2026-12", when="2026-12-14")
+    assert a.b.repos.focus_plans.get_by_id(successor.focus_plan_id).is_active
+
+
+def test_a_draft_in_another_timezone_does_not_poison_rtm(a):
+    """A draft is not clinician-approved and governs nothing; RTM ignores it
+    unless the period is opened against it — then it refuses."""
+    from pilot_backend.rtm.errors import RTMTimezoneInconsistent
+    a.b.tz = OTHER_TZ
+    draft = a.b.draft_plan(month="2026-12", when="2026-12-03")
+    dec = a.open("2026-12", when="2026-12-03")
+    assert dec.timezone_of_record == "America/New_York"
+    assert a.summary(dec).total_distinct_observation_events == 2
+    with pytest.raises(RTMTimezoneInconsistent):
+        a.open("2027-01", plan_id=draft.focus_plan_id, when="2027-01-02")
+
+
+def test_rtm_refuses_conflicting_approved_timezones(a):
+    """7b. Legacy/forged state with two approved zones (written past the
+    activation guard): opening refuses, and an already-open period's summary
+    and report refuse rather than pick, convert or mix."""
+    from pilot_backend.rtm.errors import RTMTimezoneInconsistent
+    dec = a.open("2026-12", when="2026-12-03")
+    a.b.at("2027-01-02")
+    a.rtm.generate_evidence_summary(a.b.provider, dec.period_id)
+    a.rtm.generate_coding_assistance(a.b.provider, dec.period_id)
+    a.b.tz = OTHER_TZ
+    a.b.forced_active_plan(month="2026-12", when="2026-12-04")
+    with pytest.raises(RTMTimezoneInconsistent):
+        a.summary(dec)
+    with pytest.raises(RTMTimezoneInconsistent):
+        a.rtm.generate_report(a.b.provider, dec.period_id)
+    assert a.b.repos.month_end_reports.current_for_period(dec.period_id) is None
+    with pytest.raises(RTMTimezoneInconsistent):
+        a.open("2027-01", when="2027-01-02")
+
+
+def test_a_legacy_undated_week_counts_only_when_it_cannot_be_ambiguous(s):
+    """A released week captured from a foreign (undated) document: wholly
+    inside the month, every activity is necessarily in the month; straddling
+    the month boundary, its dates are unknowable — refused, never guessed."""
+    from pilot_backend.domain.source_link import SourceSystem
+    from pilot_backend.rtm.errors import RTMConflict
+    from .test_rtm_evidence_reporting import _planning, _rtm_open
+    ctx = _planning(s)                       # Oct cycle 1, foreign snapshot
+    _, period = _rtm_open(s, ctx)
+    summary = s.rtm.generate_evidence_summary(s.provider_alpha, period.period_id)
+    assert summary.total_scheduled_opportunities == 3, "a, b, c in October"
+    for sequence in (2, 3, 4, 5):
+        s.weekly.create_cycle(s.provider_alpha, ctx["plan"].focus_plan_id,
+                              sequence_in_month=sequence)
+    crossing = [c for c in s.weekly.list_cycles(
+        s.provider_alpha, ctx["plan"].focus_plan_id)
+        if c.spans_month_boundary][0]
+    s.weekly.allocate_cycle(s.provider_alpha, crossing.cycle_id,
+                            ctx["candidates"], family_declared_capacity=2)
+    # Allocated but unreleased: still nothing scheduled from it.
+    assert s.rtm.generate_evidence_summary(
+        s.provider_alpha, period.period_id).total_scheduled_opportunities == 3
+    s.weekly.capture_snapshot(s.provider_alpha, crossing.cycle_id,
+                              SourceSystem.PARENT, "fictional-parent-plan-005",
+                              {"week": 5, "items": []})
+    s.weekly.release_cycle(s.provider_alpha, crossing.cycle_id)
+    with pytest.raises(RTMConflict, match="no dated schedule"):
+        s.rtm.generate_evidence_summary(s.provider_alpha, period.period_id)
