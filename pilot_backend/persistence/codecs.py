@@ -1045,6 +1045,7 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "generated_at": DT, "rule_version": STR, "focus_plan_ref": STR,
         "clinical_goal_refs": STR_PAIR_TUPLE, "cycle_refs": STR_TUPLE,
         "total_distinct_observation_events": INT,
+        "total_scheduled_opportunities": INT,
         "distinct_observed_local_dates": INT,
         "did_it_count": INT, "wasnt_ready_yet_count": INT,
         "didnt_want_to_try_count": INT,

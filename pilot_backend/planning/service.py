@@ -71,6 +71,7 @@ from ..domain.monthly_plan import (
 from ..domain.planning_policy import CURRENT_PLANNING_POLICY, PlanningPolicyVersion
 from ..domain.roles import ActorRole
 from ..goals.errors import (
+    ClinicalTimezoneMismatch,
     GoalAuthorizationError,
     GoalConflict,
     GoalValidationError,
@@ -216,6 +217,28 @@ class MonthlyPlanService:
         if not allocations:
             raise GoalValidationError(
                 "a plan cannot be activated with no allocated goal")
+
+        # RTM billing-evidence v2: one timezone of record per child across every
+        # clinician-approved plan. A plan that was ever activated (ACTIVE or
+        # CLOSED) fixes the zone; a successor in another zone is refused, never
+        # converted. Plans are immutable in zone and only reach ACTIVE through
+        # this method, whose CLINICAL_GOVERNANCE claim serialises activations,
+        # so a read outside the transaction cannot admit a second zone.
+        approved_zones = {
+            p.timezone_of_record
+            for p in self._repos.focus_plans.list_for_child(plan.child_id)
+            if p.focus_plan_id != focus_plan_id
+            and p.state is not MonthlyPlanState.DRAFT}
+        if approved_zones - {plan.timezone_of_record}:
+            self._audit(AuditAction.MONTHLY_PLAN_ACTIVATED, AuditResult.FAILURE,
+                        RESOURCE_FOCUS_PLAN, principal=principal,
+                        child_id=plan.child_id, resource_id=focus_plan_id,
+                        request_id=request_id, focus_plan_id=focus_plan_id,
+                        cycle_month=plan.cycle_month,
+                        plan_state=plan.state.value)
+            raise ClinicalTimezoneMismatch(
+                "every clinician-approved plan of a child must share one "
+                "timezone of record")
 
         now = self._stamp()
         kind = ClaimKind.CLINICAL_GOVERNANCE

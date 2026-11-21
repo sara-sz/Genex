@@ -127,8 +127,9 @@ class MonthEndReport:
     coding_summary_id: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
-    #: Every clinical plan represented in this month's evidence — sorted,
-    #: unique. `focus_plan_id` is the period's opening provenance only.
+    #: Every clinical plan that materially contributes to this month's record
+    #: (current observations OR scheduled opportunities dated in the month) —
+    #: sorted, unique. `focus_plan_id` is the period's opening provenance only.
     contributing_focus_plan_ids: Tuple[str, ...] = ()
     schema_version: str = MONTH_END_REPORT_SCHEMA_VERSION
 

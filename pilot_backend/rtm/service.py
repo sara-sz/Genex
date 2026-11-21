@@ -36,6 +36,7 @@ the generated candidates and leaves them byte-identical.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import List, Optional, Sequence, Tuple
 
@@ -52,8 +53,8 @@ from ..coding.rules import (
 from ..domain.goals import GoalRef, require_clinical_goal_ref
 from ..domain.identity_claims import ClaimKind, IdentityClaim, key_digest
 from ..domain.month_end import MonthEndReport, ReportSection, SectionContent
-from ..domain.monthly_plan import validate_cycle_month
-from ..domain.observation import current_observations
+from ..domain.monthly_plan import MonthlyPlanState, month_bounds, validate_cycle_month
+from ..domain.observation import attribution_month_for, current_observations
 from ..domain.roles import ActorRole
 from ..domain.rtm import (
     EpisodeStatus,
@@ -74,6 +75,7 @@ from ..domain.rtm_documentation import (
     documented_minutes,
 )
 from ..domain.rtm_summary import CodingAssistanceSummary, RTMEvidenceSummary
+from ..domain.weekly_plan_document import WEEKLY_PLAN_DOCUMENT_SCHEMA
 from ..persistence.document_store import DocumentStoreError
 from ..repository.interface import DuplicateRecord, RecordNotFound
 from .errors import (
@@ -81,6 +83,7 @@ from .errors import (
     FinalizedRecordImmutable,
     RTMAuthorizationError,
     RTMConflict,
+    RTMTimezoneInconsistent,
     RTMValidationError,
 )
 from .evidence import derive_evidence_summary
@@ -303,9 +306,14 @@ class RTMService:
         crosses into it, or when two rolling plans contribute to it.
 
         `focus_plan_id` is OPENING PROVENANCE and the source of the period's
-        `timezone_of_record` (the only timezone authority the model has; see
-        the slice report). It does NOT scope evidence: `_gather` reads every
+        `timezone_of_record`. It does NOT scope evidence: `_gather` reads every
         current observation attributed to the month, whichever plan owned it.
+
+        Timezone rule (founder decision): the period may take its zone from
+        the opening plan ONLY because every clinician-approved plan of the
+        child must agree (`activate_plan` refuses a second zone). Should any
+        approved plan of the child disagree with the opening plan — legacy
+        data, or a draft opened against — this refuses rather than pick.
         """
         episode = self._load_episode(episode_id)
         self._require_episode_owner(principal, episode,
@@ -320,6 +328,8 @@ class RTMService:
         if plan.child_id != episode.child_id:
             raise RTMValidationError(
                 "focus plan belongs to a different child")
+        self._require_one_child_timezone(episode.child_id,
+                                         plan.timezone_of_record)
 
         try:
             month = validate_cycle_month(cycle_month)
@@ -598,29 +608,137 @@ class RTMService:
                  if e.attribution_month == period.cycle_month}
         return sorted(by_id.values(), key=lambda e: (e.local_date, e.event_id))
 
+    def _require_one_child_timezone(self, child_id: str, zone: str) -> None:
+        """Fail closed unless every clinician-approved plan of the child
+        carries `zone`. Nothing is converted and no zone is chosen between.
+
+        Approved = ever activated (ACTIVE or CLOSED). That set covers every
+        plan an RTM record can draw on: weekly cycles exist only under
+        activated plans, so every contributing plan is in it, and the opening
+        plan's zone IS the period's zone. A draft is ignored — it governs
+        nothing — unless a period is opened against it, when its zone is the
+        `zone` checked here.
+        """
+        for plan in self._repos.focus_plans.list_for_child(child_id):
+            if (plan.state is not MonthlyPlanState.DRAFT
+                    and plan.timezone_of_record != zone):
+                raise RTMTimezoneInconsistent(
+                    "the child's clinical plans disagree on the timezone "
+                    "of record")
+
+    def _released_schedule(self, cycle) -> Optional[List[Tuple[str, str]]]:
+        """`(activity_instance_ref, scheduled local date)` for a RELEASED week.
+
+        The authority is the week's single released snapshot document — the
+        dates the family was actually shown. Returns None when that snapshot is
+        a foreign/legacy capture with no dated schedule (the caller decides
+        whether that is still exact). Any inconsistency fails closed.
+        """
+        snapshots = self._repos.weekly_plan_snapshots.list_for_cycle(
+            cycle.cycle_id)
+        if len(snapshots) != 1:
+            raise RTMConflict(
+                "a released week does not have exactly one plan snapshot")
+        try:
+            document = json.loads(snapshots[0].resolved_plan_document)
+        except ValueError:
+            raise RTMConflict("a released week's plan is unreadable") from None
+        if not isinstance(document, dict) or \
+                document.get("document_schema") != WEEKLY_PLAN_DOCUMENT_SCHEMA:
+            return None
+        if document.get("cycle_id") != cycle.cycle_id:
+            raise RTMConflict("a released plan names a different week")
+        dated = []
+        for row in document.get("activities") or ():
+            ref, local_date = str(row["activity_instance_ref"]), str(row["local_date"])
+            if not cycle.covers(local_date):
+                raise RTMConflict(
+                    "a released activity is dated outside its week")
+            dated.append((ref, local_date))
+        return dated
+
+    def _scheduled_in_month(self, period: RTMMonitoringPeriod):
+        """Scheduled opportunities DATED inside the billing month, all plans.
+
+        Independent of whether any observation was ever submitted. Every
+        RELEASED cycle of the child whose span touches the month is read —
+        whichever clinical plan owns it, never only `period.focus_plan_id` —
+        and each released activity counts toward the month of its own
+        scheduled local date. An unreleased week schedules nothing.
+
+        A legacy capture without dates is exact only when the whole week lies
+        inside the month (every activity then does too); a legacy week that
+        straddles the month boundary is refused rather than guessed at.
+
+        Returns `{cycle_id: (cycle, (activity_instance_ref, ...))}`.
+        """
+        first, last = (d.isoformat() for d in month_bounds(period.cycle_month))
+        scheduled = {}
+        cycles = sorted(
+            self._repos.weekly_cycles.list_for_child(period.child_id),
+            key=lambda c: c.cycle_id)
+        for cycle in cycles:
+            if cycle.child_id != period.child_id or not cycle.is_released:
+                continue
+            if cycle.ends_on < first or cycle.starts_on > last:
+                continue
+            dated = self._released_schedule(cycle)
+            if dated is None:
+                if not (first <= cycle.starts_on and cycle.ends_on <= last):
+                    raise RTMConflict(
+                        "a released week crossing the billing month has no "
+                        "dated schedule")
+                refs = {a.activity_instance_ref for a in
+                        self._repos.alignments.list_for_cycle(cycle.cycle_id)}
+            else:
+                refs = {ref for ref, local_date in dated
+                        if attribution_month_for(local_date)
+                        == period.cycle_month}
+            if refs:
+                scheduled[cycle.cycle_id] = (cycle, tuple(sorted(refs)))
+        return scheduled
+
     def _gather(self, period: RTMMonitoringPeriod):
         """Everything the month's evidence, coding and report are built from.
 
-        RTM billing-evidence v2. Observations are the month's CURRENT events
-        across all clinical plans; the contributing cycles and plans are
-        DERIVED from them (provenance), never taken from `period.focus_plan_id`.
+        RTM billing-evidence v2. Two independent streams, both across every
+        clinical plan of the child:
+
+        * OBSERVED evidence — the month's CURRENT observations
+          (`_current_month_events`);
+        * SCHEDULED opportunities — released activities dated in the month
+          (`_scheduled_in_month`), counted whether or not anyone gave feedback.
+
+        The record's cycles are the union of the cycles either stream draws on;
+        the contributing plans are those cycles' owning plans. Both are DERIVED
+        (provenance), never taken from `period.focus_plan_id`, and every one of
+        those plans must share the period's timezone of record.
         Reviews, actions, time and interactions stay period-scoped and are
         filtered by their own local dates by the callers, as before.
         """
         events = self._current_month_events(period)
-        cycle_ids = sorted({e.owning_cycle_id for e in events})
-        cycles = [self._repos.weekly_cycles.get_by_id(c) for c in cycle_ids]
+        scheduled = self._scheduled_in_month(period)
+        by_cycle = {c.cycle_id: c for c, _refs in scheduled.values()}
+        for cycle_id in sorted({e.owning_cycle_id for e in events}
+                               - set(by_cycle)):
+            by_cycle[cycle_id] = self._repos.weekly_cycles.get_by_id(cycle_id)
+        cycles = [by_cycle[c] for c in sorted(by_cycle)]
         alignments = []
         for cycle in cycles:
             alignments.extend(self._repos.alignments.list_for_cycle(cycle.cycle_id))
+        contributing = tuple(sorted({c.owning_focus_plan_id for c in cycles}))
+        self._require_one_child_timezone(period.child_id,
+                                         period.timezone_of_record)
         technologies = self._repos.rtm_technologies.list_for_episode(
             period.episode_id)
         return {
             "cycles": cycles,
             "alignments": alignments,
             "events": events,
-            "contributing_focus_plan_ids": tuple(sorted(
-                {c.owning_focus_plan_id for c in cycles})),
+            "scheduled_instances": tuple(sorted(
+                (cycle_id, ref) for cycle_id, (_c, refs) in scheduled.items()
+                for ref in refs)),
+            "contributing_focus_plan_ids": contributing,
             "reviews": self._repos.therapist_reviews.list_for_period(
                 period.period_id),
             "actions": self._repos.clinical_actions.list_for_period(
