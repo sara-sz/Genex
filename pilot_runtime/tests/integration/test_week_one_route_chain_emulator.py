@@ -259,8 +259,19 @@ def test_the_whole_chain_through_the_real_routes(stack):
     assert status == 200 and body["released"] is False and body["week"] is None
     trace.append("GET this-week before release -> 200 released=false week=null")
 
+    # The emulator database is SHARED by every test in the session, so each
+    # check below is scoped to THIS child — never store-wide.
+    def _mine(collection):
+        return [d for _i, d in stack.repos.store.list_all(collection)
+                if d.get("child_id") == stack.child_id]
+
     def _count(collection):
-        return len(stack.repos.store.list_all(collection))
+        # A snapshot carries no child_id (it hangs off its cycle), so it is
+        # counted store-wide: a before/after delta inside ONE test is stable,
+        # and a per-child filter would make that check vacuous.
+        if collection == "pilot_weekly_plan_snapshots":
+            return len(stack.repos.store.list_all(collection))
+        return len(_mine(collection))
 
     from datetime import date, timedelta
     from zoneinfo import ZoneInfo
@@ -294,10 +305,9 @@ def test_the_whole_chain_through_the_real_routes(stack):
     status, body = _call(stack.app, stack.release, method="POST",
                          bearer="Bearer token-provider", body=capacity_body)
     assert (status, body) == (403, {"error": "not permitted"})
-    plans_now = [d for _i, d in stack.repos.store.list_all(
-        "pilot_monthly_focus_plans")]
     assert [(d["focus_plan_id"], d["state"], d["timezone_of_record"])
-            for d in plans_now] == [(plan_id, "draft", PLAN_TZ)]
+            for d in _mine("pilot_monthly_focus_plans")] == [
+        (plan_id, "draft", PLAN_TZ)]
     assert _count("pilot_weekly_cycles") == 0
     trace.append("POST release with a DRAFT plan only -> 403, no second plan")
 
