@@ -25,6 +25,8 @@ from datetime import datetime, timezone
 
 import pytest
 
+from .first_plan import activate_first_plan, release_with_first_plan  # noqa: F401
+
 from pilot_backend.auth import DevAuthVerifier, VerifiedToken
 from pilot_backend.config import PilotSettings
 from pilot_backend.domain import entities as entities_module
@@ -111,8 +113,10 @@ class Boundary:
 
     def release(self, when, **kwargs):
         self.at(when)
-        return self.service.release_week_one(
-            self.provider, CHILD, family_declared_capacity=CAPACITY,
+        # First-plan gate: the clinician's explicit plan, then the release.
+        return release_with_first_plan(
+            self.service, self.provider, CHILD,
+            family_declared_capacity=CAPACITY,
             timezone_of_record=self.tz, **kwargs)
 
     def this_week(self, when):

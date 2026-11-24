@@ -32,8 +32,10 @@ For each plan, "today" is the local date in THAT plan's `timezone_of_record`
    cannot — and only because a clinician activated it.
 3. RENEWAL. If a plan was ever activated for this child but none can hold the
    week, the answer is `RENEWAL_REQUIRED`: nothing is created or copied.
-4. BOOTSTRAP. A child with no activated plan at all is the first-plan case the
-   release route has always handled (create, allocate, activate, Week 1).
+4. BOOTSTRAP. A child with no activated plan at all (a draft does not count).
+   The release REFUSES it (`ClinicalPlanRequired`): the clinician creates the
+   first plan with an explicit `timezone_of_record` and activates it first.
+   Nothing ever creates a first plan with a defaulted zone.
 """
 
 from __future__ import annotations

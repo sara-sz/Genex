@@ -615,10 +615,30 @@ POST /pilot/children/{child_id}/weekly-cycles/current/release
 { "family_declared_capacity": 3 }
 ```
 
-The body allowlist is **exactly one field, and it is required.** One provider
-action composes every transition: goal validation → monthly plan (create or
-reuse) → goal allocation → activation → Week 1 cycle → candidate lookup →
-allocation → immutable snapshot → release. The low-level transitions are
+The body allowlist is **exactly one field, and it is required.**
+
+**Prerequisite — the child's first clinical plan (first-plan timezone gate).**
+The release never creates a plan. Before the FIRST release for a child, the
+clinician runs, in order:
+
+```
+POST /pilot/children/{child_id}/monthly-plan   { "cycle_month": "YYYY-MM",
+                                                 "timezone_of_record": "<IANA zone>" }
+POST /pilot/monthly-plans/{focus_plan_id}/allocations
+                                               { "goal_kind": "clinical", "goal_id": "…",
+                                                 "priority_rank": 1 }
+POST /pilot/monthly-plans/{focus_plan_id}/activate
+```
+
+`timezone_of_record` is the family's clinical zone, chosen explicitly by the
+clinician (e.g. `America/Los_Angeles` for a Bay Area family) — never taken from
+the browser, the server or the Parent session; it is required and validated
+(an unknown name is refused). Without an ACTIVATED plan (a draft is not enough)
+the release is refused (403) and nothing is written.
+
+With a governing plan in place, one provider action composes the rest: goal
+validation → goal allocation top-up → Week 1 cycle (starting on the plan's
+LOCAL date) → candidate lookup → allocation → immutable snapshot → release. The low-level transitions are
 deliberately **not** exposed individually: a browser able to allocate but not
 snapshot could leave a week half-planned and visible to nobody.
 
@@ -663,6 +683,7 @@ stopped them. Verified causes:
 | `family_declared_capacity` = `true` (bool) | 403 |
 | any extra body field | 403 |
 | no approved, anchored, activity-mappable goal | 403 |
+| no clinician-ACTIVATED plan yet (none, or draft only) | 403, nothing written |
 
 Because every refusal looks identical, the UI must validate capacity
 client-side and surface a generic "could not release" with a retry path rather

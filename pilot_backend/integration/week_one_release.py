@@ -3,7 +3,8 @@
 0.6A-2. ONE provider action that composes the EXISTING transitions:
 
     ClinicalGoal validation    goals.get_goal / goal_anchor / is_activity_mappable
-    monthly plan               planning.active_plan | create_plan
+    clinical plan              governance only — clinician-created and
+                               ACTIVATED beforehand; never created here
     goal allocation            planning.allocate_goal
     monthly activation         planning.activate_plan
     Week 1 cycle               weekly.create_cycle
@@ -150,6 +151,18 @@ class ClinicalRenewalRequired(WeekOneReleaseError):
     The child has had a plan, but every plan's period has ended (or cannot
     hold the whole week). Nothing is created, auto-renewed or copied forward:
     continuing requires a clinician to review and activate a plan.
+    """
+
+
+class ClinicalPlanRequired(WeekOneReleaseError):
+    """First-plan timezone gate. The child has never had a clinician-ACTIVATED
+    plan, so there is nothing to govern Week 1.
+
+    Week 1 is released only under a plan the clinician created — with an
+    explicit, validated IANA `timezone_of_record` — and then activated. This
+    service never creates, allocates or activates a first plan, so no plan can
+    ever acquire a defaulted timezone. A draft is not enough: it has no clinical
+    period and governs nothing. Refused before any write.
     """
 
 
@@ -317,7 +330,6 @@ class WeekOneReleaseService:
 
     def release_week_one(self, principal, child_id: str, *,
                          family_declared_capacity: Optional[int],
-                         timezone_of_record: str = "UTC",
                          cycle_month: Optional[str] = None,
                          local_date: Optional[str] = None,
                          request_id: str = "") -> WeekOneOutcome:
@@ -345,47 +357,44 @@ class WeekOneReleaseService:
                 "review or renewal is required")
 
         if governance.outcome is GovernanceOutcome.BOOTSTRAP:
-            # The child's FIRST plan, exactly as before: created, allocated and
-            # activated by this release, with Week 1 starting today.
-            today = local_date or local_date_in(timezone_of_record,
-                                                self._now())
-            plan = self._resolve_plan(principal, child_id, goals,
-                                      timezone_of_record=timezone_of_record,
-                                      cycle_month=cycle_month or today[:7],
-                                      request_id=request_id)
-            cycle = self._resolve_cycle(principal, plan,
-                                        request_id=request_id,
-                                        local_date=today)
-        else:
-            plan = governance.plan
-            if (cycle_month is not None
-                    and validate_cycle_month(cycle_month) != plan.cycle_month):
-                # An explicit month can only AGREE with clinical governance.
-                # It can never select another plan, and so can never force a
-                # starter week inside a week another plan already governs.
-                raise GoverningPlanConflict(
-                    "the requested month is not the governing plan's")
-            if plan.is_active:
-                self._ensure_allocated(principal, plan, goals,
-                                       request_id=request_id)
-            cycle = governance.cycle
-            if governance.sequence > WEEK_ONE:
-                # P0-B1: Week 2 onward never falls through to the non-adaptive
-                # creation path below.
-                if cycle is not None and cycle.is_released:
-                    return self._existing_outcome(principal, plan, cycle,
-                                                  goals)
-                return self._release_adaptive(
-                    principal, plan, list(governance.plan_cycles), goals,
-                    first_plan_date=governance.first_plan_date,
-                    sequence=governance.sequence, existing=cycle,
-                    capacity=capacity, request_id=request_id)
-            if cycle is None:
-                cycle = self._weekly.create_cycle(
-                    principal, plan.focus_plan_id,
-                    sequence_in_month=WEEK_ONE,
-                    first_plan_date=governance.local_date,
-                    request_id=request_id)
+            # First-plan timezone gate. No plan was ever ACTIVATED for this
+            # child (a draft does not count). The pre-gate code created,
+            # allocated and activated a plan here with a defaulted UTC zone;
+            # that path is removed. The clinician creates the plan with an
+            # explicit `timezone_of_record` and activates it first.
+            raise ClinicalPlanRequired(
+                "the child's first clinical plan must be created and "
+                "activated by the clinician before Week 1 is released")
+
+        plan = governance.plan
+        if (cycle_month is not None
+                and validate_cycle_month(cycle_month) != plan.cycle_month):
+            # An explicit month can only AGREE with clinical governance.
+            # It can never select another plan, and so can never force a
+            # starter week inside a week another plan already governs.
+            raise GoverningPlanConflict(
+                "the requested month is not the governing plan's")
+        if plan.is_active:
+            self._ensure_allocated(principal, plan, goals,
+                                   request_id=request_id)
+        cycle = governance.cycle
+        if governance.sequence > WEEK_ONE:
+            # P0-B1: Week 2 onward never falls through to the non-adaptive
+            # creation path below.
+            if cycle is not None and cycle.is_released:
+                return self._existing_outcome(principal, plan, cycle,
+                                              goals)
+            return self._release_adaptive(
+                principal, plan, list(governance.plan_cycles), goals,
+                first_plan_date=governance.first_plan_date,
+                sequence=governance.sequence, existing=cycle,
+                capacity=capacity, request_id=request_id)
+        if cycle is None:
+            cycle = self._weekly.create_cycle(
+                principal, plan.focus_plan_id,
+                sequence_in_month=WEEK_ONE,
+                first_plan_date=governance.local_date,
+                request_id=request_id)
 
         if cycle.is_released:
             # REPLAY. The existing released week is returned unchanged, and the
@@ -418,39 +427,6 @@ class WeekOneReleaseService:
             raise CapacityRequired(
                 "the declared weekly capacity must be at least one activity")
         return value
-
-    def _resolve_plan(self, principal, child_id: str, goals, *,
-                      timezone_of_record: str, cycle_month: Optional[str],
-                      request_id: str):
-        """The active monthly plan, created and activated if there is none.
-
-        Uses the EXISTING transitions: `create_plan` drafts, `allocate_goal`
-        puts each approved goal on the month, `activate_plan` wins the
-        child-month claim. Nothing is skipped and no state is set directly.
-        """
-        # The month is resolved FIRST, because `active_plan` is scoped to one
-        # child-MONTH: a plan active for September is not the plan this week
-        # belongs to, and asking without a month would make the answer depend on
-        # whatever the service happened to pick.
-        # P0-C: the month LABEL of a new plan is the local month in its own
-        # zone of record, not the server's UTC month. It indexes the plan; it
-        # does not govern anything.
-        month = cycle_month or local_date_in(timezone_of_record,
-                                             self._now())[:7]
-        existing = self._plans.active_plan(principal, child_id, month)
-        if existing is not None:
-            self._ensure_allocated(principal, existing, goals,
-                                   request_id=request_id)
-            return existing
-
-        plan = self._plans.create_plan(
-            principal, child_id, month, timezone_of_record,
-            request_id=request_id)
-        self._ensure_allocated(principal, plan, goals, request_id=request_id)
-        # `activate_plan` refuses a plan with no active allocation, so the
-        # ordering here is required rather than stylistic.
-        return self._plans.activate_plan(principal, plan.focus_plan_id,
-                                         request_id=request_id)
 
     def _ensure_allocated(self, principal, plan, goals, *,
                           request_id: str) -> None:
@@ -978,6 +954,7 @@ class WeekOneReleaseService:
 
 __all__ = [
     "AdaptiveWeekCapacityMismatch",
+    "ClinicalPlanRequired",
     "ClinicalRenewalRequired",
     "GoverningPlanConflict",
     "AdaptiveWeekStateMismatch",

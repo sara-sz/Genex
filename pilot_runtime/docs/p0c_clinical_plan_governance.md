@@ -43,8 +43,11 @@ date).
 3. **Renewal required** — the child has had a plan but none can hold the week
    → `ClinicalRenewalRequired` (route: constant 403). Nothing is created,
    renewed or copied forward.
-4. **Bootstrap** — no plan ever activated → the existing first-release path
-   (create, allocate, activate, Week 1).
+4. **First plan required** — no plan ever activated (a draft does not count)
+   → `ClinicalPlanRequired` (route: constant 403), nothing written. *First-plan
+   timezone gate:* the release no longer creates/activates a first plan with a
+   defaulted UTC zone; the clinician creates it with an explicit
+   `timezone_of_record`, allocates and activates it, then releases Week 1.
 
 `cycle_month` is a label/index/reporting field only. An explicit `cycle_month`
 on the release service must AGREE with the governing plan

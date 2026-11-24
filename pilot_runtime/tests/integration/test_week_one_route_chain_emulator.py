@@ -7,6 +7,9 @@ composed WSGI application, with Firestore behind it.
 
     F-B v2 generation      POST /pilot/children/{id}/goal-suggestions/generate-v2
     Hannah's approval      POST /pilot/children/{id}/goals
+    first clinical plan    POST /pilot/children/{id}/monthly-plan   (explicit zone)
+                           POST /pilot/monthly-plans/{plan}/allocations
+                           POST /pilot/monthly-plans/{plan}/activate
     current week release   POST /pilot/children/{id}/weekly-cycles/current/release
     caregiver's week       GET  /pilot/children/{id}/this-week
 
@@ -27,6 +30,9 @@ NOW = datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc)
 DOMAIN = "talking_and_communicating"
 CYCLE_MONTH = "2026-10"
 CAPACITY = 3
+#: First-plan timezone gate: the clinician's EXPLICIT zone, deliberately not UTC
+#: so the starter week is proven to start on the plan's local date.
+PLAN_TZ = "America/Los_Angeles"
 
 AT_24 = "says at least two words together like more milk"
 BOOK = "name things in a book when you point and ask what is this"
@@ -186,6 +192,7 @@ def stack(repos, unique_suffix):
     bundle.release = (f"/pilot/children/{child_id}"
                       "/weekly-cycles/current/release")
     bundle.this_week = f"/pilot/children/{child_id}/this-week"
+    bundle.monthly_plan = f"/pilot/children/{child_id}/monthly-plan"
     return bundle
 
 
@@ -252,12 +259,65 @@ def test_the_whole_chain_through_the_real_routes(stack):
     assert status == 200 and body["released"] is False and body["week"] is None
     trace.append("GET this-week before release -> 200 released=false week=null")
 
-    # The STARTER week under the frozen Genex rule. This route runs on the REAL
-    # clock, so the invariant is asserted rather than fixed dates: the week
-    # starts TODAY and ends on that week's Sunday, and never earlier than today.
-    from datetime import date, timedelta
+    def _count(collection):
+        return len(stack.repos.store.list_all(collection))
 
-    today = date.today()
+    from datetime import date, timedelta
+    from zoneinfo import ZoneInfo
+
+    # The plan's LOCAL date, from the real clock in the clinician's zone.
+    today = datetime.now(ZoneInfo(PLAN_TZ)).date()
+
+    # 6a. First-plan gate: no clinician-activated plan -> refused, NOTHING
+    #     written (no plan, no claim, no cycle, no snapshot).
+    before = {c: _count(c) for c in ("pilot_monthly_focus_plans",
+                                     "pilot_identity_claims",
+                                     "pilot_weekly_cycles",
+                                     "pilot_weekly_plan_snapshots")}
+    status, body = _call(stack.app, stack.release, method="POST",
+                         bearer="Bearer token-provider", body=capacity_body)
+    assert (status, body) == (403, {"error": "not permitted"})
+    assert {c: _count(c) for c in before} == before, "the gate wrote something"
+    trace.append("POST release with NO activated plan -> 403, nothing written")
+
+    # 6b. The clinician creates the first plan with an EXPLICIT zone.
+    status, body = _call(stack.app, stack.monthly_plan, method="POST",
+                         bearer="Bearer token-provider",
+                         body=json.dumps({"cycle_month": today.isoformat()[:7],
+                                          "timezone_of_record": PLAN_TZ}).encode())
+    assert status == 200, body
+    plan_id = body["plan"]["focus_plan_id"]
+    assert body["plan"]["timezone_of_record"] == PLAN_TZ
+    assert body["plan"]["state"] == "draft"
+
+    # 6c. A DRAFT is not enough: refused, and no second (default-zone) plan.
+    status, body = _call(stack.app, stack.release, method="POST",
+                         bearer="Bearer token-provider", body=capacity_body)
+    assert (status, body) == (403, {"error": "not permitted"})
+    plans_now = [d for _i, d in stack.repos.store.list_all(
+        "pilot_monthly_focus_plans")]
+    assert [(d["focus_plan_id"], d["state"], d["timezone_of_record"])
+            for d in plans_now] == [(plan_id, "draft", PLAN_TZ)]
+    assert _count("pilot_weekly_cycles") == 0
+    trace.append("POST release with a DRAFT plan only -> 403, no second plan")
+
+    # 6d. Allocate the approved goal and ACTIVATE — the clinician's workflow.
+    status, body = _call(
+        stack.app, f"/pilot/monthly-plans/{plan_id}/allocations",
+        method="POST", bearer="Bearer token-provider",
+        body=json.dumps({"goal_kind": "clinical", "goal_id": goal_id,
+                         "priority_rank": 1}).encode())
+    assert status == 200, body
+    status, body = _call(stack.app, f"/pilot/monthly-plans/{plan_id}/activate",
+                         method="POST", bearer="Bearer token-provider")
+    assert status == 200 and body["plan"]["state"] == "active", body
+    trace.append(f"POST monthly-plan tz={PLAN_TZ} + allocations + activate "
+                 "-> 200 active")
+
+    # The STARTER week under the frozen Genex rule, on the PLAN's local date.
+    # This route runs on the REAL clock, so the invariant is asserted rather
+    # than fixed dates: the week starts TODAY (in the plan's zone) and ends on
+    # that week's Sunday, and never earlier than today.
     sunday = today + timedelta(days=(6 - today.weekday()) % 7)
     starter_days = (sunday - today).days + 1
 
@@ -280,6 +340,7 @@ def test_the_whole_chain_through_the_real_routes(stack):
                          bearer="Bearer token-provider", body=capacity_body)
     assert status == 200, body
     assert body["created"] is True
+    assert body["focus_plan_id"] == plan_id, "Week 1 governed by the clinician's plan"
     assert body["activity_count"] == expected_activities, (
         f"{starter_days}-day starter week, declared {CAPACITY}")
     assert body["goal_ids"] == [goal_id]

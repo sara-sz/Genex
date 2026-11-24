@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 
 import pytest
 
+from .first_plan import activate_first_plan, release_with_first_plan  # noqa: F401
+
 from pilot_backend.domain.activity_template import ActivityTemplate
 from pilot_backend.domain.adaptation_decision import (
     P0B_RULE_VERSION,
@@ -169,8 +171,10 @@ class Adaptive:
 
     def release(self, day, capacity=CAPACITY):
         self.clock.set(day)
-        return self.service.release_week_one(
-            self.provider, CHILD, family_declared_capacity=capacity,
+        # First-plan gate: the clinician's explicit plan, then the release.
+        return release_with_first_plan(
+            self.service, self.provider, CHILD,
+            family_declared_capacity=capacity,
             timezone_of_record=TZ, cycle_month=MONTH, local_date=day)
 
     def week_one_refs(self):
@@ -725,10 +729,8 @@ def test_the_non_adaptive_week_two_path_is_closed(a):
 
 
 def _plan(a):
-    goals = a.service.releasable_goals(a.provider, CHILD)
-    return a.service._resolve_plan(a.provider, CHILD, goals,
-                                   timezone_of_record=TZ, cycle_month=MONTH,
-                                   request_id="")
+    # Week 1 is released, so the clinician's activated plan already exists.
+    return a.service._plans.active_plan(a.provider, CHILD, MONTH)
 
 
 def test_an_exactly_matching_unreleased_draft_is_resumed(a):

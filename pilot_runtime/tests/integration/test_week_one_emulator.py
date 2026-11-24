@@ -197,6 +197,13 @@ def world(repos, unique_suffix):
     bundle.service = lambda: WeekOneReleaseService(
         repos=repos, goals=goals, plans=plans, weekly=weekly,
         activity_bank=StaticActivityBank(), now=lambda: NOW)
+    # First-plan timezone gate: the release never creates a plan, so the
+    # clinician's explicit workflow runs first (create with an explicit zone,
+    # allocate, activate). The contention below is then on WEEK 1 itself.
+    plan = plans.create_plan(principal, child_id, CYCLE_MONTH, TZ)
+    plans.allocate_goal(principal, plan.focus_plan_id, goal.ref,
+                        priority_rank=1)
+    plans.activate_plan(principal, plan.focus_plan_id)
     return bundle
 
 
@@ -219,7 +226,7 @@ def test_eight_concurrent_releases_produce_exactly_one_released_week(world):
             return world.service().release_week_one(
                 world.principal, world.child_id,
                 family_declared_capacity=CAPACITY,
-                timezone_of_record=TZ, cycle_month=CYCLE_MONTH)
+                cycle_month=CYCLE_MONTH)
         except Exception as exc:        # recorded, never swallowed
             failures.append(f"{type(exc).__name__}: {exc}")
             return None
@@ -296,7 +303,7 @@ def test_a_concurrent_replay_after_release_adds_nothing(world):
     """The production shape: one release, then eight opens of the child."""
     world.service().release_week_one(
         world.principal, world.child_id, family_declared_capacity=CAPACITY,
-        timezone_of_record=TZ, cycle_month=CYCLE_MONTH)
+        cycle_month=CYCLE_MONTH)
     baseline = (len(_rows(world, "pilot_weekly_cycles",
                           child_id=world.child_id)),
                 len(_rows(world, "pilot_capacity_ledgers",
@@ -309,7 +316,7 @@ def test_a_concurrent_replay_after_release_adds_nothing(world):
         return world.service().release_week_one(
             world.principal, world.child_id,
             family_declared_capacity=CAPACITY,
-            timezone_of_record=TZ, cycle_month=CYCLE_MONTH)
+            cycle_month=CYCLE_MONTH)
 
     with ThreadPoolExecutor(max_workers=WRITERS) as pool:
         outcomes = list(pool.map(replay, range(WRITERS)))
@@ -327,7 +334,7 @@ def test_a_concurrent_replay_with_a_different_capacity_cannot_rewrite_it(world):
     """A released week is frozen; a later capacity belongs to a future cycle."""
     first = world.service().release_week_one(
         world.principal, world.child_id, family_declared_capacity=CAPACITY,
-        timezone_of_record=TZ, cycle_month=CYCLE_MONTH)
+        cycle_month=CYCLE_MONTH)
 
     barrier = threading.Barrier(WRITERS)
 
@@ -336,7 +343,7 @@ def test_a_concurrent_replay_with_a_different_capacity_cannot_rewrite_it(world):
         return world.service().release_week_one(
             world.principal, world.child_id,
             family_declared_capacity=1 + (index % 5),
-            timezone_of_record=TZ, cycle_month=CYCLE_MONTH)
+            cycle_month=CYCLE_MONTH)
 
     with ThreadPoolExecutor(max_workers=WRITERS) as pool:
         outcomes = list(pool.map(replay, range(WRITERS)))
@@ -370,7 +377,7 @@ def _week_two_rows(world):
 def _release(world, local_date=None):
     return world.service().release_week_one(
         world.principal, world.child_id, family_declared_capacity=CAPACITY,
-        timezone_of_record=TZ, cycle_month=CYCLE_MONTH, local_date=local_date)
+        cycle_month=CYCLE_MONTH, local_date=local_date)
 
 
 def _assert_one_explained_week_two(world):

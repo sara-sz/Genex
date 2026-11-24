@@ -30,6 +30,8 @@ from datetime import datetime, timezone
 
 import pytest
 
+from .first_plan import activate_first_plan, release_with_first_plan  # noqa: F401
+
 from pilot_backend.domain.canonical_rung import (
     ActivityFamilyBinding,
     CanonicalRung,
@@ -200,8 +202,9 @@ class Chain:
 
     def release(self, capacity=DEMO_CAPACITY, principal=None,
                 local_date=None):
-        return self.service.release_week_one(
-            principal or self.principal, CHILD,
+        # First-plan gate: the clinician's explicit plan, then the release.
+        return release_with_first_plan(
+            self.service, principal or self.principal, CHILD,
             family_declared_capacity=capacity,
             timezone_of_record=TZ, cycle_month=CYCLE_MONTH,
             local_date=local_date)
@@ -583,9 +586,8 @@ def test_a_draft_cycle_is_invisible_to_the_parent_read():
     goals = chain.service.releasable_goals(chain.principal, CHILD)
     chain.approve()
     goals = chain.service.releasable_goals(chain.principal, CHILD)
-    plan = chain.service._resolve_plan(
-        chain.principal, CHILD, goals, timezone_of_record=TZ,
-        cycle_month=CYCLE_MONTH, request_id="")
+    plan = activate_first_plan(chain.service, chain.principal, CHILD,
+                               timezone_of_record=TZ, cycle_month=CYCLE_MONTH)
     cycle = chain.service._resolve_cycle(chain.principal, plan, request_id="")
     templates = chain.service._candidate_templates(goals)
     chain.service._allocate(chain.principal, cycle, goals, templates,
@@ -944,10 +946,7 @@ def test_the_following_cycle_begins_the_next_monday():
     chain.approve()
     first = chain.release(local_date="2026-10-07")
 
-    goals = chain.service.releasable_goals(chain.principal, CHILD)
-    plan = chain.service._resolve_plan(
-        chain.principal, CHILD, goals, timezone_of_record=TZ,
-        cycle_month=CYCLE_MONTH, request_id="")
+    plan = chain.plans.active_plan(chain.principal, CHILD, CYCLE_MONTH)
     with pytest.raises(NonAdaptiveWeekRefused):
         chain.service._resolve_cycle(
             chain.principal, plan, request_id="", local_date="2026-10-14")
