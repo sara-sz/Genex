@@ -403,10 +403,41 @@ class WeekOneReleaseService:
             # future cycle rather than to history.
             return self._existing_outcome(principal, plan, cycle, goals)
 
+        # Week 1 resume. A release interrupted after its allocation committed
+        # (snapshot not saved) or after its snapshot committed (release not
+        # marked) used to be stuck: re-running `_allocate` hit "already
+        # allocated" and every retry was refused. Week 1 now resumes exactly
+        # the way Week 2+ does (P0-B1), through the SAME two existing steps:
+        #
+        #   allocation_state       None -> allocate normally; an allocation
+        #                          EXACTLY what this request would write ->
+        #                          reuse it; anything else (capacity,
+        #                          placements, gaps, ledger) -> refused, and
+        #                          nothing is written or repaired.
+        #   _resume_snapshot_and_release
+        #                          reuse a snapshot only if byte-for-byte the
+        #                          document this request builds; otherwise
+        #                          capture; release if not released; an
+        #                          identical concurrent writer is tolerated.
         templates_by_id = self._candidate_templates(goals)
-        placements = self._allocate(principal, cycle, goals, templates_by_id,
-                                    capacity=capacity, request_id=request_id)
-        return self._snapshot_and_release(
+        candidates = self._candidates_for(goals, templates_by_id)
+        if not candidates:
+            raise GoalNotReleasable(
+                "no reviewed activity content serves this child's goals")
+        resumed = self._weekly.allocation_state(
+            principal, cycle.cycle_id, candidates,
+            family_declared_capacity=capacity)
+        if resumed is None:
+            placements = self._allocate(principal, cycle, goals,
+                                        templates_by_id, capacity=capacity,
+                                        request_id=request_id)
+        else:
+            placements = resumed.placements
+            if not placements:
+                raise AdaptiveWeekStateMismatch(
+                    "an in-progress week has an empty allocation")
+        cycle = self._weekly.get_cycle(principal, cycle.cycle_id)
+        return self._resume_snapshot_and_release(
             principal, plan, cycle, goals, placements, templates_by_id,
             request_id=request_id)
 
@@ -842,40 +873,6 @@ class WeekOneReleaseService:
                          if template.activity_family_ref in bound]
             candidates.extend(candidates_for_goal(templates, row.ref))
         return candidates
-
-    def _snapshot_and_release(self, principal, plan, cycle, goals, placements,
-                              templates_by_id, *, request_id: str):
-        """Freeze the content, then release. Snapshot FIRST, always.
-
-        `release_cycle` itself refuses a cycle with no snapshot, so this
-        ordering is enforced by the existing service rather than only here.
-        """
-        goal_text = {row.goal_id: row.text for row in goals}
-        goal_versions = {row.goal_id: row.version_id for row in goals}
-
-        document = build_document(
-            cycle=cycle, placements=placements,
-            templates_by_id=templates_by_id,
-            goal_text_by_id=goal_text,
-            goal_version_by_id=goal_versions)
-        snapshot = self._weekly.capture_snapshot(
-            principal, cycle.cycle_id, SNAPSHOT_SOURCE_SYSTEM,
-            cycle.cycle_id, document, request_id=request_id)
-        released = self._weekly.release_cycle(
-            principal, cycle.cycle_id, request_id=request_id)
-
-        return WeekOneOutcome(
-            child_id=cycle.child_id,
-            focus_plan_id=plan.focus_plan_id,
-            cycle_id=cycle.cycle_id,
-            goal_ids=tuple(row.goal_id for row in goals),
-            activity_count=len(placements),
-            created=True,
-            released_at=released.released_to_parent_at,
-            snapshot_id=snapshot.snapshot_id,
-            parent_week=parent_week_view(
-                snapshot.document(),
-                released_at=released.released_to_parent_at))
 
     def _existing_outcome(self, principal, plan, cycle, goals) -> WeekOneOutcome:
         """The already-released week, rebuilt from its FROZEN snapshot."""

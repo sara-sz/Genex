@@ -406,6 +406,96 @@ def test_adaptive_week_two_commits_its_explanation_on_a_real_server(world):
     assert cycle["cycle_id"] == outcome.cycle_id
 
 
+def _interrupt_week_one(world, step, *, before):
+    """Leave Week 1 partially written: `step` fails once (before or after it
+    commits). Mirrors the Week 2 interrupted-release proof below."""
+    original = getattr(world.weekly, step)
+    armed = {"on": True}
+
+    def interrupted(*args, **kwargs):
+        if armed["on"] and before:
+            armed["on"] = False
+            raise RuntimeError(f"injected before {step}")
+        result = original(*args, **kwargs)
+        if armed["on"]:
+            armed["on"] = False
+            raise RuntimeError(f"injected after {step}")
+        return result
+
+    setattr(world.weekly, step, interrupted)
+    try:
+        with pytest.raises(RuntimeError):
+            _release(world)
+    finally:
+        setattr(world.weekly, step, original)
+
+
+def _week_one_counts(world):
+    (cycle,) = _rows(world, "pilot_weekly_cycles", child_id=world.child_id)
+    cid = cycle["cycle_id"]
+    return cycle, {
+        "ledgers": len(_rows(world, "pilot_capacity_ledgers", cycle_id=cid)),
+        "alignments": len(_rows(world, "pilot_activity_goal_alignments", cycle_id=cid)),
+        "snapshots": len(_rows(world, "pilot_weekly_plan_snapshots", cycle_id=cid)),
+        "releases": len(_rows(world, "pilot_audit_events", action="weekly_cycle_released",
+                              resource_id=cid)),
+    }
+
+
+# Short ids: the fixture's `unique_suffix` is the node name cut to 60 chars,
+# so long parametrised names would collide in the shared emulator database.
+@pytest.mark.parametrize("step,before", [("capture_snapshot", True),
+                                         ("capture_snapshot", False),
+                                         ("release_cycle", True)],
+                         ids=["snap-before", "snap-after", "release-before"])
+def test_week_one_resumes_on_real_server(world, step, before):
+    """Week 1 resume: the two formerly stuck states (allocated without a
+    snapshot; snapshot without a release) complete on retry."""
+    _interrupt_week_one(world, step, before=before)
+    cycle, counts = _week_one_counts(world)
+    assert not cycle.get("released_to_parent_at")
+
+    outcome = _release(world)
+    assert outcome.created is True and outcome.cycle_id == cycle["cycle_id"]
+    cycle, counts = _week_one_counts(world)
+    assert cycle.get("released_to_parent_at")
+    assert counts == {"ledgers": 1, "alignments": CAPACITY, "snapshots": 1, "releases": 1}
+    assert _release(world).created is False
+
+
+def test_eight_concurrent_resumes_of_an_interrupted_week_one_release_once(world):
+    """Start from cycle + correct allocation + correct snapshot + UNRELEASED,
+    then 8 identical resumes at once against a real server."""
+    _interrupt_week_one(world, "release_cycle", before=True)
+    cycle, counts = _week_one_counts(world)
+    assert not cycle.get("released_to_parent_at") and counts["snapshots"] == 1
+
+    barrier = threading.Barrier(WRITERS)
+    failures = []
+
+    def resume(_index):
+        barrier.wait(timeout=30)
+        try:
+            return _release(world)
+        except Exception as exc:        # recorded, never swallowed
+            failures.append(type(exc).__name__)
+            return None
+
+    with ThreadPoolExecutor(max_workers=WRITERS) as pool:
+        results = list(pool.map(resume, range(WRITERS)))
+    assert len(results) == WRITERS, results
+    # Losers may be refused mid-flight; a retry must converge either way.
+    final = _release(world)
+    winners = [r for r in results if r is not None] + [final]
+    assert {r.cycle_id for r in winners} == {cycle["cycle_id"]}
+    assert final.created is False
+    cycle, counts = _week_one_counts(world)
+    assert cycle.get("released_to_parent_at")
+    assert counts == {"ledgers": 1, "alignments": CAPACITY, "snapshots": 1, "releases": 1}, (
+        counts, failures)
+    assert len(_rows(world, "pilot_weekly_cycles", child_id=world.child_id)) == 1
+
+
 def test_an_interrupted_week_two_resumes_on_a_real_server(world):
     _release(world)
     original = world.weekly.record_week_adaptation
