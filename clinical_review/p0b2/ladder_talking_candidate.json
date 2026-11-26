@@ -1,0 +1,1197 @@
+{
+ "boundary_nodes": [
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": "early_vocalizations",
+   "cdc_month_anchor": 9,
+   "destination_milestone": "makes a lot of different sounds like mamamamama and bababababa",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": true,
+   "flags": [],
+   "node_ref": "node1:861074f0c070e6c101364bbce5e02879",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:05223a71d7089644da533e8d22e24737"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:7bf3e02b257b7567edbd5e8b8722346f",
+   "subdomain": "early_vocalization_and_babbling",
+   "successor_refs": [
+    "node1:55ea64e34b8f4b7a04db085f3b52ec9a"
+   ],
+   "wording": "Makes a lot of different sounds like mamamamama and bababababa",
+   "workbook_activity_family": "early_vocalization_sound_play",
+   "workbook_previous_anchor_age": 9,
+   "workbook_previous_bridge_step": "makes cooing sounds like ooooo or aahhh"
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 48,
+   "destination_milestone": "talks about at least one thing that happened during her day like I played soccer",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": false,
+   "flags": [
+    "PARALLEL: 2 milestones share 48m in this subdomain"
+   ],
+   "node_ref": "node1:9179c9f15766a636b5e9206915478699",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:149d4347db422bcdb3e3a0fbdb9530d1"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 36m",
+    "predecessor": "node1:149d4347db422bcdb3e3a0fbdb9530d1",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:1cba63d83e670855f468ba2f302eff35",
+   "subdomain": "conversation_narrative",
+   "successor_refs": [
+    "node1:610775e8627ed3bfaef6953b909006eb"
+   ],
+   "wording": "Says one short sentence about a recent activity.",
+   "workbook_activity_family": "daily_recall_narrative",
+   "workbook_previous_anchor_age": 36,
+   "workbook_previous_bridge_step": "says what action is happening in a picture or book when asked like running or eating or playing"
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "sentence_building",
+   "cdc_month_anchor": 48,
+   "destination_milestone": "says sentences with four or more words",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [
+    "PARALLEL: 2 milestones share 48m in this subdomain"
+   ],
+   "node_ref": "node1:e1f95546f5b45fe40dfc4493fccfd441",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:afa9b5c06d9465c51a99126dcb251c22"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 24m",
+    "predecessor": "node1:afa9b5c06d9465c51a99126dcb251c22",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:09fcd11542e4abbc37af4b0bb3552f6d",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:c8d286957c73495fbf0bcecc849a9b0e"
+   ],
+   "wording": "Expands a two- or three-word phrase with one extra word.",
+   "workbook_activity_family": "four_word_sentences",
+   "workbook_previous_anchor_age": 24,
+   "workbook_previous_bridge_step": "says at least two words together like more milk"
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "conversation_turn_taking",
+   "cdc_month_anchor": 36,
+   "destination_milestone": "talks with you in conversation using at least two back and forth exchanges",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [],
+   "node_ref": "node1:e2227cb7fbabee7a14bed8a92d1a70cf",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 30m",
+    "predecessor": "node1:d333e07f1076de87a2bbfdc553a85af2",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:8d720f959360270dec670822a4827f0d",
+   "subdomain": "conversation_narrative",
+   "successor_refs": [
+    "node1:bb7483cf38ba8eb00ce7251a274f62e1"
+   ],
+   "wording": "Add a related word or phrase when someone talks to her.",
+   "workbook_activity_family": "conversation_exchange",
+   "workbook_previous_anchor_age": 30,
+   "workbook_previous_bridge_step": "says about 50 words"
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 36,
+   "destination_milestone": "talks well enough for others to understand most of the time",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": false,
+   "flags": [],
+   "node_ref": "node1:eca624e586b83435f6d631dd141b1ee7",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:0015d7b2389c7a28da54f6fc90713f5e"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 30m",
+    "predecessor": "node1:0015d7b2389c7a28da54f6fc90713f5e",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:6e6a0904e94e25d6c8bd6c475c3742c9",
+   "subdomain": "speech_intelligibility",
+   "successor_refs": [
+    "node1:2b3e39b144851101f0ce452cb0a1eec8"
+   ],
+   "wording": "Uses short phrases with understandable words",
+   "workbook_activity_family": "speech_intelligibility",
+   "workbook_previous_anchor_age": 30,
+   "workbook_previous_bridge_step": "say two or more words together with one action word like doggie run"
+  },
+  {
+   "bridge_step_number": null,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 24,
+   "destination_milestone": "points to things in a book when you ask like where is the bear",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "cdc_milestone_text_appended",
+   "family_resolves_for_domain": false,
+   "flags": [
+    "PARALLEL: 2 milestones share 24m in this subdomain"
+   ],
+   "node_ref": "node1:ed75198d457995ca137ec61c81177d95",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:bbf05d051bb00d999503ff52a317a9e3"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:1775c199e4018c7c2aa4d73856ac9704",
+   "subdomain": "receptive_language",
+   "successor_refs": [
+    "node1:64ed67abd019282b8c4626fd8a938b7d"
+   ],
+   "wording": "points to things in a book when you ask like where is the bear",
+   "workbook_activity_family": null,
+   "workbook_previous_anchor_age": null,
+   "workbook_previous_bridge_step": null
+  }
+ ],
+ "edges": [
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:55ea64e34b8f4b7a04db085f3b52ec9a",
+   "to": "node1:3e2f1d95cddbf27f29ba9138a5b345b1"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order (explicit endpoint appended)",
+   "confidence": "STRUCTURED",
+   "from": "node1:3e2f1d95cddbf27f29ba9138a5b345b1",
+   "to": "node1:288b1d0ebf379b08ad37ab57a0f55a88"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order (explicit endpoint appended)",
+   "confidence": "STRUCTURED",
+   "from": "node1:22fc536a2da39b1cec1e14b4f7a9d0f8",
+   "to": "node1:7cd82ab53472ae497e684830fe86cff9"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:b81330f543a24587b8da839ec3036e83",
+   "to": "node1:f3be24e2680cfb214e498b877b7fd552"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+   "to": "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+   "to": "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+   "to": "node1:afa9b5c06d9465c51a99126dcb251c22"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:652cbb70834b0b3e757ebb4d8bbbcf50",
+   "to": "node1:4ef3c3c2c4b53717cac0510a5c64ad0f"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:c6f3de31fded24e91ccd172bd6dc8386",
+   "to": "node1:d333e07f1076de87a2bbfdc553a85af2"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:2999dd0d3445ff578f1b2d7fa1f3a022",
+   "to": "node1:3103341ea81199bc137dc51dbd99fdce"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:13818984fa725037b46bfb4df30bd979",
+   "to": "node1:200591d7507b3765d2d078f4f351dc72"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order (explicit endpoint appended)",
+   "confidence": "STRUCTURED",
+   "from": "node1:200591d7507b3765d2d078f4f351dc72",
+   "to": "node1:0015d7b2389c7a28da54f6fc90713f5e"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:8a5e8dde41708bf47dab606ae28e3dbd",
+   "to": "node1:3b10740ef96eba31b6916f994d55d3cf"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:3b10740ef96eba31b6916f994d55d3cf",
+   "to": "node1:4c6449398711000c931dfd87b1491d47"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:64ed67abd019282b8c4626fd8a938b7d",
+   "to": "node1:fdf6a7326cdf4d3f625768889468f9ff"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:fdf6a7326cdf4d3f625768889468f9ff",
+   "to": "node1:5428efacfc0ddba51c8c502d11938dea"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:79be5cf0385c3e915d99d03d9d038a71",
+   "to": "node1:986ced2070c5cd5333547b03bc376f8c"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:986ced2070c5cd5333547b03bc376f8c",
+   "to": "node1:149d4347db422bcdb3e3a0fbdb9530d1"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 9m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:861074f0c070e6c101364bbce5e02879",
+   "to": "node1:55ea64e34b8f4b7a04db085f3b52ec9a"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 18m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "to": "node1:cb508e3ea7253ee6f3e59e092fcb54f0"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 18m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "to": "node1:c6f3de31fded24e91ccd172bd6dc8386"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 30m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:d333e07f1076de87a2bbfdc553a85af2",
+   "to": "node1:2999dd0d3445ff578f1b2d7fa1f3a022"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 30m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:d333e07f1076de87a2bbfdc553a85af2",
+   "to": "node1:13818984fa725037b46bfb4df30bd979"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 30m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:d333e07f1076de87a2bbfdc553a85af2",
+   "to": "node1:8a5e8dde41708bf47dab606ae28e3dbd"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 24m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:ed75198d457995ca137ec61c81177d95",
+   "to": "node1:64ed67abd019282b8c4626fd8a938b7d"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 24m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:afa9b5c06d9465c51a99126dcb251c22",
+   "to": "node1:79be5cf0385c3e915d99d03d9d038a71"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 30m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:0015d7b2389c7a28da54f6fc90713f5e",
+   "to": "node1:eca624e586b83435f6d631dd141b1ee7"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 30m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:d333e07f1076de87a2bbfdc553a85af2",
+   "to": "node1:e2227cb7fbabee7a14bed8a92d1a70cf"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 24m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:afa9b5c06d9465c51a99126dcb251c22",
+   "to": "node1:e1f95546f5b45fe40dfc4493fccfd441"
+  },
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 36m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:149d4347db422bcdb3e3a0fbdb9530d1",
+   "to": "node1:9179c9f15766a636b5e9206915478699"
+  }
+ ],
+ "inner_link_mismatches": [
+  {
+   "node_ref": "node1:afa9b5c06d9465c51a99126dcb251c22",
+   "structured_previous_wording": "Imitates simple two-word phrases.",
+   "workbook_previous_bridge_step": "Use at least 50 words."
+  },
+  {
+   "node_ref": "node1:200591d7507b3765d2d078f4f351dc72",
+   "structured_previous_wording": "Uses action words like go, eat, run, sleep.",
+   "workbook_previous_bridge_step": "says at least two words together like more milk"
+  }
+ ],
+ "neighbourhood_nodes": [
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "expressive_first_words",
+   "cdc_month_anchor": 12,
+   "destination_milestone": "calls parents mama or dada or another special name",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [],
+   "node_ref": "node1:55ea64e34b8f4b7a04db085f3b52ec9a",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:861074f0c070e6c101364bbce5e02879"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 9m",
+    "predecessor": "node1:861074f0c070e6c101364bbce5e02879",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:1b2914e8b21011ba7657b6cc99ed5c5f",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:3e2f1d95cddbf27f29ba9138a5b345b1"
+   ],
+   "wording": "Makes repeated sounds like “ma,” “ba,” or “da.”",
+   "workbook_activity_family": "expressive_first_words",
+   "workbook_previous_anchor_age": 9,
+   "workbook_previous_bridge_step": "makes a lot of different sounds like mamamamama and bababababa"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": "expressive_first_words",
+   "cdc_month_anchor": 12,
+   "destination_milestone": "calls parents mama or dada or another special name",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [],
+   "node_ref": "node1:3e2f1d95cddbf27f29ba9138a5b345b1",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:55ea64e34b8f4b7a04db085f3b52ec9a"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:1b2914e8b21011ba7657b6cc99ed5c5f",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:288b1d0ebf379b08ad37ab57a0f55a88"
+   ],
+   "wording": "Calls parent “mama,” “dada,” or another special name.",
+   "workbook_activity_family": "expressive_first_words",
+   "workbook_previous_anchor_age": 12,
+   "workbook_previous_bridge_step": "Makes repeated sounds like “ma,” “ba,” or “da.”"
+  },
+  {
+   "bridge_step_number": null,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 12,
+   "destination_milestone": "calls parents mama or dada or another special name",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "cdc_milestone_text_appended",
+   "family_resolves_for_domain": false,
+   "flags": [
+    "GAP: no text-linked successor"
+   ],
+   "node_ref": "node1:288b1d0ebf379b08ad37ab57a0f55a88",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:3e2f1d95cddbf27f29ba9138a5b345b1"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:1b2914e8b21011ba7657b6cc99ed5c5f",
+   "subdomain": "expressive_language",
+   "successor_refs": [],
+   "wording": "calls parents mama or dada or another special name",
+   "workbook_activity_family": null,
+   "workbook_previous_anchor_age": null,
+   "workbook_previous_bridge_step": null
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "expressive_first_words",
+   "cdc_month_anchor": 15,
+   "destination_milestone": "tries to say two or more words besides mama or dada like ba for ball or da for dog",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [
+    "PREDECESSOR UNRESOLVED: previous link text matches no node"
+   ],
+   "node_ref": "node1:22fc536a2da39b1cec1e14b4f7a9d0f8",
+   "node_type": "bridge",
+   "predecessor_refs": [],
+   "predecessor_review": {
+    "alternatives": [],
+    "reason": "previous link text matches no node",
+    "status": "NEEDS_CLINICIAN_REVIEW"
+   },
+   "rung_ref": "rung1:400e98b935c22a7995e82b91a0f213da",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:7cd82ab53472ae497e684830fe86cff9"
+   ],
+   "wording": "Tries to say one or two words besides “mama” or “dada.”",
+   "workbook_activity_family": "expressive_first_words",
+   "workbook_previous_anchor_age": 9,
+   "workbook_previous_bridge_step": "Makes repeated sounds like “ma,” “ba,” or “da.”"
+  },
+  {
+   "bridge_step_number": null,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 15,
+   "destination_milestone": "tries to say two or more words besides mama or dada like ba for ball or da for dog",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "cdc_milestone_text_appended",
+   "family_resolves_for_domain": false,
+   "flags": [
+    "GAP: no text-linked successor"
+   ],
+   "node_ref": "node1:7cd82ab53472ae497e684830fe86cff9",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:22fc536a2da39b1cec1e14b4f7a9d0f8"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:400e98b935c22a7995e82b91a0f213da",
+   "subdomain": "expressive_language",
+   "successor_refs": [],
+   "wording": "tries to say two or more words besides mama or dada like ba for ball or da for dog",
+   "workbook_activity_family": null,
+   "workbook_previous_anchor_age": null,
+   "workbook_previous_bridge_step": null
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "expressive_first_words",
+   "cdc_month_anchor": 18,
+   "destination_milestone": "tries to say three or more words besides mama or dada",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [
+    "PREDECESSOR UNRESOLVED: previous link names a mid-milestone bridge, not an endpoint"
+   ],
+   "node_ref": "node1:b81330f543a24587b8da839ec3036e83",
+   "node_type": "bridge",
+   "predecessor_refs": [],
+   "predecessor_review": {
+    "alternatives": [
+     "node1:22fc536a2da39b1cec1e14b4f7a9d0f8"
+    ],
+    "reason": "previous link names a mid-milestone bridge, not an endpoint",
+    "status": "NEEDS_CLINICIAN_REVIEW"
+   },
+   "rung_ref": "rung1:6c8e17d12c4ca2ab1d583e94635100d3",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "wording": "tries to say one or two words besides mama or dada like ba for ball or da for dog",
+   "workbook_activity_family": "expressive_first_words",
+   "workbook_previous_anchor_age": 15,
+   "workbook_previous_bridge_step": "Tries to say one or two words besides “mama” or “dada.”"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": "expressive_first_words",
+   "cdc_month_anchor": 18,
+   "destination_milestone": "tries to say three or more words besides mama or dada",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": true,
+   "flags": [
+    "BRANCH: more than one text-linked successor"
+   ],
+   "node_ref": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:b81330f543a24587b8da839ec3036e83"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:6c8e17d12c4ca2ab1d583e94635100d3",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0"
+   ],
+   "wording": "Tries to say three or more words besides “mama” or “dada.”",
+   "workbook_activity_family": "expressive_three_words",
+   "workbook_previous_anchor_age": 15,
+   "workbook_previous_bridge_step": "tries to say one or two words besides mama or dada like ba for ball or da for dog"
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "expressive_vocabulary_growth",
+   "cdc_month_anchor": 24,
+   "destination_milestone": "says at least two words together like more milk",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [],
+   "node_ref": "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 18m",
+    "predecessor": "node1:f3be24e2680cfb214e498b877b7fd552",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "wording": "Uses a few reliable single words/approximations for favorite people, objects, or needs.",
+   "workbook_activity_family": "expressive_vocabulary_growth",
+   "workbook_previous_anchor_age": 18,
+   "workbook_previous_bridge_step": "Tries to say three or more words besides “mama” or “dada.”"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": "expressive_vocabulary_growth",
+   "cdc_month_anchor": 24,
+   "destination_milestone": "says at least two words together like more milk",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [],
+   "node_ref": "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+   ],
+   "wording": "Uses more single words for needs, objects, actions",
+   "workbook_activity_family": "expressive_vocabulary_growth",
+   "workbook_previous_anchor_age": 18,
+   "workbook_previous_bridge_step": "Uses a few reliable single words/approximations for favorite people, objects, or needs."
+  },
+  {
+   "bridge_step_number": 3,
+   "canonical_activity_family": "two_word_phrases",
+   "cdc_month_anchor": 24,
+   "destination_milestone": "says at least two words together like more milk",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [],
+   "node_ref": "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:afa9b5c06d9465c51a99126dcb251c22"
+   ],
+   "wording": "Imitates simple two-word phrases.",
+   "workbook_activity_family": "expressive_two_word_phrase",
+   "workbook_previous_anchor_age": 24,
+   "workbook_previous_bridge_step": "Uses more single words for needs, objects, actions"
+  },
+  {
+   "bridge_step_number": 4,
+   "canonical_activity_family": "two_word_phrases",
+   "cdc_month_anchor": 24,
+   "destination_milestone": "says at least two words together like more milk",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": true,
+   "flags": [
+    "BRANCH: more than one text-linked successor"
+   ],
+   "node_ref": "node1:afa9b5c06d9465c51a99126dcb251c22",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:79be5cf0385c3e915d99d03d9d038a71",
+    "node1:e1f95546f5b45fe40dfc4493fccfd441"
+   ],
+   "wording": "says at least two words together like more milk",
+   "workbook_activity_family": "expressive_two_word_phrase",
+   "workbook_previous_anchor_age": 24,
+   "workbook_previous_bridge_step": "Use at least 50 words."
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "book_object_naming",
+   "cdc_month_anchor": 30,
+   "destination_milestone": "name things in a book when you point and ask what is this",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [
+    "PREDECESSOR UNRESOLVED: previous link text matches no node",
+    "PARALLEL: 4 milestones share 30m in this subdomain"
+   ],
+   "node_ref": "node1:652cbb70834b0b3e757ebb4d8bbbcf50",
+   "node_type": "bridge",
+   "predecessor_refs": [],
+   "predecessor_review": {
+    "alternatives": [
+     "node1:7cd82ab53472ae497e684830fe86cff9"
+    ],
+    "reason": "previous link text matches no node",
+    "status": "NEEDS_CLINICIAN_REVIEW"
+   },
+   "rung_ref": "rung1:431020f1dccb8b2adbcad72db2d51160",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:4ef3c3c2c4b53717cac0510a5c64ad0f"
+   ],
+   "wording": "Points to or chooses a familiar picture in a book when named.",
+   "workbook_activity_family": "book_object_naming",
+   "workbook_previous_anchor_age": 15,
+   "workbook_previous_bridge_step": "Says at least 2 to 3 words more than mama and dada"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": "book_object_naming",
+   "cdc_month_anchor": 30,
+   "destination_milestone": "name things in a book when you point and ask what is this",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": true,
+   "flags": [
+    "GAP: no text-linked successor",
+    "PARALLEL: 4 milestones share 30m in this subdomain"
+   ],
+   "node_ref": "node1:4ef3c3c2c4b53717cac0510a5c64ad0f",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:652cbb70834b0b3e757ebb4d8bbbcf50"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:431020f1dccb8b2adbcad72db2d51160",
+   "subdomain": "expressive_language",
+   "successor_refs": [],
+   "wording": "name things in a book when you point and ask what is this",
+   "workbook_activity_family": "book_object_naming",
+   "workbook_previous_anchor_age": 15,
+   "workbook_previous_bridge_step": "Points to or chooses a familiar picture in a book when named."
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "expressive_vocabulary_growth",
+   "cdc_month_anchor": 30,
+   "destination_milestone": "says about 50 words",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [
+    "PARALLEL: 4 milestones share 30m in this subdomain"
+   ],
+   "node_ref": "node1:c6f3de31fded24e91ccd172bd6dc8386",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 18m",
+    "predecessor": "node1:f3be24e2680cfb214e498b877b7fd552",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:9993f7881ea0041be4813976973f77e6",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "wording": "Learns and uses new words regularly.",
+   "workbook_activity_family": "expressive_vocabulary_growth",
+   "workbook_previous_anchor_age": 18,
+   "workbook_previous_bridge_step": "tries to say three or more words besides mama or dada"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": "expressive_vocabulary_growth",
+   "cdc_month_anchor": 30,
+   "destination_milestone": "says about 50 words",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": true,
+   "flags": [
+    "BRANCH: more than one text-linked successor",
+    "PARALLEL: 4 milestones share 30m in this subdomain"
+   ],
+   "node_ref": "node1:d333e07f1076de87a2bbfdc553a85af2",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:c6f3de31fded24e91ccd172bd6dc8386"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:9993f7881ea0041be4813976973f77e6",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:13818984fa725037b46bfb4df30bd979",
+    "node1:2999dd0d3445ff578f1b2d7fa1f3a022",
+    "node1:8a5e8dde41708bf47dab606ae28e3dbd",
+    "node1:e2227cb7fbabee7a14bed8a92d1a70cf"
+   ],
+   "wording": "says about 50 words",
+   "workbook_activity_family": "expressive_vocabulary_growth",
+   "workbook_previous_anchor_age": 30,
+   "workbook_previous_bridge_step": "Learns and uses new words regularly."
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 30,
+   "destination_milestone": "says words like I me or we",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": false,
+   "flags": [
+    "PARALLEL: 4 milestones share 30m in this subdomain"
+   ],
+   "node_ref": "node1:2999dd0d3445ff578f1b2d7fa1f3a022",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 30m",
+    "predecessor": "node1:d333e07f1076de87a2bbfdc553a85af2",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:46378a17002642f50efa858d5f95fbcd",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:3103341ea81199bc137dc51dbd99fdce"
+   ],
+   "wording": "Imitates pronouns in short phrases.",
+   "workbook_activity_family": "pronouns",
+   "workbook_previous_anchor_age": 30,
+   "workbook_previous_bridge_step": "says about 50 words"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 30,
+   "destination_milestone": "says words like I me or we",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": false,
+   "flags": [
+    "GAP: no text-linked successor",
+    "PARALLEL: 4 milestones share 30m in this subdomain"
+   ],
+   "node_ref": "node1:3103341ea81199bc137dc51dbd99fdce",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:2999dd0d3445ff578f1b2d7fa1f3a022"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:46378a17002642f50efa858d5f95fbcd",
+   "subdomain": "expressive_language",
+   "successor_refs": [],
+   "wording": "says words like I me or we",
+   "workbook_activity_family": "pronouns",
+   "workbook_previous_anchor_age": 30,
+   "workbook_previous_bridge_step": "Imitates pronouns in short phrases."
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "two_word_phrases",
+   "cdc_month_anchor": 30,
+   "destination_milestone": "say two or more words together with one action word like doggie run",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [
+    "PARALLEL: 4 milestones share 30m in this subdomain"
+   ],
+   "node_ref": "node1:13818984fa725037b46bfb4df30bd979",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 30m",
+    "predecessor": "node1:d333e07f1076de87a2bbfdc553a85af2",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:133ada8636f1886a70f3b92789f8fdfe",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:200591d7507b3765d2d078f4f351dc72"
+   ],
+   "wording": "Uses action words like go, eat, run, sleep.",
+   "workbook_activity_family": "expressive_two_word_phrase",
+   "workbook_previous_anchor_age": 30,
+   "workbook_previous_bridge_step": "says about 50 words"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": "two_word_phrases",
+   "cdc_month_anchor": 30,
+   "destination_milestone": "say two or more words together with one action word like doggie run",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [
+    "PARALLEL: 4 milestones share 30m in this subdomain"
+   ],
+   "node_ref": "node1:200591d7507b3765d2d078f4f351dc72",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:13818984fa725037b46bfb4df30bd979"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:133ada8636f1886a70f3b92789f8fdfe",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:0015d7b2389c7a28da54f6fc90713f5e"
+   ],
+   "wording": "Says two or more words together, with one action word.",
+   "workbook_activity_family": "expressive_two_word_phrase",
+   "workbook_previous_anchor_age": 24,
+   "workbook_previous_bridge_step": "says at least two words together like more milk"
+  },
+  {
+   "bridge_step_number": null,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 30,
+   "destination_milestone": "say two or more words together with one action word like doggie run",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "cdc_milestone_text_appended",
+   "family_resolves_for_domain": false,
+   "flags": [
+    "PARALLEL: 4 milestones share 30m in this subdomain"
+   ],
+   "node_ref": "node1:0015d7b2389c7a28da54f6fc90713f5e",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:200591d7507b3765d2d078f4f351dc72"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:133ada8636f1886a70f3b92789f8fdfe",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:eca624e586b83435f6d631dd141b1ee7"
+   ],
+   "wording": "say two or more words together with one action word like doggie run",
+   "workbook_activity_family": null,
+   "workbook_previous_anchor_age": null,
+   "workbook_previous_bridge_step": null
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 36,
+   "destination_milestone": "ask who or what or where or why questions like where is mommy or where is daddy",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": false,
+   "flags": [
+    "PARALLEL: 3 milestones share 36m in this subdomain"
+   ],
+   "node_ref": "node1:8a5e8dde41708bf47dab606ae28e3dbd",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 30m",
+    "predecessor": "node1:d333e07f1076de87a2bbfdc553a85af2",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:b8bfbe44eeecf8752020b639b2af3fdd",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:3b10740ef96eba31b6916f994d55d3cf"
+   ],
+   "wording": "Uses simple request words like give, please, come",
+   "workbook_activity_family": "wh_question_asking",
+   "workbook_previous_anchor_age": 30,
+   "workbook_previous_bridge_step": "says about 50 words"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 36,
+   "destination_milestone": "ask who or what or where or why questions like where is mommy or where is daddy",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": false,
+   "flags": [
+    "PARALLEL: 3 milestones share 36m in this subdomain"
+   ],
+   "node_ref": "node1:3b10740ef96eba31b6916f994d55d3cf",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:8a5e8dde41708bf47dab606ae28e3dbd"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:b8bfbe44eeecf8752020b639b2af3fdd",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:4c6449398711000c931dfd87b1491d47"
+   ],
+   "wording": "Answers to simple questions with what, where, who",
+   "workbook_activity_family": "wh_question_asking",
+   "workbook_previous_anchor_age": 36,
+   "workbook_previous_bridge_step": "Uses simple request words like give, please, come"
+  },
+  {
+   "bridge_step_number": 3,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 36,
+   "destination_milestone": "ask who or what or where or why questions like where is mommy or where is daddy",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": false,
+   "flags": [
+    "GAP: no text-linked successor",
+    "PARALLEL: 3 milestones share 36m in this subdomain"
+   ],
+   "node_ref": "node1:4c6449398711000c931dfd87b1491d47",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:3b10740ef96eba31b6916f994d55d3cf"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:b8bfbe44eeecf8752020b639b2af3fdd",
+   "subdomain": "expressive_language",
+   "successor_refs": [],
+   "wording": "ask who or what or where or why questions like where is mommy or where is daddy",
+   "workbook_activity_family": "wh_question_asking",
+   "workbook_previous_anchor_age": 36,
+   "workbook_previous_bridge_step": "Answers to simple questions with what, where, who"
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 36,
+   "destination_milestone": "says first name when asked",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": false,
+   "flags": [
+    "PARALLEL: 3 milestones share 36m in this subdomain"
+   ],
+   "node_ref": "node1:64ed67abd019282b8c4626fd8a938b7d",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:ed75198d457995ca137ec61c81177d95"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 24m",
+    "predecessor": "node1:ed75198d457995ca137ec61c81177d95",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:6a360697f70191b8f20080d011bbd277",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:fdf6a7326cdf4d3f625768889468f9ff"
+   ],
+   "wording": "Points to self when named",
+   "workbook_activity_family": "expressive_name_response",
+   "workbook_previous_anchor_age": 24,
+   "workbook_previous_bridge_step": "points to things in a book when you ask like where is the bear"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 36,
+   "destination_milestone": "says first name when asked",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": false,
+   "flags": [
+    "PARALLEL: 3 milestones share 36m in this subdomain"
+   ],
+   "node_ref": "node1:fdf6a7326cdf4d3f625768889468f9ff",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:64ed67abd019282b8c4626fd8a938b7d"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:6a360697f70191b8f20080d011bbd277",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:5428efacfc0ddba51c8c502d11938dea"
+   ],
+   "wording": "Imitate own name after an adult",
+   "workbook_activity_family": "expressive_name_response",
+   "workbook_previous_anchor_age": 36,
+   "workbook_previous_bridge_step": "Points to self when named"
+  },
+  {
+   "bridge_step_number": 3,
+   "canonical_activity_family": null,
+   "cdc_month_anchor": 36,
+   "destination_milestone": "says first name when asked",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": false,
+   "flags": [
+    "GAP: no text-linked successor",
+    "PARALLEL: 3 milestones share 36m in this subdomain"
+   ],
+   "node_ref": "node1:5428efacfc0ddba51c8c502d11938dea",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:fdf6a7326cdf4d3f625768889468f9ff"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:6a360697f70191b8f20080d011bbd277",
+   "subdomain": "expressive_language",
+   "successor_refs": [],
+   "wording": "says first name when asked",
+   "workbook_activity_family": "expressive_name_response",
+   "workbook_previous_anchor_age": 36,
+   "workbook_previous_bridge_step": "Imitate own name after an adult"
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "action_picture_labeling",
+   "cdc_month_anchor": 36,
+   "destination_milestone": "says what action is happening in a picture or book when asked like running or eating or playing",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [
+    "PARALLEL: 3 milestones share 36m in this subdomain"
+   ],
+   "node_ref": "node1:79be5cf0385c3e915d99d03d9d038a71",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:afa9b5c06d9465c51a99126dcb251c22"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 24m",
+    "predecessor": "node1:afa9b5c06d9465c51a99126dcb251c22",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:af84d949a7b2abb83583ad9280717705",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:986ced2070c5cd5333547b03bc376f8c"
+   ],
+   "wording": "Points to or matches a picture showing a familiar action.",
+   "workbook_activity_family": "action_picture_labeling",
+   "workbook_previous_anchor_age": 24,
+   "workbook_previous_bridge_step": "says at least two words together like more milk"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": "action_picture_labeling",
+   "cdc_month_anchor": 36,
+   "destination_milestone": "says what action is happening in a picture or book when asked like running or eating or playing",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [
+    "PARALLEL: 3 milestones share 36m in this subdomain"
+   ],
+   "node_ref": "node1:986ced2070c5cd5333547b03bc376f8c",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:79be5cf0385c3e915d99d03d9d038a71"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:af84d949a7b2abb83583ad9280717705",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:149d4347db422bcdb3e3a0fbdb9530d1"
+   ],
+   "wording": "Imitates or says one familiar action word from a picture.",
+   "workbook_activity_family": "action_picture_labeling",
+   "workbook_previous_anchor_age": 36,
+   "workbook_previous_bridge_step": "Points to or matches a picture showing a familiar action."
+  },
+  {
+   "bridge_step_number": 3,
+   "canonical_activity_family": "action_picture_labeling",
+   "cdc_month_anchor": 36,
+   "destination_milestone": "says what action is happening in a picture or book when asked like running or eating or playing",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": true,
+   "flags": [
+    "PARALLEL: 3 milestones share 36m in this subdomain"
+   ],
+   "node_ref": "node1:149d4347db422bcdb3e3a0fbdb9530d1",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:986ced2070c5cd5333547b03bc376f8c"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:af84d949a7b2abb83583ad9280717705",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:9179c9f15766a636b5e9206915478699"
+   ],
+   "wording": "says what action is happening in a picture or book when asked like running or eating or playing",
+   "workbook_activity_family": "action_picture_labeling",
+   "workbook_previous_anchor_age": 36,
+   "workbook_previous_bridge_step": "Imitates or says one familiar action word from a picture."
+  }
+ ],
+ "node_scheme": "node1:",
+ "package_version": "p0b2-ladder-review-package-v1",
+ "scope": {
+  "domain": "talking_and_communicating",
+  "months": [
+   12,
+   36
+  ],
+  "reference_anchor_rung": "rung1:feb590cf2788978b383c11062ce67c1b",
+  "subdomain": "expressive_language"
+ }
+}

@@ -1,0 +1,444 @@
+{
+ "bank_artifact_digest": "1c0c3a8607f24cbc71b3fd9aff2bf1b114a4e6c82b86278bb63ed7f72da42f40",
+ "cards": [
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:01cdd9f34e37a62bed4feda4300902a7",
+   "basis": "workbook per-step activity_family 'two_word_phrases' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:13818984fa725037b46bfb4df30bd979",
+    "node1:200591d7507b3765d2d078f4f351dc72",
+    "node1:afa9b5c06d9465c51a99126dcb251c22",
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "theme": "turn-taking language",
+   "title": "My Turn"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:041794bbb1acb1f86a27ca9460088c2d",
+   "basis": "workbook per-step activity_family 'two_word_phrases' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:13818984fa725037b46bfb4df30bd979",
+    "node1:200591d7507b3765d2d078f4f351dc72",
+    "node1:afa9b5c06d9465c51a99126dcb251c22",
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "theme": "requesting during play",
+   "title": "More Bubbles"
+  },
+  {
+   "activity_family": "book_object_naming",
+   "activity_template_id": "atpl1:06a431b9e9a8e118a900b7f407fecc02",
+   "basis": "workbook per-step activity_family 'book_object_naming' is shared by 2 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:4ef3c3c2c4b53717cac0510a5c64ad0f",
+    "node1:652cbb70834b0b3e757ebb4d8bbbcf50"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/book_object_naming.json (sha256 pinned in bank: a2d74590763b…)",
+   "source_tier": "family_curated",
+   "theme": "a repeated favourite book",
+   "title": "Same Book, Every Day"
+  },
+  {
+   "activity_family": "book_object_naming",
+   "activity_template_id": "atpl1:1081de288d8fc18f41225d80bb291a63",
+   "basis": "workbook per-step activity_family 'book_object_naming' is shared by 2 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:4ef3c3c2c4b53717cac0510a5c64ad0f",
+    "node1:652cbb70834b0b3e757ebb4d8bbbcf50"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/book_object_naming.json (sha256 pinned in bank: a2d74590763b…)",
+   "source_tier": "family_curated",
+   "theme": "the child leads the naming",
+   "title": "Point and Tell"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:1226e454bd64d869206574bb6ad9851f",
+   "basis": "workbook per-step activity_family 'two_word_phrases' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:13818984fa725037b46bfb4df30bd979",
+    "node1:200591d7507b3765d2d078f4f351dc72",
+    "node1:afa9b5c06d9465c51a99126dcb251c22",
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "theme": "boundaries and self-advocacy",
+   "title": "All Done and Stop"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:13a4fd9b1e557d877381cc41fed5098c",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "colour choice carrier phrase",
+   "title": "Paint Choice Words"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:166c4e5492dab00d41b9fb4d5162202b",
+   "basis": "workbook per-step activity_family 'two_word_phrases' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:13818984fa725037b46bfb4df30bd979",
+    "node1:200591d7507b3765d2d078f4f351dc72",
+    "node1:afa9b5c06d9465c51a99126dcb251c22",
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "theme": "choosing and requesting",
+   "title": "Want + Choice"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:2a9316b59bfcfef283cfeeb26a2034f6",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "toy choice game",
+   "title": "Pick Your Toy"
+  },
+  {
+   "activity_family": "sentence_building",
+   "activity_template_id": "atpl1:2c317105a4151f55be1d2122a16fc3fc",
+   "basis": "no node in the window carries this card's family",
+   "candidate_node_refs": [],
+   "mapping_status": "OUT_OF_NEIGHBOURHOOD",
+   "reviewed_provenance": "reviewed_cards/sentence_building.json (sha256 pinned in bank: de4418ec6c2f…)",
+   "source_tier": "family_curated",
+   "theme": "subject, action, and object together",
+   "title": "Who Is Doing What"
+  },
+  {
+   "activity_family": "book_object_naming",
+   "activity_template_id": "atpl1:3550b9ec30305b58d9cbbaa24c58e5b2",
+   "basis": "workbook per-step activity_family 'book_object_naming' is shared by 2 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:4ef3c3c2c4b53717cac0510a5c64ad0f",
+    "node1:652cbb70834b0b3e757ebb4d8bbbcf50"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/book_object_naming.json (sha256 pinned in bank: a2d74590763b…)",
+   "source_tier": "family_curated",
+   "theme": "naming objects in a familiar book",
+   "title": "What's on This Page?"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:3b00aee6c8a322cddda1ec55543158a2",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "two-word carrier phrase",
+   "title": "More Please Routine"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:5e054d694dcf6b0e700951eb4c2ebe8d",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "two-word carrier phrase",
+   "title": "Two-Word Choice Game"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:5f44b9eba107589ca26c6610f2c6cb05",
+   "basis": "workbook per-step activity_family 'two_word_phrases' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:13818984fa725037b46bfb4df30bd979",
+    "node1:200591d7507b3765d2d078f4f351dc72",
+    "node1:afa9b5c06d9465c51a99126dcb251c22",
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "theme": "asking for help",
+   "title": "Help Me"
+  },
+  {
+   "activity_family": "sentence_building",
+   "activity_template_id": "atpl1:797708a5514fd175e24bf0bac3f2a8ff",
+   "basis": "no node in the window carries this card's family",
+   "candidate_node_refs": [],
+   "mapping_status": "OUT_OF_NEIGHBOURHOOD",
+   "reviewed_provenance": "reviewed_cards/sentence_building.json (sha256 pinned in bank: de4418ec6c2f…)",
+   "source_tier": "family_curated",
+   "theme": "self-advocacy and boundaries",
+   "title": "I Need a Break"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:7e97ac6a60c3623f7a609c1c2b7e1995",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "snack naming game",
+   "title": "Snack Choice Words"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:80d40c4226b091fc36ba73aeb061651e",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "object memory naming",
+   "title": "What's Missing? Box"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:987acefca5dcf8001c218aba7a951022",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "book object naming",
+   "title": "What's That? Book"
+  },
+  {
+   "activity_family": "sentence_building",
+   "activity_template_id": "atpl1:9b0facf380b755262eadbf9d76820e7a",
+   "basis": "no node in the window carries this card's family",
+   "candidate_node_refs": [],
+   "mapping_status": "OUT_OF_NEIGHBOURHOOD",
+   "reviewed_provenance": "reviewed_cards/sentence_building.json (sha256 pinned in bank: de4418ec6c2f…)",
+   "source_tier": "family_curated",
+   "theme": "asking for specific help",
+   "title": "Help Me Open"
+  },
+  {
+   "activity_family": "sentence_building",
+   "activity_template_id": "atpl1:9b9eb883a67400556702486fc177e75b",
+   "basis": "no node in the window carries this card's family",
+   "candidate_node_refs": [],
+   "mapping_status": "OUT_OF_NEIGHBOURHOOD",
+   "reviewed_provenance": "reviewed_cards/sentence_building.json (sha256 pinned in bank: de4418ec6c2f…)",
+   "source_tier": "family_curated",
+   "theme": "requesting with a short sentence",
+   "title": "I Want Bubbles"
+  },
+  {
+   "activity_family": "sentence_building",
+   "activity_template_id": "atpl1:9e165d6d242e3e887ddb32f6d7c48486",
+   "basis": "no node in the window carries this card's family",
+   "candidate_node_refs": [],
+   "mapping_status": "OUT_OF_NEIGHBOURHOOD",
+   "reviewed_provenance": "reviewed_cards/sentence_building.json (sha256 pinned in bank: de4418ec6c2f…)",
+   "source_tier": "family_curated",
+   "theme": "joining in",
+   "title": "Can I Play?"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:aa5d7da84faba502ab7a4c6284f1347d",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "cleanup direction game",
+   "title": "Cleanup Request Game"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:adafba440db93934b88a2fa45a364f1d",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "family photo naming",
+   "title": "Family Photo Names"
+  },
+  {
+   "activity_family": "book_object_naming",
+   "activity_template_id": "atpl1:bd6a98e7eef7d1a01c1e48baa8230317",
+   "basis": "workbook per-step activity_family 'book_object_naming' is shared by 2 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:4ef3c3c2c4b53717cac0510a5c64ad0f",
+    "node1:652cbb70834b0b3e757ebb4d8bbbcf50"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/book_object_naming.json (sha256 pinned in bank: a2d74590763b…)",
+   "source_tier": "family_curated",
+   "theme": "naming with a reveal",
+   "title": "Lift the Flap, Name It"
+  },
+  {
+   "activity_family": "sentence_building",
+   "activity_template_id": "atpl1:c694ec43189c20633adeea5502833f6b",
+   "basis": "no node in the window carries this card's family",
+   "candidate_node_refs": [],
+   "mapping_status": "OUT_OF_NEIGHBOURHOOD",
+   "reviewed_provenance": "reviewed_cards/sentence_building.json (sha256 pinned in bank: de4418ec6c2f…)",
+   "source_tier": "family_curated",
+   "theme": "polite turn-taking",
+   "title": "My Turn Please"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:ca49a944bb6b1181d845524845bdb023",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "two-choice requesting game",
+   "title": "Give Me Two! Game"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:cb95176fdcc5cff557bdc409da186304",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "home object naming walk",
+   "title": "Quick Naming Walk"
+  },
+  {
+   "activity_family": "book_object_naming",
+   "activity_template_id": "atpl1:e22a325977fbaaeca903a6ea909d17d0",
+   "basis": "workbook per-step activity_family 'book_object_naming' is shared by 2 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:4ef3c3c2c4b53717cac0510a5c64ad0f",
+    "node1:652cbb70834b0b3e757ebb4d8bbbcf50"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/book_object_naming.json (sha256 pinned in bank: a2d74590763b…)",
+   "source_tier": "family_curated",
+   "theme": "searching a page then naming",
+   "title": "Find and Name"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:f273cccd0afd3c96730215bc49ba8096",
+   "basis": "workbook per-step activity_family 'expressive_vocabulary_growth' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:d333e07f1076de87a2bbfdc553a85af2"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "theme": "song pause fill-in",
+   "title": "Song Fill-In Game"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:f7a99d017c398560058379637732ac58",
+   "basis": "workbook per-step activity_family 'two_word_phrases' is shared by 4 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:13818984fa725037b46bfb4df30bd979",
+    "node1:200591d7507b3765d2d078f4f351dc72",
+    "node1:afa9b5c06d9465c51a99126dcb251c22",
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "theme": "combining an action with an object",
+   "title": "Action + Object"
+  },
+  {
+   "activity_family": "book_object_naming",
+   "activity_template_id": "atpl1:f83b5f3cd8ef75cdba82700d6b389be7",
+   "basis": "workbook per-step activity_family 'book_object_naming' is shared by 2 nodes; no structured evidence separates them — Hannah chooses (multiple allowed)",
+   "candidate_node_refs": [
+    "node1:4ef3c3c2c4b53717cac0510a5c64ad0f",
+    "node1:652cbb70834b0b3e757ebb4d8bbbcf50"
+   ],
+   "mapping_status": "NEEDS_CLINICIAN_REVIEW",
+   "reviewed_provenance": "reviewed_cards/book_object_naming.json (sha256 pinned in bank: a2d74590763b…)",
+   "source_tier": "family_curated",
+   "theme": "naming objects in family photos",
+   "title": "Photo Album Names"
+  }
+ ],
+ "package_version": "p0b2-ladder-review-package-v1"
+}

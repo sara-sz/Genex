@@ -1,0 +1,516 @@
+{
+ "capacity_is_a_maximum": 3,
+ "coverage": [
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": false,
+   "node_ref": "node1:55ea64e34b8f4b7a04db085f3b52ec9a",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": {
+    "candidate_cards": 7,
+    "candidate_file": "clinical_review/candidates/expressive_first_words.json",
+    "ledger_statuses": {
+     "generated_candidate": 14
+    }
+   }
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": false,
+   "node_ref": "node1:3e2f1d95cddbf27f29ba9138a5b345b1",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": {
+    "candidate_cards": 7,
+    "candidate_file": "clinical_review/candidates/expressive_first_words.json",
+    "ledger_statuses": {
+     "generated_candidate": 14
+    }
+   }
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": null,
+   "node_ref": "node1:288b1d0ebf379b08ad37ab57a0f55a88",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": false,
+   "node_ref": "node1:22fc536a2da39b1cec1e14b4f7a9d0f8",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": {
+    "candidate_cards": 7,
+    "candidate_file": "clinical_review/candidates/expressive_first_words.json",
+    "ledger_statuses": {
+     "generated_candidate": 14
+    }
+   }
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": null,
+   "node_ref": "node1:7cd82ab53472ae497e684830fe86cff9",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": false,
+   "node_ref": "node1:b81330f543a24587b8da839ec3036e83",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": {
+    "candidate_cards": 7,
+    "candidate_file": "clinical_review/candidates/expressive_first_words.json",
+    "ledger_statuses": {
+     "generated_candidate": 14
+    }
+   }
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": false,
+   "node_ref": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": {
+    "candidate_cards": 7,
+    "candidate_file": "clinical_review/candidates/expressive_first_words.json",
+    "ledger_statuses": {
+     "generated_candidate": 14
+    }
+   }
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [
+    "expressive_vocabulary_growth"
+   ],
+   "family_eligible_cards": 12,
+   "family_eligible_titles": [
+    "Cleanup Request Game",
+    "Family Photo Names",
+    "Give Me Two! Game",
+    "More Please Routine",
+    "Paint Choice Words",
+    "Pick Your Toy",
+    "Quick Naming Walk",
+    "Snack Choice Words",
+    "Song Fill-In Game",
+    "Two-Word Choice Game",
+    "What's Missing? Box",
+    "What's That? Book"
+   ],
+   "if_all_eligible_approved": "capacity 3 supported",
+   "node_family_unresolved": false,
+   "node_ref": "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+   "same_node_theme_variation": true,
+   "theme_count": 11,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [
+    "expressive_vocabulary_growth"
+   ],
+   "family_eligible_cards": 12,
+   "family_eligible_titles": [
+    "Cleanup Request Game",
+    "Family Photo Names",
+    "Give Me Two! Game",
+    "More Please Routine",
+    "Paint Choice Words",
+    "Pick Your Toy",
+    "Quick Naming Walk",
+    "Snack Choice Words",
+    "Song Fill-In Game",
+    "Two-Word Choice Game",
+    "What's Missing? Box",
+    "What's That? Book"
+   ],
+   "if_all_eligible_approved": "capacity 3 supported",
+   "node_family_unresolved": false,
+   "node_ref": "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+   "same_node_theme_variation": true,
+   "theme_count": 11,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [
+    "two_word_phrases"
+   ],
+   "family_eligible_cards": 6,
+   "family_eligible_titles": [
+    "Action + Object",
+    "All Done and Stop",
+    "Help Me",
+    "More Bubbles",
+    "My Turn",
+    "Want + Choice"
+   ],
+   "if_all_eligible_approved": "capacity 3 supported",
+   "node_family_unresolved": false,
+   "node_ref": "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+   "same_node_theme_variation": true,
+   "theme_count": 6,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [
+    "two_word_phrases"
+   ],
+   "family_eligible_cards": 6,
+   "family_eligible_titles": [
+    "Action + Object",
+    "All Done and Stop",
+    "Help Me",
+    "More Bubbles",
+    "My Turn",
+    "Want + Choice"
+   ],
+   "if_all_eligible_approved": "capacity 3 supported",
+   "node_family_unresolved": false,
+   "node_ref": "node1:afa9b5c06d9465c51a99126dcb251c22",
+   "same_node_theme_variation": true,
+   "theme_count": 6,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [
+    "book_object_naming"
+   ],
+   "family_eligible_cards": 6,
+   "family_eligible_titles": [
+    "Find and Name",
+    "Lift the Flap, Name It",
+    "Photo Album Names",
+    "Point and Tell",
+    "Same Book, Every Day",
+    "What's on This Page?"
+   ],
+   "if_all_eligible_approved": "capacity 3 supported",
+   "node_family_unresolved": false,
+   "node_ref": "node1:652cbb70834b0b3e757ebb4d8bbbcf50",
+   "same_node_theme_variation": true,
+   "theme_count": 6,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [
+    "book_object_naming"
+   ],
+   "family_eligible_cards": 6,
+   "family_eligible_titles": [
+    "Find and Name",
+    "Lift the Flap, Name It",
+    "Photo Album Names",
+    "Point and Tell",
+    "Same Book, Every Day",
+    "What's on This Page?"
+   ],
+   "if_all_eligible_approved": "capacity 3 supported",
+   "node_family_unresolved": false,
+   "node_ref": "node1:4ef3c3c2c4b53717cac0510a5c64ad0f",
+   "same_node_theme_variation": true,
+   "theme_count": 6,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [
+    "expressive_vocabulary_growth"
+   ],
+   "family_eligible_cards": 12,
+   "family_eligible_titles": [
+    "Cleanup Request Game",
+    "Family Photo Names",
+    "Give Me Two! Game",
+    "More Please Routine",
+    "Paint Choice Words",
+    "Pick Your Toy",
+    "Quick Naming Walk",
+    "Snack Choice Words",
+    "Song Fill-In Game",
+    "Two-Word Choice Game",
+    "What's Missing? Box",
+    "What's That? Book"
+   ],
+   "if_all_eligible_approved": "capacity 3 supported",
+   "node_family_unresolved": false,
+   "node_ref": "node1:c6f3de31fded24e91ccd172bd6dc8386",
+   "same_node_theme_variation": true,
+   "theme_count": 11,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [
+    "expressive_vocabulary_growth"
+   ],
+   "family_eligible_cards": 12,
+   "family_eligible_titles": [
+    "Cleanup Request Game",
+    "Family Photo Names",
+    "Give Me Two! Game",
+    "More Please Routine",
+    "Paint Choice Words",
+    "Pick Your Toy",
+    "Quick Naming Walk",
+    "Snack Choice Words",
+    "Song Fill-In Game",
+    "Two-Word Choice Game",
+    "What's Missing? Box",
+    "What's That? Book"
+   ],
+   "if_all_eligible_approved": "capacity 3 supported",
+   "node_family_unresolved": false,
+   "node_ref": "node1:d333e07f1076de87a2bbfdc553a85af2",
+   "same_node_theme_variation": true,
+   "theme_count": 11,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": true,
+   "node_ref": "node1:2999dd0d3445ff578f1b2d7fa1f3a022",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": true,
+   "node_ref": "node1:3103341ea81199bc137dc51dbd99fdce",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [
+    "two_word_phrases"
+   ],
+   "family_eligible_cards": 6,
+   "family_eligible_titles": [
+    "Action + Object",
+    "All Done and Stop",
+    "Help Me",
+    "More Bubbles",
+    "My Turn",
+    "Want + Choice"
+   ],
+   "if_all_eligible_approved": "capacity 3 supported",
+   "node_family_unresolved": false,
+   "node_ref": "node1:13818984fa725037b46bfb4df30bd979",
+   "same_node_theme_variation": true,
+   "theme_count": 6,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [
+    "two_word_phrases"
+   ],
+   "family_eligible_cards": 6,
+   "family_eligible_titles": [
+    "Action + Object",
+    "All Done and Stop",
+    "Help Me",
+    "More Bubbles",
+    "My Turn",
+    "Want + Choice"
+   ],
+   "if_all_eligible_approved": "capacity 3 supported",
+   "node_family_unresolved": false,
+   "node_ref": "node1:200591d7507b3765d2d078f4f351dc72",
+   "same_node_theme_variation": true,
+   "theme_count": 6,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": null,
+   "node_ref": "node1:0015d7b2389c7a28da54f6fc90713f5e",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": true,
+   "node_ref": "node1:8a5e8dde41708bf47dab606ae28e3dbd",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": true,
+   "node_ref": "node1:3b10740ef96eba31b6916f994d55d3cf",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": true,
+   "node_ref": "node1:4c6449398711000c931dfd87b1491d47",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": true,
+   "node_ref": "node1:64ed67abd019282b8c4626fd8a938b7d",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": true,
+   "node_ref": "node1:fdf6a7326cdf4d3f625768889468f9ff",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": true,
+   "node_ref": "node1:5428efacfc0ddba51c8c502d11938dea",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": null
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": false,
+   "node_ref": "node1:79be5cf0385c3e915d99d03d9d038a71",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": {
+    "candidate_cards": 7,
+    "candidate_file": "clinical_review/candidates/action_picture_labeling.json",
+    "ledger_statuses": {
+     "generated_candidate": 12
+    }
+   }
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": false,
+   "node_ref": "node1:986ced2070c5cd5333547b03bc376f8c",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": {
+    "candidate_cards": 7,
+    "candidate_file": "clinical_review/candidates/action_picture_labeling.json",
+    "ledger_statuses": {
+     "generated_candidate": 12
+    }
+   }
+  },
+  {
+   "approved_mapped_cards": 0,
+   "families": [],
+   "family_eligible_cards": 0,
+   "family_eligible_titles": [],
+   "if_all_eligible_approved": "ZERO reviewed cards — no automatic move",
+   "node_family_unresolved": false,
+   "node_ref": "node1:149d4347db422bcdb3e3a0fbdb9530d1",
+   "same_node_theme_variation": false,
+   "theme_count": 0,
+   "unreviewed_candidates_for_family": {
+    "candidate_cards": 7,
+    "candidate_file": "clinical_review/candidates/action_picture_labeling.json",
+    "ledger_statuses": {
+     "generated_candidate": 12
+    }
+   }
+  }
+ ],
+ "package_version": "p0b2-ladder-review-package-v1"
+}
