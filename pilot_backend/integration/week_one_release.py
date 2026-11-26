@@ -419,6 +419,16 @@ class WeekOneReleaseService:
         #                          document this request builds; otherwise
         #                          capture; release if not released; an
         #                          identical concurrent writer is tolerated.
+        #
+        # The SNAPSHOT is Week 1's clinical freeze / commitment boundary
+        # (founder decision). Before it exists no family-facing commitment
+        # exists, so a resumed release uses the LATEST active clinician-approved
+        # goal version — provided the persisted allocation still EXACTLY
+        # matches what this request expects (else refused, nothing written).
+        # Once a snapshot exists, any revision that makes the rebuilt document
+        # differ is refused by the byte-equivalence check.
+        # (Naming debt: the resume refusal is `AdaptiveWeekStateMismatch` for
+        # Week 1 too; kept so P0-B1's error contract does not change.)
         templates_by_id = self._candidate_templates(goals)
         candidates = self._candidates_for(goals, templates_by_id)
         if not candidates:

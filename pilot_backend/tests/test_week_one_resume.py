@@ -12,6 +12,21 @@ and `_resume_snapshot_and_release` (reuse a snapshot only if byte-for-byte the
 document this request builds; else capture; release if unreleased; identical
 racers tolerated). The result is the SAME Week 1 an uninterrupted release
 produces — or a refusal.
+
+## The snapshot is Week 1's clinical freeze / commitment boundary
+
+Founder decision (goal revised between an interruption and its retry):
+
+* BEFORE a snapshot exists (state 3: cycle + allocation, no snapshot), no
+  family-facing commitment exists yet. The retry recomputes the normal Week 1
+  from the LATEST active clinician-approved goal version, and resumes ONLY if
+  the persisted allocation still EXACTLY matches what it now expects; the
+  snapshot is then frozen with the latest approved wording/version. A
+  revision that changes the expected allocation (anchor-derived candidates,
+  placements, coverage, selection) is refused and nothing is written.
+* ONCE a snapshot exists (state 4), it IS the frozen clinical artifact: any
+  revision that makes the rebuilt snapshot differ is refused by the existing
+  byte-equivalence check.
 """
 
 from __future__ import annotations
@@ -190,20 +205,91 @@ def test_a_different_capacity_on_retry_is_refused(point, monkeypatch):
     assert f.this_week_cycle() is None
 
 
-def test_a_goal_revised_after_the_snapshot_was_saved_is_refused(monkeypatch):
-    """State 4: the saved snapshot froze the OLD goal version; the rebuilt
-    document carries the new one, so the exact snapshot check refuses."""
+def _revise_goal(f, text="{child} will name 12 objects"):
+    status, body = f.http("POST", f"/pilot/goals/clinical/{f.goal.clinical_goal_id}/revisions",
+                          body={"edit_type": "modified", "text": text,
+                                "reason": "clinician revision after the interruption"})
+    assert status == 200, body
+    return text
+
+
+def test_state_3_a_wording_revision_that_keeps_the_allocation_resumes_with_the_latest_version(monkeypatch):
+    """Founder decision, state 3 (no snapshot yet): the latest approved goal
+    version governs the resumed release because the persisted allocation still
+    EXACTLY matches what the retry expects."""
+    f = _world(monkeypatch)
+    old_version = f.goal.current_version_id
+    _interrupt(f, "allocate_cycle:after")
+    (cycle,) = f.repos.weekly_cycles.list_for_child(CHILD)
+    allocation_before = [d for k, d in _surface(f).items()
+                         if k in ("pilot_activity_goal_alignments", "pilot_capacity_ledgers")]
+    new_text = _revise_goal(f)
+
+    status, body = f.release()
+    assert status == 200 and body["created"] is True and body["cycle_id"] == cycle.cycle_id
+    assert _counts(f) == ONE_OF_EVERYTHING
+    assert [d for k, d in _surface(f).items()
+            if k in ("pilot_activity_goal_alignments", "pilot_capacity_ledgers")] == allocation_before, \
+        "the persisted allocation was reused, never rewritten"
+    (snap,) = f.repos.weekly_plan_snapshots.list_for_cycle(cycle.cycle_id)
+    (frozen_goal,) = json.loads(snap.resolved_plan_document)["goals"]
+    current = f.goals.get_goal(f.provider, f.goal.ref)
+    assert current.current_version_id != old_version
+    assert frozen_goal["goal_version_id"] == current.current_version_id, "latest approved version frozen"
+    assert frozen_goal["text"] == new_text
+    assert f.this_week_cycle() == cycle.cycle_id, "the family sees the released week"
+    _s, week = f.http("GET", f"/pilot/children/{CHILD}/this-week", token="cg")
+    assert [g["text"] for g in week["week"]["goals"]] == [new_text]
+
+
+def test_state_3_a_change_that_alters_the_expected_allocation_is_refused(monkeypatch):
+    """Founder decision, state 3: a clinical change after the interruption that
+    alters the deterministic Week 1 (here the goal is re-anchored so a family
+    the persisted allocation USED drops out) is refused; nothing is written."""
+    f = _world(monkeypatch)
+    _interrupt(f, "allocate_cycle:after")
+    (cycle,) = f.repos.weekly_cycles.list_for_child(CHILD)
+    templates = f.service._candidate_templates(f.service.releasable_goals(f.provider, CHILD))
+    used = {templates[a.activity_identity_ref].activity_family_ref
+            for a in f.repos.alignments.list_for_cycle(cycle.cycle_id)}
+    ((anchor_id, anchor),) = list(f.repos.store.list_all("pilot_clinical_goal_anchors"))
+    families = [b["family_ref"] for b in anchor["rung"]["family_bindings"]]
+    dropped = sorted(used)[0]
+    assert dropped in families and len(families) > 1
+    real_anchor = f.goals.goal_anchor
+
+    def re_anchored(principal, ref):
+        a = real_anchor(principal, ref)
+        from dataclasses import replace
+        rung = replace(a.rung, family_bindings=tuple(b for b in a.rung.family_bindings
+                                                     if b.family_ref != dropped))
+        return replace(a, rung=rung)
+
+    f.goals.goal_anchor = re_anchored                # the retry sees the new anchor
+    before = _surface(f)
+    with pytest.raises((InProgressStateMismatch, AdaptiveWeekStateMismatch)):
+        f.service.release_week_one(f.provider, CHILD, family_declared_capacity=CAPACITY)
+    assert _surface(f) == before, "the interrupted state is byte-identical"
+    assert f.this_week_cycle() is None
+
+
+def test_state_4_a_goal_revised_after_the_snapshot_was_saved_is_refused(monkeypatch):
+    """State 4: the saved snapshot is the frozen clinical artifact; it froze the
+    OLD goal version, the rebuilt document carries the new one, so the exact
+    snapshot check refuses and the snapshot is left untouched."""
     f = _world(monkeypatch)
     _interrupt(f, "capture_snapshot:after")
-    status, _b = f.http("POST", f"/pilot/goals/clinical/{f.goal.clinical_goal_id}/revisions",
-                        body={"edit_type": "modified", "text": "{child} will name 12 objects",
-                              "reason": "clinician revision after the interruption"})
-    assert status == 200
+    (cycle,) = f.repos.weekly_cycles.list_for_child(CHILD)
+    (snapshot_before,) = f.repos.weekly_plan_snapshots.list_for_cycle(cycle.cycle_id)
+    _revise_goal(f)
     before = _surface(f)
     with pytest.raises(AdaptiveWeekStateMismatch):
         f.service.release_week_one(f.provider, CHILD, family_declared_capacity=CAPACITY)
     assert f.release() == (403, {"error": "not permitted"})
     assert _surface(f) == before
+    (snapshot_after,) = f.repos.weekly_plan_snapshots.list_for_cycle(cycle.cycle_id)
+    assert snapshot_after == snapshot_before, "the frozen snapshot is unchanged"
+    assert f.this_week_cycle() is None
 
 
 def test_a_changed_expected_allocation_is_refused(monkeypatch):

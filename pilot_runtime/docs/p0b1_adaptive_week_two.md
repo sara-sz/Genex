@@ -126,3 +126,24 @@ Card-level easier/harder ordering; autonomous dosage changes; free-text
 escalation; a mechanism taxonomy; P0-B2 rules 1/2/6 (same-card scaffold /
 challenge); the December repair above; gap handling when a week is missed
 (currently a fail-closed `AdaptiveWeekUnavailable`).
+
+
+## Week 1 resumability (shares the resume path above)
+
+A Week 1 release interrupted after its allocation committed (no snapshot) or
+after its snapshot committed (not released) used to be stuck: the retry re-ran
+`allocate_cycle` ("already allocated") and the route answered 403 forever.
+Week 1 now resumes through the same two steps: `WeeklyService.allocation_state`
+(none -> allocate; exact match -> reuse; any difference -> refuse, nothing
+written) and `_resume_snapshot_and_release` (byte-identical snapshot reused,
+else captured; released if unreleased; identical racers tolerated).
+
+**The snapshot is the Week 1 clinical freeze / commitment boundary.**
+
+| Interrupted state | Goal revised before the retry |
+|---|---|
+| 3 — cycle + allocation, no snapshot | Resumes with the LATEST active clinician-approved goal version/text **iff** the persisted allocation still exactly matches the recomputed one; a change that alters the expected allocation (anchor-derived candidates, placements, coverage, selection) is refused, nothing written. |
+| 4 — cycle + allocation + snapshot, unreleased | Refused by the byte-equivalence check if the rebuilt snapshot differs; the frozen snapshot is never rewritten. |
+
+Naming debt (not a pilot blocker): the resume refusal raised for Week 1 is
+`AdaptiveWeekStateMismatch`, kept to avoid changing P0-B1's error contract.
