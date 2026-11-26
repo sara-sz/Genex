@@ -157,3 +157,58 @@ def test_the_serving_code_never_imports_the_review_package():
                 mods = ([a.name for a in node.names] if isinstance(node, ast.Import)
                         else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
                 assert not any(m.startswith("clinical_review") for m in mods), path
+
+
+# ---------------------------------------------------------------------------
+# Focused Pilot packet (founder decision: Option B, five nodes)
+# ---------------------------------------------------------------------------
+
+
+def test_the_pilot_envelope_is_exactly_the_approved_five_nodes(pkg):
+    P_ = pkg["pilot"]
+    chain = P_["chain"]
+    assert [(n["cdc_month_anchor"], n["node_type"], n["bridge_step_number"]) for n in chain] == [
+        (18, "endpoint", 2), (24, "bridge", 1), (24, "bridge", 2), (24, "bridge", 3), (24, "endpoint", 4)]
+    assert all(n["rung_ref"] == P.REFERENCE_ANCHOR_RUNG for n in chain[1:])
+    assert [l["confidence"] for l in P_["links"]] == [P.TEXT_LINKED, P.STRUCTURED, P.STRUCTURED, P.STRUCTURED]
+    assert P_["envelope"]["minimum_node_ref"] == chain[0]["node_ref"]
+    assert P_["envelope"]["maximum_node_ref"] == chain[-1]["node_ref"]
+    assert not P_["envelope"]["starting_node_ref"].startswith("node1:"), "the start is never pre-decided"
+
+
+def test_no_existing_card_is_assigned_to_a_single_bridge_without_hannah(pkg):
+    P_ = pkg["pilot"]
+    chain = [n["node_ref"] for n in P_["chain"]]
+    assert len(P_["bank_cards"]) == 18
+    for c in P_["bank_cards"]:
+        assert c["proposed_node"] == P.DECISION
+        expect = chain[1:3] if c["activity_family"] == "expressive_vocabulary_growth" else chain[3:5]
+        assert sorted(c["allowed_nodes"]) == sorted(expect), c["title"]
+
+
+def test_the_seven_18m_candidates_are_carried_unapproved(pkg):
+    cands = pkg["pilot"]["candidates_18m"]
+    assert len(cands) == 7
+    lower = pkg["pilot"]["chain"][0]["node_ref"]
+    for c in cands:
+        assert c["ledger_status"] == "generated_candidate" and c["reviewer"] is None
+        assert c["proposed_node"] == lower and c["allowed_nodes"] == [lower]
+        for f in ("title", "materials", "instructions", "success_criteria", "what_to_avoid",
+                  "make_easier", "make_harder", "theme"):
+            assert c["card"][f].strip()
+
+
+def test_the_hannah_packet_is_clinical_not_technical(pkg):
+    doc = P.render_hannah_packet(pkg)
+    for banned in ("node1:", "rung1:", "atpl1:", "sha256", "codec", "hash", "NEEDS_CLINICIAN_REVIEW"):
+        assert banned not in doc, banned
+    for c in pkg["pilot"]["candidates_18m"]:
+        assert c["card"]["title"] in doc and c["card"]["instructions"] in doc
+    for n in pkg["pilot"]["chain"]:
+        assert n["wording"] in doc
+    bridges = [n["wording"] for n in pkg["pilot"]["chain"] if n["node_type"] == "bridge"]
+    for i, q in enumerate(bridges, 1):
+        assert f'{i}. "{q}"' in doc, "baseline questions use the existing bridge wording verbatim"
+    assert "Right now, does this describe your child?" in doc
+    assert "Yes / Sometimes / Not yet / Not sure" in doc
+    assert not re.search(r"\b\d+\s*-?\s*month(s)?[- ]old\b|developmental age", doc, re.I)

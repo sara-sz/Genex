@@ -268,7 +268,7 @@ def _candidate_content(families: List[str]) -> Dict[str, Dict[str, Any]]:
     return out
 
 
-def build_package() -> Dict[str, Any]:
+def _build_package_core() -> Dict[str, Any]:
     L = build_ladder()
     nodes = L["nodes"]
     lo, hi = WINDOW_MONTHS
@@ -337,6 +337,12 @@ def build_package() -> Dict[str, Any]:
             "edges": [e for e in L["edges"] if e["from"] in hood_refs or e["to"] in hood_refs],
             "inner_link_mismatches": [m for m in L["inner_link_mismatches"] if m["node_ref"] in hood_refs],
             "cards": cards, "coverage": coverage}
+
+
+def build_package() -> Dict[str, Any]:
+    pkg = _build_package_core()
+    pkg["pilot"] = build_pilot_packet(pkg)
+    return pkg
 
 
 # ---------------------------------------------------------------------------
@@ -456,6 +462,233 @@ def render_review_sheet(pkg: Dict[str, Any]) -> str:
     return out.getvalue()
 
 
+# ---------------------------------------------------------------------------
+# Focused Pilot packet (founder decision: Option B, five nodes)
+# ---------------------------------------------------------------------------
+
+#: The 18m milestone whose ENDPOINT is the envelope's lower bound.
+PILOT_LOWER_MILESTONE = (18, "tries to say three or more words besides mama or dada")
+DECISION = "NEEDS CLINICIAN DECISION"
+CANDIDATE_FAMILY_FOR_18M = "expressive_first_words"
+
+
+def _candidate_cards() -> List[Dict[str, Any]]:
+    """The existing UNREVIEWED candidates for the 18m endpoint's family."""
+    sys.path.insert(0, str(ROOT))
+    from pilot_backend.domain.activity_template import compute_template_id  # noqa: WPS433
+    cards = json.loads((ROOT / "clinical_review" / "candidates"
+                        / f"{CANDIDATE_FAMILY_FOR_18M}.json").read_text())
+    entries = json.loads((ROOT / "clinical_review" / "review_ledger.json").read_text())["entries"]
+    out = []
+    for c in cards:
+        tid = compute_template_id(CANDIDATE_FAMILY_FOR_18M, c)
+        e = entries[tid]                       # every candidate has a ledger row
+        out.append({"activity_template_id": tid, "card": c, "ledger_status": e["status"],
+                    "reviewer": e["reviewer"], "ledger_note": e["note"],
+                    "supersedes": e["supersedes"], "adapted_from": e["adapted_from"],
+                    # Rungs the AUTHORING note itself names (read, not inferred).
+                    "note_mentions_rungs": sorted({int(m) for m in re.findall(r"\b(\d+)m\b", e["note"])})})
+    return out
+
+
+def build_pilot_packet(pkg: Dict[str, Any]) -> Dict[str, Any]:
+    nodes = {n["node_ref"]: n for n in pkg["neighbourhood_nodes"]}
+    m_lo, t_lo = PILOT_LOWER_MILESTONE
+    lower = [n for n in nodes.values() if n["cdc_month_anchor"] == m_lo and n["node_type"] == "endpoint"
+             and _cmp(n["destination_milestone"]) == _cmp(t_lo)]
+    ref24 = sorted((n for n in nodes.values() if n["rung_ref"] == REFERENCE_ANCHOR_RUNG),
+                   key=lambda n: (n["node_type"] == "endpoint", n["bridge_step_number"] or 0))
+    chain = lower + ref24
+    if len(lower) != 1 or len(chain) != 5:
+        raise ValueError("the five-node Pilot envelope is not what the founder approved")
+    edges = {(e["from"], e["to"]): e for e in pkg["edges"]}
+    links = []
+    for a, b in zip(chain, chain[1:]):
+        e = edges.get((a["node_ref"], b["node_ref"]))
+        if e is None or e["confidence"] not in (STRUCTURED, TEXT_LINKED):
+            raise ValueError("a Pilot envelope transition is not established by the workbook")
+        links.append({"from": a["node_ref"], "to": b["node_ref"], "confidence": e["confidence"], "basis": e["basis"]})
+    fam_nodes: Dict[str, List[str]] = defaultdict(list)
+    for n in chain:
+        if n["canonical_activity_family"]:
+            fam_nodes[n["canonical_activity_family"]].append(n["node_ref"])
+
+    def proposal(fam):
+        allowed = fam_nodes.get(fam, [])
+        if len(allowed) == 1:
+            return allowed, allowed[0], "the only envelope node whose workbook bridge family matches"
+        return allowed, DECISION, f"workbook family is shared by {len(allowed)} envelope nodes; no structured evidence separates them"
+
+    bank_cards = []
+    for c in pkg["cards"]:
+        if c["activity_family"] in fam_nodes:
+            allowed, proposed, basis = proposal(c["activity_family"])
+            bank_cards.append({**{k: c[k] for k in ("activity_template_id", "title", "activity_family", "theme",
+                                                    "source_tier", "reviewed_provenance")},
+                               "allowed_nodes": allowed, "proposed_node": proposed, "basis": basis,
+                               "review_status": "reviewed bank card — node assignment pending"})
+    bank = _bank()["templates"]
+    for c in bank_cards:
+        t = bank[c["activity_template_id"]]
+        c["instructions"], c["success_criteria"] = t["instructions"], t["success_criteria"]
+    bank_cards.sort(key=lambda c: (c["activity_family"], _cmp(c["theme"]), _cmp(c["title"])))
+    cands = []
+    for c in _candidate_cards():
+        allowed, proposed, basis = proposal(CANDIDATE_FAMILY_FOR_18M)
+        cands.append({**c, "allowed_nodes": allowed, "proposed_node": proposed, "basis": basis})
+    coverage = []
+    for n in chain:
+        r = n["node_ref"]
+        reviewed = [c for c in bank_cards if r in c["allowed_nodes"]]
+        unreviewed = [c for c in cands if r in c["allowed_nodes"]]
+        coverage.append({"node_ref": r, "reviewed_cards_eligible": len(reviewed),
+                         "unreviewed_candidates_eligible": len(unreviewed),
+                         "themes_eligible": len({c["theme"] for c in reviewed} | {c["card"]["theme"] for c in unreviewed}),
+                         "approved_now": 0})
+    return {"envelope": {"minimum_node_ref": chain[0]["node_ref"], "maximum_node_ref": chain[-1]["node_ref"],
+                         "starting_node_ref": "FROM BASELINE (section D) OR CLINICIAN"},
+            "chain": chain, "links": links, "bank_cards": bank_cards, "candidates_18m": cands,
+            "coverage": coverage}
+
+
+_STEP_NAMES = ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5"]
+
+
+def _step_label(pilot, ref):
+    i = [n["node_ref"] for n in pilot["chain"]].index(ref)
+    n = pilot["chain"][i]
+    where = ("earlier milestone (CDC 18 months)" if i == 0 else
+             "the 24-month milestone itself" if n["node_type"] == "endpoint" else
+             f"towards the 24-month milestone — bridge {n['bridge_step_number']}")
+    return f"{_STEP_NAMES[i]} — {where}"
+
+
+def render_hannah_packet(pkg: Dict[str, Any]) -> str:
+    P = pkg["pilot"]
+    out = io.StringIO(); w = out.write
+    w("# Genex Pilot — developmental steps for review\n\n")
+    w("Hannah, this is the small set of decisions Genex needs from you before it adapts activities "
+      "between developmental steps. Everything here reuses the existing CDC milestones and Genex bridge "
+      "milestones — nothing is a new milestone. Please mark each item **Approve / Edit / Reject** "
+      "(or choose a step where asked).\n\n")
+    w("How it works for a family: Genex picks activities for the child's current step. If an activity is "
+      "rated *too hard* on two different practice days, the next week moves **one step down**; *too easy* "
+      "on two different days moves **one step up**. A single rating never moves the child — the card's "
+      "\"make it easier / make it harder\" tips cover the moment. Families never see step names.\n\n")
+    w("## A. The five steps (skill: putting words together)\n\n")
+    w("| Step | What the parent sees | Source | Order correct? |\n|---|---|---|---|\n")
+    for i, n in enumerate(P["chain"]):
+        src = ("CDC milestone" if n["node_type"] == "endpoint" else "Genex bridge milestone")
+        w(f"| **{_step_label(P, n['node_ref'])}** | {n['wording']} | {src} | ☐ Approve ☐ Edit ☐ Reject |\n")
+    w("\nThe step above Step 5 is deliberately not included yet: the existing milestones branch there "
+      "(e.g. describing actions in pictures vs. longer phrases), so that choice stays with you.\n\n")
+
+    w("## B. Which activities belong to which step\n\n")
+    w("These are existing reviewed Genex activities. Genex can tell which *pair* of steps each one belongs "
+      "to (from the milestone data), but **not which single step** — that is your call. Tick every step "
+      "the activity fits; ticking two is allowed but please only when you mean it. Ideally each step ends "
+      "up with **at least 3 activities** and more than one theme, so adjacent steps offer genuinely "
+      "different practice.\n\n")
+    for fam, steps in (("expressive_vocabulary_growth", "Step 2 or Step 3"), ("two_word_phrases", "Step 4 or Step 5")):
+        group = [c for c in P["bank_cards"] if c["activity_family"] == fam]
+        if not group:
+            continue
+        opts = [r for r in group[0]["allowed_nodes"]]
+        heads = " | ".join(_step_label(P, r).split(" — ")[0] for r in opts)
+        w(f"### Single words → early phrases ({steps}) — {len(group)} activities\n\n" if fam.startswith("expressive")
+          else f"### Two-word phrases ({steps}) — {len(group)} activities\n\n")
+        w(f"| Activity | Theme | What success looks like | {heads} | Notes |\n|---|---|---|" + "---|" * len(opts) + "---|\n")
+        for c in group:
+            w(f"| **{c['title']}** — {c['instructions']} | {c['theme']} | {c['success_criteria']} | "
+              + " | ".join("☐" for _ in opts) + " |  |\n")
+        w("\n")
+    w("No existing activity belongs to **Step 1** — the seven new activities in section C are proposed for it.\n\n")
+
+    w("## C. Seven new activities proposed for Step 1 (not yet clinically reviewed)\n\n")
+    w("These were drafted for Genex's first-words activity family and revised by the founder before any "
+      "clinical review. **None is approved.** They are proposed for Step 1 because it is the only step in "
+      "this set that uses the first-words family. Some were originally written with an earlier first-words "
+      "milestone in mind — noted per card.\n\n")
+    for i, c in enumerate(P["candidates_18m"], 1):
+        k = c["card"]
+        w(f"### C{i}. {k['title']}  ☐ Approve ☐ Edit ☐ Reject — step: ☐ Step 1 ☐ other: ____\n\n")
+        w(f"- **Theme:** {k['theme']}\n- **Materials:** {k['materials']}\n- **Instructions:** {k['instructions']}\n"
+          f"- **Success looks like:** {k['success_criteria']}\n- **Make it easier:** {k['make_easier']}\n"
+          f"- **Make it harder:** {k['make_harder']}\n- **What to avoid:** {k['what_to_avoid']}\n")
+        mentions = [m for m in c["note_mentions_rungs"]]
+        w(f"- **Origin:** founder-drafted, no clinician input yet."
+          + (f" The drafting note refers to the {', '.join(str(m) + '-month' for m in mentions)} first-words milestone." if mentions else "")
+          + "\n")
+        if "supervision" in k["what_to_avoid"].lower() or "SUPERVISION" in c["ledger_note"]:
+            w("- **Needs your explicit decision:** the bath-time supervision sentence in *What to avoid* "
+              "was drafted outside clinical review — approve, replace, or supply standing wording.\n")
+        w("\n")
+
+    w("## D. Choosing a child's starting step\n\n")
+    w("Today's onboarding tells us the child is working towards the 24-month milestone but not which "
+      "bridge. We would add these three questions, in order, using the existing bridge wording:\n\n")
+    w("> **Right now, does this describe your child?** — Yes / Sometimes / Not yet / Not sure\n\n")
+    for q, n in enumerate([n for n in P["chain"] if n["node_type"] == "bridge"], 1):
+        w(f"{q}. \"{n['wording']}\"  *(→ {_step_label(P, n['node_ref']).split(' — ')[0]})*\n")
+    w("\n**Proposed rule:** start at the first of these that is not clearly happening yet; if all three "
+      "are clearly happening, start at Step 5. Please choose how *Sometimes* should count:\n\n")
+    w("| Answer | Option 1 (recommended) | Option 2 |\n|---|---|---|\n")
+    w("| Yes | clearly happening → look at the next question | same |\n")
+    w("| Sometimes | **emerging → start at this step** (practise what is emerging) | counts as happening → look at the next question |\n")
+    w("| Not yet | start at this step | same |\n")
+    w("| Not sure | you choose the starting step | same |\n\n")
+    w("Option 1 matches how Genex's onboarding already treats *emerging* skills (as something to work on). "
+      "Option 2 starts one step higher and risks the first week feeling too hard. Also: if answers are "
+      "out of order (e.g. *Not yet* on question 1 but *Yes* on question 3), should Genex follow the rule "
+      "or ask you to choose? ☐ Follow the rule ☐ Ask me\n\n")
+    w("☐ Option 1  ☐ Option 2  ☐ Edit: ______\n\n")
+
+    w("## E. Approval for automatic adjustment\n\n")
+    w("Do you approve Genex moving the child **one step at a time**, automatically, only within "
+      "**Step 1 ↔ Step 2 ↔ Step 3 ↔ Step 4 ↔ Step 5**, under these rules?\n\n")
+    for rule in ("*Too hard* on two different practice days (same activity) → one step down",
+                 "*Too easy* on two different practice days (same activity) → one step up",
+                 "One rating only → no change of step (in-the-moment tips on the card)",
+                 "Child repeatedly didn't want to try / didn't enjoy it → same step, different activity or theme",
+                 "*Wasn't ready* → no automatic change; flagged for you",
+                 "Signals pointing in opposite directions → no change; flagged for you",
+                 "Never move outside Steps 1–5; a step with no approved activities is not entered — flagged for you"):
+        w(f"- {rule}\n")
+    w("\n☐ Approve  ☐ Approve with changes: ______  ☐ Reject\n")
+    return out.getvalue()
+
+
+def render_technical_appendix(pkg: Dict[str, Any]) -> str:
+    P = pkg["pilot"]
+    out = io.StringIO(); w = out.write
+    w("# P0-B2 Pilot packet — technical appendix (engineering record)\n\n")
+    w(f"Generator `clinical_review/tools/build_p0b2_ladder_package.py` ({PACKAGE_VERSION}); bank artifact "
+      f"digest `{pkg['bank_artifact_digest']}`. Founder decision: Option B envelope.\n\n")
+    w("## Envelope candidate\n\n")
+    for k, v in P["envelope"].items():
+        w(f"- `{k}`: `{v}`\n")
+    w("\n## Chain (node identity and provenance)\n\n| Step | node_ref | type | step# | rung_ref | workbook family → canonical | endpoint source |\n|---|---|---|---|---|---|---|\n")
+    for n in P["chain"]:
+        w(f"| {_step_label(P, n['node_ref']).split(' — ')[0]} | `{n['node_ref']}` | {n['node_type']} | {n['bridge_step_number'] or '—'} | "
+          f"`{n['rung_ref']}` | {n['workbook_activity_family']} → {n['canonical_activity_family']} | {n['endpoint_source'] or '—'} |\n")
+    w("\n## Transitions\n\n")
+    for l in P["links"]:
+        w(f"- `{l['from'][:22]}…` → `{l['to'][:22]}…`: **{l['confidence']}** — {l['basis']}\n")
+    w("\n## Card proposals\n\n| activity_template_id | title | family | tier | allowed nodes | proposed |\n|---|---|---|---|---|---|\n")
+    for c in P["bank_cards"]:
+        w(f"| `{c['activity_template_id']}` | {c['title']} | {c['activity_family']} | {c['source_tier']} | "
+          f"{', '.join(_step_label(P, r).split(' — ')[0] for r in c['allowed_nodes'])} | {c['proposed_node'] if c['proposed_node'] == DECISION else _step_label(P, c['proposed_node']).split(' — ')[0]} |\n")
+    for c in P["candidates_18m"]:
+        w(f"| `{c['activity_template_id']}` | {c['card']['title']} (candidate) | {CANDIDATE_FAMILY_FOR_18M} | "
+          f"ledger: {c['ledger_status']}, reviewer: {c['reviewer']} | "
+          f"{', '.join(_step_label(P, r).split(' — ')[0] for r in c['allowed_nodes'])} | "
+          f"{_step_label(P, c['proposed_node']).split(' — ')[0]} |\n")
+    w("\n## Coverage (eligible, before Hannah's split; approved now = 0 everywhere)\n\n| Step | reviewed eligible | unreviewed candidates | themes |\n|---|---|---|---|\n")
+    for c in P["coverage"]:
+        w(f"| {_step_label(P, c['node_ref']).split(' — ')[0]} | {c['reviewed_cards_eligible']} | {c['unreviewed_candidates_eligible']} | {c['themes_eligible']} |\n")
+    return out.getvalue()
+
+
 def write_all(pkg: Dict[str, Any]) -> Dict[str, str]:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     files = {
@@ -470,6 +703,11 @@ def write_all(pkg: Dict[str, Any]) -> Dict[str, str]:
             {"package_version": pkg["package_version"], "capacity_is_a_maximum": CAPACITY,
              "coverage": pkg["coverage"]}, indent=1, sort_keys=True, ensure_ascii=False) + "\n",
         "hannah_review_sheet.md": render_review_sheet(pkg),
+        "pilot_review_packet_for_hannah.md": render_hannah_packet(pkg),
+        "pilot_technical_appendix.md": render_technical_appendix(pkg),
+        "pilot_envelope_candidate.json": json.dumps(
+            {"package_version": pkg["package_version"], **pkg["pilot"]},
+            indent=1, sort_keys=True, ensure_ascii=False, default=str) + "\n",
     }
     for name, text in files.items():
         (OUT_DIR / name).write_text(text, encoding="utf-8")

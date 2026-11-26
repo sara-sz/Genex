@@ -1,0 +1,697 @@
+{
+ "bank_cards": [
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:987acefca5dcf8001c218aba7a951022",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Open the book to a clear picture. Point and ask 'what's that?' Wait 5 seconds. Accept any sound, word, or point. Say the name clearly once and turn the page. Do 5-6 pages.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child attempts to name or point to at least 2 pictured items.",
+   "theme": "book object naming",
+   "title": "What's That? Book"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:aa5d7da84faba502ab7a4c6284f1347d",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Scatter toys on the floor. Say '[item] in the basket!' and wait for your child to pick it up and drop it in. After each success, name the next item. Do 4-5 cleanup requests. Keep the instructions simple: one item at a time.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child picks up and places at least 2 named items into the basket.",
+   "theme": "cleanup direction game",
+   "title": "Cleanup Request Game"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:13a4fd9b1e557d877381cc41fed5098c",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Put 2–3 colour jars in front of your child. Model choosing: 'red paint!' and dip a finger. Hold the jars slightly back and wait. When your child reaches, model: 'blue paint!' and let them choose. Do 4–5 colour choices, celebrating each two-word attempt.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child uses a colour word plus 'paint' or 'want' in any order.",
+   "theme": "colour choice carrier phrase",
+   "title": "Paint Choice Words"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:adafba440db93934b88a2fa45a364f1d",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Show one photo at a time. Ask 'who is this?' and wait 5 seconds. Accept any sound, word, or point. Say the name clearly: 'That's grandma!' and show the next photo. Do 4-5 photos per round.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child attempts to name or point to at least two people in the photos.",
+   "theme": "family photo naming",
+   "title": "Family Photo Names"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:cb95176fdcc5cff557bdc409da186304",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Walk slowly around one room with your child. Stop at an object, tap it, and ask 'what's this?' Wait 5 seconds. Accept any sound, point, or word. Name it and move on. Visit 5-6 objects per walk.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child attempts to name or respond to at least 3 objects on the walk.",
+   "theme": "home object naming walk",
+   "title": "Quick Naming Walk"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:80d40c4226b091fc36ba73aeb061651e",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Put 4-5 objects on the table and name each one together. Ask your child to close or cover their eyes. Remove one object and hide it in the box. Say 'open your eyes — what's missing?' Wait for any attempt — a point, word, or sound.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child notices something is gone and attempts to name or indicate the missing object.",
+   "theme": "object memory naming",
+   "title": "What's Missing? Box"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:7e97ac6a60c3623f7a609c1c2b7e1995",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Put two snacks on the table. Name each one slowly: 'cracker… banana.' Ask 'which one?' and wait 5 seconds. Give the chosen snack and name it as you hand it over. Repeat for 3-4 choices.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child indicates a snack choice through any means (point, word, reach, or eye gaze).",
+   "theme": "snack naming game",
+   "title": "Snack Choice Words"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:f273cccd0afd3c96730215bc49ba8096",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Start a familiar song together. Slow down and stop just before the last word of a line. Look at your child and wait 3 seconds. Accept any sound, word, or just a look — then finish the word together. Do 4-5 pauses across the song.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child fills in, attempts, or reacts to at least one pause.",
+   "theme": "song pause fill-in",
+   "title": "Song Fill-In Game"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:2a9316b59bfcfef283cfeeb26a2034f6",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Hold one toy in each hand. Say 'which one?' and wait. If your child reaches or looks, say the name and give it. Try again with a different pair. Do 3-4 choices.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child communicates a choice (reach, point, word, or sound).",
+   "theme": "toy choice game",
+   "title": "Pick Your Toy"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:ca49a944bb6b1181d845524845bdb023",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Lay out four objects in a row. Point to two and name them slowly: 'spoon… ball.' Ask 'can you give me the spoon?' and wait 5 seconds. If correct, celebrate and put it in a basket. Try all four objects across 2-3 rounds.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child gives you the named object at least twice.",
+   "theme": "two-choice requesting game",
+   "title": "Give Me Two! Game"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:3b00aee6c8a322cddda1ec55543158a2",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Give your child a very small piece of snack or a brief turn with a toy. When it runs out, wait silently and look expectant. If your child reaches, points, or makes a sound, say 'more!' and model it. Wait for any attempt — a sound, approximation, or gesture — then give more. Do 4-5 turns. Try pairing a gesture: hold up one finger for 'more.'",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child communicates 'more' using any word, sound, sign, or gesture.",
+   "theme": "two-word carrier phrase",
+   "title": "More Please Routine"
+  },
+  {
+   "activity_family": "expressive_vocabulary_growth",
+   "activity_template_id": "atpl1:5e054d694dcf6b0e700951eb4c2ebe8d",
+   "allowed_nodes": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Put 2–3 objects on a tray between you and your child. Hold one up and say 'want cracker?' then wait. If your child reaches or sounds, model the two words: 'want cracker!' Give it over immediately. Repeat with other objects, modelling 'want ball,' 'open box.' Do 4–5 turns.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "_BUCKET_VARIANTS[expressive_word] — Parent frozen curated variant; bucket reuse approved for expressive_vocabulary_growth: expressive_word",
+   "source_tier": "bucket_curated",
+   "success_criteria": "Your child uses any two-word combination or approximation to request an item.",
+   "theme": "two-word carrier phrase",
+   "title": "Two-Word Choice Game"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:5f44b9eba107589ca26c6610f2c6cb05",
+   "allowed_nodes": [
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+    "node1:afa9b5c06d9465c51a99126dcb251c22"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Choose something the child enjoys and may naturally need a little help with. When the child shows they need assistance, model 'help me.' Pause briefly for an attempt, then help right away.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "success_criteria": "The child attempts a two-word help request such as 'help me' or 'help please.'",
+   "theme": "asking for help",
+   "title": "Help Me"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:1226e454bd64d869206574bb6ad9851f",
+   "allowed_nodes": [
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+    "node1:afa9b5c06d9465c51a99126dcb251c22"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "During play or a routine, model short phrases the child can use to finish, refuse, or pause something, such as 'all done,' 'no more,' or 'please stop.' When the child communicates that they are finished, respond promptly so they learn that their communication has meaning.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "success_criteria": "The child attempts a two-word phrase to stop, finish, refuse, or set a boundary.",
+   "theme": "boundaries and self-advocacy",
+   "title": "All Done and Stop"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:166c4e5492dab00d41b9fb4d5162202b",
+   "allowed_nodes": [
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+    "node1:afa9b5c06d9465c51a99126dcb251c22"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Show two choices and name them simply. Ask which one the child wants. When the child reaches, points, looks, or says a word, model a two-word phrase such as 'want car' or 'want book.' Pause briefly, then give the chosen item.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "success_criteria": "The child attempts a two-word request combining 'want' with the chosen item.",
+   "theme": "choosing and requesting",
+   "title": "Want + Choice"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:f7a99d017c398560058379637732ac58",
+   "allowed_nodes": [
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+    "node1:afa9b5c06d9465c51a99126dcb251c22"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Choose a simple action with a familiar object and model a short combination such as 'push car,' 'feed bear,' 'wash doll,' or 'open box.' Pause before doing the action and give the child a chance to attempt the two-word combination.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "success_criteria": "The child attempts a meaningful two-word combination containing an action and an object or person.",
+   "theme": "combining an action with an object",
+   "title": "Action + Object"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:041794bbb1acb1f86a27ca9460088c2d",
+   "allowed_nodes": [
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+    "node1:afa9b5c06d9465c51a99126dcb251c22"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Play for a few turns, then pause before starting again. Model a short phrase such as 'more bubbles' and wait a few seconds. Accept a close attempt, then immediately continue the activity. Repeat naturally for 3-5 opportunities.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "success_criteria": "The child attempts a meaningful two-word request such as 'more bubbles' or 'more please.'",
+   "theme": "requesting during play",
+   "title": "More Bubbles"
+  },
+  {
+   "activity_family": "two_word_phrases",
+   "activity_template_id": "atpl1:01cdd9f34e37a62bed4feda4300902a7",
+   "allowed_nodes": [
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+    "node1:afa9b5c06d9465c51a99126dcb251c22"
+   ],
+   "basis": "workbook family is shared by 2 envelope nodes; no structured evidence separates them",
+   "instructions": "Share a favorite toy and model 'my turn' and 'your turn' when the toy changes hands. Pause briefly before passing it so the child has an opportunity to use the phrase. Keep the exchange quick and playful.",
+   "proposed_node": "NEEDS CLINICIAN DECISION",
+   "review_status": "reviewed bank card — node assignment pending",
+   "reviewed_provenance": "reviewed_cards/two_word_phrases.json (sha256 pinned in bank: 367c3d85cf75…)",
+   "source_tier": "family_curated",
+   "success_criteria": "The child attempts 'my turn,' 'your turn,' or another meaningful two-word turn-taking phrase.",
+   "theme": "turn-taking language",
+   "title": "My Turn"
+  }
+ ],
+ "candidates_18m": [
+  {
+   "activity_template_id": "atpl1:79e480b2ccc99485f2d7ecb0630fd964",
+   "adapted_from": null,
+   "allowed_nodes": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "basis": "the only envelope node whose workbook bridge family matches",
+   "card": {
+    "group_play_line": "A sibling can help look through the photos, name each person once, and then pause to give your child a turn.",
+    "instructions": "Choose two or three photos of people your child knows well. Sit together and look at one photo at a time. Point to the person and say the name your family uses for them once, such as \"Mama.\" Pause for a few seconds and give your child a chance to respond. Accept any sound, approximation, or word that seems connected to that person, then warmly say the name again. Look through the same few photos regularly so your child gets repeated opportunities to hear and try the names. You can also practice naturally when the person is nearby or enters the room: point them out, say their name once, and pause to give your child a chance to respond.",
+    "make_easier": "Start with just one very familiar person and use the same photo repeatedly. If your child looks at, points to, smiles at, or reaches toward the person in the photo without making a sound, acknowledge the response and model the name again.",
+    "make_harder": "Add a second or third familiar person and give your child opportunities to hear and attempt different names.",
+    "materials": "A few photos of familiar people your child sees often — for example Mama, Papa, a sibling, grandparent, or caregiver. Photos can be kept on a phone or placed in a small photo album.",
+    "success_criteria": "The child makes a sound, word approximation, or word that appears connected to one of the familiar people at least once.",
+    "theme": "Naming familiar people",
+    "title": "Who's Here",
+    "what_to_avoid": "Do not quiz your child with repeated \"Who is this?\" questions or ask them to repeat the name over and over. Model the name, pause, and keep the interaction relaxed and playful."
+   },
+   "ledger_note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. This wording was revised by the founder BEFORE clinical review and has had no clinician input; the status is still generated_candidate and reviewer/decided_on are deliberately null. Supersedes atpl1:69702817b90ba435e5c7b575db187291, which was never approved and therefore carries no approval to transfer. CHANGE: the activity moved from an arrival/departure moment to a small set of photos of familiar people, with the live-arrival version kept only as a secondary opportunity, so practice no longer depends on somebody entering the room. Review focus: is a familiar-person name the right first target here, and is a photo set an adequate referent at the 12m rung?",
+   "ledger_status": "generated_candidate",
+   "note_mentions_rungs": [
+    12
+   ],
+   "proposed_node": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "reviewer": null,
+   "supersedes": "atpl1:69702817b90ba435e5c7b575db187291"
+  },
+  {
+   "activity_template_id": "atpl1:03857398879347566cacc0d6280d2517",
+   "adapted_from": null,
+   "allowed_nodes": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "basis": "the only envelope node whose workbook bridge family matches",
+   "card": {
+    "group_play_line": "A sibling can take turns hiding and appearing while the caregiver names them.",
+    "instructions": "Choose one person your child knows very well, such as Mama, Papa, a sibling, or a grandparent. Have that person briefly hide behind a doorway, their hands, or a light scarf. When the person appears, point to them and say their familiar name once: \"Papa!\" Pause for a few seconds and give your child a chance to respond. Accept any sound, approximation, or word that seems connected to the person, then say the name warmly again. Repeat for a few rounds while your child is enjoying the game. Optional mirror variation: sit or stand together in front of a mirror. Point to yourself in the mirror and say the familiar name your child uses for you, such as \"Mama.\" Pause and give your child a chance to respond, then say the name again. If another familiar person joins, take turns pointing to each person in the mirror and saying their name. Keep the focus on familiar-person names rather than asking the child to identify themselves.",
+    "make_easier": "Use the same familiar person for every round and keep the hiding very brief. Say the person's name as soon as they appear.",
+    "make_harder": "Later, play with a second familiar person so your child has opportunities to hear and attempt two different names.",
+    "materials": "No materials needed. A doorway, hands, a light scarf, or a mirror can be used.",
+    "success_criteria": "The child makes a sound, word approximation, or word that appears connected to the familiar person during at least one round.",
+    "theme": "Naming familiar people during a playful social game",
+    "title": "Peekaboo Names",
+    "what_to_avoid": "Do not ask \"Who is it?\" over and over or require your child to say the name before the person appears again. Stop if your child loses interest or seems uncomfortable with the hiding."
+   },
+   "ledger_note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:c04d588bb0437f1c6c56db0a000ea1b4 ('Peek and Name'), which was never approved. CHANGE: retitled to 'Peekaboo Names'; the person who hides is now any very familiar person rather than the caregiver's own face, and an optional mirror variation was added. The mirror variation deliberately keeps the target on FAMILIAR-PERSON names and does not ask the child to identify themselves, which would be a different self-recognition target. Review focus: round count, whether a reveal game competes with the naming target, and whether the mirror variation belongs inside this card or as a card of its own.",
+   "ledger_status": "generated_candidate",
+   "note_mentions_rungs": [],
+   "proposed_node": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "reviewer": null,
+   "supersedes": "atpl1:c04d588bb0437f1c6c56db0a000ea1b4"
+  },
+  {
+   "activity_template_id": "atpl1:a12d0335f334b1ab0c320d4cec1aeb41",
+   "adapted_from": "genex-parent/genex_core/activity_engine.py :: _BUCKET_VARIANTS['expressive_word'][0] 'Pick Your Toy'",
+   "allowed_nodes": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "basis": "the only envelope node whose workbook bridge family matches",
+   "card": {
+    "group_play_line": "A sibling can choose an item, say its name once, and then give your child a turn to choose or name one.",
+    "instructions": "Place two or three familiar favorite items in front of your child, such as a ball, car, doll, book, or cup. Pick up or point to one item and say its name slowly once. Pause for a few seconds and give your child a chance to make a sound, approximation, or word. Accept any attempt that seems connected to the item, then say the full word warmly and let your child play with or hold the item. Repeat with the other items, following your child's interest rather than going through them like a test.",
+    "make_easier": "Start with just one or two very familiar items. You can focus first on understanding: say \"Give me the ball,\" or \"Where's the ball?\" and let your child look, point, reach, or hand you the correct item. Then model the word yourself — \"Ball!\" — and pause to give your child a chance to make any sound or word attempt. A correct look, point, or hand-over shows participation and understanding, but does not count as spoken-word success.",
+    "make_harder": "Increase the choice to three or four familiar objects, or add one new object alongside words your child already knows. Give your child a little more time to start the word before you model it.",
+    "materials": "Two or three favorite toys or familiar objects your child knows well",
+    "success_criteria": "The child makes a sound, word approximation, or word that appears connected to at least one familiar object.",
+    "theme": "Naming familiar favorite objects",
+    "title": "Favorite Things",
+    "what_to_avoid": "Do not repeatedly ask \"What is this?\" or require the word before your child can have the toy. Keep it playful and model the word yourself if your child does not attempt it."
+   },
+   "ledger_note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:f562e541df79bc55108f3607b75bebb4 ('One Word, One Thing'), which was never approved. CHANGE: retitled to 'Favorite Things', and it REVERSES the earlier narrowing — the array is back to two or three familiar favorite objects rather than a single item. make_easier now adds an explicit receptive step ('Give me the ball' / 'Where's the ball?') and states that a correct look, point or hand-over shows participation and understanding but does NOT count as spoken-word success. Review focus: confirm that re-widening the array is right for a first-words target, and confirm the receptive-step wording leaves the expressive success criterion unambiguous.",
+   "ledger_status": "generated_candidate",
+   "note_mentions_rungs": [],
+   "proposed_node": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "reviewer": null,
+   "supersedes": "atpl1:f562e541df79bc55108f3607b75bebb4"
+  },
+  {
+   "activity_template_id": "atpl1:1dc565ad660e3551e3707e2497f82d2c",
+   "adapted_from": null,
+   "allowed_nodes": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "basis": "the only envelope node whose workbook bridge family matches",
+   "card": {
+    "group_play_line": "A sibling can choose first and model the snack name, then let your child take a turn choosing.",
+    "instructions": "At snack time, show your child two familiar choices, such as banana and crackers. Hold or place both where your child can see them and name each one once: \"Banana. Crackers.\" Ask a simple choice question such as, \"Which one do you want?\" Give your child a few seconds to look, point, reach, make a sound, or attempt a word. When your child chooses, say the name of the chosen snack again — \"Banana!\" — and give it to them. If your child makes a sound, approximation, or word connected to the snack, accept it warmly and model the full word once. Repeat naturally during the snack without turning every bite into a language trial.",
+    "make_easier": "Use only two very familiar choices. Let your child choose by looking, pointing, reaching, or touching. Name the snack they choose and pause briefly to give them a chance to make a sound or word attempt. Choosing correctly shows communication and understanding, but does not need to count as spoken-word success.",
+    "make_harder": "Offer three familiar choices, or give your child more time to try the snack's name before you model it. If your child already attempts some food words, encourage them to use the word while choosing — but still give the chosen food whether or not they say it.",
+    "materials": "Two familiar snacks your child likes",
+    "success_criteria": "The child makes a sound, word approximation, or word that appears connected to one of the snack choices at least once.",
+    "theme": "Using first words to choose between familiar foods",
+    "title": "Snack Choices",
+    "what_to_avoid": "Never make food depend on saying a word. Do not withhold a snack, repeatedly demand \"Say ___,\" or require correct pronunciation before giving the food. Keep the interaction relaxed and let the choice remain meaningful."
+   },
+   "ledger_note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:b9030e455771b9fc0213d75e9d00530e ('Snack Words'), which was never approved. CHANGE: retitled to 'Snack Choices'; the activity is now a two-item CHOICE rather than naming a single food, and what_to_avoid was strengthened — it now forbids withholding the snack, demanding 'Say ___', and requiring correct pronunciation. make_easier states that choosing correctly shows communication and understanding but need not count as spoken-word success. Review focus: the what_to_avoid line is still the load-bearing part — food must never be contingent on a word.",
+   "ledger_status": "generated_candidate",
+   "note_mentions_rungs": [],
+   "proposed_node": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "reviewer": null,
+   "supersedes": "atpl1:b9030e455771b9fc0213d75e9d00530e"
+  },
+  {
+   "activity_template_id": "atpl1:dc14cad0ff29afbf65f43725330f5abd",
+   "adapted_from": null,
+   "allowed_nodes": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "basis": "the only envelope node whose workbook bridge family matches",
+   "card": {
+    "group_play_line": "A sibling can name the familiar item once during the routine and then give your child a chance to respond.",
+    "instructions": "Choose one familiar item your child sees often during the routine, such as a duck, towel, pajamas, toothbrush, or book. When you naturally reach for the item, say its name once and pause briefly to give your child a chance to respond. Accept any sound, approximation, or word that seems connected to the item, then warmly model the full word again and continue the routine. Use the same word for several days so your child gets repeated opportunities to hear and try it.",
+    "make_easier": "Use one highly familiar item and say its name twice before a short pause. Keep the interaction brief and predictable.",
+    "make_harder": "Add a second familiar item from the routine and give your child opportunities to hear and attempt both words across the week.",
+    "materials": "Familiar items already used during bath time or bedtime",
+    "success_criteria": "The child makes a sound, word approximation, or word connected to the familiar item at least once during the routine.",
+    "theme": "Naming familiar objects during everyday care routines",
+    "title": "Bath and Bedtime Words",
+    "what_to_avoid": "Do not turn bath time or bedtime into a test, delay sleep, or repeatedly ask your child to say the word. During bath time, never pause or change what you are doing in a way that interferes with close supervision and safety."
+   },
+   "ledger_note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Revised by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. Supersedes atpl1:7015cc812377ad0cb64e04e09ff02b90, which was never approved. The TITLE is unchanged ('Bath and Bedtime Words'); the body changed, so the id changed. CHANGE: the dose moved from 'the same word every night' to the same word across several days, and what_to_avoid now adds an explicit bath-time supervision sentence. THAT SUPERVISION SENTENCE IS CANDIDATE LANGUAGE DRAFTED OUTSIDE CLINICAL REVIEW AND NEEDS AN EXPLICIT DECISION: approve it, replace it, or supply standing wording. Review focus: whether several-day repetition of one word is the right dose, and whether bath time is an appropriate window at all.",
+   "ledger_status": "generated_candidate",
+   "note_mentions_rungs": [],
+   "proposed_node": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "reviewer": null,
+   "supersedes": "atpl1:7015cc812377ad0cb64e04e09ff02b90"
+  },
+  {
+   "activity_template_id": "atpl1:8ce3a7e5bb00817c5754654af54899db",
+   "adapted_from": null,
+   "allowed_nodes": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "basis": "the only envelope node whose workbook bridge family matches",
+   "card": {
+    "group_play_line": "Take turns pulling objects from the box. A sibling can pull one out and name it, then let your child have the next turn.",
+    "instructions": "Choose two or three familiar objects and hide them inside a box or bag. Let your child reach in and pull out one object at a time. When it appears, react with interest and say its name once: \"Car!\" Pause for a few seconds and give your child a chance to make a sound, word approximation, or word. Accept any attempt connected to the object and warmly say the full word again. Let your child hold or play with the object before reaching into the box for the next surprise. Repeat with the same small group of objects so the words become familiar.",
+    "make_easier": "Start with only one or two highly familiar objects. Name each object as soon as it comes out and let your child explore it. Pause briefly after saying the word to leave room for any sound or word attempt.",
+    "make_harder": "Use three or four familiar objects. Before naming the object yourself, pause and give your child a chance to start the word. You can also use objects from the same group, such as a car, bus, and truck, or several familiar animals.",
+    "materials": "A small box or bag and two or three familiar objects your child likes — for example toy cars, stuffed animals, bath toys, or favorite everyday objects",
+    "success_criteria": "The child makes a sound, word approximation, or word connected to at least one object.",
+    "theme": "Discovering and naming familiar objects",
+    "title": "Magic Word Box",
+    "what_to_avoid": "Do not repeatedly ask \"What is this?\" or require your child to name the object before playing with it. Keep the surprise and play more important than getting the word right."
+   },
+   "ledger_note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. This is a COMPLETE REPLACEMENT of atpl1:75020d1045c22f79ba398d154d1be321 ('Say It Your Way'), not an edit of it. The superseded card's target was the CAREGIVER's response — treating an approximation as the word rather than as an error — and its ledger note asked whether that was clinically distinct from the simplification card or collapsed into it. The founder resolved that by replacing it with a different activity: a surprise box producing one familiar object at a time. Review focus: confirm the recast/expansion concept is adequately covered by the 'accept any attempt, then model the full word' instruction now carried by every card in this family, or say so if it needs a card of its own.",
+   "ledger_status": "generated_candidate",
+   "note_mentions_rungs": [],
+   "proposed_node": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "reviewer": null,
+   "supersedes": "atpl1:75020d1045c22f79ba398d154d1be321"
+  },
+  {
+   "activity_template_id": "atpl1:b0eb9f7e0e847c69984900b04429ec79",
+   "adapted_from": null,
+   "allowed_nodes": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "basis": "the only envelope node whose workbook bridge family matches",
+   "card": {
+    "group_play_line": "A sibling can choose an object, find its matching picture, and say the word before giving your child a turn.",
+    "instructions": "Start with two familiar objects and their matching photos. Place the two photos in front of your child. Hand your child one of the real objects, say its name once — \"Ball!\" — and help them look for the matching picture. When they find or touch the matching photo, say the word again: \"Ball!\" Pause for a few seconds and give your child a chance to make a sound, approximation, or word. Accept any attempt and warmly model the full word. Repeat with the other object.",
+    "make_easier": "Use only two very familiar objects. Take photos of the actual objects your child will match, with a simple background and as little visual difference as possible between the photo and the real object. If matching is difficult, place the real object beside its photo yourself, say the name, and let your child explore both. The child does not need to match independently at first.",
+    "make_harder": "Add a third or fourth object and picture. Once matching is easy, try using a different photo of the same kind of object — for example, your child's red ball matched to a picture of another ball — while continuing to model the same word. You can also pause before saying the name to give your child a chance to attempt it first.",
+    "materials": "Two or three familiar objects and a clear photo of each one. For the easiest version, take photos of the child's actual objects. Make each photo simple and easy to recognize: show one object by itself, from a similar angle, with similar colors to the real object. Photos may be printed or displayed one at a time on a phone.",
+    "success_criteria": "The child matches or shows recognition of at least one familiar object and makes a sound, word approximation, or word connected to one of the objects. The match itself shows understanding; the sound or word attempt is the expressive-language part of the activity.",
+    "theme": "Matching familiar objects with their pictures and hearing their names",
+    "title": "Match the Picture",
+    "what_to_avoid": "Do not make matching accuracy the main goal or repeatedly correct mistakes. If your child is unsure, help them match the object and picture, say the word, and keep the activity moving. The purpose is repeated, meaningful exposure to familiar first words."
+   },
+   "ledger_note": "FOUNDER/PRODUCT REVISION, NOT CLINICAL REVIEW. Authored by the founder before clinical review; no clinician input, reviewer/decided_on deliberately null. This is a COMPLETE REPLACEMENT of atpl1:c062d182c4ec09fd4432dc9a348cb742 ('Words Around the House'), not an edit of it. The superseded card targeted generalisation of a known word across rooms; this one targets object-to-photo matching with the object's name modelled at the moment of the match. Its success criterion is deliberately TWO-PART — the match shows understanding, the sound or word attempt is the expressive part — so a child who matches silently has not met it. Review focus: whether a matching task belongs in an EXPRESSIVE family at all rather than a receptive one, and whether the make_harder step (a different photo of the same kind of object) is the right generalisation move for the 18m rung.",
+   "ledger_status": "generated_candidate",
+   "note_mentions_rungs": [
+    18
+   ],
+   "proposed_node": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "reviewer": null,
+   "supersedes": "atpl1:c062d182c4ec09fd4432dc9a348cb742"
+  }
+ ],
+ "chain": [
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": "expressive_first_words",
+   "cdc_month_anchor": 18,
+   "destination_milestone": "tries to say three or more words besides mama or dada",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": true,
+   "flags": [
+    "BRANCH: more than one text-linked successor"
+   ],
+   "node_ref": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:b81330f543a24587b8da839ec3036e83"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:6c8e17d12c4ca2ab1d583e94635100d3",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:c6f3de31fded24e91ccd172bd6dc8386",
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0"
+   ],
+   "wording": "Tries to say three or more words besides “mama” or “dada.”",
+   "workbook_activity_family": "expressive_three_words",
+   "workbook_previous_anchor_age": 15,
+   "workbook_previous_bridge_step": "tries to say one or two words besides mama or dada like ba for ball or da for dog"
+  },
+  {
+   "bridge_step_number": 1,
+   "canonical_activity_family": "expressive_vocabulary_growth",
+   "cdc_month_anchor": 24,
+   "destination_milestone": "says at least two words together like more milk",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [],
+   "node_ref": "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:f3be24e2680cfb214e498b877b7fd552"
+   ],
+   "predecessor_review": {
+    "basis": "previous_bridge_step text matches exactly one endpoint at 18m",
+    "predecessor": "node1:f3be24e2680cfb214e498b877b7fd552",
+    "status": "TEXT_LINKED"
+   },
+   "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "wording": "Uses a few reliable single words/approximations for favorite people, objects, or needs.",
+   "workbook_activity_family": "expressive_vocabulary_growth",
+   "workbook_previous_anchor_age": 18,
+   "workbook_previous_bridge_step": "Tries to say three or more words besides “mama” or “dada.”"
+  },
+  {
+   "bridge_step_number": 2,
+   "canonical_activity_family": "expressive_vocabulary_growth",
+   "cdc_month_anchor": 24,
+   "destination_milestone": "says at least two words together like more milk",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [],
+   "node_ref": "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+   ],
+   "wording": "Uses more single words for needs, objects, actions",
+   "workbook_activity_family": "expressive_vocabulary_growth",
+   "workbook_previous_anchor_age": 18,
+   "workbook_previous_bridge_step": "Uses a few reliable single words/approximations for favorite people, objects, or needs."
+  },
+  {
+   "bridge_step_number": 3,
+   "canonical_activity_family": "two_word_phrases",
+   "cdc_month_anchor": 24,
+   "destination_milestone": "says at least two words together like more milk",
+   "domain": "talking_and_communicating",
+   "endpoint_source": null,
+   "family_resolves_for_domain": true,
+   "flags": [],
+   "node_ref": "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+   "node_type": "bridge",
+   "predecessor_refs": [
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:afa9b5c06d9465c51a99126dcb251c22"
+   ],
+   "wording": "Imitates simple two-word phrases.",
+   "workbook_activity_family": "expressive_two_word_phrase",
+   "workbook_previous_anchor_age": 24,
+   "workbook_previous_bridge_step": "Uses more single words for needs, objects, actions"
+  },
+  {
+   "bridge_step_number": 4,
+   "canonical_activity_family": "two_word_phrases",
+   "cdc_month_anchor": 24,
+   "destination_milestone": "says at least two words together like more milk",
+   "domain": "talking_and_communicating",
+   "endpoint_source": "workbook_final_bridge_row",
+   "family_resolves_for_domain": true,
+   "flags": [
+    "BRANCH: more than one text-linked successor"
+   ],
+   "node_ref": "node1:afa9b5c06d9465c51a99126dcb251c22",
+   "node_type": "endpoint",
+   "predecessor_refs": [
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+   ],
+   "predecessor_review": null,
+   "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+   "subdomain": "expressive_language",
+   "successor_refs": [
+    "node1:79be5cf0385c3e915d99d03d9d038a71",
+    "node1:e1f95546f5b45fe40dfc4493fccfd441"
+   ],
+   "wording": "says at least two words together like more milk",
+   "workbook_activity_family": "expressive_two_word_phrase",
+   "workbook_previous_anchor_age": 24,
+   "workbook_previous_bridge_step": "Use at least 50 words."
+  }
+ ],
+ "coverage": [
+  {
+   "approved_now": 0,
+   "node_ref": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "reviewed_cards_eligible": 0,
+   "themes_eligible": 7,
+   "unreviewed_candidates_eligible": 7
+  },
+  {
+   "approved_now": 0,
+   "node_ref": "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+   "reviewed_cards_eligible": 12,
+   "themes_eligible": 11,
+   "unreviewed_candidates_eligible": 0
+  },
+  {
+   "approved_now": 0,
+   "node_ref": "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+   "reviewed_cards_eligible": 12,
+   "themes_eligible": 11,
+   "unreviewed_candidates_eligible": 0
+  },
+  {
+   "approved_now": 0,
+   "node_ref": "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+   "reviewed_cards_eligible": 6,
+   "themes_eligible": 6,
+   "unreviewed_candidates_eligible": 0
+  },
+  {
+   "approved_now": 0,
+   "node_ref": "node1:afa9b5c06d9465c51a99126dcb251c22",
+   "reviewed_cards_eligible": 6,
+   "themes_eligible": 6,
+   "unreviewed_candidates_eligible": 0
+  }
+ ],
+ "envelope": {
+  "maximum_node_ref": "node1:afa9b5c06d9465c51a99126dcb251c22",
+  "minimum_node_ref": "node1:f3be24e2680cfb214e498b877b7fd552",
+  "starting_node_ref": "FROM BASELINE (section D) OR CLINICIAN"
+ },
+ "links": [
+  {
+   "basis": "previous_bridge_step text matches exactly one endpoint at 18m",
+   "confidence": "TEXT_LINKED",
+   "from": "node1:f3be24e2680cfb214e498b877b7fd552",
+   "to": "node1:cb508e3ea7253ee6f3e59e092fcb54f0"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+   "to": "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+   "to": "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+  },
+  {
+   "basis": "same milestone, bridge_step_number order",
+   "confidence": "STRUCTURED",
+   "from": "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+   "to": "node1:afa9b5c06d9465c51a99126dcb251c22"
+  }
+ ],
+ "package_version": "p0b2-ladder-review-package-v1"
+}

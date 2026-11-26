@@ -14,7 +14,21 @@ Regenerate (deterministic; the test suite fails if these files drift):
 | `ladder_talking_candidate.json` | 1 — candidate ladder: nodes, edges, flags |
 | `activity_mapping_candidate.json` | 2 — `activity_template_id` → candidate nodes |
 | `coverage_candidate.json` | 3 — node → reviewed cards, capacity, gaps |
-| `hannah_review_sheet.md` | 4 + 5 — baseline mapping, review sheet, envelope |
+| `hannah_review_sheet.md` | 4 + 5 — full 12–36m neighbourhood sheet (engineering context) |
+| **`pilot_review_packet_for_hannah.md`** | **the focused clinician packet to send to Hannah** |
+| `pilot_technical_appendix.md` | ids, provenance and proposals behind that packet |
+| `pilot_envelope_candidate.json` | the same, machine-readable |
+
+## Founder decision — Option B (focused Pilot envelope)
+
+`18m endpoint → 24m Bridge 1 → Bridge 2 → Bridge 3 → 24m endpoint`, nothing above
+the 24m endpoint (branching). The focused packet asks Hannah only for: the five
+steps' order (A); which of the 18 existing cards belong to which single step —
+every card is **NEEDS CLINICIAN DECISION**, constrained only by the workbook
+family to two adjacent steps (B); approve / edit / reject the 7 unreviewed
+first-words candidates proposed for the 18m endpoint, the only envelope node of
+that family (C); the three bridge questions and how *Sometimes* counts (D); and
+the automatic one-step adjustment rules (E).
 
 ## Scope
 
