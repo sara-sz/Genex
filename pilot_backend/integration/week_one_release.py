@@ -76,6 +76,11 @@ from ..domain.adaptation_decision import (
     GoalInvariantProof,
 )
 from ..domain.clinical_period import local_date_in
+from ..domain.developmental_ladder import (
+    DevelopmentalMovement,
+    LadderError,
+    evaluate_movement,
+)
 from ..domain.goals import GoalKind, GoalRef, GoalStatus
 from ..domain.monthly_plan import validate_cycle_month
 from ..domain.weekly_cycle import (
@@ -104,6 +109,11 @@ from .adaptive_week import (
     AdaptiveSelectionError,
     select_week_templates,
     verify_reviewed_and_bounded,
+)
+from .developmental_recalibration import (
+    DevelopmentalRecalibrationService,
+    PlacementStateMismatch,
+    RecalibrationError,
 )
 from .governing_plan import (
     Governance,
@@ -280,7 +290,8 @@ class WeekOneReleaseService:
     """Compose the existing transitions into one provider action."""
 
     def __init__(self, *, repos: Any, goals: Any, plans: Any, weekly: Any,
-                 activity_bank: Any, now: Any = None) -> None:
+                 activity_bank: Any, now: Any = None,
+                 ladder: Any = None) -> None:
         #: Injectable clock, the same seam every other service takes. "Current"
         #: is a calendar question, so a test must be able to pin the date.
         from ..domain.entities import utc_now  # noqa: WPS433
@@ -291,6 +302,13 @@ class WeekOneReleaseService:
         self._plans = plans
         self._weekly = weekly
         self._bank = activity_bank
+        #: P0-B2a. The composed five-node ladder, or None. None keeps P0-B1
+        #: behaviour for every plan WITHOUT a placement; a placed plan with no
+        #: ladder configured fails closed (see `_placement`).
+        self._ladder = ladder
+        self._recal = DevelopmentalRecalibrationService(
+            repos=repos, goals=goals, plans=plans, weekly=weekly,
+            ladder=ladder, now=self._now)
 
     # -- the goal gate ----------------------------------------------------
 
@@ -430,6 +448,12 @@ class WeekOneReleaseService:
         # (Naming debt: the resume refusal is `AdaptiveWeekStateMismatch` for
         # Week 1 too; kept so P0-B1's error contract does not change.)
         templates_by_id = self._candidate_templates(goals)
+        placement = self._placement(plan, goals)
+        if placement is not None:
+            # P0-B2a. Week 1 of a placed plan draws ONLY on the reviewed pool
+            # of the clinician-confirmed starting step.
+            start = self._ladder.node(placement.starting_node_ref)
+            templates_by_id = self._node_pool(start, templates_by_id)
         candidates = self._candidates_for(goals, templates_by_id)
         if not candidates:
             raise GoalNotReleasable(
@@ -633,13 +657,39 @@ class WeekOneReleaseService:
         day_count = (date.fromisoformat(ends_on)
                      - date.fromisoformat(starts_on)).days + 1
         slots = min(capacity, day_count)
+
+        # ---- P0-B2a: at most one adjacent step, BEFORE any write ----------
+        placement = self._placement(plan, goals)
+        evaluation = None
+        sel_pool, sel_families = pool, families
+        sel_decisions, sel_previous = policy.decisions, previous_template_ids
+        if placement is not None:
+            try:
+                current = self._recal.current_node(placement, sequence)
+                consumed = self._recal.consumed_evidence(
+                    placement, excluding_cycle_id=(existing.cycle_id
+                                                   if existing else ""))
+                evaluation = evaluate_movement(
+                    self._ladder, current.node_ref, policy.decisions,
+                    consumed_event_ids=consumed)
+            except (RecalibrationError, LadderError) as exc:
+                raise AdaptiveWeekStateMismatch(str(exc)) from exc
+            node = self._ladder.node(evaluation.node_after_ref)
+            sel_pool = tuple(self._node_pool(
+                node, {t.activity_template_id: t for t in pool}).values())
+            sel_families = [node.pool_family_ref]
+            if evaluation.moved:
+                # A NEW step: chosen fresh from the new step's reviewed pool.
+                # Last week's activities belong to the old step's pool, so
+                # neither they nor their per-activity decisions carry over.
+                sel_decisions, sel_previous = (), ()
         try:
             selection = select_week_templates(
-                decisions=policy.decisions,
-                previous_template_ids=previous_template_ids,
-                pool=pool, slots=slots)
-            verify_reviewed_and_bounded(selection.selected_template_ids, pool,
-                                        families)
+                decisions=sel_decisions,
+                previous_template_ids=sel_previous,
+                pool=sel_pool, slots=slots)
+            verify_reviewed_and_bounded(selection.selected_template_ids,
+                                        sel_pool, sel_families)
         except AdaptiveSelectionError as exc:
             raise ClinicalBoundaryRefused(str(exc)) from exc
 
@@ -715,10 +765,17 @@ class WeekOneReleaseService:
         if not set(placed) <= set(selection.selected_template_ids):
             raise ClinicalBoundaryRefused(  # pragma: no cover - allocator bound
                 "the allocator placed an activity outside the selection")
+        movement = None
+        if placement is not None:
+            movement = DevelopmentalMovement.create(
+                placement=placement, ladder=self._ladder,
+                from_cycle_id=previous.cycle_id, to_cycle_id=cycle.cycle_id,
+                evaluation=evaluation, now=self._now())
         try:
             self._weekly.record_week_adaptation(
                 principal, previous.cycle_id, cycle.cycle_id,
                 policy_outcome=policy,
+                developmental_movement=movement,
                 selected_template_ids=placed,
                 repeated_template_ids=sorted(set(placed)
                                              & set(previous_template_ids)),
@@ -830,6 +887,42 @@ class WeekOneReleaseService:
             parent_week=parent_week_view(
                 snapshot.document(),
                 released_at=released.released_to_parent_at))
+
+    # -- P0-B2a ------------------------------------------------------------
+
+    def _placement(self, plan, goals):
+        """The plan's verified developmental placement, or None (= P0-B1).
+
+        Fails closed when a placement exists but no ladder is configured, or
+        when it no longer matches the configured envelope or goal.
+        """
+        stored = self._repos.developmental_placements.find_for_plan(
+            plan.focus_plan_id)
+        if stored is None:
+            return None
+        if self._ladder is None:
+            raise ClinicalBoundaryRefused(
+                "a placed plan needs the developmental ladder")
+        try:
+            return self._recal.verified_placement(
+                plan, [row.goal_id for row in goals])
+        except PlacementStateMismatch as exc:
+            raise ClinicalBoundaryRefused(str(exc)) from exc
+
+    @staticmethod
+    def _node_pool(node, templates_by_id) -> Dict[str, Any]:
+        """The node's reviewed pool, every member served by the bank."""
+        ids = set(node.pool_template_ids)
+        if not node.has_reviewed_pool:
+            raise ClinicalBoundaryRefused(
+                "that developmental step has no reviewed activities")
+        chosen = {k: v for k, v in templates_by_id.items() if k in ids}
+        if set(chosen) != ids or any(
+                t.activity_family_ref != node.pool_family_ref
+                for t in chosen.values()):
+            raise ClinicalBoundaryRefused(
+                "the step's reviewed pool is not served by the bank")
+        return chosen
 
     def _candidate_templates(self, goals) -> Dict[str, Any]:
         """Reviewed templates for every family the goals' anchors bind.

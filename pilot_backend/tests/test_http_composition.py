@@ -575,6 +575,12 @@ def test_route_table_and_apisurface_cannot_disagree():
         "/pilot/rtm-periods/{period_id}/interactions": False,
         "/pilot/rtm-periods/{period_id}/report": False,
         "/pilot/rtm-reviews/{review_id}/actions": False,
+        # P0-B2a constrained developmental recalibration. Protected, every
+        # one: caregiver bridge questions/answers, provider start view,
+        # provider placement on a draft plan.
+        "/pilot/children/{child_id}/bridge-baseline": False,
+        "/pilot/children/{child_id}/developmental-start": False,
+        "/pilot/monthly-plans/{focus_plan_id}/developmental-placement": False,
     }
 
 

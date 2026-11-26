@@ -1,0 +1,164 @@
+{
+  "anchor_family_refs": [
+    "expressive_vocabulary_growth",
+    "two_word_phrases"
+  ],
+  "anchor_rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+  "artifact_digest": "67ba95ebce0f27e644e4511cc9342e96b739052a1120187ec9836879aab521b2",
+  "artifact_schema_version": "pilot-developmental-ladder-v1",
+  "baseline_question_node_refs": [
+    "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+    "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+    "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+  ],
+  "domain_key": "talking_and_communicating",
+  "enabled_transitions": [
+    {
+      "from": "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+      "to": "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+    },
+    {
+      "from": "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+      "to": "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+    }
+  ],
+  "generator_version": "pilot-developmental-ladder-generator-v1",
+  "ladder_ref": "ldr1:b55ffcff182180a486a6a93aeff03691",
+  "links": [
+    {
+      "confidence": "TEXT_LINKED",
+      "from": "node1:f3be24e2680cfb214e498b877b7fd552",
+      "to": "node1:cb508e3ea7253ee6f3e59e092fcb54f0"
+    },
+    {
+      "confidence": "STRUCTURED",
+      "from": "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+      "to": "node1:1a3b74cec4d866fb196f47fb8d6302ab"
+    },
+    {
+      "confidence": "STRUCTURED",
+      "from": "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+      "to": "node1:f8102ec520a2932f03112d9c4c6e0e3a"
+    },
+    {
+      "confidence": "STRUCTURED",
+      "from": "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+      "to": "node1:afa9b5c06d9465c51a99126dcb251c22"
+    }
+  ],
+  "nodes": [
+    {
+      "endpoint_source": "workbook_final_bridge_row",
+      "index": 0,
+      "is_anchor_milestone": false,
+      "node_ref": "node1:f3be24e2680cfb214e498b877b7fd552",
+      "node_type": "endpoint",
+      "pool_family_ref": null,
+      "pool_template_ids": [],
+      "rung_ref": "rung1:6c8e17d12c4ca2ab1d583e94635100d3",
+      "step_number": 2,
+      "wording": "Tries to say three or more words besides “mama” or “dada.”",
+      "workbook_family": "expressive_three_words"
+    },
+    {
+      "endpoint_source": null,
+      "index": 1,
+      "is_anchor_milestone": true,
+      "node_ref": "node1:cb508e3ea7253ee6f3e59e092fcb54f0",
+      "node_type": "bridge",
+      "pool_family_ref": "expressive_vocabulary_growth",
+      "pool_template_ids": [
+        "atpl1:13a4fd9b1e557d877381cc41fed5098c",
+        "atpl1:2a9316b59bfcfef283cfeeb26a2034f6",
+        "atpl1:3b00aee6c8a322cddda1ec55543158a2",
+        "atpl1:5e054d694dcf6b0e700951eb4c2ebe8d",
+        "atpl1:7e97ac6a60c3623f7a609c1c2b7e1995",
+        "atpl1:80d40c4226b091fc36ba73aeb061651e",
+        "atpl1:987acefca5dcf8001c218aba7a951022",
+        "atpl1:aa5d7da84faba502ab7a4c6284f1347d",
+        "atpl1:adafba440db93934b88a2fa45a364f1d",
+        "atpl1:ca49a944bb6b1181d845524845bdb023",
+        "atpl1:cb95176fdcc5cff557bdc409da186304",
+        "atpl1:f273cccd0afd3c96730215bc49ba8096"
+      ],
+      "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+      "step_number": 1,
+      "wording": "Uses a few reliable single words/approximations for favorite people, objects, or needs.",
+      "workbook_family": "expressive_vocabulary_growth"
+    },
+    {
+      "endpoint_source": null,
+      "index": 2,
+      "is_anchor_milestone": true,
+      "node_ref": "node1:1a3b74cec4d866fb196f47fb8d6302ab",
+      "node_type": "bridge",
+      "pool_family_ref": "expressive_vocabulary_growth",
+      "pool_template_ids": [
+        "atpl1:13a4fd9b1e557d877381cc41fed5098c",
+        "atpl1:2a9316b59bfcfef283cfeeb26a2034f6",
+        "atpl1:3b00aee6c8a322cddda1ec55543158a2",
+        "atpl1:5e054d694dcf6b0e700951eb4c2ebe8d",
+        "atpl1:7e97ac6a60c3623f7a609c1c2b7e1995",
+        "atpl1:80d40c4226b091fc36ba73aeb061651e",
+        "atpl1:987acefca5dcf8001c218aba7a951022",
+        "atpl1:aa5d7da84faba502ab7a4c6284f1347d",
+        "atpl1:adafba440db93934b88a2fa45a364f1d",
+        "atpl1:ca49a944bb6b1181d845524845bdb023",
+        "atpl1:cb95176fdcc5cff557bdc409da186304",
+        "atpl1:f273cccd0afd3c96730215bc49ba8096"
+      ],
+      "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+      "step_number": 2,
+      "wording": "Uses more single words for needs, objects, actions",
+      "workbook_family": "expressive_vocabulary_growth"
+    },
+    {
+      "endpoint_source": null,
+      "index": 3,
+      "is_anchor_milestone": true,
+      "node_ref": "node1:f8102ec520a2932f03112d9c4c6e0e3a",
+      "node_type": "bridge",
+      "pool_family_ref": "two_word_phrases",
+      "pool_template_ids": [
+        "atpl1:01cdd9f34e37a62bed4feda4300902a7",
+        "atpl1:041794bbb1acb1f86a27ca9460088c2d",
+        "atpl1:1226e454bd64d869206574bb6ad9851f",
+        "atpl1:166c4e5492dab00d41b9fb4d5162202b",
+        "atpl1:5f44b9eba107589ca26c6610f2c6cb05",
+        "atpl1:f7a99d017c398560058379637732ac58"
+      ],
+      "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+      "step_number": 3,
+      "wording": "Imitates simple two-word phrases.",
+      "workbook_family": "expressive_two_word_phrase"
+    },
+    {
+      "endpoint_source": "workbook_final_bridge_row",
+      "index": 4,
+      "is_anchor_milestone": true,
+      "node_ref": "node1:afa9b5c06d9465c51a99126dcb251c22",
+      "node_type": "endpoint",
+      "pool_family_ref": "two_word_phrases",
+      "pool_template_ids": [
+        "atpl1:01cdd9f34e37a62bed4feda4300902a7",
+        "atpl1:041794bbb1acb1f86a27ca9460088c2d",
+        "atpl1:1226e454bd64d869206574bb6ad9851f",
+        "atpl1:166c4e5492dab00d41b9fb4d5162202b",
+        "atpl1:5f44b9eba107589ca26c6610f2c6cb05",
+        "atpl1:f7a99d017c398560058379637732ac58"
+      ],
+      "rung_ref": "rung1:feb590cf2788978b383c11062ce67c1b",
+      "step_number": 4,
+      "wording": "says at least two words together like more milk",
+      "workbook_family": "expressive_two_word_phrase"
+    }
+  ],
+  "provenance": {
+    "activity_bank_digest": "1c0c3a8607f24cbc71b3fd9aff2bf1b114a4e6c82b86278bb63ed7f72da42f40",
+    "bridge_workbook_relpath": "data/parent_2_4/cdc_milestones_parent_2_4_candidate.xlsx",
+    "bridge_workbook_sha256": "a16ce10fe9c932bc7ca6e3275748541b3c8a1e15a0d8a2702b0560a56ddc5fd6",
+    "llm_used": false,
+    "rung_table_digest": "9f306d542ba7af704776f79285755eb178babdc4b4294a8981ddf035a4e24dfe",
+    "unreviewed_candidates_read": false
+  }
+}

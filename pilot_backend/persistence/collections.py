@@ -120,6 +120,12 @@ COLLECTIONS: Mapping[str, str] = {
     # refuses any key-set mismatch, so widening that record would make every
     # stored row undecodable. Create-only, keyed by the cycle it explains.
     "weekly_adaptation_decision": "pilot_weekly_adaptation_decisions",
+    # P0-B2a. Bridge-baseline answers (caregiver), the clinician-confirmed
+    # starting step per plan, and one movement record per adaptive week.
+    # Create-only sidecars; nothing here is a field on an earlier record.
+    "bridge_baseline_answers": "pilot_bridge_baseline_answers",
+    "developmental_placement": "pilot_developmental_placements",
+    "developmental_movement": "pilot_developmental_movements",
     # 0.4F RTM evidence. An episode and a period are separate collections
     # because they have separate lifetimes: a month ending must not be able
     # to reach an episode row at all.

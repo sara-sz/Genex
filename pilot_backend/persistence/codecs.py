@@ -53,6 +53,15 @@ from ..domain.adaptation_decision import (
     GoalInvariantProof,
     WeeklyAdaptationDecision,
 )
+from ..domain.developmental_ladder import (
+    BaselineStatus,
+    BridgeBaselineAnswers,
+    DevelopmentalMovement,
+    DevelopmentalPlacement,
+    MovementOutcome,
+    MovementReason,
+    PlacementSource,
+)
 from ..domain.alignment import (
     ActivityGoalAlignment,
     AlignmentRole,
@@ -973,6 +982,43 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "repeated_template_ids": STR_TUPLE,
         "excluded_themes": STR_TUPLE,
         "goal_proofs": _NestedTuple(GoalInvariantProof),
+        "created_at": DT, "schema_version": STR,
+    },
+    # ---- P0-B2a constrained developmental recalibration (sidecars) -------
+    #
+    # Three NEW records rather than fields on the P0-B1 decision: the codec
+    # refuses key-set mismatches, so widening `WeeklyAdaptationDecision` would
+    # make every stored decision undecodable. Node refs are internal ids and
+    # never reach the Parent view.
+    BridgeBaselineAnswers: {
+        "answers_id": STR, "child_id": STR, "ladder_ref": STR,
+        "question_node_refs": STR_TUPLE, "answers": STR_TUPLE,
+        "submitted_by_actor_id": STR,
+        "created_at": DT, "schema_version": STR,
+    },
+    DevelopmentalPlacement: {
+        "placement_id": STR, "child_id": STR, "focus_plan_id": STR,
+        "goal_id": STR, "ladder_ref": STR,
+        "envelope_node_refs": STR_TUPLE,
+        "starting_node_ref": STR, "starting_node_index": INT,
+        "proposed_node_ref": STR, "baseline_answers_id": STR,
+        "baseline_status": _EnumKind(BaselineStatus),
+        "source": _EnumKind(PlacementSource),
+        "rule_version": STR, "placed_by_actor_id": STR,
+        "created_at": DT, "schema_version": STR,
+    },
+    DevelopmentalMovement: {
+        "movement_id": STR, "child_id": STR, "focus_plan_id": STR,
+        "placement_id": STR, "from_cycle_id": STR, "to_cycle_id": STR,
+        "rule_version": STR, "ladder_ref": STR, "goal_id": STR,
+        "outcome": _EnumKind(MovementOutcome),
+        "reason": _EnumKind(MovementReason),
+        "direction": STR,
+        "node_before_ref": STR, "node_before_index": INT,
+        "node_after_ref": STR, "node_after_index": INT,
+        "pool_family_before": STR, "pool_family_after": STR,
+        "evidence_event_ids": STR_TUPLE,
+        "trigger_activity_refs": STR_TUPLE,
         "created_at": DT, "schema_version": STR,
     },
     RTMEpisode: {

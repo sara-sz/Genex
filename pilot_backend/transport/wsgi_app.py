@@ -214,6 +214,14 @@ PERIOD_TIME_ROUTE = "/pilot/rtm-periods/{period_id}/time-entries"
 PERIOD_INTERACTIONS_ROUTE = "/pilot/rtm-periods/{period_id}/interactions"
 PERIOD_REPORT_ROUTE = "/pilot/rtm-periods/{period_id}/report"
 REVIEW_ACTIONS_ROUTE = "/pilot/rtm-reviews/{review_id}/actions"
+#: P0-B2a — constrained developmental recalibration.
+#:   bridge-baseline          caregiver GET (the three questions) / POST answers
+#:   developmental-start      provider GET: steps, proposal, envelope
+#:   developmental-placement  provider POST: confirm/choose the starting step
+CHILD_BRIDGE_BASELINE_ROUTE = "/pilot/children/{child_id}/bridge-baseline"
+CHILD_DEVELOPMENTAL_START_ROUTE = "/pilot/children/{child_id}/developmental-start"
+PLAN_DEVELOPMENTAL_PLACEMENT_ROUTE = (
+    "/pilot/monthly-plans/{focus_plan_id}/developmental-placement")
 
 #: (method, template, is_public). Explicit; no prefix matching anywhere.
 ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
@@ -252,6 +260,10 @@ ROUTE_TABLE: Tuple[Tuple[str, str, bool], ...] = (
     ("POST", PERIOD_INTERACTIONS_ROUTE, False),
     ("POST", PERIOD_REPORT_ROUTE, False),
     ("POST", REVIEW_ACTIONS_ROUTE, False),
+    ("GET", CHILD_BRIDGE_BASELINE_ROUTE, False),
+    ("POST", CHILD_BRIDGE_BASELINE_ROUTE, False),
+    ("GET", CHILD_DEVELOPMENTAL_START_ROUTE, False),
+    ("POST", PLAN_DEVELOPMENTAL_PLACEMENT_ROUTE, False),
 )
 
 _STATUS_TEXT = {
@@ -836,8 +848,13 @@ class PilotWSGIApplication:
                  parent_source=None,
                  rung_source=None,
                  activity_bank=None,
+                 developmental_ladder=None,
                  log_sink: Optional[List[str]] = None) -> None:
         self._settings = settings
+        #: P0-B2a. The composed five-node ladder, or None. None leaves every
+        #: P0-B2a route refusing (constant 403) and every unplaced plan on
+        #: P0-B1 behaviour.
+        self._developmental_ladder = developmental_ladder
         self._verifier = verifier
         self._repos = repos
         self._recorder = recorder
@@ -1054,6 +1071,12 @@ class PilotWSGIApplication:
                 ("rtm-periods", "interactions", PERIOD_INTERACTIONS_ROUTE, ("POST",)),
                 ("rtm-periods", "report", PERIOD_REPORT_ROUTE, ("POST",)),
                 ("rtm-reviews", "actions", REVIEW_ACTIONS_ROUTE, ("POST",)),
+                ("children", "bridge-baseline", CHILD_BRIDGE_BASELINE_ROUTE,
+                 ("GET", "POST")),
+                ("children", "developmental-start",
+                 CHILD_DEVELOPMENTAL_START_ROUTE, ("GET",)),
+                ("monthly-plans", "developmental-placement",
+                 PLAN_DEVELOPMENTAL_PLACEMENT_ROUTE, ("POST",)),
         ):
             resource = _match_resource_subroute(path, collection, tail)
             if resource is None:
@@ -1637,6 +1660,45 @@ class PilotWSGIApplication:
                 principal, resource, opt_str(body, "cycle_month"),
                 opt_str(body, "timezone_of_record"), request_id=request_id)
             return {"plan": _plan_payload(plan)}
+
+        if route == CHILD_BRIDGE_BASELINE_ROUTE:
+            # P0-B2a caregiver surface. The response NEVER carries a step,
+            # node, proposal, age or any review internal.
+            recal = self._recalibration_service(goals, plans, weekly)
+            if method == "GET":
+                return {"baseline": recal.baseline_questions(principal,
+                                                             resource)}
+            body = read_json_body(environ, allowed=["answers"],
+                                  required=["answers"])
+            from .body import BodyError as _BodyError
+            raw = body.get("answers")
+            # Exactly three entries, each an answer value or null (unanswered).
+            if not isinstance(raw, list) or len(raw) != 3 or not all(
+                    a is None or isinstance(a, str) for a in raw):
+                raise _BodyError("answers must be three values or nulls")
+            recal.submit_baseline(principal, resource,
+                                  [a.strip() or None if isinstance(a, str)
+                                   else None for a in raw])
+            return {"recorded": True}
+
+        if route == CHILD_DEVELOPMENTAL_START_ROUTE:
+            return {"developmental_start": self._recalibration_service(
+                goals, plans, weekly).start_view(principal, resource)}
+
+        if route == PLAN_DEVELOPMENTAL_PLACEMENT_ROUTE:
+            body = read_json_body(environ, allowed=["step_key"],
+                                  required=["step_key"])
+            recal = self._recalibration_service(goals, plans, weekly)
+            placement = recal.place(principal, resource,
+                                    opt_str(body, "step_key"))
+            ladder = self._developmental_ladder
+            return {"placement": {
+                "focus_plan_id": placement.focus_plan_id,
+                "starting_step_key": ladder.node(
+                    placement.starting_node_ref).step_key,
+                "source": placement.source.value,
+                "baseline_status": placement.baseline_status.value,
+            }}
 
         if route == PLAN_ACTIVATE_ROUTE:
             plan = plans.activate_plan(principal, resource,
@@ -2300,7 +2362,18 @@ class PilotWSGIApplication:
 
         return WeekOneReleaseService(
             repos=self._repos, goals=goals, plans=plans, weekly=weekly,
-            activity_bank=self._activity_bank)
+            activity_bank=self._activity_bank,
+            ladder=self._developmental_ladder)
+
+    def _recalibration_service(self, goals, plans, weekly):
+        """P0-B2a over the request's frozen services."""
+        from ..integration.developmental_recalibration import (
+            DevelopmentalRecalibrationService,
+        )
+
+        return DevelopmentalRecalibrationService(
+            repos=self._repos, goals=goals, plans=plans, weekly=weekly,
+            ladder=self._developmental_ladder)
 
     def _handle_week_one_release(self, environ: Mapping[str, object],
                                  child_id: str, request_id: str
@@ -2465,6 +2538,7 @@ def build_application(*, settings, repos, verifier, recorder=None,
                       parent_source=None,
                       rung_source=None,
                       activity_bank=None,
+                      developmental_ladder=None,
                       log_sink: Optional[List[str]] = None) -> PilotWSGIApplication:
     """Composition root for the proof.
 
@@ -2476,6 +2550,7 @@ def build_application(*, settings, repos, verifier, recorder=None,
                                 recorder=recorder, parent_source=parent_source,
                                 rung_source=rung_source,
                                 activity_bank=activity_bank,
+                                developmental_ladder=developmental_ladder,
                                 log_sink=log_sink)
 
 

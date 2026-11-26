@@ -1162,8 +1162,14 @@ class WeeklyService:
                                repeated_template_ids: Sequence[str],
                                excluded_themes: Sequence[str],
                                goal_proofs: Sequence[Any],
+                               developmental_movement: Any = None,
                                request_id: str = ""):
         """Write, or VERIFY and resume, the AdaptationRecord + P0-B1 decision.
+
+        P0-B2a. When the plan carries a developmental placement, the week's
+        `DevelopmentalMovement` (moved or not) is the THIRD row of the same
+        transaction, and is verified on resume exactly like the other two. A
+        plan without a placement passes None and nothing about P0-B1 changes.
 
         Called by the adaptive release composition AFTER the new cycle has been
         allocated and BEFORE it is snapshotted, so a released week always has
@@ -1289,6 +1295,7 @@ class WeeklyService:
             if expected_decision != stored:
                 raise InProgressStateMismatch(
                     "the stored adaptation decision differs from the expected one")
+            self._verify_movement(cycle.cycle_id, developmental_movement)
             if cycle.adaptation_record_id == stored_record.record_id:
                 return stored_record, stored
 
@@ -1311,6 +1318,15 @@ class WeeklyService:
         if records_for_cycle or cycle.adaptation_record_id is not None:
             raise InProgressStateMismatch(
                 "this cycle has adaptation state but no decision")
+        if self._repos.developmental_movements.find_for_cycle(
+                cycle.cycle_id) is not None:
+            raise InProgressStateMismatch(
+                "this cycle has a developmental movement but no decision")
+        if developmental_movement is not None and (
+                developmental_movement.to_cycle_id != cycle.cycle_id
+                or developmental_movement.from_cycle_id != from_cycle_id):
+            raise WeeklyValidationError(
+                "a developmental movement must explain this cycle")
 
         # ---- first write: record + decision + cycle link, atomically -------
         def _write(store):
@@ -1321,6 +1337,8 @@ class WeeklyService:
                     "the cycle changed before its explanation was written")
             tx.adaptation_records.create(record)
             tx.adaptation_decisions.create(decision)
+            if developmental_movement is not None:
+                tx.developmental_movements.create(developmental_movement)
             tx.weekly_cycles.overwrite(
                 current.with_adaptation(record.record_id, now=self._stamp()))
             return decision
@@ -1341,6 +1359,21 @@ class WeeklyService:
                     signal_count=len(adaptation.signals),
                     rule_version=ADAPTATION_RULE_VERSION)
         return record, decision
+
+    def _verify_movement(self, cycle_id: str, expected) -> None:
+        """P0-B2a resume: the stored movement must be EXACTLY the recomputed
+        one (its timestamp aside), and must exist iff one is expected."""
+        from dataclasses import replace as _replace  # noqa: WPS433
+
+        stored = self._repos.developmental_movements.find_for_cycle(cycle_id)
+        if expected is None and stored is None:
+            return
+        if expected is None or stored is None:
+            raise InProgressStateMismatch(
+                "the stored developmental movement differs from the expected one")
+        if _replace(expected, created_at=stored.created_at) != stored:
+            raise InProgressStateMismatch(
+                "the stored developmental movement differs from the expected one")
 
     # =====================================================================
     # Reads

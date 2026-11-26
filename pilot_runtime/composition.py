@@ -62,6 +62,9 @@ from pilot_backend.transport import build_application
 
 from .auth.firebase_decoder import FirebaseTokenDecoder, initialize_firebase_app
 from .integration.static_activity_bank import build_static_activity_bank
+from .integration.static_developmental_ladder import (
+    build_static_developmental_ladder,
+)
 from .integration.static_rung_source import build_static_rung_source
 from .integration.parent_gcs_source import (
     BUCKET_ENV_VAR,
@@ -109,6 +112,10 @@ class PilotRuntime:
     #: built runtime, for the same reason as `rung_source` and enforced the same
     #: way — see `build_activity_bank`.
     activity_bank: Any = None
+    #: P0-B2a. The five-node developmental ladder. NEVER None in a built
+    #: runtime (it ships inside the image), and cross-checked against the
+    #: reviewed bank at startup — see `build_developmental_ladder`.
+    developmental_ladder: Any = None
 
     @property
     def is_production(self) -> bool:
@@ -240,6 +247,17 @@ def build_activity_bank(artifact_path: Any = None):
     return build_static_activity_bank(artifact_path)
 
 
+def build_developmental_ladder(activity_bank: Any, artifact_path: Any = None):
+    """P0-B2a. The generated five-node ladder, validated against the bank.
+
+    Raises rather than returning None — the 0.6A-2 lesson: a composition root
+    that silently omitted a capability turned a build defect into a constant
+    403. Placed plans would otherwise fail closed on every release.
+    """
+    return build_static_developmental_ladder(artifact_path,
+                                             activity_bank=activity_bank)
+
+
 def build_runtime(env: Mapping[str, str], *,
                   process_env: Optional[Mapping[str, str]] = None,
                   in_memory: bool = False,
@@ -249,6 +267,7 @@ def build_runtime(env: Mapping[str, str], *,
                   storage_client: Any = None,
                   rung_artifact_path: Any = None,
                   activity_artifact_path: Any = None,
+                  ladder_artifact_path: Any = None,
                   log_sink: Optional[list] = None) -> PilotRuntime:
     """Assemble the runtime from an explicit environment mapping.
 
@@ -295,11 +314,15 @@ def build_runtime(env: Mapping[str, str], *,
     parent_source = build_parent_source(env, storage_client=storage_client)
     rung_source = build_rung_source(rung_artifact_path)
     activity_bank = build_activity_bank(activity_artifact_path)
+    developmental_ladder = build_developmental_ladder(activity_bank,
+                                                      ladder_artifact_path)
 
     application = build_application(settings=settings, repos=repos, verifier=verifier,
                                     recorder=recorder, parent_source=parent_source,
                                     rung_source=rung_source,
-                                    activity_bank=activity_bank, log_sink=log_sink)
+                                    activity_bank=activity_bank,
+                                    developmental_ladder=developmental_ladder,
+                                    log_sink=log_sink)
 
     return PilotRuntime(
         settings=settings, store=store, repos=repos, verifier=verifier,
@@ -307,4 +330,5 @@ def build_runtime(env: Mapping[str, str], *,
         application=application, cors=cors_policy_for(settings),
         parent_source=parent_source, rung_source=rung_source,
         activity_bank=activity_bank,
+        developmental_ladder=developmental_ladder,
     )

@@ -39,6 +39,13 @@ from typing import Any, List, Optional, Sequence, Type
 from ..audit.events import AuditEvent
 from ..domain.adaptation import AdaptationRecord
 from ..domain.adaptation_decision import WeeklyAdaptationDecision
+from ..domain.developmental_ladder import (
+    BridgeBaselineAnswers,
+    DevelopmentalMovement,
+    DevelopmentalPlacement,
+    developmental_movement_id,
+    developmental_placement_id,
+)
 from ..domain.parent_clinician_profile_v21 import ClinicianProfileV21
 from ..domain.alignment import (
     ActivityGoalAlignment,
@@ -118,6 +125,9 @@ def _own_id(record: Any) -> str:
                  # CARRIES adaptation_record_id and two cycle ids, so its own
                  # id must be found before any of those foreign keys.
                  "decision_id",
+                 # P0-B2a. A movement CARRIES placement_id, so its own id is
+                 # found first; a placement owns placement_id.
+                 "movement_id", "placement_id", "answers_id",
                  # 0.4B/C own-ids go BEFORE child_id and focus_plan_id for the
                  # reason in the module docstring: every suggestion, goal,
                  # allocation and snapshot for one child shares its child_id,
@@ -1324,6 +1334,68 @@ class FirestoreWeeklyAdaptationDecisionRepository(_BaseRepo):
         return self._query("child_id", child_id)
 
 
+class FirestoreBridgeBaselineAnswersRepository(_BaseRepo):
+    """P0-B2a. Caregiver bridge answers. Append-only: a new answer set is a
+    new row, and the latest one is what a clinician sees."""
+
+    record_type, model = "bridge_baseline_answers", BridgeBaselineAnswers
+
+    def create(self, answers: BridgeBaselineAnswers) -> BridgeBaselineAnswers:
+        return self._create(answers.answers_id, answers)
+
+    def list_for_child(self, child_id: str) -> List[BridgeBaselineAnswers]:
+        return self._query("child_id", child_id)
+
+    def latest_for_child(self, child_id: str
+                         ) -> Optional[BridgeBaselineAnswers]:
+        rows = self.list_for_child(child_id)
+        return rows[-1] if rows else None
+
+
+class FirestoreDevelopmentalPlacementRepository(_BaseRepo):
+    """P0-B2a. ONE placement per plan (derived id). Create-only."""
+
+    record_type, model = "developmental_placement", DevelopmentalPlacement
+
+    def create(self, placement: DevelopmentalPlacement
+               ) -> DevelopmentalPlacement:
+        return self._create(placement.placement_id, placement)
+
+    def find_for_plan(self, focus_plan_id: str
+                      ) -> Optional[DevelopmentalPlacement]:
+        try:
+            return self._get(developmental_placement_id(focus_plan_id))
+        except RecordNotFound:
+            return None
+
+    def list_for_child(self, child_id: str) -> List[DevelopmentalPlacement]:
+        return self._query("child_id", child_id)
+
+
+class FirestoreDevelopmentalMovementRepository(_BaseRepo):
+    """P0-B2a. ONE movement record per adaptive week (derived id).
+    Create-only, written in the P0-B1 decision's transaction."""
+
+    record_type, model = "developmental_movement", DevelopmentalMovement
+
+    def create(self, movement: DevelopmentalMovement) -> DevelopmentalMovement:
+        return self._create(movement.movement_id, movement)
+
+    def find_for_cycle(self, to_cycle_id: str
+                       ) -> Optional[DevelopmentalMovement]:
+        try:
+            return self._get(developmental_movement_id(to_cycle_id))
+        except RecordNotFound:
+            return None
+
+    def list_for_placement(self, placement_id: str
+                           ) -> List[DevelopmentalMovement]:
+        return self._query("placement_id", placement_id)
+
+    def list_for_child(self, child_id: str) -> List[DevelopmentalMovement]:
+        return self._query("child_id", child_id)
+
+
 class _PeriodScopedRepo(_BaseRepo):
     """Records belonging to exactly one monitoring period."""
 
@@ -1593,6 +1665,12 @@ class FirestoreRepositories:
         self.adaptation_records = FirestoreAdaptationRecordRepository(store)
         self.adaptation_decisions = \
             FirestoreWeeklyAdaptationDecisionRepository(store)
+        self.bridge_baseline_answers = \
+            FirestoreBridgeBaselineAnswersRepository(store)
+        self.developmental_placements = \
+            FirestoreDevelopmentalPlacementRepository(store)
+        self.developmental_movements = \
+            FirestoreDevelopmentalMovementRepository(store)
         self.rtm_episodes = FirestoreRTMEpisodeRepository(store)
         self.rtm_periods = FirestoreRTMPeriodRepository(store)
         self.rtm_technologies = FirestoreRTMTechnologyRepository(store)
