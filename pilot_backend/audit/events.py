@@ -166,6 +166,11 @@ class AuditAction(str, Enum):
     PROVIDER_CONNECTION_PAUSED = "provider_connection_paused"
     PROVIDER_CONNECTION_RESUMED = "provider_connection_resumed"
 
+    # P0-B2a. The clinician confirming (or adjusting) a child's starting
+    # developmental step for one plan. Written exactly once, in the SAME
+    # transaction as the immutable placement, under an id derived from it.
+    DEVELOPMENTAL_PLACEMENT_CONFIRMED = "developmental_placement_confirmed"
+
 
 class AuditResult(str, Enum):
     SUCCESS = "success"
@@ -311,6 +316,18 @@ ALLOWED_METADATA_KEYS = frozenset({
     # needs to tell a family-invited clinician from a self-asserted one.
     "initiated_by",           # caregiver | provider
     "connection_status",      # pending | active | declined | paused | ...
+    # P0-B2a placement provenance. Opaque internal ids, small integers and
+    # short closed enums ONLY — no caregiver answers, no bridge wording, no
+    # age. `starting_node_ref` is an opaque node1: id, never shown to a family.
+    "placement_id",           # opaque dplc_ id
+    "ladder_ref",             # opaque ldr1: envelope id
+    "starting_node_ref",      # opaque node1: id
+    "starting_node_index",    # 0..4
+    "proposed_node_ref",      # opaque node1: id, or empty
+    "placement_source",       # confirmed_baseline_proposal | ... | clinician_choice
+    "proposal_basis",         # baseline | previous_plan
+    "baseline_status",        # consistent | needs_clinician_confirmation | absent
+    "previous_placement_id",  # opaque dplc_ id, or empty
 })
 
 _MAX_METADATA_VALUE_LENGTH = 64

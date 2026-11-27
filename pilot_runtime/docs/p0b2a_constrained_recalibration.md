@@ -81,3 +81,64 @@ node data.
 Plans without a placement keep P0-B1 exactly, with no inference or backfill.
 RTM is untouched. A placed plan with no ladder configured fails closed.
 P0-B2a is single-goal: a child with another releasable goal is not placeable.
+
+## Bridge questions: when they are asked (deterministic)
+
+`GET /pilot/children/{child}/bridge-baseline` (caregiver only) returns
+`{"applicable": false}` and nothing else unless the child's target set is
+exactly this ladder's anchor. The target set is the canonical anchors of the
+child's active approved clinical goals, or, when there are none yet, of the
+currently offered goal suggestions. With no target, an unanchored target,
+another milestone, or this milestone plus another, the questions are not
+asked and a POST is refused. When they apply, the response holds the prompt,
+the four answers, the three bridge wordings verbatim, and `submitted`.
+
+Parent Dev (`sara-sz/dear-journey`, route `/pilot`) asks the questions one at a
+time. **Yes** continues; **Sometimes**, **Not yet** or **Not sure** stops, so an
+out-of-order set cannot be produced. It posts exactly `{"answers": [a1, a2, a3]}`,
+with `null` for a question that wasn't asked. It never computes or shows a step.
+
+## Placement audit event
+
+The first placement writes ONE `developmental_placement_confirmed` audit event
+in the same transaction as the placement row. Both are create-only, and the
+event id is derived from the placement. Metadata holds opaque provenance only:
+plan, placement, goal, envelope `ldr1:` ref, rule version, starting `node1:` ref
+and index, proposed node, `placement_source`, `proposal_basis`, baseline status
+and previous placement. No caregiver answers, bridge wording or age. An
+identical replay returns the stored placement and writes nothing. A different
+step is refused and writes nothing. On the emulator, 8 concurrent identical
+placements produce 1 placement and 1 event.
+
+`placement_source` is derived, never asserted. The record refuses a
+clinician-adjusted step labelled as a confirmed proposal, and the reverse.
+
+## Successor-plan rule (founder decision)
+
+At renewal, the final derived node of the previous placed plan becomes the
+**proposed** starting node for the successor (`proposal_basis: previous_plan`).
+The clinician must confirm it (`confirmed_previous_plan_step`) or choose
+another allowed step (`clinician_choice`) on the successor's draft. The prior
+plan's envelope is never the successor's approval: the successor gets its own
+placement, envelope and audit event. A successor activated without a placement
+runs as any unplaced plan does (P0-B1). Nothing creates, carries or infers a
+placement. Tests: `test_p0b2a_audit_successor_scope.py` §3. The full renewal
+UI belongs to the clinician review/renewal slice.
+
+## Intentional Pilot limitation: single goal
+
+P0-B2a refuses multi-goal plans: placement and release need exactly one
+approved goal, at the ladder's milestone. This is deliberate for the Pilot,
+not an open defect. Multi-goal developmental movement is out of scope.
+
+## Clinician-review records (for the next slice's exception UI)
+
+Every `requires_clinician_review` movement carries what that UI needs:
+`clinician_review_item()` gives child, plan, week, current step (key and
+wording), reason, the attempted direction where there is one, and the exact
+evidence and activity refs. The provider `developmental-start` read exposes
+them as `placements[].review_items`. None of it reaches a caregiver response.
+Reasons: `transition_not_enabled`, `outside_envelope`, `wasnt_ready`,
+`conflicting_signals`, `evidence_already_used`. Missing or ambiguous placement
+or content is **not** a record: the release is refused (fail closed) and no
+week is written.

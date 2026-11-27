@@ -42,12 +42,15 @@ from ..domain.developmental_ladder import (
     LadderError,
     LadderNode,
     MovementOutcome,
-    PlacementSource,
+    ProposalBasis,
     StartReason,
+    clinician_review_item,
     developmental_placement_id,
+    placement_source_for,
+    propose_placement,
     propose_start,
 )
-from ..domain.goals import GoalKind, GoalRef, GoalStatus
+from ..domain.goals import GoalKind, GoalRef, GoalStatus, SuggestionStatus
 from ..domain.monthly_plan import MonthlyPlanState
 from ..domain.roles import ActorRole
 from ..repository.interface import DuplicateRecord
@@ -155,10 +158,49 @@ class DevelopmentalRecalibrationService:
 
     # -- caregiver ---------------------------------------------------------
 
+    def bridge_applicable(self, child_id: str) -> bool:
+        """Do the bridge questions apply to this child? Deterministic.
+
+        The child's TARGET set is the canonical anchors of its active approved
+        clinical goals or, when it has none yet, of its currently OFFERED goal
+        suggestions. The questions apply iff that set is exactly {the ladder's
+        anchor}. Anything else — no target, an unanchored target, another
+        milestone, or this milestone plus another — is not this Pilot ladder,
+        and the questions are never asked. Callers authorize first.
+        """
+        ladder = self._ladder
+        if ladder is None:
+            return False
+        goals = [g for g in self._repos.clinical_goals.list_for_child(child_id)
+                 if g.status is GoalStatus.ACTIVE
+                 and (g.current_version_id or "").strip()]
+        anchors = set()
+        if goals:
+            for g in goals:
+                anchor = self._repos.clinical_goal_anchors.find(
+                    g.clinical_goal_id)
+                anchors.add(anchor.rung.rung_ref if anchor else None)
+        else:
+            for sug in self._repos.goal_suggestions.list_for_child(child_id):
+                if sug.status is not SuggestionStatus.OFFERED:
+                    continue
+                anchor = self._repos.suggestion_anchors.find(
+                    sug.suggestion_id)
+                anchors.add(anchor.rung.rung_ref if anchor else None)
+        return anchors == {ladder.anchor_rung_ref}
+
     def baseline_questions(self, principal, child_id: str) -> Dict[str, Any]:
         ladder = self._require_ladder()
+        if principal.role is not ActorRole.CAREGIVER:
+            raise RecalibrationError("the bridge questions are the family's")
         self._goals._authorize(principal, child_id)
+        if not self.bridge_applicable(child_id):
+            # The ONLY thing a caregiver learns about a non-matching child.
+            return {"applicable": False}
+        latest = self._latest_answers(child_id, ladder)
         return {
+            "applicable": True,
+            "submitted": latest is not None,
             "prompt": BASELINE_PROMPT,
             "options": [{"value": a.value, "label": label} for a, label in (
                 (BridgeAnswer.YES, "Yes"),
@@ -177,6 +219,8 @@ class DevelopmentalRecalibrationService:
         if principal.role is not ActorRole.CAREGIVER:
             raise RecalibrationError("only a caregiver answers the baseline")
         self._goals._authorize(principal, child_id)
+        if not self.bridge_applicable(child_id):
+            raise RecalibrationError("the bridge questions do not apply")
         if len(answers) != 3:
             raise RecalibrationError("exactly three answers are expected")
         try:
@@ -216,8 +260,11 @@ class DevelopmentalRecalibrationService:
         self._require_provider(principal, child_id)
         self.ladder_goal(principal, child_id)
         latest = self._latest_answers(child_id, ladder)
-        proposal = propose_start(ladder,
-                                 latest.parsed() if latest else None)
+        previous = self._previous_placement(child_id, excluding_plan_id="")
+        proposal = propose_placement(
+            ladder, baseline_answers=latest.parsed() if latest else None,
+            previous_final_node_ref=(self.current_node(previous, None).node_ref
+                                     if previous else None))
         automatic = sorted({tuple(sorted((ladder.node(a).index,
                                           ladder.node(b).index)))
                             for a, b in ladder.transitions})
@@ -235,16 +282,18 @@ class DevelopmentalRecalibrationService:
                     placement.starting_node_ref).step_key,
                 "current_step_key": current.step_key,
                 "source": placement.source.value,
-                "notes": self._review_notes(placement)})
+                "notes": self._review_notes(placement),
+                "review_items": self._review_items(placement)})
         return {
             "steps": [self._step(n) for n in ladder.nodes],
             "automatic_moves": [
                 {"between": [ladder.nodes[i].step_key,
                              ladder.nodes[j].step_key]}
                 for i, j in automatic],
+            "proposal_basis": proposal.basis.value,
             "baseline": {
-                "status": proposal.status.value,
-                "summary": _BASELINE_TEXT[proposal.reason],
+                "status": proposal.baseline.status.value,
+                "summary": _BASELINE_TEXT[proposal.baseline.reason],
                 "answers": ([{"question": ladder.node(ref).wording,
                               "answer": ans or None}
                              for ref, ans in zip(latest.question_node_refs,
@@ -265,6 +314,31 @@ class DevelopmentalRecalibrationService:
                 notes.append({"week_starts_on": cycle.starts_on,
                               "note": _REVIEW_TEXT[m.reason.value]})
         return sorted(notes, key=lambda n: n["week_starts_on"])
+
+    def _review_items(self, placement) -> List[Dict[str, Any]]:
+        """Provider-only structured review items (no free text, no family)."""
+        ladder = self._require_ladder()
+        items = []
+        for m in self._repos.developmental_movements.list_for_placement(
+                placement.placement_id):
+            item = clinician_review_item(m, ladder)
+            if item is None:
+                continue
+            items.append({
+                "movement_id": item.movement_id,
+                "cycle_id": item.to_cycle_id,
+                "current_step_key": item.current_step_key,
+                "reason": item.reason.value,
+                "attempted_direction": item.attempted_direction or None,
+                "evidence_event_ids": list(item.evidence_event_ids),
+            })
+        return items
+
+    def _previous_placement(self, child_id: str, *, excluding_plan_id: str):
+        """The child's most recent placement on ANOTHER plan, or None."""
+        rows = [p for p in self._repos.developmental_placements.list_for_child(
+            child_id) if p.focus_plan_id != excluding_plan_id]
+        return rows[-1] if rows else None
 
     def place(self, principal, focus_plan_id: str, step_key: str
               ) -> DevelopmentalPlacement:
@@ -298,10 +372,12 @@ class DevelopmentalRecalibrationService:
             raise PlacementRefused("a plan with weeks cannot be placed")
 
         latest = self._latest_answers(plan.child_id, ladder)
-        proposal = propose_start(ladder,
-                                 latest.parsed() if latest else None)
-        confirmed = (proposal.status is BaselineStatus.CONSISTENT
-                     and proposal.node_ref == node.node_ref)
+        previous = self._previous_placement(plan.child_id,
+                                            excluding_plan_id=focus_plan_id)
+        proposal = propose_placement(
+            ladder, baseline_answers=latest.parsed() if latest else None,
+            previous_final_node_ref=(self.current_node(previous, None).node_ref
+                                     if previous else None))
         placement = DevelopmentalPlacement(
             placement_id=developmental_placement_id(focus_plan_id),
             child_id=plan.child_id, focus_plan_id=focus_plan_id,
@@ -310,18 +386,40 @@ class DevelopmentalRecalibrationService:
             starting_node_ref=node.node_ref, starting_node_index=node.index,
             proposed_node_ref=proposal.node_ref or "",
             baseline_answers_id=latest.answers_id if latest else "",
-            baseline_status=proposal.status,
-            source=(PlacementSource.CONFIRMED_BASELINE_PROPOSAL if confirmed
-                    else PlacementSource.CLINICIAN_CHOICE),
+            baseline_status=proposal.baseline.status,
+            source=placement_source_for(proposal, node.node_ref),
+            proposal_basis=proposal.basis,
+            previous_placement_id=(previous.placement_id
+                                   if proposal.basis is ProposalBasis.PREVIOUS_PLAN
+                                   else ""),
             rule_version=P0B2A_RULE_VERSION,
             placed_by_actor_id=principal.application_id,
             created_at=self._now())
+        event = placement_audit_event(placement, principal)
+
+        def _write(store):
+            # Placement AND its audit event, atomically, with NO read inside
+            # the transaction. Both documents are CREATE-ONLY under ids derived
+            # from the plan, so exactly one commit can win; a replay or an
+            # identical racing request collides instead of writing a second
+            # row or a second event. (A read-then-write here deadlocked every
+            # concurrent writer on the emulator's pessimistic locks.)
+            tx = type(self._repos)(store)
+            tx.developmental_placements.create(placement)
+            tx.audit_events.append(event)
+
         try:
-            return self._repos.developmental_placements.create(placement)
-        except DuplicateRecord:
+            self._repos.store.run_in_transaction(_write)
+            return placement
+        except Exception:  # noqa: BLE001 - resolved by reading the outcome
             raced = self._repos.developmental_placements.find_for_plan(
                 focus_plan_id)
-            if raced is not None and raced.starting_node_ref == node.node_ref:
+            if raced is None:
+                # Nothing was saved (e.g. contention). PHI-safe refusal; an
+                # identical retry is safe.
+                raise PlacementRefused(
+                    "the starting step could not be saved; try again") from None
+            if raced.starting_node_ref == node.node_ref:
                 return raced
             raise PlacementRefused(
                 "this plan's starting step is already set") from None
@@ -392,8 +490,49 @@ class DevelopmentalRecalibrationService:
             for e in m.evidence_event_ids}))
 
 
+def placement_audit_event_id(placement_id: str) -> str:
+    import hashlib  # noqa: WPS433
+    digest = hashlib.sha256(
+        f"developmental_placement_audit|{placement_id}".encode("utf-8"))
+    return f"audt_{digest.hexdigest()[:32]}"
+
+
+def placement_audit_event(placement: DevelopmentalPlacement, principal):
+    """The ONE audit event for a first placement. Opaque provenance only."""
+    from dataclasses import replace  # noqa: WPS433
+
+    from ..audit.events import AuditAction, AuditEvent, AuditResult  # noqa
+
+    event = AuditEvent.build(
+        AuditAction.DEVELOPMENTAL_PLACEMENT_CONFIRMED, AuditResult.SUCCESS,
+        "developmental_placement", resource_id=placement.placement_id,
+        child_id=placement.child_id,
+        actor_application_id=principal.application_id,
+        actor_auth_subject=getattr(principal, "auth_subject", None),
+        actor_role=principal.role,
+        metadata={
+            "placement_id": placement.placement_id,
+            "focus_plan_id": placement.focus_plan_id,
+            "goal_id": placement.goal_id,
+            "ladder_ref": placement.ladder_ref,
+            "rule_version": placement.rule_version,
+            "starting_node_ref": placement.starting_node_ref,
+            "starting_node_index": placement.starting_node_index,
+            "proposed_node_ref": placement.proposed_node_ref,
+            "placement_source": placement.source.value,
+            "proposal_basis": placement.proposal_basis.value,
+            "baseline_status": placement.baseline_status.value,
+            "previous_placement_id": placement.previous_placement_id,
+        },
+        now=placement.created_at)
+    return replace(event, event_id=placement_audit_event_id(
+        placement.placement_id))
+
+
 __all__ = [
     "DevelopmentalRecalibrationService",
+    "placement_audit_event",
+    "placement_audit_event_id",
     "LadderNotApplicable",
     "PlacementRefused",
     "PlacementStateMismatch",

@@ -61,6 +61,7 @@ from ..domain.developmental_ladder import (
     MovementOutcome,
     MovementReason,
     PlacementSource,
+    ProposalBasis,
 )
 from ..domain.alignment import (
     ActivityGoalAlignment,
@@ -1004,6 +1005,8 @@ SPECS: Dict[type, Dict[str, Kind]] = {
         "proposed_node_ref": STR, "baseline_answers_id": STR,
         "baseline_status": _EnumKind(BaselineStatus),
         "source": _EnumKind(PlacementSource),
+        "proposal_basis": _EnumKind(ProposalBasis),
+        "previous_placement_id": STR,
         "rule_version": STR, "placed_by_actor_id": STR,
         "created_at": DT, "schema_version": STR,
     },

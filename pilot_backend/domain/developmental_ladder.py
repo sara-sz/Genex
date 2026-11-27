@@ -302,6 +302,57 @@ def propose_start(ladder: DevelopmentalLadder,
 
 
 # ---------------------------------------------------------------------------
+# Placement proposal: baseline (first plan) or previous plan (successor)
+# ---------------------------------------------------------------------------
+
+
+class ProposalBasis(str, Enum):
+    #: The child's first placed plan: the caregiver bridge baseline.
+    BASELINE = "baseline"
+    #: A successor plan: the PREVIOUS placed plan's final derived node.
+    PREVIOUS_PLAN = "previous_plan"
+
+
+@dataclass(frozen=True)
+class PlacementProposal:
+    """What the clinician is OFFERED for one plan. Never an approval.
+
+    ## Successor rule (founder decision, P0-B2a)
+
+    At renewal the previous plan's final derived node is only the PROPOSED
+    starting node of the successor. The clinician must confirm it or choose
+    another allowed node before the successor runs with P0-B2a. Nothing
+    carries over by itself: the successor gets its own placement and its own
+    envelope approval, and a successor with no placement runs exactly as any
+    unplaced plan does (P0-B1).
+    """
+
+    basis: ProposalBasis
+    #: None = no proposal; the clinician must choose.
+    node_ref: Optional[str]
+    #: The baseline reading, always computed (shown and recorded).
+    baseline: StartProposal
+
+
+def propose_placement(ladder: DevelopmentalLadder, *,
+                      baseline_answers: Optional[Sequence[Optional[BridgeAnswer]]],
+                      previous_final_node_ref: Optional[str]
+                      ) -> PlacementProposal:
+    """Pure. A previous plan's final node outranks a (by then stale) baseline.
+
+    A previous final node without a reviewed pool proposes nothing: the
+    clinician must choose a step that has reviewed activities.
+    """
+    baseline = propose_start(ladder, baseline_answers)
+    if previous_final_node_ref is not None:
+        node = ladder.node(previous_final_node_ref)
+        return PlacementProposal(ProposalBasis.PREVIOUS_PLAN,
+                                 node.node_ref if node.has_reviewed_pool
+                                 else None, baseline)
+    return PlacementProposal(ProposalBasis.BASELINE, baseline.node_ref, baseline)
+
+
+# ---------------------------------------------------------------------------
 # Movement evaluation (pure)
 # ---------------------------------------------------------------------------
 
@@ -487,7 +538,9 @@ class BridgeBaselineAnswers:
 class PlacementSource(str, Enum):
     #: The clinician confirmed the consistent baseline's proposal.
     CONFIRMED_BASELINE_PROPOSAL = "confirmed_baseline_proposal"
-    #: The clinician chose the step (no, inconsistent, or overridden baseline).
+    #: The clinician confirmed the previous plan's final step (successor).
+    CONFIRMED_PREVIOUS_PLAN_STEP = "confirmed_previous_plan_step"
+    #: The clinician chose a step OTHER than the proposal, or there was none.
     CLINICIAN_CHOICE = "clinician_choice"
 
 
@@ -507,6 +560,10 @@ class DevelopmentalPlacement:
     baseline_answers_id: str            # "" when there was no baseline
     baseline_status: BaselineStatus
     source: PlacementSource
+    #: Where `proposed_node_ref` came from (baseline, or the previous plan).
+    proposal_basis: ProposalBasis
+    #: The previous placed plan's placement ("" for a first plan).
+    previous_placement_id: str
     rule_version: str
     placed_by_actor_id: str
     created_at: datetime = field(default_factory=utc_now)
@@ -515,6 +572,24 @@ class DevelopmentalPlacement:
     def __post_init__(self) -> None:
         object.__setattr__(self, "envelope_node_refs",
                            tuple(self.envelope_node_refs))
+        # The source is DERIVED from the proposal, never asserted: a
+        # clinician-adjusted step cannot be labelled as a confirmed proposal,
+        # and a confirmed proposal cannot be labelled as an adjustment.
+        matched = bool(self.proposed_node_ref) and \
+            self.proposed_node_ref == self.starting_node_ref
+        if matched != (self.source is not PlacementSource.CLINICIAN_CHOICE):
+            raise LadderError(
+                "the placement source must match whether the proposal was kept")
+        if self.source is PlacementSource.CONFIRMED_PREVIOUS_PLAN_STEP and not (
+                self.proposal_basis is ProposalBasis.PREVIOUS_PLAN
+                and self.previous_placement_id):
+            raise LadderError(
+                "only a previous plan's final step can be confirmed as one")
+        if (self.proposal_basis is ProposalBasis.PREVIOUS_PLAN) != bool(
+                self.previous_placement_id):
+            raise LadderError("a previous-plan proposal names its placement")
+        if self.previous_placement_id == self.placement_id:
+            raise LadderError("a placement cannot succeed itself")
         if self.placement_id != developmental_placement_id(self.focus_plan_id):
             raise LadderError("placement id must derive from its plan")
         if self.rule_version != P0B2A_RULE_VERSION:
@@ -527,7 +602,8 @@ class DevelopmentalPlacement:
                 self.starting_node_ref:
             raise LadderError("the starting node is not at its index")
         if self.source is PlacementSource.CONFIRMED_BASELINE_PROPOSAL and not (
-                self.baseline_status is BaselineStatus.CONSISTENT
+                self.proposal_basis is ProposalBasis.BASELINE
+                and self.baseline_status is BaselineStatus.CONSISTENT
                 and self.proposed_node_ref == self.starting_node_ref):
             raise LadderError(
                 "only a consistent baseline's own proposal can be confirmed")
@@ -624,6 +700,54 @@ class DevelopmentalMovement:
             created_at=now or utc_now())
 
 
+def placement_source_for(proposal: PlacementProposal,
+                         starting_node_ref: str) -> PlacementSource:
+    """The ONLY way a source is chosen: from what was proposed and kept."""
+    if proposal.node_ref != starting_node_ref or proposal.node_ref is None:
+        return PlacementSource.CLINICIAN_CHOICE
+    if proposal.basis is ProposalBasis.PREVIOUS_PLAN:
+        return PlacementSource.CONFIRMED_PREVIOUS_PLAN_STEP
+    return PlacementSource.CONFIRMED_BASELINE_PROPOSAL
+
+
+@dataclass(frozen=True)
+class ClinicianReviewItem:
+    """What the next slice's exception UI needs from ONE review record.
+
+    Built only from the immutable `DevelopmentalMovement`: proves the record
+    already carries child, current step, reason, evidence references and the
+    attempted direction. Provider-facing only; never part of any caregiver
+    response.
+    """
+
+    movement_id: str
+    child_id: str
+    focus_plan_id: str
+    to_cycle_id: str
+    current_step_key: str
+    current_step_wording: str
+    reason: MovementReason
+    attempted_direction: str            # "up" | "down" | ""
+    evidence_event_ids: Tuple[str, ...]
+    trigger_activity_refs: Tuple[str, ...]
+
+
+def clinician_review_item(movement: DevelopmentalMovement,
+                          ladder: DevelopmentalLadder
+                          ) -> Optional[ClinicianReviewItem]:
+    if movement.outcome is not MovementOutcome.REQUIRES_CLINICIAN_REVIEW:
+        return None
+    node = ladder.node(movement.node_before_ref)
+    return ClinicianReviewItem(
+        movement_id=movement.movement_id, child_id=movement.child_id,
+        focus_plan_id=movement.focus_plan_id,
+        to_cycle_id=movement.to_cycle_id, current_step_key=node.step_key,
+        current_step_wording=node.wording, reason=movement.reason,
+        attempted_direction=movement.direction,
+        evidence_event_ids=movement.evidence_event_ids,
+        trigger_activity_refs=movement.trigger_activity_refs)
+
+
 def ladder_from_artifact(body: Mapping) -> DevelopmentalLadder:
     """Build (and so fully validate) a ladder from an artifact body."""
     try:
@@ -654,6 +778,12 @@ def ladder_from_artifact(body: Mapping) -> DevelopmentalLadder:
 __all__ = [
     "BASELINE_PROMPT",
     "BaselineStatus",
+    "ClinicianReviewItem",
+    "PlacementProposal",
+    "ProposalBasis",
+    "clinician_review_item",
+    "placement_source_for",
+    "propose_placement",
     "BridgeAnswer",
     "BridgeBaselineAnswers",
     "DevelopmentalLadder",

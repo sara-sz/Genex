@@ -65,6 +65,16 @@ def _rung(milestone, months, families):
 
 @pytest.fixture()
 def world(repos, unique_suffix):
+    return _make_world(repos, unique_suffix, place=True)
+
+
+@pytest.fixture()
+def draft_world(repos, unique_suffix):
+    """Approved goal + allocated DRAFT plan; nothing placed or activated."""
+    return _make_world(repos, unique_suffix, place=False)
+
+
+def _make_world(repos, unique_suffix, *, place):
     from pilot_backend.audit.recorder import AuditRecorder
     from pilot_backend.auth.interface import VerifiedToken
     from pilot_backend.auth.resolver import resolve_principal
@@ -173,15 +183,19 @@ def world(repos, unique_suffix):
     plan = plans.create_plan(provider, child_id, CYCLE_MONTH, TZ)
     plans.allocate_goal(provider, plan.focus_plan_id, goal.ref,
                         priority_rank=1)
-    recal.place(provider, plan.focus_plan_id, "step_3")     # Bridge 2
-    plans.activate_plan(provider, plan.focus_plan_id)
-
     class Bundle:
         pass
 
     w = Bundle()
     w.repos, w.child_id, w.provider, w.caregiver = repos, child_id, provider, caregiver
     w.weekly, w.clock, w.ladder, w.plan = weekly, clock, ladder, plan
+    w.recal = lambda: DevelopmentalRecalibrationService(
+        repos=repos, goals=goals, plans=plans, weekly=weekly, ladder=ladder,
+        now=clock)
+    if not place:
+        return w
+    recal.place(provider, plan.focus_plan_id, "step_3")     # Bridge 2
+    plans.activate_plan(provider, plan.focus_plan_id)
     w.service = lambda: WeekOneReleaseService(
         repos=repos, goals=goals, plans=plans, weekly=weekly,
         activity_bank=bank, now=clock, ladder=ladder)
@@ -293,3 +307,61 @@ def test_eight_concurrent_placed_week_two_builds_move_exactly_once(world):
     print(f"\n=== P0-B2a {WRITERS}-way: winners={len(winners) - 1} "
           f"refused={sorted(set(failures))} movement={m['movement_id']} "
           f"{m['node_before_index']}->{m['node_after_index']}")
+
+
+# ---------------------------------------------------------------------------
+# Placement audit — exactly one placement and one audit event, on a real server
+# ---------------------------------------------------------------------------
+
+
+def _placement_rows(world):
+    placements = [d for _i, d in world.repos.store.list_all(
+        "pilot_developmental_placements")
+        if d.get("focus_plan_id") == world.plan.focus_plan_id]
+    events = [d for d in _rows(world, "pilot_audit_events",
+                               child_id=world.child_id)
+              if d.get("action") == "developmental_placement_confirmed"]
+    return placements, events
+
+
+def test_eight_concurrent_identical_placements_write_one_of_each(draft_world):
+    w = draft_world
+    barrier = threading.Barrier(WRITERS)
+    failures = []
+
+    def place(_i):
+        barrier.wait(timeout=30)
+        try:
+            return w.recal().place(w.provider, w.plan.focus_plan_id, "step_3")
+        except Exception as exc:        # recorded, never swallowed
+            failures.append(type(exc).__name__)
+            return None
+
+    with ThreadPoolExecutor(max_workers=WRITERS) as pool:
+        results = list(pool.map(place, range(WRITERS)))
+    assert len(results) == WRITERS, results
+    final = w.recal().place(w.provider, w.plan.focus_plan_id, "step_3")
+    winners = [r for r in results if r is not None] + [final]
+    assert {r.placement_id for r in winners} == {final.placement_id}
+    assert len(winners) >= 2, "at least one CONCURRENT identical request succeeds"
+    placements, events = _placement_rows(w)
+    assert len(placements) == 1 and len(events) == 1, (placements, events,
+                                                       failures)
+    assert events[0]["resource_id"] == final.placement_id
+    assert events[0]["metadata"]["starting_node_index"] == "2"
+    print(f"\n=== placement {WRITERS}-way: winners={len(winners) - 1} "
+          f"refused={sorted(set(failures))} placements=1 audit_events=1")
+
+
+def test_a_conflicting_placement_is_refused_with_no_second_event(draft_world):
+    from pilot_backend.integration.developmental_recalibration import (
+        PlacementRefused,
+    )
+    w = draft_world
+    w.recal().place(w.provider, w.plan.focus_plan_id, "step_3")
+    w.recal().place(w.provider, w.plan.focus_plan_id, "step_3")   # replay
+    with pytest.raises(PlacementRefused):
+        w.recal().place(w.provider, w.plan.focus_plan_id, "step_4")
+    placements, events = _placement_rows(w)
+    assert len(placements) == 1 and len(events) == 1
+    assert placements[0]["starting_node_index"] == 2

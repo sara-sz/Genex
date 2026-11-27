@@ -1259,7 +1259,17 @@ def test_audit_metadata_allowlist_is_narrow_and_operational():
             # the lifecycle state, not a reason: no decline reason, pause
             # reason or clinical justification is permitted here.
             "initiated_by", "connection_status",
+            # P0-B2a developmental placement provenance. Opaque internal ids
+            # (dplc_/ldr1:/node1:), a 0..4 index and short closed enums. No
+            # caregiver answer, bridge wording, milestone or age is permitted.
+            "placement_id", "ladder_ref", "starting_node_ref",
+            "starting_node_index", "proposed_node_ref", "placement_source",
+            "proposal_basis", "baseline_status", "previous_placement_id",
         }, key
+    # P0-B2a: the caregiver's answers and the bridge wording never enter audit.
+    for clinical_p0b2a in ("answers", "bridge_answers", "wording",
+                           "bridge_step", "milestone_text", "age_months"):
+        assert clinical_p0b2a not in ALLOWED_METADATA_KEYS, clinical_p0b2a
     assert "external_id" not in ALLOWED_METADATA_KEYS
     # The raw auth subject must never become an allowlisted key. The
     # fingerprint exists precisely so there is no reason to add one, and a
